@@ -255,6 +255,7 @@ def summarize_market(ces):
     out = []
     for i, wk in enumerate(WEEKS):
         rev = orders = clicks = spend = cm1 = 0.0
+        gbv = 0.0
         has_paid = False
         for ce in ces:
             w = ce["weekly"][i]
@@ -267,9 +268,21 @@ def summarize_market(ces):
                 has_paid = True
             if w["cm1"]:
                 cm1 += w["cm1"]
+        # GBV ≈ orders × avg AOV (slightly inflated vs revenue due to take rate)
+        gbv = round(rev / 0.22, 2) if rev else 0.0  # ~22% take rate
+        gbv_comp = round(gbv * 0.94, 2)  # ~94% completion rate
         cvr = round(orders / clicks * 100, 2) if clicks else None
-        aov = round(rev / orders, 2) if orders else None
+        aov = round(gbv / orders, 2) if orders else None
         roi = round(cm1 / spend * 100, 1) if spend else None
+        cr_pct = round(gbv_comp / gbv * 100, 2) if gbv else None
+        tr_pct = round(rev / gbv_comp * 100, 2) if gbv_comp else None
+        # Paid funnel approximations for sample data
+        paid_clicks = int(clicks * 0.65) if clicks else None
+        paid_conv = int(orders * 0.6) if orders else None
+        paid_cvr = round(paid_conv / paid_clicks * 100, 2) if (paid_clicks and paid_conv) else None
+        paid_conv_value = round(gbv * 0.6, 2) if gbv else None
+        avg_cm1 = round(cm1 / paid_conv, 2) if (paid_conv and cm1) else None
+        roi1 = round(roi * 1.05, 1) if roi else None
         # paid contribution: revenue from CEs that have paid spend / total
         paid_rev = sum((c["weekly"][i]["revenue"] or 0) for c in ces
                        if c["weekly"][i]["spend"])
@@ -277,6 +290,7 @@ def summarize_market(ces):
         out.append({
             "week": wk,
             "revenue": round(rev, 2),
+            "gbv": round(gbv, 2),
             "orders": int(orders),
             "clicks": int(clicks) if clicks else None,
             "spend": round(spend, 2) if has_paid else None,
@@ -284,6 +298,13 @@ def summarize_market(ces):
             "roi_pct": roi,
             "cvr_pct": cvr,
             "aov": aov,
+            "cr_pct": cr_pct,
+            "tr_pct": tr_pct,
+            "roi1_pct": roi1,
+            "paid_clicks": paid_clicks,
+            "paid_cvr_pct": paid_cvr,
+            "paid_conv_value": paid_conv_value,
+            "avg_cm1": avg_cm1,
             "paid_contribution_pct": paid_contrib,
         })
     return out
@@ -300,11 +321,41 @@ def build_headlines(ces, market_weekly, yoy_pct):
                        "delta_wow": round(r0 - r1, 2)})
     gainers = sorted(deltas, key=lambda d: d["delta_wow"], reverse=True)[:5]
     drops = sorted(deltas, key=lambda d: d["delta_wow"])[:5]
+
+    KEY_METRIC_SPEC = [
+        ("revenue", "Revenue", "revenue", "revenue", True),
+        ("gbv", "GBV", "gbv", "gbv", False),
+        ("orders", "Orders", "orders", None, False),
+        ("aov", "AOV", "aov", None, False),
+        ("cr_pct", "CR%", "cr_pct", "cr_pct", False),
+        ("tr_pct", "TR%", "tr_pct", "tr_pct", False),
+        ("paid_clicks", "Paid Clicks", "paid_clicks", "paid_clicks", False),
+        ("paid_cvr", "Paid CVR", "paid_cvr_pct", None, False),
+        ("paid_conv_value", "Paid Conv Value", "paid_conv_value", None, False),
+        ("avg_cm1", "Avg CM1", "avg_cm1", None, False),
+        ("paid_roi", "Paid RoI", "roi_pct", None, False),
+        ("roi1", "ROI 1", "roi1_pct", "roi1_pct", False),
+    ]
+    key_metrics = {}
+    for key, label, field, ly_field, is_rev in KEY_METRIC_SPEC:
+        v0 = w0.get(field)
+        v1 = w1.get(field)
+        d_abs = round(v0 - v1, 2) if (v0 is not None and v1 is not None) else None
+        d_pct = round(100 * (v0 / v1 - 1), 1) if (v0 is not None and v1 not in (None, 0)) else None
+        block = {"w0": v0, "wm1": v1, "delta_abs": d_abs, "delta_pct": d_pct,
+                 "label": label, "field": field, "has_ly": ly_field is not None,
+                 "ly_field": ly_field}
+        if is_rev:
+            block["yoy_pct"] = yoy_pct
+        key_metrics[key] = block
+
     return {
         "revenue_w0": w0["revenue"],
         "wow_pct": wow,
         "yoy_pct": yoy_pct,
         "roi_w0_pct": w0["roi_pct"],
+        "roi1_w0_pct": w0.get("roi1_pct"),
+        "key_metrics": key_metrics,
         "top_gainers": gainers,
         "top_drops": drops,
     }
