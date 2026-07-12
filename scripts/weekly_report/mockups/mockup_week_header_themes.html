@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — Section 0 · Week Header + Themes · North America w/c Jun 29 2026</title>
+<!--
+  DESIGN MOCKUP (not wired to live data). Renders the FULL "0. Week Header +
+  Themes" tab of sheet 1j0pk…40PIs, including the Phase-2 blocks the V1 render
+  deliberately omits. Purpose: align on the visual + the data shape BEFORE we
+  build the infra. The DATA object below is the implicit contract — each block
+  is annotated with the source model the data layer must produce.
+  Numbers are illustrative, grounded in the NA 2026-06-29 case studies from the
+  sheet's own Notes column (tROAS-raise cluster, Hawaii Luaus flip, Six Flags
+  masking, ~2,022 unclassified CEs).
+-->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap');
+:root{
+  --purps:#8000FF; --purps-deep:#6a00d6; --purps-soft:#F1E8FF;
+  --candy:#FF2D6F; --candy-soft:#FFE3EC;
+  --paper:#ffffff; --paper-deep:#F7F3FF; --card:#ffffff;
+  --ink:#1A1526; --ink-soft:#5C5470; --ink-faint:#9B93AC;
+  --rule:#ECE6F8; --rule-dark:#DAD1EF;
+  --red:#E5384F; --red-bg:#FDE7EA;
+  --amber:#B5810B; --amber-bg:#FAF0D5;
+  --green:#12A150; --green-bg:#E2F5EA;
+  --blue:#2F6FE0; --blue-bg:#E7EEFC;
+  --violet:#8000FF; --violet-bg:#F1E8FF;
+  --sans:'Figtree',ui-sans-serif,system-ui,-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'Figtree',ui-sans-serif,system-ui,sans-serif;
+  --disp:'Figtree',ui-sans-serif,system-ui,sans-serif;
+  --shadow:0 2px 10px rgba(88,0,170,.06),0 1px 3px rgba(88,0,170,.05);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);
+  background-image:radial-gradient(1100px 460px at 8% -8%, #F2EAFF 0%, transparent 62%),
+                   radial-gradient(900px 420px at 100% 4%, #FFEAF2 0%, transparent 55%);
+  color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.page{max-width:1180px;margin:0 auto;padding:38px 32px 100px}
+.masthead{border-bottom:2px solid var(--rule);padding-bottom:18px;position:relative}
+.mast-kicker{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--purps)}
+.masthead h1{font-family:var(--disp);font-weight:800;font-size:40px;line-height:1.02;letter-spacing:-.025em;margin:9px 0 6px}
+.masthead h1 em{font-style:normal;font-weight:800;color:var(--purps)}
+.mast-meta{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink-soft);display:flex;gap:22px;flex-wrap:wrap;margin-top:10px}
+.mast-meta b{font-weight:700;color:var(--ink)}
+.mockchip{position:absolute;right:0;top:8px;transform:rotate(3deg);border:2px solid var(--candy);color:var(--candy);
+  font-family:var(--sans);font-weight:700;font-size:12px;letter-spacing:.2em;padding:5px 12px;border-radius:8px;opacity:.9}
+
+.blocklabel{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--purps);
+  margin:38px 0 13px;display:flex;align-items:center;gap:10px}
+.blocklabel::after{content:'';flex:1;height:1px;background:var(--rule-dark)}
+.blocklabel .src{color:var(--ink-faint);text-transform:none;letter-spacing:0;font-size:10.5px;font-weight:500}
+
+.chip{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.02em;padding:2px 9px;border-radius:99px;white-space:nowrap;vertical-align:1px}
+.chip.red{background:var(--red-bg);color:var(--red)}.chip.amber{background:var(--amber-bg);color:var(--amber)}
+.chip.green{background:var(--green-bg);color:var(--green)}.chip.blue{background:var(--blue-bg);color:var(--blue)}
+.chip.violet{background:var(--violet-bg);color:var(--violet)}
+.chip.ghost{background:transparent;border:1.3px solid var(--rule-dark);color:var(--ink-soft);font-weight:600}
+.pos{color:var(--green)}.neg{color:var(--red)}.amb{color:var(--amber)}
+
+/* dual clock */
+.clocks{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.clock{border:1px solid var(--rule);border-radius:16px;padding:18px 20px;background:var(--card);box-shadow:var(--shadow);position:relative}
+.clock.structural{background:linear-gradient(180deg,#FBF9FF,#fff)}
+.clock .ctag{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+.clock h3{font-family:var(--disp);font-size:17px;font-weight:800;letter-spacing:-.01em;margin-bottom:12px}
+.bignum{font-family:var(--disp);font-size:40px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.bignum small{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-soft)}
+.crow{display:flex;justify-content:space-between;font-family:var(--sans);font-size:12.5px;font-weight:500;padding:7px 0;border-top:1px solid var(--rule);align-items:center}
+.crow:first-of-type{border-top:none}
+.crow b{font-weight:700}
+.crow .lab{color:var(--ink-soft)}
+.glbar{display:flex;height:22px;border-radius:8px;overflow:hidden;margin:7px 0 4px;font-family:var(--sans);font-size:10.5px;font-weight:700}
+.glbar .g{background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center}
+.glbar .l{background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center}
+.mini{font-family:var(--sans);font-size:11px;font-weight:500;color:var(--ink-faint);display:flex;gap:16px;margin-top:6px}
+.mini b{color:var(--ink);font-weight:700}
+
+/* verdict banner */
+.verdict{border:1px solid var(--rule);border-radius:16px;background:var(--card);overflow:hidden;box-shadow:var(--shadow)}
+.verdict .vhead{padding:18px 22px;background:var(--paper-deep);border-bottom:1px solid var(--rule);display:flex;align-items:flex-start;gap:16px}
+.verdict .vlabel{font-family:var(--disp);font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.verdict .vsub{font-size:13px;font-weight:500;color:var(--ink-soft);margin-top:5px;max-width:640px}
+.verdict .vverdict{margin-left:auto;text-align:right;white-space:nowrap}
+.vbody{padding:16px 22px;display:flex;flex-direction:column;gap:12px}
+.vline{display:grid;grid-template-columns:130px 1fr;gap:14px;align-items:baseline;font-size:13px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
+.vline:last-child{border-bottom:none;padding-bottom:0}
+.vline .k{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+.callout{border-left:4px solid var(--amber);background:var(--amber-bg);padding:11px 14px;border-radius:0 12px 12px 0;font-size:13px}
+.callout.blue{border-color:var(--purps);background:var(--purps-soft)}
+.callout.green{border-color:var(--green);background:var(--green-bg)}
+.callout b{font-weight:700}
+/* shapley strip */
+.shapley{display:flex;border-radius:10px;overflow:hidden;font-family:var(--sans);font-size:11px;font-weight:700}
+.shapley .seg{padding:9px 6px;text-align:center;color:#fff;flex-shrink:0}
+.shapley .seg small{display:block;font-weight:500;font-size:9.5px;opacity:.92;letter-spacing:.03em}
+
+/* themes table */
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;border:1px solid var(--rule);border-radius:16px;overflow:hidden;background:var(--card);box-shadow:var(--shadow)}
+thead th{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:11px 12px;border-bottom:1.5px solid var(--rule-dark);background:var(--paper-deep)}
+th.num,td.num{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.unclass td{background:var(--paper-deep);font-style:italic}
+tbody tr:hover td{background:rgba(128,0,255,.045)}
+td.theme b{font-weight:700}
+td.theme small{display:block;color:var(--ink-faint);font-family:var(--sans);font-size:10px;font-weight:500}
+.idx{font-family:var(--sans);font-weight:700}
+.note{font-size:11.5px;font-weight:500;color:var(--ink-soft)}
+.legend{margin-top:14px;font-family:var(--sans);font-size:11px;font-weight:500;color:var(--ink-faint);line-height:1.8;border-top:1px solid var(--rule);padding-top:10px}
+.legend b{color:var(--ink-soft);font-weight:700}
+.footnote{margin-top:44px;border-top:2px solid var(--rule);padding-top:16px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="masthead">
+    <div class="mockchip">MOCKUP</div>
+    <div class="mast-kicker">Headout · Growth · Weekly Market Report · Section 0</div>
+    <h1>Week Header <em>&amp; Theme Attribution</em></h1>
+    <div class="mast-meta">
+      <span>Market: <b>North America</b></span>
+      <span>Week: 2026-06-29 → 2026-07-05</span>
+      <span>Dual-clock · always renders · never a bare verdict</span>
+    </div>
+  </div>
+  <div id="app"></div>
+  <div class="footnote" id="footnote"></div>
+</div>
+
+<script>
+/* ================= DATA (mockup) — doubles as the infra contract =================
+   Each block is annotated with the source model the data layer must produce.        */
+const D = {
+  meta:{market:"North America", week:"2026-06-29"},
+
+  /* Block 1 — RAW CLOCK · source: combined_entity_stats + google_ads_campaign_stats */
+  raw:{
+    revenue_w0: 615400,
+    wow_abs: -12000, wow_pct: -1.9,          // RAW, no weekday alignment
+    yoy_pct: 6.2,                            // −364d weekday-aligned
+    roi1_t4w_pct: 152, roi1_wow_pp: -4.0,    // CM1/spend trailing-4w + WoW pp delta
+    mtd_attainment_pct: 94, mtd_ces_below_90: 25   // source: revenue_goals + LY daily shape (Pacing)
+  },
+
+  /* Block 2 — STRUCTURAL CLOCK · source: market_weekly_flows (NEW model) + LY blend */
+  structural:{
+    expected_wow_pct: 2.1,                   // 3-wk centered LY average ramp
+    structural_delta_pct: -4.0,              // actual −1.9% vs expected +2.1%
+    gross_gain: 59800, gross_loss: 97100,    // G / |L| of structural deltas
+    net_structural: -37300,                  // G − L (≠ raw net — different clocks)
+    g_pct: 9.7, l_pct: 15.8, turbulence_pct: 25.5,
+    n80_gain: 6, n80_loss: 9,                // # CEs carrying 80% of each side
+    baseline_sensitive:["Hawaii Luaus (gain→loss)","Nouvelle Eve (wave→loss)"]
+  },
+
+  /* Block 3 — DUAL-CLOCK WEEK TYPE · source: derived + shapley_decomp UDF */
+  weektype:{
+    structural_verdict:"CONTESTED",          // L/G = 1.6× (< 3× → contested)
+    rendered_label:"CONTESTED WEEK",
+    rendered_sub:"$59.8K structural gains vs $97.1K losses — both material. NOT ‘mostly loss’: the market is +6.2% YoY (v2 lesson).",
+    routing_note:"9 CEs carry 80% of losses (mid-range) → CE deep-dive cards + one NYC-cluster line.",
+    cluster_line:"Broad tROAS raise Jun-23 (150 → 155–167, 19 campaigns, ~$32K/wk) precedes the B1 cliff cluster — Kennedy, SUMMIT, High Roller, Universal Orlando. Exogenous input; don’t over-correct per-CE.",
+    concordance:"Markets diverge this week — no cross-market methodology gate.",
+    // Shapley: metric-dimension cut of the SAME net delta (traffic × CVR × AOV × TR × CR)
+    shapley:[
+      {k:"Traffic", v:-28400}, {k:"CVR", v:9100}, {k:"AOV", v:4200}, {k:"TR", v:2000}, {k:"CR", v:1100}
+    ],
+    shapley_read:"Traffic-led softness; conversion & yield holding."
+  },
+
+  /* Block 4 — THEMES SUB-TABLE · source: dim_combined_entities dims + ce_groups + market_weekly_flows */
+  themes:[
+    {dim:"City", value:"New York", side:"loss", delta:-41200, index:1.8, conc:48, ces:9, flag:"NYC defunding cluster", flagclass:"red"},
+    {dim:"Subcategory", value:"Observation Decks", side:"loss", delta:-22500, index:1.6, conc:55, ces:5, flag:null},
+    {dim:"Evolution", value:"Scaling", side:"gain", delta:18300, index:1.4, conc:40, ces:12, flag:null},
+    {dim:"City", value:"Chicago", side:"gain", delta:14800, index:2.1, conc:78, ces:3, flag:"demote → CE callout: driven by Chicago Architecture Cruises, not the group", flagclass:"amber"},
+    {dim:"ce_group", value:"Six Flags", side:"flat", delta:-400, index:null, conc:null, ces:6, flag:"masked — G $8.0K / L $8.4K inside a flat group", flagclass:"violet"},
+    {dim:"ce_group", value:"Hawaii Luaus", side:"flippable", delta:5200, index:null, conc:null, ces:4, flag:"baseline-sensitive: gain (single-wk LY) vs loss (blend)", flagclass:"amber"},
+  ],
+  unclassified:{delta:-3100, ces:2022}
+};
+
+/* ---------- fmt ---------- */
+const M="−";
+function money(v){if(v==null)return"—";const a=Math.abs(v);let s=a>=1e6?"$"+(v/1e6).toFixed(1)+"M":a>=1e3?"$"+(v/1e3).toFixed(1)+"K":"$"+Math.round(v);return s.replace("$-","-$");}
+function moneyD(v){if(v==null)return"—";return (v>0?"+":M)+money(Math.abs(v));}
+function pctD(v,dp){dp=dp==null?1:dp;if(v==null)return"—";return (v>0?"+":v<0?M:"")+Math.abs(v).toFixed(dp)+"%";}
+function ppD(v){if(v==null)return"";return " ("+(v>0?"+":M)+Math.abs(v).toFixed(1)+"pp)";}
+function sgn(v){return v==null?"":v>0?"pos":v<0?"neg":"";}
+
+/* ---------- Block 1 + 2 : dual clock ---------- */
+function clocks(){
+  const r=D.raw, s=D.structural;
+  const gTot=s.gross_gain+s.gross_loss;
+  const gW=(s.gross_gain/gTot*100).toFixed(0), lW=(s.gross_loss/gTot*100).toFixed(0);
+  return '<div class="blocklabel">Dual clock — raw register vs LY-expected <span class="src">· combined_entity_stats · market_weekly_flows</span></div>'+
+  '<div class="clocks">'+
+    '<div class="clock">'+
+      '<div class="ctag">Raw clock — what the register says</div>'+
+      '<h3>Revenue this week</h3>'+
+      '<div class="bignum">'+money(r.revenue_w0)+'</div>'+
+      '<div class="crow" style="margin-top:10px"><span class="lab">WoW Δ (raw)</span><b class="'+sgn(r.wow_abs)+'">'+moneyD(r.wow_abs)+' · '+pctD(r.wow_pct)+'</b></div>'+
+      '<div class="crow"><span class="lab">YoY (−364d, weekday-aligned)</span><b class="'+sgn(r.yoy_pct)+'">'+pctD(r.yoy_pct)+'</b></div>'+
+      '<div class="crow"><span class="lab">ROI1 (trailing 4w)</span><b>'+r.roi1_t4w_pct+'%<span class="'+sgn(r.roi1_wow_pp)+'">'+ppD(r.roi1_wow_pp)+'</span></b></div>'+
+      '<div class="crow"><span class="lab">MTD attainment (adj)</span><b>'+r.mtd_attainment_pct+'% <span class="chip amber">'+r.mtd_ces_below_90+' CEs &lt;90%</span></b></div>'+
+    '</div>'+
+    '<div class="clock structural">'+
+      '<div class="ctag">Structural clock — vs LY-expected (v2 baseline, locked)</div>'+
+      '<h3>What seasonality said this week should do</h3>'+
+      '<div class="crow"><span class="lab">Expected WoW ramp (LY blend)</span><b class="pos">'+pctD(s.expected_wow_pct)+'</b></div>'+
+      '<div class="crow"><span class="lab">Structural delta (actual − expected)</span><b class="'+sgn(s.structural_delta_pct)+'">'+pctD(s.structural_delta_pct)+'</b></div>'+
+      '<div class="crow" style="display:block"><span class="lab">Gross gains G vs losses L</span>'+
+        '<div class="glbar"><div class="g" style="width:'+gW+'%">G '+money(s.gross_gain)+'</div><div class="l" style="width:'+lW+'%">L '+money(s.gross_loss)+'</div></div>'+
+        '<div class="mini"><span>net structural <b class="'+sgn(s.net_structural)+'">'+moneyD(s.net_structural)+'</b></span>'+
+          '<span>turbulence <b>'+s.turbulence_pct+'%</b></span><span>g '+s.g_pct+'% · l '+s.l_pct+'%</span></div>'+
+      '</div>'+
+      '<div class="crow"><span class="lab">N80 — CEs carrying 80% of each side</span><b><span class="pos">'+s.n80_gain+' gain</span> / <span class="neg">'+s.n80_loss+' loss</span></b></div>'+
+      '<div class="crow"><span class="lab">Baseline-sensitive (flippable)</span><b class="amb">'+s.baseline_sensitive.length+' rows ⚑</b></div>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ---------- Block 3 : week-type verdict ---------- */
+function verdict(){
+  const w=D.weektype;
+  const shTot=w.shapley.reduce((a,b)=>a+Math.abs(b.v),0);
+  const segs=w.shapley.map(x=>{
+    const wd=(Math.abs(x.v)/shTot*100).toFixed(1);
+    const bg=x.v>=0?'var(--green)':'var(--red)';
+    return '<div class="seg" style="width:'+wd+'%;background:'+bg+';opacity:.85"><small>'+x.k+'</small>'+moneyD(x.v)+'</div>';
+  }).join('');
+  return '<div class="blocklabel">Dual-clock week type — mandatory, never a bare verdict <span class="src">· derived · shapley_decomp</span></div>'+
+  '<div class="verdict">'+
+    '<div class="vhead">'+
+      '<div><div class="vlabel">'+w.rendered_label+'</div><div class="vsub">'+w.rendered_sub+'</div></div>'+
+      '<div class="vverdict"><div class="chip amber" style="font-size:12px">STRUCTURAL: '+w.structural_verdict+'</div></div>'+
+    '</div>'+
+    '<div class="vbody">'+
+      '<div class="vline"><span class="k">Routing</span><span>'+w.routing_note+'</span></div>'+
+      '<div class="vline"><span class="k">Cluster gate</span><div class="callout"><b>⚠ In-bucket cluster:</b> '+w.cluster_line+'</div></div>'+
+      '<div class="vline"><span class="k">Concordance</span><div class="callout green"><b>✓</b> '+w.concordance+'</div></div>'+
+      '<div class="vline"><span class="k">Shapley drivers</span><div><div class="shapley">'+segs+'</div>'+
+        '<div class="mini" style="margin-top:6px"><span>net delta decomposed · traffic × CVR × AOV × TR × CR</span><span><b>'+w.shapley_read+'</b></span></div></div></div>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ---------- Block 4 : themes ---------- */
+function sideChip(s){
+  if(s==="loss")return '<span class="chip red">loss</span>';
+  if(s==="gain")return '<span class="chip green">gain</span>';
+  if(s==="flat")return '<span class="chip ghost">flat</span>';
+  if(s==="flippable")return '<span class="chip amber">flippable</span>';
+  return '<span class="chip ghost">'+s+'</span>';
+}
+function idxCell(x){
+  if(x.index==null)return '—';
+  const flag = x.index>=1.5 ? ' 🚩' : '';
+  const cls = x.index>=1.5 ? (x.side==='loss'?'neg':'pos') : '';
+  return '<span class="idx '+cls+'">'+x.index.toFixed(1)+'×'+flag+'</span>';
+}
+function concCell(x){
+  if(x.conc==null)return '—';
+  const up = x.conc>60 ? ' ⬆' : '';
+  return '<span class="'+(x.conc>60?'amb':'')+'">'+x.conc+'%'+up+'</span>';
+}
+function themes(){
+  let rows=D.themes.map(x=>
+    '<tr><td class="theme"><b>'+x.value+'</b><small>'+x.dim+'</small></td>'+
+    '<td>'+sideChip(x.side)+'</td>'+
+    '<td class="num '+sgn(x.delta)+'">'+moneyD(x.delta)+'</td>'+
+    '<td class="num">'+idxCell(x)+'</td>'+
+    '<td class="num">'+concCell(x)+'</td>'+
+    '<td class="num">'+x.ces+'</td>'+
+    '<td class="note">'+(x.flag?'<span class="chip '+(x.flagclass||'ghost')+'">'+x.flag+'</span>':'')+'</td></tr>'
+  ).join('');
+  const u=D.unclassified;
+  rows+='<tr class="unclass"><td class="theme"><b>(unclassified)</b><small>NULL metadata</small></td>'+
+    '<td><span class="chip ghost">mixed</span></td>'+
+    '<td class="num '+sgn(u.delta)+'">'+moneyD(u.delta)+'</td><td class="num">—</td><td class="num">—</td>'+
+    '<td class="num">~'+u.ces.toLocaleString()+'</td><td class="note">always rendered — never dropped</td></tr>';
+  return '<div class="blocklabel">Themes — per dimension &amp; custom group <span class="src">· dim_combined_entities · ce_groups · market_weekly_flows</span></div>'+
+  '<table><thead><tr><th>Theme (dimension : value)</th><th>Side</th><th class="num">Δ structural</th>'+
+    '<th class="num">Contribution index</th><th class="num">Concentration</th><th class="num">CEs</th><th>Flag / routing</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>'+
+  '<div class="legend">'+
+    '<b>Contribution index</b> = share-of-loss ÷ share-of-revenue (same for gains) · flag 🚩 when ≥1.5× AND ≥3 CEs AND ≥ $ materiality floor. '+
+    '<b>Concentration</b> = top-CE share of the theme delta · &gt;60% ⬆ demotes the theme to a single CE callout. '+
+    '<b>Masked</b> = a net-flat group hiding both a large gain and a large loss inside (Six Flags case). '+
+    '<b>Flippable</b> = gain/loss sign flips between single-week and blended LY baselines — never a confident “scale this”.'+
+  '</div>';
+}
+
+document.getElementById('app').innerHTML = clocks()+verdict()+themes();
+document.getElementById('footnote').innerHTML =
+  'MOCKUP of sheet “0. Week Header + Themes” (gid 1878897356) · North America w/c 2026-06-29 · numbers illustrative, grounded in the tab’s own case studies. '+
+  'Blocks 2–4 (structural clock, dual-clock week type, themes) are Phase-2 — the V1 render ships Block 1 only. '+
+  'INFRA TO BUILD next: <b>market_weekly_flows</b> (structural deltas, G/L, N80, turbulence), <b>shapley_decomp</b> (metric-dimension cut), '+
+  '<b>ce_groups</b> (Pari’s 8×24 taxonomy) + the events/seasonality registry for events-aware baseline selection.';
+</script>
+</body>
+</html>

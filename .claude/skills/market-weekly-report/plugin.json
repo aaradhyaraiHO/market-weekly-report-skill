@@ -1,0 +1,27 @@
+{
+  "name": "market-weekly-report",
+  "version": "1.0.0",
+  "description": "Weekly market report for the pilot markets (North America / Italy / Oceania). One command builds the movement-flow buckets B1-B4 (ROI/CM2 movement, fluctuations, losing ground, scale windows) plus a week-type header into a single self-contained multi-market tabbed HTML. Default week = latest complete matured week; NA carries a hard validation gate. Agent adds a Slack digest of signal beyond the data.",
+  "author": "Analytics Team",
+  "category": "analytics",
+  "tags": [
+    "growth",
+    "weekly-review",
+    "market-analysis",
+    "ce-diagnostics",
+    "buckets"
+  ],
+  "main": "SKILL.md",
+  "context_files": [
+    "../../../scripts/weekly_report/weekly_market_report.py",
+    "../../../scripts/weekly_report/config.py"
+  ],
+  "dependencies": {
+    "bigquery": "required",
+    "slack": "required",
+    "python": ">=3.9"
+  },
+  "settings": {
+    "auto_send_slack": false
+  }
+}

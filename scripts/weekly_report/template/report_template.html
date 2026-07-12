@@ -1,0 +1,1741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TITLE__</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap');
+
+:root{
+  --purps:#8000FF; --purps-deep:#6a00d6; --purps-soft:#F1E8FF;
+  --candy:#FF2D6F; --candy-soft:#FFE3EC;
+  --paper:#ffffff; --paper-deep:#F7F3FF; --card:#ffffff;
+  --ink:#1A1526; --ink-soft:#5C5470; --ink-faint:#9B93AC;
+  --rule:#ECE6F8; --rule-dark:#DAD1EF;
+  --red:#E5384F; --red-bg:#FDE7EA;
+  --amber:#B5810B; --amber-bg:#FAF0D5;
+  --green:#12A150; --green-bg:#E2F5EA;
+  --blue:#2F6FE0; --blue-bg:#E7EEFC;
+  --violet:#8000FF; --violet-bg:#F1E8FF;
+  --sans:'Figtree',ui-sans-serif,system-ui,-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'Figtree',ui-sans-serif,system-ui,sans-serif;
+  --disp:'Figtree',ui-sans-serif,system-ui,sans-serif;
+  --shadow:0 2px 10px rgba(88,0,170,.06),0 1px 3px rgba(88,0,170,.05);
+  --shadow-lg:0 18px 50px rgba(40,0,90,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--paper);
+  background-image:radial-gradient(1100px 460px at 8% -8%, #F2EAFF 0%, transparent 62%),
+                   radial-gradient(900px 420px at 100% 4%, #FFEAF2 0%, transparent 55%);
+  color:var(--ink); font-family:var(--sans); font-size:14px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.page{max-width:1280px;margin:0 auto;padding:38px 32px 120px}
+
+.masthead{border-bottom:2px solid var(--rule);padding-bottom:20px;position:relative}
+.mast-kicker{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--purps)}
+.masthead h1{font-family:var(--disp);font-weight:800;font-size:44px;line-height:1.02;letter-spacing:-.025em;margin:9px 0 6px}
+.masthead h1 em{font-style:normal;font-weight:800;color:var(--purps)}
+.mast-meta{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink-soft);display:flex;gap:22px;flex-wrap:wrap;margin-top:10px}
+.mast-meta b{font-weight:700;color:var(--ink)}
+
+.tabs{display:flex;gap:8px;margin:22px 0 4px;flex-wrap:wrap}
+.tab{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:.01em;padding:9px 18px;border:1.5px solid var(--rule-dark);
+     border-radius:999px;background:#fff;color:var(--ink-soft);cursor:pointer;white-space:nowrap;transition:all .14s}
+.tab:hover{color:var(--purps);border-color:var(--purps)}
+.tab.active{background:var(--purps);color:#fff;border-color:var(--purps);font-weight:700;box-shadow:0 4px 14px rgba(128,0,255,.28)}
+.tab .trev{opacity:.85;margin-left:9px;font-size:12px;font-weight:600}
+
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:13px;border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:17px}
+.sec-num{font-family:var(--sans);font-size:12px;font-weight:700;color:#fff;background:var(--purps);padding:3px 10px;border-radius:7px;letter-spacing:.02em}
+.sec-head h2{font-family:var(--disp);font-size:23px;font-weight:800;letter-spacing:-.02em}
+.sec-head .sub{font-family:var(--sans);font-size:11.5px;font-weight:500;color:var(--ink-faint);margin-left:auto;text-align:right}
+
+.chip{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.02em;padding:2px 9px;border-radius:99px;white-space:nowrap;vertical-align:1px}
+.chip.red{background:var(--red-bg);color:var(--red)} .chip.amber{background:var(--amber-bg);color:var(--amber)}
+.chip.green{background:var(--green-bg);color:var(--green)} .chip.blue{background:var(--blue-bg);color:var(--blue)}
+.chip.violet{background:var(--violet-bg);color:var(--violet)}
+.chip.ghost{background:transparent;border:1.3px solid var(--rule-dark);color:var(--ink-soft);font-weight:600}
+.pos{color:var(--green)} .neg{color:var(--red)} .amb{color:var(--amber)}
+
+.head-grid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px}
+.card{border:1px solid var(--rule);border-radius:16px;padding:18px 20px;background:var(--card);box-shadow:var(--shadow)}
+.card h3{font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:11px}
+.bignum{font-family:var(--disp);font-size:40px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.bignum small{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-soft);letter-spacing:0}
+.clockrow{display:flex;justify-content:space-between;font-family:var(--sans);font-size:12.5px;font-weight:500;padding:6px 0;border-top:1px solid var(--rule)}
+.clockrow b{font-weight:700}
+.movers h3 .n{color:var(--ink-faint);font-weight:500}
+.mover{display:grid;grid-template-columns:16px 1fr auto;gap:9px;align-items:baseline;font-size:13px;padding:5px 0;border-top:1px solid var(--rule)}
+.mover:first-of-type{border-top:none}
+.mover .rk{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-faint)}
+.mover .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.mover .nm:hover{color:var(--purps);text-decoration:underline}
+.mover .dv{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+/* dual-lens mover rows — struct & raw in aligned labeled columns */
+.mvr{display:grid;grid-template-columns:15px 1fr 76px 68px;gap:8px;align-items:baseline;font-size:13px;padding:5px 0;border-top:1px solid var(--rule)}
+.mvr:first-of-type{border-top:none}
+.mvr .rk{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-faint)}
+.mvr .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.mvr .nm:hover{color:var(--purps);text-decoration:underline}
+.mvr .st{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
+.mvr .rw{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:500;font-size:11.5px;color:var(--ink-faint);text-align:right;white-space:nowrap}
+.mvr .rw.diverge{color:var(--amber);font-weight:700}
+.mvh{display:grid;grid-template-columns:15px 1fr 76px 68px;gap:8px;font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);padding-bottom:5px;border-bottom:1.3px solid var(--rule-dark)}
+.mvh span:nth-child(3),.mvh span:nth-child(4){text-align:right}
+.spark-wrap{margin-top:7px}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:16px;background:var(--card);max-height:74vh;box-shadow:var(--shadow)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+thead th{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);text-align:left;
+  padding:11px 11px;border-bottom:1.5px solid var(--rule-dark);background:var(--paper-deep);position:sticky;top:0;white-space:nowrap;z-index:3}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th.sortable:hover{color:var(--purps)}
+thead th .ar{color:var(--purps);margin-left:3px}
+tbody td{padding:8px 11px;border-bottom:1px solid var(--rule);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.cerow{cursor:pointer;transition:background .12s}
+tbody tr.cerow:hover td{background:rgba(128,0,255,.055)}
+td.num,th.num{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.ce{font-weight:700;white-space:nowrap}
+td.ce .cn{display:block}
+td.ce small{display:block;font-weight:500;font-family:var(--sans);font-size:10px;color:var(--ink-faint)}
+th.stick,td.stick{position:sticky;left:0;background:var(--paper);z-index:2}
+tbody tr.cerow:hover td.stick{background:#F5EFFF}
+thead th.stick{z-index:4;background:var(--paper-deep)}
+tr.grouphead td{background:var(--paper-deep);font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--purps-deep);border-top:2px solid var(--rule-dark);border-bottom:1px solid var(--rule-dark)}
+tr.grouphead td.gtoggle{cursor:pointer;user-select:none}
+tr.grouphead:hover td.gtoggle{color:var(--purps)}
+tr.grouphead .caret{display:inline-block;width:14px;color:var(--purps);font-weight:700}
+tr.grouphead .gcnt{color:var(--ink-faint);font-weight:600;letter-spacing:0;text-transform:none;margin-left:7px}
+tr.subtot td{background:rgba(128,0,255,.055);font-family:var(--sans);font-weight:700;font-size:12px;border-bottom:1.5px solid var(--rule-dark)}
+.moverbadge{font-size:11px;margin-right:4px}
+.cmtdot{color:var(--purps);margin-left:5px}
+
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:14px 16px;border:1px solid var(--rule);border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
+.controls .search{flex:1;min-width:200px}
+.controls input[type=text],.controls select{font-family:var(--sans);font-size:12.5px;font-weight:500;padding:8px 12px;border:1.5px solid var(--rule-dark);
+  border-radius:10px;background:#fff;color:var(--ink);width:100%}
+.controls input[type=text]:focus,.controls select:focus{outline:none;border-color:var(--purps)}
+.controls label{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:5px}
+.ctl-group{min-width:150px}
+.fchips{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.fgroup{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fgroup .flabel{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-right:2px}
+.fchip{font-family:var(--sans);font-size:11.5px;font-weight:600;padding:4px 12px;border:1.3px solid var(--rule-dark);border-radius:99px;background:#fff;color:var(--ink-soft);cursor:pointer;transition:all .12s}
+.fchip:hover{border-color:var(--purps);color:var(--purps)}
+.fchip.on{background:var(--purps);color:#fff;border-color:var(--purps)}
+.btn{font-family:var(--sans);font-size:11.5px;font-weight:600;padding:8px 14px;border:1.5px solid var(--rule-dark);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;transition:all .12s}
+.btn:hover{border-color:var(--purps);color:var(--purps)}
+.btn.dark{background:var(--purps);color:#fff;border-color:var(--purps)}
+.btn.dark:hover{background:var(--purps-deep);color:#fff}
+.countline{font-family:var(--sans);font-size:12px;font-weight:500;color:var(--ink-soft);margin-top:11px;display:flex;gap:24px;flex-wrap:wrap}
+.countline b{color:var(--ink);font-weight:700}
+
+.emptystate{border:1.5px dashed var(--rule-dark);border-radius:14px;padding:18px 22px;font-size:13.5px;color:var(--ink-soft);background:var(--paper-deep)}
+.emptystate b{color:var(--green);font-weight:700}
+
+svg.spark{display:block}
+
+.scrim{position:fixed;inset:0;background:rgba(26,21,38,.42);opacity:0;pointer-events:none;transition:opacity .18s;z-index:40}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:640px;max-width:96vw;background:var(--paper);border-left:1px solid var(--rule);
+  box-shadow:var(--shadow-lg);transform:translateX(102%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:50;
+  display:flex;flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.dr-head{padding:22px 24px 16px;border-bottom:1.5px solid var(--rule);position:relative}
+.dr-head .close{position:absolute;top:18px;right:20px;font-size:22px;cursor:pointer;color:var(--ink-faint);line-height:1;background:none;border:none}
+.dr-head .close:hover{color:var(--purps)}
+.dr-head .kick{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--purps)}
+.dr-head h2{font-family:var(--disp);font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.02em;margin:5px 40px 9px 0}
+.dr-chips{display:flex;gap:6px;flex-wrap:wrap}
+.dr-body{overflow-y:auto;padding:20px 24px 44px}
+.dr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:18px}
+.dr-stat{border:1px solid var(--rule);border-radius:12px;padding:11px 13px;background:var(--paper-deep)}
+.dr-stat .l{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+.dr-stat .v{font-family:var(--disp);font-size:23px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:4px}
+.dr-sec-t{font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:22px 0 10px;border-bottom:1px solid var(--rule);padding-bottom:6px}
+.trend-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.trend{border:1px solid var(--rule);border-radius:12px;padding:11px 12px;background:var(--paper-deep)}
+.trend .tl{font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);display:flex;justify-content:space-between}
+.trend .tl b{color:var(--ink);font-weight:700}
+.dr-table{width:100%;font-size:11.5px;border-collapse:collapse;margin-top:4px}
+.dr-table th{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);text-align:right;padding:6px 7px;border-bottom:1.3px solid var(--rule-dark);position:sticky;top:0;background:var(--paper)}
+.dr-table th:first-child{text-align:left}
+.dr-table td{padding:5px 7px;text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--rule)}
+.dr-table td:first-child{text-align:left;color:var(--ink-soft)}
+.dr-table tr:last-child td{font-weight:700;background:rgba(128,0,255,.05)}
+/* RE-SOURCE composition tables have no total row — neutralise last-row emphasis */
+.dr-table.plain tr:last-child td{font-weight:normal;background:none}
+.cmt-box textarea{width:100%;min-height:120px;font-family:var(--sans);font-size:13.5px;padding:12px 14px;border:1.5px solid var(--rule-dark);
+  border-radius:12px;background:#fff;color:var(--ink);resize:vertical;line-height:1.5}
+.cmt-box textarea:focus{outline:none;border-color:var(--purps)}
+.cmt-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint)}
+.cmt-saved{color:var(--green);font-weight:600}
+.io-row{display:flex;gap:8px;margin-top:12px}
+.mono{font-family:var(--sans)}
+a.outlink{color:var(--purps);text-decoration:none;font-family:var(--sans);font-size:12px;font-weight:600;border-bottom:1px solid rgba(128,0,255,.35)}
+a.outlink:hover{color:var(--purps-deep);border-bottom-color:var(--purps-deep)}
+.footnote{margin-top:64px;border-top:2px solid var(--rule);padding-top:16px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint);line-height:1.7}
+
+/* --- Section-1 clickable headline card --- */
+.card.click{cursor:pointer;position:relative;transition:box-shadow .14s,border-color .14s}
+.card.click:hover{border-color:var(--purps);box-shadow:0 0 0 1.5px var(--purps),0 12px 30px -14px rgba(128,0,255,.32)}
+.card.click .hint{position:absolute;top:13px;right:15px;font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--purps);background:var(--violet-bg);border:1px solid var(--rule-dark);border-radius:6px;padding:2px 7px}
+
+/* --- Market drawer (wider than CE drawer) + key-metrics table --- */
+.drawer.wide{width:880px}
+.km-legend{margin-left:auto;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint);display:flex;gap:13px;align-items:center;text-transform:none;letter-spacing:0}
+.km-legend i{display:inline-block;width:15px;height:0;border-top:2px solid var(--ink);margin-right:5px;vertical-align:middle}
+.km-legend i.ly{border-top:2px dashed var(--ink-faint)}
+table.km{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+table.km th{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);
+  text-align:right;padding:6px 8px 8px;border-bottom:1.3px solid var(--rule-dark)}
+table.km th:first-child{text-align:left}table.km th.spk{text-align:right}
+table.km td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums}
+table.km td:first-child{text-align:left;color:var(--ink-soft);font-weight:600}
+table.km td.w0{font-weight:800;color:var(--ink)}
+table.km td.spk{padding-right:0;width:158px;text-align:right}
+table.km tr:hover td{background:rgba(128,0,255,.04)}
+table.km td.spk svg{vertical-align:middle;cursor:crosshair}
+.lyna{font-family:var(--sans);font-size:9.5px;font-style:italic;color:var(--ink-faint)}
+#kmtip{position:fixed;pointer-events:none;z-index:60;background:var(--ink);color:#fff;border-radius:8px;padding:9px 11px;
+  font-family:var(--sans);font-size:11.5px;opacity:0;transition:opacity .08s;box-shadow:0 8px 24px -6px rgba(0,0,0,.5);min-width:150px}
+#kmtip .wk{color:#b7aecb;font-size:10px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:5px}
+#kmtip .r{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
+#kmtip .r .k{color:#c9c2d8}#kmtip .r .ty{font-weight:700}#kmtip .r .ly{color:#b0a8c2}
+#kmtip .yoy{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.15);font-weight:700}
+
+/* --- WoW Shapley diverging bars --- */
+.shaprow{display:grid;grid-template-columns:88px 1fr 82px;align-items:center;gap:12px;padding:6px 0;border-top:1px solid var(--rule)}
+.shaprow:first-of-type{border-top:none}
+.shaprow .k{font-family:var(--sans);color:var(--ink-soft);font-size:12.5px;font-weight:600}
+.shaprow .d{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;font-size:13px}
+.barwrap{position:relative;height:15px;background:linear-gradient(90deg,var(--red-bg) 0 50%,var(--green-bg) 50% 100%);border-radius:4px}
+.barwrap .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--rule-dark)}
+.bar{position:absolute;top:2px;height:11px;border-radius:3px}
+.bar.n{right:50%;background:var(--red)}.bar.p{left:50%;background:var(--green)}
+.shapnet{display:flex;justify-content:space-between;margin-top:10px;padding-top:9px;border-top:1.5px solid var(--rule-dark);
+  font-family:var(--sans);font-weight:800;font-size:13.5px}
+
+/* --- Pacing placeholders --- */
+.pace{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.pacecard{border:1px dashed var(--rule-dark);border-radius:12px;padding:12px 14px;opacity:.7}
+.pacecard .l{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+.pacecard .v{font-family:var(--disp);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
+.dr-cap{font-family:var(--sans);color:var(--ink-faint);font-size:11px;margin-top:9px;line-height:1.5}
+
+/* --- BGM customization: saved views bar, select bar, star, hot rows, group tag --- */
+.views{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 16px;margin-bottom:12px;
+  border:1px solid var(--rule);border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
+.views .vlbl{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-right:2px}
+.vchip{font-family:var(--sans);font-size:11.5px;font-weight:600;padding:5px 11px;border:1.3px solid var(--rule-dark);border-radius:99px;
+  background:#fff;color:var(--ink-soft);cursor:pointer;display:inline-flex;gap:7px;align-items:center;transition:all .12s}
+.vchip:hover{border-color:var(--purps);color:var(--purps)}
+.vchip.on{background:var(--purps);color:#fff;border-color:var(--purps)}
+.vchip .del{color:var(--ink-faint);font-weight:700}.vchip:hover .del{color:var(--purps)}.vchip.on .del{color:#e9defc}
+.selbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:11px 16px;
+  border:1.3px solid var(--rule-dark);border-radius:14px;background:var(--paper-deep);font-family:var(--sans);font-size:12.5px;color:var(--ink-soft)}
+.selbar b{color:var(--purps);font-weight:800}
+.selbar input[type=text]{font-family:var(--sans);font-size:12.5px;font-weight:500;padding:7px 11px;border:1.5px solid var(--rule-dark);border-radius:10px;background:#fff;color:var(--ink);width:190px}
+.selbar input[type=text]:focus{outline:none;border-color:var(--purps)}
+.selbar .glist{color:var(--ink-faint);font-size:11.5px}
+tbody tr.hot td{box-shadow:inset 3px 0 0 var(--red)!important;background:rgba(229,56,79,.045)}
+tbody tr.cerow.hot:hover td{background:rgba(229,56,79,.08)}
+.star{cursor:pointer;color:var(--ink-faint);font-size:15px;user-select:none;padding:0 2px}
+.star.on{color:var(--amber)}.star:hover{color:var(--amber)}
+td.selcol,th.selcol{text-align:center;width:30px}
+td.selcol input,th.selcol input{cursor:pointer}
+.gtag{display:inline-block;font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.02em;background:var(--violet-bg);
+  border:1px solid var(--rule-dark);border-radius:5px;padding:1px 6px;color:var(--purps);margin-left:6px;vertical-align:1px}
+
+/* --- (P2) contribution strip: per-group Δ-rev-WoW diverging bars --- */
+.strip{background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:14px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.strip .sh{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+.strip .sh b{color:var(--ink)} .strip .sh .muted{color:var(--ink-faint);font-weight:600;letter-spacing:0;text-transform:none}
+.sbars{display:flex;flex-direction:column;gap:7px}
+.sbar{display:grid;grid-template-columns:190px 1fr 128px;align-items:center;gap:12px;cursor:pointer}
+.sbar .k{font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar:hover .k{color:var(--purps)}
+.strack{position:relative;height:18px;background:linear-gradient(90deg,var(--red-bg) 0 50%,var(--green-bg) 50% 100%);border-radius:4px}
+.strack .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--rule-dark)}
+.sfill{position:absolute;top:2px;height:14px;border-radius:3px}
+.sfill.n{right:50%;background:var(--red)}.sfill.p{left:50%;background:var(--green)}
+.sbar .d{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700}
+.idx{font-family:var(--sans);font-size:11px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:6px}
+.idx.hot{background:var(--red-bg);color:var(--red)}.idx.warm{background:var(--green-bg);color:var(--green)}.idx.mute{background:var(--paper-deep);color:var(--ink-faint)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="masthead">
+    <div class="mast-kicker">Headout · Growth · Weekly Market Report</div>
+    <h1>The Weekly <em>Ledger</em></h1>
+    <div class="mast-meta" id="mastMeta"></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="app"></div>
+
+  <div class="footnote" id="footnote"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<div id="kmtip"></div>
+
+<script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById('report-data').textContent);
+const MARKETS = DATA.markets;
+let mi = 0;                       // current market index
+const state = { sortKey:'__mover', dir:-1, group:'', search:'', filters:{}, watchOnly:false, rule:'', selMode:false, collapsed:{} };
+let ceCtxTotRev = 0;   // total W0 revenue of the currently-filtered rows (for Contrib %); set in paintCETable
+const sel = new Set();            // CE ids checked in select mode (transient)
+let activeView = null;            // index of the currently-applied saved view
+
+/* ---------- formatting ---------- */
+const MINUS = '−';
+function fmtMoney(v){ if(v==null||isNaN(v)) return '—'; const a=Math.abs(v);
+  let s; if(a>=1e6) s='$'+(v/1e6).toFixed(1)+'M'; else if(a>=1e3) s='$'+(v/1e3).toFixed(1)+'K'; else s='$'+Math.round(v);
+  return s.replace('$-','-$'); }
+function fmtInt(v){ return (v==null||isNaN(v))?'—':Math.round(v).toLocaleString('en-US'); }
+function fmtCpc(v){ return (v==null||isNaN(v))?'—':'$'+(+v).toFixed(2); }   // sub-$ metric — needs cents
+function fmtPct(v,dp){ dp=dp==null?1:dp; return (v==null||isNaN(v))?'—':(+v).toFixed(dp)+'%'; }
+function fmtDelta(v,dp){ dp=dp==null?1:dp; if(v==null||isNaN(v)) return '—';
+  const s=v>0?'+':(v<0?MINUS:''); return s+Math.abs(v).toFixed(dp)+'%'; }
+function fmtMoneyDelta(v){ if(v==null||isNaN(v)) return '—';
+  const s=v>0?'+':MINUS; return s+fmtMoney(Math.abs(v)); }
+function sgn(v){ return (v==null||isNaN(v))?'':(v>0?'pos':(v<0?'neg':'')); }
+function esc(s){ return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ---------- sparkline (inline SVG, null = gap, auto-scaled) ---------- */
+function sparkline(vals, opt){
+  opt=opt||{}; const w=opt.w||120,h=opt.h||26,pad=2.5;
+  const nums=vals.map(v=>(v==null||isNaN(v))?null:+v);
+  const present=nums.filter(v=>v!=null);
+  if(present.length<2) return '<svg class="spark" width="'+w+'" height="'+h+'"></svg>';
+  const min=Math.min.apply(null,present), max=Math.max.apply(null,present), span=(max-min)||1, n=nums.length;
+  const X=i=>pad+(w-2*pad)*(i/(n-1)), Y=v=>h-pad-(h-2*pad)*((v-min)/span);
+  let d='',started=false;
+  nums.forEach((v,i)=>{ if(v==null){started=false;return;} d+=(started?' L':' M')+X(i).toFixed(1)+' '+Y(v).toFixed(1); started=true; });
+  const up = present[present.length-1] >= present[0];
+  const color = opt.color || (up?'var(--green)':'var(--red)');
+  const last=nums[n-1];
+  const dot = last!=null ? '<circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(last).toFixed(1)+'" r="1.9" fill="'+color+'"/>' : '';
+  return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+
+    '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'+dot+'</svg>';
+}
+
+/* ---------- comments (localStorage, persists week-over-week) ---------- */
+function cmtKey(ceId){ return 'wr_comments::'+MARKETS[mi].meta.market_slug+'::'+ceId; }
+function getComment(ceId){ try{ return JSON.parse(localStorage.getItem(cmtKey(ceId))||'null'); }catch(e){ return null; } }
+function hasComment(ceId){ const c=getComment(ceId); return !!(c && c.text && c.text.trim()); }
+function saveComment(ceId,text){
+  if(text && text.trim()) localStorage.setItem(cmtKey(ceId), JSON.stringify({text:text, updated:new Date().toISOString()}));
+  else localStorage.removeItem(cmtKey(ceId));
+}
+
+/* ---------- BGM customization: per-market saved views / groups / watchlist / rule ----------
+   Keys mirror the comments pattern, scoped per market:
+     wr_views::{slug}   -> [{name, st:{sortKey,dir,group,search,filters,watchOnly,rule}}]
+     wr_groups::{slug}  -> {groupName:[ceId,...]}
+     wr_watch::{slug}   -> [ceId,...]
+     wr_rule::{slug}    -> "roi<145"  (last-used highlight rule string) */
+function slug(){ return MARKETS[mi].meta.market_slug; }
+function lsGet(kind, dflt){ try{ const v=localStorage.getItem('wr_'+kind+'::'+slug());
+  return v==null?dflt:(JSON.parse(v)??dflt); }catch(e){ return dflt; } }
+function lsSet(kind, val){ localStorage.setItem('wr_'+kind+'::'+slug(), JSON.stringify(val)); }
+function getViews(){ return lsGet('views', []); }
+function setViews(v){ lsSet('views', v); }
+function getGroups(){ return lsGet('groups', {}); }
+function setGroups(g){ lsSet('groups', g); }
+function getWatch(){ return new Set(lsGet('watch', [])); }
+function setWatch(s){ lsSet('watch', Array.from(s)); }
+function toggleWatch(ceId){ const s=getWatch(); s.has(ceId)?s.delete(ceId):s.add(ceId); setWatch(s); }
+function groupOf(ceId){ const g=getGroups(); for(const name in g){ if(g[name].indexOf(ceId)>=0) return name; } return null; }
+
+/* ---------- diagnostic-bucket lookup (from bucket1_fluctuations) ---------- */
+// Map ce_id -> {signal, direction} for the current market. Built lazily and
+// cached per market index so the group-by / contribution strip stay instant.
+let _bucketIdx=null, _bucketIdxMi=-1;
+function bucketIndex(){
+  if(_bucketIdxMi===mi && _bucketIdx) return _bucketIdx;
+  _bucketIdx={}; (MARKETS[mi].bucket1_fluctuations||[]).forEach(f=>{ _bucketIdx[f.ce_id]={signal:f.signal,direction:f.direction}; });
+  _bucketIdxMi=mi; return _bucketIdx;
+}
+function bucketOf(ceId){ return bucketIndex()[ceId]||null; }
+// pretty label e.g. "B1 · CVR ▼" for a {signal,direction}
+function bucketLabel(b){
+  const sig={cvr:'CVR', rpc:'RPC', cm1_per_conv:'CM1/conv'}[b.signal]||b.signal;
+  return 'B1 · '+sig+' '+(b.direction==='down'?'▼':'▲');
+}
+// highlight rule: parse "roi<145" / "wow<-20" / "rev>50000" -> predicate over a ceRow
+function ruleFn(){
+  const m=(state.rule||'').match(/(roi|wow|rev|yoy|cvr|aov|tr|dwk|spend|cm1|clicks|orders)\s*([<>]=?)\s*(-?\d+\.?\d*)/i);
+  if(!m) return null;
+  const field=m[1].toLowerCase(), op=m[2], val=parseFloat(m[3]);
+  const pick={roi:r=>r.w0.roi_pct, wow:r=>r.wow, rev:r=>r.w0.revenue, yoy:r=>r.w0.yoy_pct,
+    cvr:r=>r.w0.cvr_pct, aov:r=>r.w0.aov, tr:r=>r.w0.tr_pct, dwk:r=>r.dwk,
+    spend:r=>r.w0.spend, cm1:r=>r.w0.cm1, clicks:r=>r.w0.clicks, orders:r=>r.w0.orders}[field];
+  if(!pick) return null;
+  return r=>{ const x=pick(r); if(x==null||isNaN(x)) return false;
+    return op==='<'?x<val:op==='<='?x<=val:op==='>'?x>val:op==='>='?x>=val:false; };
+}
+
+/* ---------- per-CE derived W0/W1 row ---------- */
+function ceRow(ce){
+  const wk=ce.weekly, w0=wk[wk.length-1], w1=wk[wk.length-2];
+  const wow = (w1&&w1.revenue)? (w0.revenue-w1.revenue)/w1.revenue*100 : null;
+  const dwk = w0.revenue - ((w1&&w1.revenue)||0);
+  return {ce:ce, w0:w0, w1:w1, wow:wow, dwk:dwk};
+}
+
+/* =====================================================================
+   SECTION 1 — headlines + top movers + market sparkline
+   ===================================================================== */
+// SECTION 1 — Market header (merged: raw headline + structural dual-clock +
+// dual-lens movers + themes). One header, not two — the structural and raw
+// views live together so their DIVERGENCE (e.g. Cruises-Chicago −$3.3K raw but
+// −$29.7K structural) is the signal, instead of two overlapping mover lists.
+function renderHead(M){
+  const h = M.market_summary.headlines;
+  const wh = h.week_header || null;       // structural engine (may be absent on old snapshots)
+  const wkly = M.market_summary.weekly;
+  const nW = wkly.length;
+  const w0rev = nW ? wkly[nW-1].revenue : null;
+  const w1rev = nW>1 ? wkly[nW-2].revenue : null;
+  const wowAbs = (w0rev!=null&&w1rev!=null) ? w0rev-w1rev : null;
+  function trailing4wRoi(endIdx){
+    let cm=0, sp=0, any=false;
+    for(let i=endIdx-3;i<=endIdx;i++){ if(i<0||i>=nW) continue; const w=wkly[i];
+      if(w.spend){ sp+=w.spend; any=true; } if(w.cm1){ cm+=w.cm1; } }
+    return (any&&sp) ? cm/sp*100 : null;
+  }
+  const roiT4 = trailing4wRoi(nW-1), roiT4prev = trailing4wRoi(nW-2);
+  const roiDeltaPP = (roiT4!=null&&roiT4prev!=null) ? roiT4-roiT4prev : null;
+  const ppChip = roiDeltaPP==null ? '' :
+    ' <span class="'+sgn(roiDeltaPP)+'" style="font-weight:600">('+
+    (roiDeltaPP>0?'+':MINUS)+Math.abs(roiDeltaPP).toFixed(1)+'pp)</span>';
+
+  // raw WoW Δ per CE — for the dual-lens mover rows
+  const rawDelta = {};
+  (M.ces||[]).forEach(c=>{ const w=c.weekly||[]; if(w.length>=2){
+    const a=w[w.length-1].revenue, b=w[w.length-2].revenue;
+    if(a!=null&&b!=null) rawDelta[c.ce_id]=a-b; } });
+
+  // Show BOTH structural and raw, in aligned labeled columns (struct | raw).
+  // struct is primary (bold, colored); raw is muted, and turns amber when it
+  // materially disagrees (sign flip, or raw <½ / >2× structural) — so you see
+  // both numbers AND the divergence at a glance (Cruises-Chicago: −$29.7K / −$3.3K).
+  const diverges = (st,raw)=>{
+    if(raw==null||st==null) return false;
+    if((st>=0)!==(raw>=0)) return true;
+    if(st===0) return Math.abs(raw)>=1000;
+    const r=raw/st; return r<0.5 || r>2.0;
+  };
+  const MVHEAD='<div class="mvh"><span></span><span></span><span>struct</span><span>raw</span></div>';
+  const mvS = (c,cls,i)=>{ const raw=rawDelta[c.ce_id], dv=diverges(c.struct_usd,raw);
+    return '<div class="mvr"><span class="rk">'+(i+1)+'</span>'+
+      '<span class="nm" data-ce="'+esc(c.ce_id)+'">'+esc(c.ce_name)+
+      (c.baseline_sensitive?' <span class="sub">~bl</span>':'')+'</span>'+
+      '<span class="st '+cls+'">'+fmtMoneyDelta(c.struct_usd)+'</span>'+
+      '<span class="rw'+(dv?' diverge':'')+'"'+(dv?' title="raw & structural disagree"':'')+'>'+
+        (raw!=null?fmtMoneyDelta(raw):'—')+'</span></div>'; };
+  // fallback mover (no structural engine): raw only, classic single-column
+  const mvR = (m,i)=> '<div class="mover"><span class="rk">'+(i+1)+'</span>'+
+     '<span class="nm" data-ce="'+esc(m.ce_id)+'">'+esc(m.ce_name)+'</span>'+
+     '<span class="dv '+sgn(m.delta_wow)+'">'+fmtMoneyDelta(m.delta_wow)+'</span></div>';
+
+  let drops, gains, moverSub;
+  if(wh){
+    const dr=(wh.structural.top_droppers||[]).slice(0,6).map((c,i)=>mvS(c,'neg',i)).join('');
+    const gn=(wh.structural.top_gainers||[]).slice(0,6).map((c,i)=>mvS(c,'pos',i)).join('');
+    drops = dr ? MVHEAD+dr : ''; gains = gn ? MVHEAD+gn : '';
+    moverSub='structural Δ vs LY · raw beside · amber = disagree';
+  } else {
+    drops=(h.top_drops||[]).map(mvR).join(''); gains=(h.top_gainers||[]).map(mvR).join('');
+    moverSub='Δ rev WoW';
+  }
+
+  // Plain-language read — translate the dual-clock into one sentence a BGM gets
+  // instantly (the "so what", not the jargon). This is the header's headline.
+  function plainRead(wh){
+    const s=wh.structural, wow=h.wow_pct;
+    const rawTxt = (wow==null) ? 'moved' :
+      Math.abs(wow)<2 ? 'roughly flat ('+fmtDelta(wow)+' WoW)' :
+      (wow>0?'up ':'down ')+fmtDelta(Math.abs(wow))+' WoW';
+    const pool = s.net_usd<0 ? (s.top_droppers||[]) : (s.top_gainers||[]);
+    const names = pool.slice(0,2).map(c=>esc(c.ce_name));
+    const drv = names.length ? ' — mostly '+names.join(' and ') : '';
+    if(s.net_usd<0)
+      return 'Revenue is <b>'+rawTxt+'</b>, but structurally <b class="neg">'+fmtMoney(Math.abs(s.net_usd))+' behind</b> last year’s seasonal ramp'+drv+'.';
+    return 'Revenue is <b>'+rawTxt+'</b>, and structurally <b class="pos">'+fmtMoney(s.net_usd)+' ahead</b> of last year’s ramp'+drv+'.';
+  }
+  const verdict = wh ? (
+      '<div class="bignum" style="font-size:20px;line-height:1.15;margin:2px 0 6px">'+esc(wh.dual_clock_label)+'</div>'+
+      '<div style="font-size:13.5px;line-height:1.5;color:var(--ink-soft);margin-bottom:10px">'+plainRead(wh)+'</div>'
+    ) : '';
+  // N80 counts, hover to reveal the CEs behind them (native title tooltip).
+  const _names = (arr,n)=>{ const names=(arr||[]).slice(0,n).map(c=>c.ce_name);
+    const more=(n>names.length)?0:((arr||[]).length>n?0:0); return names; };
+  const lossN = wh ? wh.structural.n80_loss : 0, gainN = wh ? wh.structural.n80_gain : 0;
+  const lossTip = wh ? esc((wh.structural.top_droppers||[]).slice(0,lossN).map(c=>c.ce_name).join(', ')) : '';
+  const gTop = wh ? (wh.structural.top_gainers||[]).slice(0,10).map(c=>c.ce_name) : [];
+  const gainTip = wh ? esc(gTop.join(', ')+(gainN>gTop.length?', …+'+(gainN-gTop.length)+' more':'')) : '';
+  const hov = 'cursor:help;border-bottom:1px dotted var(--ink-faint)';
+  const structRows = wh ? (
+      '<div class="clockrow"><span>Structural net (vs LY ramp)</span><b class="'+sgn(wh.structural.net_usd)+'">'+fmtMoneyDelta(wh.structural.net_usd)+
+        ' <span class="sub" style="font-weight:500">(gains +'+fmtMoney(wh.structural.gains_usd)+' · losses '+MINUS+fmtMoney(wh.structural.losses_usd)+')</span></b></div>'+
+      '<div class="clockrow"><span>Concentration (N80) <span class="sub">hover for CEs</span></span><b>'+
+        '<span title="'+lossTip+'" style="'+hov+'">'+lossN+' CEs</span> = 80% of loss · '+
+        '<span title="'+gainTip+'" style="'+hov+'">'+gainN+'</span> of gains</b></div>'
+    ) : '';
+  const disagree = (wh && wh.clocks_disagree) ? '<div class="sub" style="margin-top:6px;color:var(--amber)">⚠ clocks disagree — raw & structural point opposite ways</div>' : '';
+
+  // themes: diffuse only; concentrated single-CE cuts demoted (spec §4.3)
+  let themesCard='';
+  if(wh && (wh.themes||[]).length){
+    const realT=wh.themes.filter(t=>!t.concentrated), concT=wh.themes.filter(t=>t.concentrated);
+    const rows=realT.map(t=>'<div style="padding:5px 0;border-bottom:1px solid var(--rule)">'+
+      '<span class="chip '+(t.direction==='loss'?'red':'green')+'">'+esc(t.direction)+'</span> '+
+      '<b>'+esc(t.dim)+': '+esc(t.value)+'</b> <span class="sub">'+t.index+'× · '+t.n_ces+' CEs · '+
+      fmtMoney(t.flow_usd)+' ('+t.share_of_flow_pct+'% of flow)</span></div>').join('')+
+      (concT.length?'<div class="sub" style="padding-top:9px">Concentrated (single-CE) cuts — see movers, not group themes: '+
+        concT.map(t=>esc(t.value)+' ('+fmtMoney(t.flow_usd)+')').join(' · ')+'</div>':'');
+    themesCard='<div class="card" style="margin-top:14px"><h3>Themes <span class="n">· contribution index ≥1.5× · diffuse only</span></h3>'+rows+'</div>';
+  }
+
+  return ''+
+  '<section id="s1"><div class="sec-head"><span class="sec-num">1</span><h2>Market headlines</h2>'+
+    '<span class="sub">week of '+esc(M.meta.week_start)+' · raw vs structural (LY seasonality)</span></div>'+
+  '<div class="head-grid">'+
+    '<div class="card click" data-market-drawer="1" role="button" tabindex="0" aria-label="Open market headline detail">'+
+      '<span class="hint">▸ click for detail</span>'+
+      '<h3>Revenue W0 · verdict</h3>'+
+      '<div class="bignum">'+fmtMoney(h.revenue_w0)+'</div>'+
+      verdict+
+      '<div class="clockrow"><span>WoW Δ (raw)</span><b class="'+sgn(wowAbs)+'">'+fmtMoneyDelta(wowAbs)+' · '+fmtDelta(h.wow_pct)+'</b></div>'+
+      '<div class="clockrow"><span>YoY (−364d, weekday-aligned)</span><b class="'+sgn(h.yoy_pct)+'">'+fmtDelta(h.yoy_pct)+'</b></div>'+
+      structRows+
+      '<div class="clockrow"><span>ROI1 (trailing 4w)</span><b>'+fmtPct(roiT4,0)+ppChip+'</b></div>'+
+      '<div class="spark-wrap">'+sparkline(wkly.map(x=>x.revenue),{w:340,h:52,color:'var(--blue)'})+'</div>'+
+      disagree+
+    '</div>'+
+    '<div class="card movers"><h3>Top drops <span class="n">· '+moverSub+'</span></h3>'+
+      (drops||'<div class="emptystate">No drops this week <b>✅</b></div>')+'</div>'+
+    '<div class="card movers"><h3>Top gains <span class="n">· '+moverSub+'</span></h3>'+
+      (gains||'<div class="emptystate">No gains this week</div>')+'</div>'+
+  '</div>'+themesCard+'</section>';
+}
+
+/* =====================================================================
+   SECTION 2 — WoW follow-up snapshot
+   ===================================================================== */
+function statusChip(s){
+  const t=(s||'').toLowerCase();
+  let c='ghost';
+  if(t.indexOf('recover')>=0||t.indexOf('resolved')>=0) c='green';
+  else if(t.indexOf('wors')>=0) c='red';
+  else if(t.indexOf('soft')>=0||t.indexOf('still')>=0) c='amber';
+  return '<span class="chip '+c+'">'+esc(s)+'</span>';
+}
+function renderFollowup(M){
+  const rows = M.followup||[];
+  let body;
+  if(!rows.length){
+    body='<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>';
+  } else {
+    body='<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>'+
+      rows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span></td>'+
+        '<td class="mono">'+esc(r.flagged_week)+'</td>'+
+        '<td>'+esc(r.signal)+'</td>'+
+        '<td>'+statusChip(r.status_now)+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  }
+  return '<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>'+
+    '<span class="sub">last week’s flagged CEs · signal then → status now</span></div>'+body+'</section>';
+}
+
+/* =====================================================================
+   SECTION 3 — All-CE view (the core surface)
+   ===================================================================== */
+const COLS = [
+  {k:'name', label:'Combined Entity', stick:true, sort:true, sv:r=>r.ce.ce_name.toLowerCase()},
+  {k:'spark',label:'12-wk rev', sort:false},
+  {k:'rev',  label:'Rev W0', num:true, sort:true, sv:r=>r.w0.revenue, rd:r=>fmtMoney(r.w0.revenue)},
+  {k:'contrib', label:'Contrib %', num:true, sort:true, sv:r=>r.w0.revenue,
+    rd:r=>fmtPct(ceCtxTotRev? 100*(r.w0.revenue||0)/ceCtxTotRev : null, 1)},
+  {k:'dwk',  label:'Δ Rev WoW', num:true, sort:true, sv:r=>r.dwk, rd:r=>'<span class="'+sgn(r.dwk)+'">'+fmtMoneyDelta(r.dwk)+'</span>'},
+  {k:'wow',  label:'WoW %', num:true, sort:true, sv:r=>r.wow, rd:r=>'<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+'</span>'},
+  {k:'yoy',  label:'YoY %', num:true, sort:true, sv:r=>r.w0.yoy_pct, rd:r=>'<span class="'+sgn(r.w0.yoy_pct)+'">'+fmtDelta(r.w0.yoy_pct)+'</span>'},
+  {k:'ord',  label:'Orders', num:true, sort:true, sv:r=>r.w0.orders, rd:r=>fmtInt(r.w0.orders)},
+  {k:'clk',  label:'Clicks', num:true, sort:true, sv:r=>r.w0.clicks, rd:r=>fmtInt(r.w0.clicks)},
+  {k:'cpc',  label:'CPC', num:true, sort:true, sv:r=>r.w0.cpc, rd:r=>fmtCpc(r.w0.cpc)},
+  {k:'cvr',  label:'CVR', num:true, sort:true, sv:r=>r.w0.cvr_pct, rd:r=>fmtPct(r.w0.cvr_pct)},
+  {k:'aov',  label:'AOV', num:true, sort:true, sv:r=>r.w0.aov, rd:r=>fmtMoney(r.w0.aov)},
+  {k:'tr',   label:'TR', num:true, sort:true, sv:r=>r.w0.tr_pct, rd:r=>fmtPct(r.w0.tr_pct)},
+  {k:'spd',  label:'Spend', num:true, sort:true, sv:r=>r.w0.spend, rd:r=>fmtMoney(r.w0.spend)},
+  {k:'cm1',  label:'CM1', num:true, sort:true, sv:r=>r.w0.cm1, rd:r=>fmtMoney(r.w0.cm1)},
+  {k:'roi',  label:'ROI', num:true, sort:true, sv:r=>r.w0.roi_pct, rd:r=>fmtPct(r.w0.roi_pct,0)},
+  {k:'paid', label:'Paid %', num:true, sort:true, sv:r=>r.w0.paid_contribution_pct, rd:r=>fmtPct(r.w0.paid_contribution_pct,0)},
+];
+const FILTER_DIMS = [
+  {key:'management_type', label:'Mgmt'},
+  {key:'evolution', label:'Evolution'},
+  {key:'new_vs_existing', label:'Lifecycle'},
+  {key:'tier', label:'Tier'},
+];
+const GROUP_DIMS = [
+  {v:'', label:'None'},{v:'category', label:'Category'},{v:'subcategory', label:'Subcategory'},
+  {v:'city', label:'City'},{v:'management_type', label:'Management type'},
+  {v:'evolution', label:'Evolution'},{v:'tier', label:'Tier'},{v:'new_vs_existing', label:'Lifecycle'},
+  {v:'__bucket', label:'⚑ Diagnostic bucket (B1)'},
+  {v:'__mygrp', label:'★ My groups'},
+];
+
+function distinct(rows, key){
+  const s=new Set(); rows.forEach(r=>{ const v=r.ce.metadata[key]; if(v!=null) s.add(v); });
+  return Array.from(s).sort();
+}
+
+function renderAllCE(M){
+  const rows = M.ces.map(ceRow);
+  // top movers (by |Δ rev|) — for the badge in the name cell
+  const byAbs = rows.slice().sort((a,b)=>Math.abs(b.dwk)-Math.abs(a.dwk));
+  const topMovers={}; byAbs.slice(0,10).forEach(r=>{ topMovers[r.ce.ce_id]= r.dwk>=0?'up':'down'; });
+
+  // control bar
+  const fdimHtml = FILTER_DIMS.map(dim=>{
+    const vals=distinct(rows,dim.key);
+    if(!vals.length) return '';
+    const chips=vals.map(v=>{
+      const on=(state.filters[dim.key]||[]).indexOf(v)>=0;
+      return '<span class="fchip'+(on?' on':'')+'" data-fdim="'+dim.key+'" data-fval="'+esc(v)+'">'+esc(v)+'</span>';
+    }).join('');
+    return '<div class="fgroup"><span class="flabel">'+dim.label+'</span>'+chips+'</div>';
+  }).join('');
+
+  const groupOpts = GROUP_DIMS.map(o=>'<option value="'+o.v+'"'+(state.group===o.v?' selected':'')+'>'+o.label+'</option>').join('');
+
+  // --- (1) saved views bar ---
+  const viewsBar =
+    '<div class="views">'+
+      '<span class="vlbl">My views</span>'+
+      '<span id="viewChips"></span>'+
+      '<button class="btn dark" id="saveView">＋ Save current view</button>'+
+    '</div>';
+
+  const controls =
+    '<div class="controls">'+
+      '<div class="search"><label>Search CE / city / category</label>'+
+        '<input type="text" id="ceSearch" placeholder="type to filter…" value="'+esc(state.search)+'"></div>'+
+      '<div class="ctl-group"><label>Group by (subtotals)</label><select id="ceGroup">'+groupOpts+'</select></div>'+
+      '<div><label>&nbsp;</label><button class="btn" id="collapseGroups"'+(state.group?'':' disabled style="opacity:.45;cursor:default"')+'>'+(state.group?collapseBtnLabel():'▸ Collapse groups')+'</button></div>'+
+      '<div class="ctl-group"><label>Highlight rule</label>'+
+        '<input type="text" id="ceRule" placeholder="e.g. roi&lt;145 or wow&lt;-20" value="'+esc(state.rule)+'"></div>'+
+      '<div><label>&nbsp;</label><button class="btn'+(state.watchOnly?' dark':'')+'" id="watchOnly">★ Watchlist only</button></div>'+
+      '<div><label>&nbsp;</label><button class="btn'+(state.selMode?' dark':'')+'" id="selMode">☑ Select CEs</button></div>'+
+      '<div><label>&nbsp;</label><button class="btn dark" id="moverSort">↕ Top movers</button></div>'+
+      '<div><label>&nbsp;</label><button class="btn" id="ceReset">Reset</button></div>'+
+    '</div>'+
+    (fdimHtml?'<div class="fchips">'+fdimHtml+'</div>':'')+
+    // --- (2) custom-group builder (shown in select mode) ---
+    '<div class="selbar" id="selBar" style="display:'+(state.selMode?'flex':'none')+'">'+
+      '<span><b id="selN">'+sel.size+'</b> selected</span>'+
+      '<input type="text" id="grpName" placeholder="new group name…">'+
+      '<button class="btn dark" id="addGrp">Add to group</button>'+
+      '<button class="btn" id="clearSel">Clear selection</button>'+
+      '<span class="glist" id="grpList"></span>'+
+    '</div>';
+
+  return '<section id="s3"><div class="sec-head"><span class="sec-num">3</span><h2>All-CE view</h2>'+
+    '<span class="sub">every CE × 12 wks · sort · filter · group · star · save views · click a row for the deep dive</span></div>'+
+    viewsBar+
+    controls+
+    '<div id="ceStrip"></div>'+
+    '<div class="tablewrap" id="ceTableWrap"></div>'+
+    '<div class="countline" id="ceCount"></div>'+
+    '<div style="margin-top:12px"><a class="outlink" href="#" id="monthlyLink">→ Open the monthly deep-dive report for '+esc(M.meta.market)+'</a></div>'+
+    '</section>';
+}
+
+function passesFilters(r){
+  if(state.watchOnly && !getWatch().has(r.ce.ce_id)) return false;
+  if(state.search){
+    const q=state.search.toLowerCase();
+    const md=r.ce.metadata;
+    const hay=(r.ce.ce_name+' '+(md.city||'')+' '+(md.category||'')+' '+(md.subcategory||'')).toLowerCase();
+    if(hay.indexOf(q)<0) return false;
+  }
+  for(const key in state.filters){
+    const sel=state.filters[key];
+    if(sel && sel.length){ if(sel.indexOf(r.ce.metadata[key])<0) return false; }
+  }
+  return true;
+}
+
+function sortRows(rows){
+  const k=state.sortKey, dir=state.dir;
+  let sv;
+  if(k==='__mover') sv=r=>Math.abs(r.dwk);
+  else { const col=COLS.find(c=>c.k===k); sv = col&&col.sv ? col.sv : (r=>0); }
+  return rows.slice().sort((a,a2)=>{
+    let x=sv(a), y=sv(a2);
+    const xn=(x==null||(typeof x==='number'&&isNaN(x))), yn=(y==null||(typeof y==='number'&&isNaN(y)));
+    if(xn&&yn) return 0; if(xn) return 1; if(yn) return -1;  // nulls always last
+    if(typeof x==='string') return dir*x.localeCompare(y);
+    return dir*(x-y);
+  });
+}
+
+function moverBadge(topMovers,id){
+  const m=topMovers[id]; if(!m) return '';
+  return m==='up'?'<span class="moverbadge">▲</span>':'<span class="moverbadge neg">▼</span>';
+}
+
+function rowHtml(r,topMovers,rf){
+  const md=r.ce.metadata, id=r.ce.ce_id;
+  const watched=getWatch().has(id), g=groupOf(id), hot=rf&&rf(r);
+  let tds='';
+  if(state.selMode){
+    tds+='<td class="selcol"><input type="checkbox" data-selce="'+esc(id)+'"'+(sel.has(id)?' checked':'')+'></td>';
+  }
+  COLS.forEach(c=>{
+    if(c.k==='name'){
+      tds+='<td class="ce stick">'+
+        '<span class="star'+(watched?' on':'')+'" data-star="'+esc(id)+'" title="watchlist">'+(watched?'★':'☆')+'</span> '+
+        '<span class="cn">'+moverBadge(topMovers,id)+esc(r.ce.ce_name)+
+        (g?'<span class="gtag">'+esc(g)+'</span>':'')+
+        (hasComment(id)?'<span class="cmtdot" title="has a saved note">●</span>':'')+'</span>'+
+        '<small>'+esc(md.city||'')+' · '+esc(md.category||'')+' · '+esc(md.tier||'')+'</small></td>';
+    } else if(c.k==='spark'){
+      // TY (solid) + LY (dashed) revenue mini-trend; no data-k so no per-row
+      // hover wiring — keeps the table instant at 400+ CEs (hover lives in the drawer).
+      const ty=r.ce.weekly.map(x=>x.revenue);
+      const ly=r.ce.weekly_ly?r.ce.weekly_ly.map(x=>x.revenue):null;
+      tds+='<td>'+kmSparkline('', ty, ly).replace(' data-k=""','')+'</td>';
+    } else {
+      tds+='<td class="num">'+c.rd(r)+'</td>';
+    }
+  });
+  return '<tr class="cerow'+(hot?' hot':'')+'" data-ce="'+esc(id)+'">'+tds+'</tr>';
+}
+
+function subtotalHtml(groupRows){
+  // Aggregate raw additive components, then recompute every ratio metric as
+  // Σnumerator / Σdenominator — NOT an average of per-CE ratios (which would be
+  // wrong and is why CPC/CVR/AOV/TR/Paid % used to render blank on collapse).
+  let rev0=0,rev1=0,revLy=0,ord=0,clk=0,pclk=0,spd=0,cpw=0,cm1=0,gbv=0,gbvC=0,adConv=0,organic=0;
+  let anyClk=false,anyPclk=false,anySpd=false,anyLy=false,anyGbvC=false,anyAdConv=false;
+  groupRows.forEach(r=>{ const w=r.w0;
+    rev0+=w.revenue||0; rev1+=(r.w1&&r.w1.revenue)||0;
+    if(w.revenue_ly!=null){revLy+=w.revenue_ly;anyLy=true;}
+    ord+=w.orders||0;
+    if(w.clicks!=null){clk+=w.clicks;anyClk=true;}
+    if(w.paid_clicks!=null){pclk+=w.paid_clicks;anyPclk=true;}
+    if(w.spend!=null){spd+=w.spend;anySpd=true;}
+    if(w.coupon_wallet!=null){cpw+=w.coupon_wallet;}
+    if(w.cm1!=null){cm1+=w.cm1;}
+    if(w.gbv!=null){gbv+=w.gbv;}
+    if(w.gbv_completed!=null){gbvC+=w.gbv_completed;anyGbvC=true;}
+    if(w.ad_conversions!=null){adConv+=w.ad_conversions;anyAdConv=true;}
+    if(w.organic_gbv!=null){organic+=w.organic_gbv;}
+  });
+  const dwk=rev0-rev1;
+  const cell={
+    rev:fmtMoney(rev0),
+    contrib:fmtPct(ceCtxTotRev? 100*rev0/ceCtxTotRev : null, 1),
+    dwk:'<span class="'+sgn(dwk)+'">'+fmtMoneyDelta(dwk)+'</span>',
+    wow:(v=>'<span class="'+sgn(v)+'">'+fmtDelta(v)+'</span>')(rev1? (rev0-rev1)/rev1*100 : null),
+    yoy:(v=>'<span class="'+sgn(v)+'">'+fmtDelta(v)+'</span>')(anyLy&&revLy? (rev0/revLy-1)*100 : null),
+    ord:fmtInt(ord),
+    clk:anyClk?fmtInt(clk):'—',
+    cpc:(anyPclk&&pclk)?fmtCpc(spd/pclk):'—',                // Σspend / Σpaid-clicks
+    cvr:(anyAdConv&&clk)?fmtPct(adConv/clk*100):'—',         // Σad-conv / Σclicks
+    aov:ord?fmtMoney(gbv/ord):'—',                           // ΣGBV / Σorders
+    tr:(anyGbvC&&gbvC)?fmtPct(rev0/gbvC*100):'—',            // Σrev / Σcompleted-GBV
+    spd:anySpd?fmtMoney(spd):'—',
+    cm1:anySpd?fmtMoney(cm1):'—',
+    roi:(anySpd&&(spd+cpw))?fmtPct(cm1/(spd+cpw)*100,0):'—', // Paid RoI = ΣCM1/(Σspend+Σcoupon+wallet)
+    paid:(anyGbvC&&gbvC)?fmtPct(Math.max(0,Math.min(100,100*(1-organic/gbvC))),0):'—'
+  };
+  let tds='';
+  COLS.forEach(c=>{
+    if(c.k==='name') tds+='<td class="stick">'+groupRows.length+' CEs · subtotal</td>';
+    else if(c.k==='spark') tds+='<td></td>';
+    else tds+='<td class="num">'+(cell[c.k]!=null?cell[c.k]:'')+'</td>';
+  });
+  return '<tr class="subtot">'+(state.selMode?'<td class="selcol"></td>':'')+tds+'</tr>';
+}
+
+// group key for a row under the current group-by (metadata dim, "My groups",
+// or diagnostic bucket). Returns the raw group *value* (the collapse key is
+// "<groupDim>|<value>").
+function groupValueOf(r){
+  const gk=state.group;
+  if(gk==='__mygrp') return groupOf(r.ce.ce_id)||'— ungrouped';
+  if(gk==='__bucket'){ const b=bucketOf(r.ce.ce_id); return b?bucketLabel(b):'— not flagged'; }
+  return r.ce.metadata[gk]||'—';
+}
+// list of currently-visible group collapse-keys (for collapse-all/expand-all)
+function currentGroupKeys(){
+  if(!state.group) return [];
+  const rows=MARKETS[mi].ces.map(ceRow).filter(passesFilters);
+  const set=new Set(); rows.forEach(r=>set.add(state.group+'|'+groupValueOf(r)));
+  return Array.from(set);
+}
+function collapseBtnLabel(){
+  const keys=currentGroupKeys();
+  const anyOpen=keys.some(k=>!state.collapsed[k]);
+  return anyOpen?'▸ Collapse all':'▾ Expand all';
+}
+function toggleAllGroups(){
+  const keys=currentGroupKeys();
+  const anyOpen=keys.some(k=>!state.collapsed[k]);
+  keys.forEach(k=>{ state.collapsed[k]=anyOpen; });   // collapse all if any open, else expand all
+  paintCETable();
+  const b=document.getElementById('collapseGroups'); if(b) b.textContent=collapseBtnLabel();
+}
+
+function paintCETable(){
+  const M=MARKETS[mi];
+  let rows = M.ces.map(ceRow).filter(passesFilters);
+  // total filtered W0 revenue — powers the Contrib % column + group contrib in
+  // subtotals/strip. Set before any row/subtotal render reads it.
+  ceCtxTotRev = rows.reduce((s,r)=>s+(r.w0.revenue||0),0);
+  const allRows = M.ces.map(ceRow);
+  const byAbs = allRows.slice().sort((a,b)=>Math.abs(b.dwk)-Math.abs(a.dwk));
+  const topMovers={}; byAbs.slice(0,10).forEach(r=>{ topMovers[r.ce.ce_id]= r.dwk>=0?'up':'down'; });
+
+  const rf=ruleFn();
+
+  // header (leading select column only in select mode)
+  let head='<tr>'+(state.selMode?'<th class="selcol stick"></th>':'')+COLS.map(c=>{
+    const isSort=c.sort!==false;
+    let ar='';
+    if(state.sortKey===c.k) ar='<span class="ar">'+(state.dir<0?'▼':'▲')+'</span>';
+    if(state.sortKey==='__mover'&&c.k==='dwk') ar='<span class="ar">↕</span>';
+    return '<th class="'+(c.num?'num ':'')+(c.stick?'stick ':'')+(isSort?'sortable':'')+'"'+
+      (isSort?' data-sort="'+c.k+'"':'')+'>'+esc(c.label)+ar+'</th>';
+  }).join('')+'</tr>';
+
+  const gspan=COLS.length+(state.selMode?1:0);
+  let body='';
+  if(state.group){
+    const gk=state.group;
+    // "My groups" clusters by custom-group membership, "Diagnostic bucket" by
+    // the B1 signal+direction, others by metadata value.
+    const glabel = gk==='__mygrp' ? 'my group' : (gk==='__bucket' ? 'bucket' : gk);
+    const groups={};
+    rows.forEach(r=>{ const v=groupValueOf(r); (groups[v]=groups[v]||[]).push(r); });
+    // sort group headers by descending subtotal revenue (matches mockup)
+    const grev=gv=>groups[gv].reduce((s,r)=>s+(r.w0.revenue||0),0);
+    Object.keys(groups).sort((a,b)=>grev(b)-grev(a)).forEach(gv=>{
+      const gr=sortRows(groups[gv]);
+      // collapsed state keyed by "groupByDim|groupValue" (survives re-renders this session)
+      const ckey=gk+'|'+gv, open=!state.collapsed[ckey];
+      body+='<tr class="grouphead" data-group="'+esc(ckey)+'"><td class="stick gtoggle" colspan="'+gspan+'" data-gtoggle="'+esc(ckey)+'">'+
+        '<span class="caret">'+(open?'▾':'▸')+'</span>'+esc(glabel)+': '+esc(gv)+
+        '<span class="gcnt">'+gr.length+' CE'+(gr.length===1?'':'s')+'</span></td></tr>';
+      if(open) body+=gr.map(r=>rowHtml(r,topMovers,rf)).join('');
+      body+=subtotalHtml(gr);
+    });
+  } else {
+    body=sortRows(rows).map(r=>rowHtml(r,topMovers,rf)).join('');
+  }
+
+  document.getElementById('ceTableWrap').innerHTML='<table><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
+  renderContributionStrip(rows);
+  const totRev=rows.reduce((s,r)=>s+(r.w0.revenue||0),0);
+  const hotN=rf?rows.filter(rf).length:0;
+  document.getElementById('ceCount').innerHTML=
+    'Showing <b>'+rows.length+'</b> of <b>'+M.ces.length+'</b> CEs · '+
+    'filtered revenue <b>'+fmtMoney(totRev)+'</b>'+
+    (state.sortKey==='__mover'?' · sorted by <b>|Δ rev WoW|</b> (top movers first)':'')+
+    (rf?' · <b>'+hotN+'</b> row(s) match rule <b>'+esc(state.rule)+'</b>':'')+
+    ' · <b>'+getWatch().size+'</b> watched · <b>'+Object.keys(getGroups()).length+'</b> custom group(s)';
+}
+
+/* ---------- (P2) contribution strip — per-group Δ-rev-WoW diverging bars ----------
+   Only shown when grouped. Bar length ∝ |Δ rev WoW|; the index badge =
+   share-of-move ÷ share-of-revenue (>1.5× = the group punches above its weight).
+   Clicking a bar expands + scrolls to its group. */
+function renderContributionStrip(rows){
+  const box=document.getElementById('ceStrip'); if(!box) return;
+  if(!state.group){ box.innerHTML=''; return; }
+  const gk=state.group;
+  const glabel = gk==='__mygrp' ? 'my group' : (gk==='__bucket' ? 'diagnostic bucket' : gk);
+  const groups={};
+  rows.forEach(r=>{ const v=groupValueOf(r); (groups[v]=groups[v]||[]).push(r); });
+  const stats=Object.keys(groups).map(gv=>{
+    const gr=groups[gv];
+    const rev0=gr.reduce((s,r)=>s+(r.w0.revenue||0),0);
+    const dwk=gr.reduce((s,r)=>s+(r.dwk||0),0);
+    return {val:gv, rev0:rev0, dwk:dwk};
+  });
+  const totRev=stats.reduce((s,g)=>s+g.rev0,0)||1;
+  const totAbsMove=stats.reduce((s,g)=>s+Math.abs(g.dwk),0)||1;
+  // MATERIALITY FLOOR: the "punch above weight" index = share-of-move ÷
+  // share-of-revenue is unstable for tiny-revenue groups — a small $ move on a
+  // near-zero base explodes the ratio (e.g. Unmanaged $3.8K → 35×, pure noise).
+  // Show the index only for groups holding >=3% of revenue; everyone gets the
+  // always-stable contribution-% (share of revenue).
+  const IDX_MIN_REV_SHARE=0.03;
+  stats.forEach(g=>{ g.shRev=g.rev0/totRev;
+    const shMove=Math.abs(g.dwk)/totAbsMove;
+    g.idx = g.shRev>=IDX_MIN_REV_SHARE ? shMove/g.shRev : null; });
+  const maxAbs=Math.max.apply(null,stats.map(g=>Math.abs(g.dwk)).concat([1]));
+  const bars=stats.slice().sort((a,b)=>Math.abs(b.dwk)-Math.abs(a.dwk)).slice(0,10).map(g=>{
+    const neg=g.dwk<0, w=(Math.abs(g.dwk)/maxAbs*48).toFixed(1);
+    const ic=g.idx==null?'mute':(g.idx>=1.5?(neg?'hot':'warm'):'mute');
+    const cpct=g.shRev*100;
+    return '<div class="sbar" data-gstrip="'+esc(gk+'|'+g.val)+'">'+
+      '<span class="k">'+esc(g.val)+'</span>'+
+      '<span class="strack"><span class="mid"></span><span class="sfill '+(neg?'n':'p')+'" style="width:'+w+'%"></span></span>'+
+      '<span class="d '+sgn(g.dwk)+'">'+fmtMoneyDelta(g.dwk)+
+        '<span class="idx mute" title="contribution to revenue">'+cpct.toFixed(cpct>=10?0:1)+'% rev</span>'+
+        (g.idx!=null?'<span class="idx '+ic+'" title="share of WoW move ÷ share of revenue">'+g.idx.toFixed(1)+'×</span>':'')+
+      '</span></div>';
+  }).join('');
+  box.innerHTML='<div class="strip"><div class="sh">What drove the week — by <b>'+esc(glabel)+
+    '</b> · Δ Rev WoW <span class="muted">% rev = contribution to revenue · idx = share-of-move ÷ share-of-revenue (groups ≥3% rev only)</span></div>'+
+    '<div class="sbars">'+bars+'</div></div>';
+}
+
+/* ---------- BGM: saved-views chips + custom-group builder wiring ---------- */
+function renderViewChips(){
+  const box=document.getElementById('viewChips'); if(!box) return;
+  const views=getViews();
+  box.innerHTML=views.map((v,i)=>'<span class="vchip'+(activeView===i?' on':'')+'" data-view="'+i+'">'+
+    esc(v.name)+'<span class="del" data-delview="'+i+'" title="delete view">✕</span></span>').join('');
+}
+function applyView(i){
+  const v=getViews()[i]; if(!v) return;
+  const s=v.st||{};
+  state.search=s.search||''; state.group=s.group||''; state.sortKey=s.sortKey||'__mover';
+  state.dir=s.dir==null?-1:s.dir; state.watchOnly=!!s.watchOnly; state.rule=s.rule||'';
+  state.filters=JSON.parse(JSON.stringify(s.filters||{}));
+  activeView=i;
+  renderApp();          // rebuild controls to reflect restored state
+}
+function saveCurrentView(){
+  const name=(prompt('Name this view:')||'').trim(); if(!name) return;
+  const views=getViews();
+  views.push({name:name, st:{search:state.search, group:state.group, sortKey:state.sortKey,
+    dir:state.dir, watchOnly:state.watchOnly, rule:state.rule, filters:state.filters}});
+  setViews(views); activeView=views.length-1; renderViewChips();
+}
+function deleteView(i){
+  const views=getViews(); views.splice(i,1); setViews(views);
+  if(activeView===i) activeView=null; else if(activeView>i) activeView--;
+  renderViewChips();
+}
+function refreshGroupList(){
+  const el=document.getElementById('grpList'); if(!el) return;
+  const names=Object.keys(getGroups());
+  el.textContent=names.length?('Groups: '+names.join(', ')):'No custom groups yet.';
+}
+// any manual control change breaks the "active view" highlight
+function markDirty(){ activeView=null; renderViewChips(); }
+
+/* =====================================================================
+   SECTION 4 — Bucket 1 fluctuations
+   ===================================================================== */
+function dirChip(d){ return d==='up'?'<span class="chip green">▲ up-swing</span>':'<span class="chip red">▼ down-swing</span>'; }
+function _moveChip(m){
+  const c = (m==='EXIT') ? 'green' : (m==='ESCALATION'||m==='CLIFF') ? 'red' : (m==='NEW') ? 'amber' : 'ghost';
+  return '<span class="chip '+c+'">'+esc(m)+'</span>';
+}
+function _laneChip(lane, label){
+  const c = lane==='a' ? 'green' : lane==='b' ? 'amber' : 'blue';
+  return '<span class="chip '+c+'">'+esc(label)+'</span>';
+}
+function _causeChip(t){
+  const c = t==='unexplained' ? 'red' : t==='input-induced' ? 'ghost' : t==='supply-linked' ? 'amber' : 'green';
+  return '<span class="chip '+c+'">'+esc(t)+'</span>';
+}
+function _bucketBlock(tag, title, sub, body){
+  return '<div style="margin-top:20px"><div class="sec-head" style="border:0">'+
+    '<span class="sec-num" style="background:var(--ink)">'+tag+'</span><h2 style="font-size:19px">'+title+'</h2>'+
+    '<span class="sub">'+sub+'</span></div>'+body+'</div>';
+}
+function _tbl(head, bodyRows){
+  return '<div class="tablewrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+bodyRows+'</tbody></table></div>';
+}
+
+// SECTION 4 — Diagnostic buckets (B1 ROI/CM2 · B2 CM1/Conv · B3 Losing Ground · B4 Scale)
+function renderBuckets(M){
+  // Cross-bucket cascade: render each CE only in its HOME bucket, within the
+  // 10-row problem cap (in_store = counted, not shown; is_win = a B1 recovery).
+  const _cas = rows => { rows=rows||[]; return {
+    shown: rows.filter(r=>r.is_home!==false && !r.in_store && !r.is_win),
+    wins: rows.filter(r=>r.is_win),
+    store: rows.filter(r=>r.is_home!==false && r.in_store).length }; };
+  const _also = r => (r.also_in&&r.also_in.length)
+    ? ' '+r.also_in.map(b=>'<span class="chip ghost" style="font-size:8.5px;padding:0 5px">also '+esc(b)+'</span>').join('') : '';
+  const _store = (n,label)=> n?'<div class="sub" style="margin-top:6px">+ '+n+' more '+esc(label)+' in store (below the 10-row cap)</div>':'';
+
+  // ---------- B1 · ROI / CM2 Movement ----------
+  const B1=(M.bucket_b1||{});
+  const b1c=_cas(B1.rows), b1=b1c.shown, b1std=B1.standing_count||0;
+  const winsLine = b1c.wins.length? '<div class="sub" style="margin-top:8px;color:var(--green)"><b>✅ '+b1c.wins.length+' recovered (EXIT):</b> '+b1c.wins.map(r=>esc(r.ce_name)).join(' · ')+'</div>':'';
+  // P2.1 zero-spend transitions · P2.2 long-tail burn · P2.3 gray-zone counters
+  const zse=B1.zero_spend_exits||[];
+  const zseLine = zse.length? '<div class="sub" style="margin-top:6px;color:var(--amber)">⚠️ <b>'+zse.length+' went to zero spend</b> while still &lt;100% ROI (paused, not recovered): '+
+    zse.slice(0,6).map(z=>esc(z.ce_name)+' <span class="sub">(was '+fmtPct(z.roi_last_pct,0)+', '+fmtMoney(z.spend_last)+')</span>').join(' · ')+(zse.length>6?' <span class="sub">+'+(zse.length-6)+' more</span>':'')+'</div>':'';
+  const burn=B1.burn_line||{};
+  const burnLine = (burn.count)? '<div class="sub" style="margin-top:6px">+ <b>'+burn.count+' CEs</b> · <span class="neg">'+fmtMoneyDelta(burn.bleed_wk_total)+'/wk</span> bleeding below the $1k/4w spend floor (not shown individually)</div>':'';
+  const gz=B1.gray_zone||{};
+  const gzParts=[]; if(gz.near_floor) gzParts.push(gz.near_floor+' within 5pp of the 100% floor'); if(gz.near_transition) gzParts.push(gz.near_transition+' near transition (70%)'); if(gz.near_critical) gzParts.push(gz.near_critical+' near critical (20%)');
+  const gzLine = gzParts.length? '<div class="sub" style="margin-top:6px">Near triggers: '+gzParts.join(' · ')+'</div>':'';
+  let b1body;
+  if(!b1.length && !b1c.wins.length){ b1body='<div class="emptystate">No ROI/CM2 movement this week. <b>✅</b></div>'+zseLine+burnLine+gzLine; }
+  else{
+    b1body=(b1.length?_tbl('<th class="stick">Combined Entity</th><th>Movement</th><th class="num">ROI W0</th><th class="num">W-1</th>'+
+      '<th class="num">Δpp</th><th class="num">tROAS</th><th class="num">wks&lt;100</th><th>RPC 8w</th><th class="num">CM2 bleed/wk</th><th>Action</th>',
+      b1.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
+        '<td>'+_moveChip(r.movement)+'</td>'+
+        '<td class="num">'+fmtPct(r.roi_w0_pct,0)+'</td>'+
+        '<td class="num">'+fmtPct(r.roi_wm1_pct,0)+'</td>'+
+        '<td class="num '+sgn(r.roi_drop_pp!=null?-r.roi_drop_pp:null)+'">'+(r.roi_drop_pp!=null?(r.roi_drop_pp>=0?MINUS:'+')+Math.abs(r.roi_drop_pp).toFixed(0)+'pp':'—')+'</td>'+
+        '<td class="num">'+fmtPct(r.troas_target_pct,0)+'</td>'+
+        '<td class="num">'+(r.weeks_below_100||0)+'</td>'+
+        '<td>'+sparkline(r.spark_rpc||[],{w:80,h:22})+'</td>'+
+        '<td class="num '+sgn(r.cm2_bleed_wk)+'">'+fmtMoneyDelta(r.cm2_bleed_wk)+'</td>'+
+        '<td>'+esc(r.action||'—')+'</td></tr>').join('')):'')+
+      winsLine+_store(b1c.store,'B1')+
+      (b1std?'<div class="sub" style="margin-top:6px">+ '+b1std+' standing below 100% (no movement) — see monthly</div>':'')+
+      zseLine+burnLine+gzLine;
+  }
+
+  // ---------- B2 · Unexplained CM1/Conv Swings ----------
+  const b2c=_cas(M.bucket1_fluctuations), b2=b2c.shown;
+  // P2.3 gray-zone: CVR WoW drops just short of the 30% trigger
+  const b2gz=((M._diagnostics||{}).cvr_gray_zone_count)||0;
+  const b2gzLine = b2gz? '<div class="sub" style="margin-top:6px">Near triggers: '+b2gz+' with a CVR drop within 5pp of the 30% swing trigger</div>':'';
+  let b2body;
+  if(!b2.length){ b2body='<div class="emptystate">No unexplained CM1/conv swings home here this week. <b>✅</b></div>'+_store(b2c.store,'B2')+b2gzLine; }
+  else{
+    b2body=_tbl('<th class="stick">Combined Entity</th><th>Signal</th><th>Dir</th><th class="num">Mag</th>'+
+      '<th>Cause</th><th>Swing driver</th><th class="num">Persist</th><th class="num">CV</th><th class="num">Spend wk</th><th>Recommendation</th>',
+      b2.map(r=>{ const e=r.evidence||{}, sd=r.swing_driver;
+        return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
+          '<td class="mono">'+esc(r.signal)+'</td>'+
+          '<td>'+dirChip(r.direction)+'</td>'+
+          '<td class="num">'+fmtDelta((r.direction==='down'?-1:1)*(r.magnitude_pct||0))+'</td>'+
+          '<td>'+_causeChip(r.cause_tag||'—')+'</td>'+
+          '<td>'+(sd?esc(sd.label)+' <span class="'+sgn(sd.value)+'">'+fmtMoneyDelta(sd.value)+'</span> <span class="sub">'+sd.share_pct+'%</span>':'—')+'</td>'+
+          '<td class="num">'+(e.persistence_days!=null?e.persistence_days+'d':'—')+'</td>'+
+          '<td class="num">'+(e.cv!=null?e.cv.toFixed(2):'—')+'</td>'+
+          '<td class="num">'+fmtMoney(r.spend_wk)+'</td>'+
+          '<td>'+esc(r.recommendation)+'</td></tr>';
+      }).join(''))+_store(b2c.store,'B2')+b2gzLine;
+  }
+
+  // ---------- B3 · Losing Ground ----------
+  const b3c=_cas((M.bucket_b3||{}).rows), b3=b3c.shown;
+  let b3body;
+  if(!b3.length){ b3body='<div class="emptystate">No Pro+ CEs home here this week. <b>✅</b></div>'+_store(b3c.store,'B3'); }
+  else{
+    b3body=_tbl('<th class="stick">Combined Entity</th><th>Band now</th><th>Projected</th><th class="num">Fall</th>'+
+      '<th class="num">wks on pace</th><th>Rev TY/LY</th><th>Reason</th><th class="num">Proj loss/mo</th><th>Action</th>',
+      b3.map(r=>{ const ty=(r.spark_rev||[]).slice(), ly=r.spark_rev_ly||[];
+        while(ty.length<ly.length) ty.push(null);
+        return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
+        '<td>'+esc(r.band_now)+'</td>'+
+        '<td><span class="neg">'+esc(r.band_projected)+'</span></td>'+
+        '<td class="num">'+r.fall_bands+'</td>'+
+        '<td class="num">'+r.weeks_on_pace+'</td>'+
+        '<td>'+kmSparkline('b3_'+r.ce_id, ty, ly)+'</td>'+
+        '<td class="mono">'+esc(r.reason)+'</td>'+
+        '<td class="num neg">'+fmtMoneyDelta(-Math.abs(r.projected_monthly_loss||0))+'</td>'+
+        '<td>'+esc(r.action||'—')+'</td></tr>';}).join(''))+_store(b3c.store,'B3');
+  }
+
+  // ---------- B4 · Scale Windows ----------
+  const b4c=_cas((M.bucket_b4||{}).rows), b4=b4c.shown;
+  let b4body;
+  if(!b4.length){ b4body='<div class="emptystate">No scaling windows home here this week.</div>'+_store(b4c.store,'B4'); }
+  else{
+    b4body=_tbl('<th class="stick">Combined Entity</th><th>Lane</th><th class="num">ROI W0</th>'+
+      '<th>Rev 10w</th><th class="num">Struct gain/wk</th><th class="num">Est +/wk</th><th>Gate</th><th>Action</th>',
+      b4.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
+        '<td>'+_laneChip(r.lane, r.lane_label)+'</td>'+
+        '<td class="num">'+fmtPct(r.roi_w0_pct,0)+'</td>'+
+        '<td>'+sparkline(r.spark_rev||[],{w:80,h:22})+'</td>'+
+        '<td class="num pos">'+fmtMoney(r.structural_gain_wk)+'</td>'+
+        '<td class="num pos">'+fmtMoney(r.est_incremental_wk)+'</td>'+
+        '<td class="sub">'+esc(r.gate_note)+'</td>'+
+        '<td>'+esc(r.action||'—')+'</td></tr>').join(''))+_store(b4c.store,'B4');
+  }
+
+  return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
+      '<span class="sub">movement-only · one home per cascade B1&gt;B2&gt;B3&gt;B4 · each row carries its action</span></div>'+
+    _bucketBlock('B1','ROI / CM2 Movement','entered / escalated / exited this week · pause · investigate · transition · ranked by CM2 bleed', b1body)+
+    _bucketBlock('B2','Unexplained CM1/Conv Swings','POF gates · cause routing (unexplained = nobody knows) · Shapley swing driver', b2body)+
+    _bucketBlock('B3','Losing Ground','Pro+ on pace to fall a band · dormant → inputs → paid-opt → manual', b3body)+
+    _bucketBlock('B4','Scale Windows','sticky · ⚡ NEW WAVE · 🔄 LOADING · probe-capped · ranked by est. incremental', b4body)+
+    '</section>';
+}
+
+/* =====================================================================
+   SECTION 5 — Seasonality visibility
+   ===================================================================== */
+function seasStatusChip(s){ const t=(s||'').toLowerCase();
+  return '<span class="chip '+(t.indexOf('expir')>=0?'amber':'green')+'">'+esc(s)+'</span>'; }
+function renderSeasonality(M){
+  const rows=M.seasonality_adjustments||[];
+  let body;
+  if(!rows.length){ body='<div class="emptystate">No seasonality adjustments currently set for this market.</div>'; }
+  else{
+    body='<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Combined Entity</th><th>Direction</th><th class="num">Adj %</th><th>Window</th><th>Status</th>'+
+      '<th class="num">CM2 pre-4w</th><th class="num">CM2 in-window</th><th class="num">Δ Rev</th><th>Recommendation</th>'+
+      '</tr></thead><tbody>'+
+      rows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span></td>'+
+        '<td>'+dirChip(r.direction)+'</td>'+
+        '<td class="num">'+(r.direction==='down'?MINUS:'+')+r.pct+'%</td>'+
+        '<td class="mono">'+esc(r.start_date)+' → '+esc(r.end_date)+'</td>'+
+        '<td>'+seasStatusChip(r.status)+'</td>'+
+        '<td class="num">'+fmtMoney(r.cm2_pre_4w_avg)+'</td>'+
+        '<td class="num">'+fmtMoney(r.cm2_in_window_avg)+'</td>'+
+        '<td class="num '+sgn(r.revenue_delta_pct)+'">'+fmtDelta(r.revenue_delta_pct)+'</td>'+
+        '<td>'+esc(r.recommendation)+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  }
+  return '<section id="s5"><div class="sec-head"><span class="sec-num">5</span><h2>Seasonality visibility</h2>'+
+    '<span class="sub">adjustments set · CM2 pre-4w vs in-window · extend / expire</span></div>'+body+'</section>';
+}
+
+/* =====================================================================
+   SECTION 6 — Levers visibility (a) tagged levers  (b) no-bid campaigns
+   ===================================================================== */
+function leverChip(l){ const map={pp:'PP',marketing_budget:'Mkt budget',tr_incentive:'TR incentive'};
+  return '<span class="chip violet">'+esc(map[l]||l)+'</span>'; }
+function renderLevers(M){
+  const levers=M.levers||[];
+  const nb=M.no_bid_campaigns||{totals:{},rows:[]};
+  let aBody;
+  if(!levers.length){ aBody='<div class="emptystate">No CEs currently tagged on PP / marketing-budget / TR-incentive levers. <span class="mono">(tag sources pending — see plan open inputs)</span></div>'; }
+  else{
+    aBody='<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Combined Entity</th><th>Lever</th><th>Since</th><th class="num">Rev wk</th><th class="num">ROI</th><th class="num">WoW %</th>'+
+      '</tr></thead><tbody>'+
+      levers.map(r=>{ const p=r.weekly_perf_summary||{};
+        return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span></td>'+
+          '<td>'+leverChip(r.lever)+'</td>'+
+          '<td class="mono">'+esc(r.since)+'</td>'+
+          '<td class="num">'+fmtMoney(p.revenue_wk)+'</td>'+
+          '<td class="num">'+fmtPct(p.roi_pct,0)+'</td>'+
+          '<td class="num '+sgn(p.wow_pct)+'">'+fmtDelta(p.wow_pct)+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  const t=nb.totals||{};
+  const nbRows=nb.rows||[];
+  const bBody='<div class="countline" style="margin:0 0 10px"><span>No-bid campaigns (MCV / tROAS NULL-or-0, ENABLED, spend ≥$50/wk): '+
+      '<b>'+(t.count!=null?t.count:'—')+'</b> campaigns · <b>'+fmtMoney(t.spend_total)+'</b>/wk</span></div>'+
+    (nbRows.length?
+      '<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Campaign</th><th>Combined Entity</th><th>Strategy</th><th class="num">Spend wk</th><th class="num">ROI</th><th class="num">Clicks wk</th><th>New?</th>'+
+      '</tr></thead><tbody>'+
+      nbRows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.campaign_name)+'</span></td>'+
+        '<td>'+esc(r.ce_name)+'</td>'+
+        '<td class="mono">'+esc(r.bidding_strategy)+'</td>'+
+        '<td class="num">'+fmtMoney(r.spend_wk)+'</td>'+
+        '<td class="num">'+fmtPct(r.roi_pct,0)+'</td>'+
+        '<td class="num">'+fmtInt(r.clicks_wk)+'</td>'+
+        '<td>'+(r.new_this_week?'<span class="chip amber">new this week</span>':'')+'</td></tr>').join('')+
+      '</tbody></table></div>'
+      :'<div class="emptystate">No no-bid campaigns this week. <b>✅</b></div>');
+
+  return '<section id="s6"><div class="sec-head"><span class="sec-num">6</span><h2>Levers visibility</h2>'+
+    '<span class="sub">(a) tagged levers · (b) no-bid campaigns</span></div>'+
+    '<div class="dr-sec-t" style="margin-top:2px">(a) CEs on PP / marketing budgets / TR incentives</div>'+aBody+
+    '<div class="dr-sec-t">(b) No-bid campaigns</div>'+bBody+'</section>';
+}
+
+/* =====================================================================
+   MARKET DRAWER — Section-1 headline detail (key metrics + Shapley + pacing)
+   ===================================================================== */
+// dual-line sparkline: TY solid (green/red by net dir) + optional LY dashed grey,
+// shared scale across both series. Returns SVG markup carrying a data-k hook so
+// hover tooltips can be wired after the HTML is injected.
+function kmSparkline(kId, ty, ly){
+  const W=150,H=30,PAD=3;
+  const tyN=ty.map(v=>(v==null||isNaN(v))?null:+v);
+  const lyN=ly?ly.map(v=>(v==null||isNaN(v))?null:+v):null;
+  const all=tyN.concat(lyN||[]).filter(v=>v!=null);
+  if(all.length<2) return '<svg class="spark" width="'+W+'" height="'+H+'"></svg>';
+  const lo=Math.min.apply(null,all), hi=Math.max.apply(null,all), rng=(hi-lo)||1, n=tyN.length;
+  const X=i=>PAD+(W-2*PAD)*(i/(n-1)), Y=v=>H-PAD-(H-2*PAD)*((v-lo)/rng);
+  const poly=arr=>arr.map((v,i)=>v==null?null:X(i).toFixed(1)+','+Y(v).toFixed(1)).filter(Boolean).join(' ');
+  const tyPresent=tyN.filter(v=>v!=null);
+  const up=tyPresent[tyPresent.length-1]>=tyPresent[0];
+  const col=up?'var(--green)':'var(--red)';
+  let lastI=n-1; while(lastI>=0 && tyN[lastI]==null) lastI--;
+  const dot = lastI>=0 ? '<circle cx="'+X(lastI).toFixed(1)+'" cy="'+Y(tyN[lastI]).toFixed(1)+'" r="2.2" fill="'+col+'"/>' : '';
+  const lyLine = (lyN && lyN.filter(v=>v!=null).length>=2)
+    ? '<polyline fill="none" stroke="var(--ink-faint)" stroke-width="1.3" stroke-dasharray="3 2" points="'+poly(lyN)+'"/>' : '';
+  return '<svg class="spark" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" data-k="'+esc(kId)+'" style="cursor:crosshair">'+
+    lyLine+
+    '<polyline fill="none" stroke="'+col+'" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" points="'+poly(tyN)+'"/>'+
+    dot+
+    '<line class="cursor" x1="0" y1="0" x2="0" y2="'+H+'" stroke="var(--ink)" stroke-width="1" opacity="0"/>'+
+    '</svg>';
+}
+// format a value by metric type (money / pct / count) — matches mockup formatters
+function kmFmt(v,t){
+  if(v==null||isNaN(v)) return '—';
+  if(t==='money'){ const a=Math.abs(v);
+    if(a>=1e6) return '$'+(v/1e6).toFixed(2)+'M'; if(a>=1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+Math.round(v); }
+  if(t==='pct') return (+v).toFixed(2)+'%';
+  if(t==='count'){ const a=Math.abs(v); return a>=1e3?(v/1e3).toFixed(1)+'K':''+Math.round(v); }
+  return ''+v;
+}
+// Δ-abs formatting: ratio metrics in pp, money in $, counts raw.
+function kmDeltaAbs(v,t){
+  if(v==null||isNaN(v)) return '—';
+  const s=v>0?'+':(v<0?MINUS:''); const a=Math.abs(v);
+  if(t==='pct') return s+a.toFixed(2)+'pp';
+  if(t==='money'){ if(a>=1e6) return s+'$'+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return s+'$'+(a/1e3).toFixed(1)+'K'; return s+'$'+Math.round(a); }
+  if(a>=1e3) return s+(a/1e3).toFixed(1)+'K';
+  return s+Math.round(a);
+}
+// map metric id -> display format bucket
+const KM_FMT = { revenue:'money', gbv:'money', cr_pct:'pct', tr_pct:'pct', paid_roi:'pct',
+  roi1:'pct', paid_conv_value:'money', paid_cvr:'pct', paid_clicks:'count' };
+const KM_ORDER = ['revenue','gbv','cr_pct','tr_pct','paid_roi','roi1','paid_conv_value','paid_cvr','paid_clicks'];
+
+function openMarketDrawer(){
+  const M=MARKETS[mi];
+  const h=M.market_summary.headlines;
+  const km=h.key_metrics||{};
+  const wkly=M.market_summary.weekly||[];
+  const wklyLy=M.market_summary.weekly_ly||[];
+  const weeks=wkly.map(w=>w.week);
+  const rev=km.revenue||{};
+  const wowPct = rev.delta_pct!=null ? rev.delta_pct : h.wow_pct;
+  const yoyPct = (rev.yoy_pct!=null ? rev.yoy_pct : h.yoy_pct);
+
+  // ----- key-metrics rows -----
+  const rowsHtml = KM_ORDER.filter(k=>km[k]).map(k=>{
+    const m=km[k], t=KM_FMT[k]||'money';
+    const ty = m.field ? wkly.map(w=>w[m.field]) : [];
+    const ly = (m.has_ly && m.ly_field) ? wklyLy.map(w=>w[m.ly_field]) : null;
+    const spk = kmSparkline(k, ty, ly) + (m.has_ly?'':'<div class="lyna">LY n/a</div>');
+    const dc=sgn(m.delta_pct);
+    return '<tr><td>'+esc(m.label)+'</td>'+
+      '<td class="w0">'+kmFmt(m.w0,t)+'</td>'+
+      '<td>'+kmFmt(m.wm1,t)+'</td>'+
+      '<td class="'+sgn(m.delta_abs)+'">'+kmDeltaAbs(m.delta_abs,t)+'</td>'+
+      '<td class="'+dc+'">'+fmtDelta(m.delta_pct)+'</td>'+
+      '<td class="spk">'+spk+'</td></tr>';
+  }).join('');
+  const kmBlock=''+
+    '<div class="dr-sec-t" style="display:flex;align-items:baseline;gap:10px">'+
+      '<span>Key metrics · 12-week trend</span>'+
+      '<span class="km-legend"><span><i></i>This year</span><span><i class="ly"></i>Last year</span><span>hover for values</span></span>'+
+    '</div>'+
+    '<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th>'+
+      '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric. '+
+      'Metrics without an LY line (Paid RoI / Paid Conv Value / Paid CVR) have no comparable −364d window yet.</div>';
+
+  // ----- WoW Shapley -----
+  let shapBlock='';
+  const sh=h.shapley_wow;
+  if(sh){
+    const labs=sh.labels||{};
+    const factors=['traffic','cvr','aov','cr','tr'].filter(f=>sh[f]!=null);
+    const maxAbs=Math.max.apply(null,factors.map(f=>Math.abs(sh[f]))) || 1;
+    const bars=factors.map(f=>{
+      const v=sh[f], pos=v>=0, w=Math.max(2,Math.round(Math.abs(v)/maxAbs*48));
+      return '<div class="shaprow"><span class="k">'+esc(labs[f]||f)+'</span>'+
+        '<div class="barwrap"><div class="mid"></div><div class="bar '+(pos?'p':'n')+'" style="width:'+w+'%"></div></div>'+
+        '<span class="d '+sgn(v)+'">'+fmtMoneyDelta(v)+'</span></div>';
+    }).join('');
+    const net = sh.net_delta!=null ? sh.net_delta : sh.total;
+    shapBlock=''+
+      '<div class="dr-sec-t">WoW Shapley — what drove the '+fmtMoneyDelta(net)+'</div>'+
+      bars+
+      '<div class="shapnet"><span>Net WoW</span><span class="'+sgn(net)+'">'+fmtMoneyDelta(net)+'</span></div>'+
+      '<div class="dr-cap">5-factor decomposition of the WoW revenue move (USD). Bars diverge from centre: red = drag, green = lift.</div>';
+  }
+
+  // ----- Pacing (deferred) -----
+  const paceBlock=''+
+    '<div class="dr-sec-t">Pacing <span class="chip ghost" style="text-transform:none;letter-spacing:0;font-weight:600">awaiting goals data</span></div>'+
+    '<div class="pace">'+
+      '<div class="pacecard"><div class="l">MTD attainment (adj)</div><div class="v">—</div></div>'+
+      '<div class="pacecard"><div class="l">Target attainment</div><div class="v">—</div></div>'+
+    '</div>'+
+    '<div class="dr-cap">Lights up when the revenue_goals join is wired — MoM / target % at market level.</div>';
+
+  document.getElementById('drawer').innerHTML=
+    '<div class="dr-head"><button class="close" id="drClose">×</button>'+
+      '<div class="kick">Market headline · detail</div>'+
+      '<h2>'+esc(M.meta.market)+'</h2>'+
+      '<div class="mono" style="font-size:12px;color:var(--ink-faint);margin-top:-4px">wk '+esc(M.meta.week_start)+'</div>'+
+    '</div>'+
+    '<div class="dr-body">'+
+      '<div class="bignum" style="font-size:38px;margin-top:2px">'+fmtMoney(h.revenue_w0)+'</div>'+
+      '<div style="font-family:var(--sans);font-size:13px;color:var(--ink-soft);margin-top:2px">'+
+        '<span class="'+sgn(wowPct)+'">'+fmtDelta(wowPct)+' WoW</span> · '+
+        '<span class="'+sgn(yoyPct)+'">'+fmtDelta(yoyPct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
+      kmBlock + shapBlock + paceBlock +
+    '</div>';
+
+  document.getElementById('drClose').onclick=closeDrawer;
+  wireKmHover(km, weeks, wkly, wklyLy);
+
+  const dr=document.getElementById('drawer');
+  dr.classList.add('open','wide');
+  dr.setAttribute('aria-hidden','false');
+  document.getElementById('scrim').classList.add('open');
+}
+
+// hover tooltip on each key-metric sparkline (week · TY · LY · YoY%)
+function wireKmHover(km, weeks, wkly, wklyLy){
+  const tip=document.getElementById('kmtip');
+  document.querySelectorAll('#drawer svg[data-k]').forEach(svg=>{
+    const k=svg.dataset.k, m=km[k]; if(!m) return;
+    const t=KM_FMT[k]||'money';
+    const ty = m.field ? wkly.map(w=>w[m.field]) : [];
+    const ly = (m.has_ly && m.ly_field) ? wklyLy.map(w=>w[m.ly_field]) : null;
+    const cursor=svg.querySelector('.cursor');
+    const n=ty.length, W=150, PAD=3;
+    svg.addEventListener('mousemove',e=>{
+      const r=svg.getBoundingClientRect(); const rel=(e.clientX-r.left)/r.width;
+      let i=Math.round(rel*(n-1)); i=Math.max(0,Math.min(n-1,i));
+      const x=PAD+(W-2*PAD)*(i/(n-1));
+      cursor.setAttribute('x1',x); cursor.setAttribute('x2',x); cursor.setAttribute('opacity','0.35');
+      const tyv=ty[i], lyv=ly?ly[i]:null;
+      let yoy='';
+      if(lyv!=null && lyv!==0 && tyv!=null){ const p=100*(tyv/lyv-1);
+        yoy='<div class="yoy '+(p>=0?'pos':'neg')+'">YoY '+(p>=0?'+':MINUS)+Math.abs(p).toFixed(1)+'%</div>'; }
+      tip.innerHTML='<div class="wk">'+esc(weeks[i]||'')+(i===n-1?' · W0':'')+'</div>'+
+        '<div class="r"><span class="k">'+esc(m.label)+' TY</span><span class="ty">'+kmFmt(tyv,t)+'</span></div>'+
+        '<div class="r"><span class="k">LY</span><span class="ly">'+(ly?kmFmt(lyv,t):'n/a')+'</span></div>'+yoy;
+      tip.style.opacity='1';
+      tip.style.left=Math.min(e.clientX+14, window.innerWidth-190)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+    });
+    svg.addEventListener('mouseleave',()=>{ tip.style.opacity='0'; cursor.setAttribute('opacity','0'); });
+  });
+}
+
+/* =====================================================================
+   DRAWER — CE deep dive + persisting comments
+   Layout follows ce_drawer_complete_mockup.html, built from the SAME
+   components as the market drawer (kmSparkline + km-table + Shapley bars).
+   Full drawer: header + key-metrics (W0/W-1/Δ + 12-wk TY/LY spark + hover)
+   + WoW Shapley (from ce.shapley_wow) + RE-SOURCE tier (channel mix, funnel,
+   TGIDs, lead-time, countries — see resourceBlocks) + notes + watchlist mirror.
+   ===================================================================== */
+// CE key-metrics config: label + weekly field + LY field (weekly_ly has only
+// the 6 comparable metrics) + display format. Metrics without an LY field show
+// "LY n/a". Order matches the mockup's METRICS list.
+const CE_METRICS = [
+  {k:'revenue',   label:'Revenue',         fmt:'money', ly:'revenue'},
+  {k:'gbv',       label:'GBV',             fmt:'money', ly:'gbv'},
+  {k:'orders',    label:'Orders',          fmt:'count', ly:null},
+  {k:'clicks',    label:'Clicks',          fmt:'count', ly:null},
+  {k:'cvr_pct',   label:'CVR%',            fmt:'pct',   ly:null},
+  {k:'aov',       label:'AOV',             fmt:'money', ly:null},
+  {k:'tr_pct',    label:'TR%',             fmt:'pct',   ly:'tr_pct'},
+  {k:'cr_pct',    label:'CR%',             fmt:'pct',   ly:'cr_pct'},
+  {k:'roi1_pct',  label:'ROI 1',           fmt:'pct',   ly:'roi1_pct'},
+  {k:'paid_conv_value', label:'Paid Conv Value', fmt:'money', ly:null},
+  {k:'paid_cvr_pct',    label:'Paid CVR',        fmt:'pct',   ly:null},
+  {k:'paid_clicks',     label:'Paid Clicks',     fmt:'count', ly:'paid_clicks'},
+];
+
+// pp delta (percentage-point) with explicit sign — for funnel rate stages.
+function ppDelta(v){ if(v==null||isNaN(v)) return '—';
+  return (v>0?'+':(v<0?MINUS:''))+Math.abs(v).toFixed(1)+'pp'; }
+
+/* RE-SOURCE tier — the 5 composition tables between Shapley and Notes.
+   Reads ce.channels / .funnel / .tgids / .leadtime / .countries straight off
+   the mart (schema v1). Each section renders only when it has data; a CE with
+   no W0 activity simply omits them (graceful degrade). Order matches the
+   ce_drawer_complete mockup. */
+function resourceBlocks(ce){
+  let html='';
+
+  const ch=ce.channels||[];
+  if(ch.length){
+    html+='<div class="dr-sec-t">Channel mix</div>'+
+      '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
+      ch.map(c=>'<tr><td>'+esc(c.channel)+'</td>'+
+        '<td>'+fmtMoney(c.rev)+'</td>'+
+        '<td class="'+sgn(c.wow_pct)+'">'+fmtDelta(c.wow_pct,0)+'</td>'+
+        '<td class="'+sgn(c.yoy_pct)+'">'+fmtDelta(c.yoy_pct,0)+'</td>'+
+        '<td>'+fmtPct(c.share_pct,0)+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  const fn=ce.funnel||{};
+  const stages=['LP Users','LP2S','S2C','C2O'].filter(s=>fn[s]);
+  if(stages.length){
+    html+='<div class="dr-sec-t">Funnel · LP → order</div>'+
+      '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
+      stages.map(s=>{
+        const v=fn[s], isUsers=(s==='LP Users');
+        const cur=isUsers?fmtInt(v.current):fmtPct(v.current,1);
+        const wf=isUsers?fmtDelta(v.wow,0):ppDelta(v.wow);
+        const yf=isUsers?fmtDelta(v.yoy,0):ppDelta(v.yoy);
+        return '<tr><td>'+esc(s)+'</td><td>'+cur+'</td>'+
+          '<td class="'+sgn(v.wow)+'">'+wf+'</td>'+
+          '<td class="'+sgn(v.yoy)+'">'+yf+'</td></tr>';
+      }).join('')+
+      '</tbody></table>';
+  }
+
+  const tg=ce.tgids||[];
+  if(tg.length){
+    html+='<div class="dr-sec-t">Top experiences (TGIDs)</div>'+
+      '<table class="dr-table plain"><thead><tr><th>Experience</th><th>Rev</th><th>Share</th></tr></thead><tbody>'+
+      tg.map(t=>'<tr><td>'+esc(t.experience)+' <span class="mono" style="color:var(--ink-faint)">'+esc(t.tgid)+'</span></td>'+
+        '<td>'+fmtMoney(t.rev)+'</td><td>'+fmtPct(t.share_pct,0)+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  const lt=ce.leadtime||[];
+  if(lt.length){
+    html+='<div class="dr-sec-t">Lead-time bands</div>'+
+      '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
+      lt.map(l=>'<tr><td>'+esc(l.band)+'</td>'+
+        '<td>'+fmtInt(l.bookings)+'</td>'+
+        '<td>'+fmtPct(l.share_pct,0)+'</td>'+
+        '<td>'+fmtMoney(l.rev)+'</td>'+
+        '<td>'+fmtMoney(l.aov)+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  const ct=ce.countries||[];
+  if(ct.length){
+    html+='<div class="dr-sec-t">Top countries</div>'+
+      '<table class="dr-table plain"><thead><tr><th>Country</th><th>Orders</th><th>Rev</th><th>Share</th><th>AOV</th></tr></thead><tbody>'+
+      ct.slice(0,6).map(c=>'<tr><td>'+esc(c.country)+'</td>'+
+        '<td>'+fmtInt(c.orders)+'</td>'+
+        '<td>'+fmtMoney(c.rev)+'</td>'+
+        '<td>'+fmtPct(c.rev_share_pct,0)+'</td>'+
+        '<td>'+fmtMoney(c.aov)+'</td></tr>').join('')+
+      '</tbody></table>';
+  }
+
+  if(html){
+    html+='<div class="dr-cap">Composition for the W0 week. Channel mix &amp; lead-time use actual (booked) revenue; '+
+      'shares are within-CE. Channel &amp; funnel carry WoW (vs W-1) and YoY (−364d); funnel rate deltas are in pp.</div>';
+  }
+  return html;
+}
+
+let drawerTimer=null;
+function openDrawer(ceId){
+  const M=MARKETS[mi];
+  const ce=M.ces.find(c=>c.ce_id===ceId);
+  if(!ce){ return; }  // mover/campaign CE not in ces[] (e.g. aggregate) — ignore
+  const r=ceRow(ce), md=ce.metadata, wk=ce.weekly, w0=r.w0, w1=r.w1;
+  const wkLy=ce.weekly_ly||null;
+  const weeks=wk.map(w=>w.week);
+  const chips=[['category',md.category],['subcategory',md.subcategory],['city',md.city],
+    ['management_type',md.management_type],['evolution',md.evolution],['new_vs_existing',md.new_vs_existing],['tier',md.tier]]
+    .filter(x=>x[1]).map(x=>'<span class="chip ghost">'+esc(x[1])+'</span>').join('');
+  const watched=getWatch().has(ceId);
+
+  // ----- key-metrics table (W0 / W-1 / Δ% + 12-wk TY/LY spark + hover) -----
+  const rowsHtml = CE_METRICS.map(mm=>{
+    const ty = wk.map(x=>x[mm.k]);
+    const ly = (mm.ly && wkLy) ? wkLy.map(x=>x[mm.ly]) : null;
+    const cur=w0?w0[mm.k]:null, prev=w1?w1[mm.k]:null;
+    const dpct=(prev!=null && prev!==0 && cur!=null)?(cur-prev)/Math.abs(prev)*100:null;
+    const spk = kmSparkline('ce_'+mm.k, ty, ly) + (ly?'':'<div class="lyna">LY n/a</div>');
+    return '<tr><td>'+esc(mm.label)+'</td>'+
+      '<td class="w0">'+kmFmt(cur,mm.fmt)+'</td>'+
+      '<td>'+kmFmt(prev,mm.fmt)+'</td>'+
+      '<td class="'+sgn(dpct)+'">'+fmtDelta(dpct)+'</td>'+
+      '<td class="spk">'+spk+'</td></tr>';
+  }).join('');
+  const kmBlock=''+
+    '<div class="dr-sec-t" style="display:flex;align-items:baseline;gap:10px">'+
+      '<span>Key metrics · 12-week trend</span>'+
+      '<span class="km-legend"><span><i></i>This year</span><span><i class="ly"></i>Last year</span><span>hover for values</span></span>'+
+    '</div>'+
+    '<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ %</th>'+
+      '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric. '+
+      'Metrics without an LY line have no comparable −364d window yet.</div>';
+
+  // ----- WoW Shapley (reuse market-drawer pattern; hide when null) -----
+  let shapBlock='';
+  const sh=ce.shapley_wow;
+  if(sh){
+    const labs=sh.labels||{};
+    const factors=['traffic','cvr','aov','cr','tr'].filter(f=>sh[f]!=null);
+    const maxAbs=Math.max.apply(null,factors.map(f=>Math.abs(sh[f]))) || 1;
+    const bars=factors.map(f=>{
+      const v=sh[f], pos=v>=0, w=Math.max(2,Math.round(Math.abs(v)/maxAbs*48));
+      return '<div class="shaprow"><span class="k">'+esc(labs[f]||f)+'</span>'+
+        '<div class="barwrap"><div class="mid"></div><div class="bar '+(pos?'p':'n')+'" style="width:'+w+'%"></div></div>'+
+        '<span class="d '+sgn(v)+'">'+fmtMoneyDelta(v)+'</span></div>';
+    }).join('');
+    const net = sh.net_delta!=null ? sh.net_delta : sh.total;
+    shapBlock=''+
+      '<div class="dr-sec-t">WoW Shapley — what drove the '+fmtMoneyDelta(net)+'</div>'+
+      bars+
+      '<div class="shapnet"><span>Net WoW</span><span class="'+sgn(net)+'">'+fmtMoneyDelta(net)+'</span></div>'+
+      '<div class="dr-cap">5-factor decomposition of the WoW revenue move (USD). Bars diverge from centre: red = drag, green = lift.</div>';
+  }
+
+  const c=getComment(ceId);
+  const cmtText=c&&c.text?c.text:'';
+  const cmtWhen=c&&c.updated?'saved '+new Date(c.updated).toLocaleString():'not saved yet';
+
+  document.getElementById('drawer').innerHTML=
+    '<div class="dr-head"><button class="close" id="drClose">×</button>'+
+      '<div class="kick">CE deep dive · '+esc(M.meta.market)+' · '+esc(ce.ce_id)+'</div>'+
+      '<h2>'+esc(ce.ce_name)+'</h2><div class="dr-chips">'+chips+'</div></div>'+
+    '<div class="dr-body">'+
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">'+
+        '<div class="bignum" style="font-size:38px;margin-top:2px">'+fmtMoney(w0.revenue)+'</div>'+
+        '<span class="star drawer-star'+(watched?' on':'')+'" data-star="'+esc(ceId)+'" title="watchlist" '+
+          'style="font-size:24px">'+(watched?'★':'☆')+'</span>'+
+      '</div>'+
+      '<div style="font-family:var(--sans);font-size:13px;color:var(--ink-soft);margin-top:2px">'+
+        '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
+        '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
+      kmBlock + shapBlock + resourceBlocks(ce) +
+      '<div class="dr-sec-t">Notes · persists week-over-week</div>'+
+      '<div class="cmt-box"><textarea id="cmtText" placeholder="Your running note on this CE. Saved locally and carried across weeks…">'+esc(cmtText)+'</textarea>'+
+        '<div class="cmt-meta"><span id="cmtSaved" class="cmt-saved">'+esc(cmtWhen)+'</span>'+
+          '<span class="mono">key: wr_comments::'+esc(M.meta.market_slug)+'::'+esc(ce.ce_id)+'</span></div>'+
+        '<div class="io-row"><button class="btn" id="cmtExport">Export notes (JSON)</button>'+
+          '<button class="btn" id="cmtImport">Import notes</button>'+
+          '<input type="file" id="cmtFile" accept="application/json" style="display:none"></div>'+
+      '</div>'+
+    '</div>';
+
+  // Show drawer immediately — event wiring failures must not block visibility
+  document.getElementById('drawer').classList.add('open','wide');
+  document.getElementById('drawer').setAttribute('aria-hidden','false');
+  document.getElementById('scrim').classList.add('open');
+
+  try {
+  document.getElementById('drClose').onclick=closeDrawer;
+  wireCeKmHover(ce, weeks, wk, wkLy);
+  const ta=document.getElementById('cmtText');
+  ta.addEventListener('input',()=>{
+    clearTimeout(drawerTimer);
+    drawerTimer=setTimeout(()=>{ saveComment(ceId,ta.value);
+      document.getElementById('cmtSaved').textContent='saved '+new Date().toLocaleString(); },350);
+  });
+  document.getElementById('cmtExport').onclick=exportNotes;
+  document.getElementById('cmtImport').onclick=()=>document.getElementById('cmtFile').click();
+  document.getElementById('cmtFile').onchange=importNotes;
+  // watchlist star MIRROR — same per-market watchlist as the row star.
+  const dstar=document.querySelector('#drawer .drawer-star');
+  if(dstar) dstar.onclick=()=>{ toggleWatch(ceId); const on=getWatch().has(ceId);
+    dstar.classList.toggle('on',on); dstar.textContent=on?'★':'☆'; paintCETable(); };
+  } catch(err) { console.error('openDrawer wiring error:', err); }
+}
+
+// hover tooltip on each CE key-metric sparkline (week · TY · LY · YoY%).
+// Mirrors wireKmHover but reads TY/LY straight off the CE weekly arrays.
+function wireCeKmHover(ce, weeks, wk, wkLy){
+  const tip=document.getElementById('kmtip');
+  document.querySelectorAll('#drawer svg[data-k]').forEach(svg=>{
+    const key=svg.dataset.k;                 // "ce_<field>"
+    const mm=CE_METRICS.find(x=>'ce_'+x.k===key); if(!mm) return;
+    const t=mm.fmt;
+    const ty = wk.map(x=>x[mm.k]);
+    const ly = (mm.ly && wkLy) ? wkLy.map(x=>x[mm.ly]) : null;
+    const cursor=svg.querySelector('.cursor');
+    const n=ty.length, W=150, PAD=3;
+    svg.addEventListener('mousemove',e=>{
+      const rc=svg.getBoundingClientRect(); const rel=(e.clientX-rc.left)/rc.width;
+      let i=Math.round(rel*(n-1)); i=Math.max(0,Math.min(n-1,i));
+      const x=PAD+(W-2*PAD)*(i/(n-1));
+      cursor.setAttribute('x1',x); cursor.setAttribute('x2',x); cursor.setAttribute('opacity','0.35');
+      const tyv=ty[i], lyv=ly?ly[i]:null;
+      let yoy='';
+      if(lyv!=null && lyv!==0 && tyv!=null){ const p=100*(tyv/lyv-1);
+        yoy='<div class="yoy '+(p>=0?'pos':'neg')+'">YoY '+(p>=0?'+':MINUS)+Math.abs(p).toFixed(1)+'%</div>'; }
+      tip.innerHTML='<div class="wk">'+esc(weeks[i]||'')+(i===n-1?' · W0':'')+'</div>'+
+        '<div class="r"><span class="k">'+esc(mm.label)+' TY</span><span class="ty">'+kmFmt(tyv,t)+'</span></div>'+
+        '<div class="r"><span class="k">LY</span><span class="ly">'+(ly?kmFmt(lyv,t):'n/a')+'</span></div>'+yoy;
+      tip.style.opacity='1';
+      tip.style.left=Math.min(e.clientX+14, window.innerWidth-190)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+    });
+    svg.addEventListener('mouseleave',()=>{ tip.style.opacity='0'; cursor.setAttribute('opacity','0'); });
+  });
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open','wide');
+  document.getElementById('drawer').setAttribute('aria-hidden','true');
+  document.getElementById('scrim').classList.remove('open');
+  const tip=document.getElementById('kmtip'); if(tip) tip.style.opacity='0';
+  paintCETable();   // refresh comment dots
+}
+function exportNotes(){
+  const M=MARKETS[mi], prefix='wr_comments::'+M.meta.market_slug+'::', out={};
+  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(k.indexOf(prefix)===0) out[k.slice(prefix.length)]=JSON.parse(localStorage.getItem(k)); }
+  // also carry the BGM customizations for this market (views / groups / watchlist / rule)
+  const custom={ views:getViews(), groups:getGroups(), watch:Array.from(getWatch()), rule:lsGet('rule','') };
+  const blob=new Blob([JSON.stringify({market:M.meta.market_slug,exported:new Date().toISOString(),notes:out,customizations:custom},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='wr_notes_'+M.meta.market_slug+'.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+function importNotes(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{ try{ const obj=JSON.parse(reader.result); const M=MARKETS[mi];
+    const prefix='wr_comments::'+M.meta.market_slug+'::'; const notes=obj.notes||obj;
+    Object.keys(notes).forEach(ceId=>{ localStorage.setItem(prefix+ceId, JSON.stringify(notes[ceId])); });
+    // restore BGM customizations if present
+    const c=obj.customizations;
+    if(c){ if(c.views) setViews(c.views); if(c.groups) setGroups(c.groups);
+      if(c.watch) setWatch(new Set(c.watch)); if(c.rule!=null) lsSet('rule', c.rule); }
+    alert('Imported '+Object.keys(notes).length+' note(s)'+(c?' + customizations':'')+'.');
+    activeView=null; renderApp();
+  }catch(e){ alert('Could not parse that file.'); } };
+  reader.readAsText(f);
+}
+
+/* =====================================================================
+   TABS + wiring
+   ===================================================================== */
+function renderTabs(){
+  document.getElementById('tabs').innerHTML=MARKETS.map((M,i)=>{
+    const rev=M.market_summary.headlines.revenue_w0;
+    return '<div class="tab'+(i===mi?' active':'')+'" data-mi="'+i+'">'+esc(M.meta.market)+
+      '<span class="trev">'+fmtMoney(rev)+'</span></div>';
+  }).join('');
+}
+function renderMeta(){
+  const M=MARKETS[mi];
+  document.getElementById('mastMeta').innerHTML=
+    '<span>Market: <b>'+esc(M.meta.market)+'</b></span>'+
+    '<span>Week: '+esc(M.meta.week_start)+' → '+esc(M.meta.week_end)+'</span>'+
+    '<span>12-week window · weekly grain</span>'+
+    '<span>Generated '+esc((M.meta.generated_at||'').slice(0,10))+'</span>';
+  document.getElementById('footnote').innerHTML=
+    'Weekly Market Report V1 · schema v'+(M.meta.schema_version||1)+' · net revenue basis (amount_revenue_usd) · '+
+    'CM1 = offline contribution margin · ROI = CM1/spend · YoY weekday-aligned (−364d) · data ≥3 days matured. '+
+    'Nulls render “—” (organic CEs have no paid ROI/CVR), never 0. Comments persist locally per market×CE.';
+}
+function renderApp(){
+  const M=MARKETS[mi];
+  document.getElementById('app').innerHTML=
+    renderHead(M)+renderFollowup(M)+renderAllCE(M)+renderBuckets(M)+renderSeasonality(M)+renderLevers(M);
+  paintCETable();
+  renderViewChips();       // (1) saved views bar
+  refreshGroupList();      // (2) custom-group builder list
+}
+function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
+  state.search=''; state.group=''; state.filters={}; state.sortKey='__mover'; state.dir=-1;
+  state.watchOnly=false; state.selMode=false; sel.clear(); activeView=null;
+  state.rule=lsGet('rule','');   // restore last-used highlight rule for this market
+  renderTabs(); renderMeta(); renderApp(); window.scrollTo(0,0); }
+
+// delegated events
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab'); if(t) switchMarket(+t.dataset.mi); });
+document.getElementById('scrim').addEventListener('click',closeDrawer);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
+document.getElementById('app').addEventListener('click',e=>{
+  // --- (1) saved views ---
+  if(e.target.dataset && e.target.dataset.delview!=null){ deleteView(+e.target.dataset.delview); return; }
+  const vc=e.target.closest && e.target.closest('.vchip');
+  if(vc && vc.dataset.view!=null){ applyView(+vc.dataset.view); return; }
+  if(e.target.id==='saveView'){ saveCurrentView(); return; }
+  // --- (3) watchlist star toggle ---
+  if(e.target.dataset && e.target.dataset.star!=null){ e.stopPropagation(); toggleWatch(e.target.dataset.star); paintCETable(); return; }
+  // --- (3) watchlist-only filter ---
+  if(e.target.id==='watchOnly'){ state.watchOnly=!state.watchOnly; markDirty(); renderApp(); return; }
+  // --- (2) select mode + custom groups ---
+  if(e.target.id==='selMode'){ state.selMode=!state.selMode; if(!state.selMode) sel.clear(); renderApp(); return; }
+  if(e.target.id==='clearSel'){ sel.clear(); paintCETable(); const n=document.getElementById('selN'); if(n) n.textContent=0; return; }
+  if(e.target.id==='addGrp'){
+    const nm=(document.getElementById('grpName').value||'').trim();
+    if(!nm){ alert('Name the group first.'); return; }
+    if(!sel.size){ alert('Select at least one CE (checkboxes) first.'); return; }
+    const g=getGroups(); g[nm]=Array.from(new Set((g[nm]||[]).concat(Array.from(sel)))); setGroups(g);
+    sel.clear(); document.getElementById('grpName').value=''; renderApp(); return;
+  }
+  // --- (P2) contribution-strip bar → expand + scroll to that group ---
+  const sb=e.target.closest && e.target.closest('.sbar');
+  if(sb && sb.dataset.gstrip!=null){ const ck=sb.dataset.gstrip;
+    state.collapsed[ck]=false; paintCETable();
+    const gh=document.querySelector('tr.grouphead[data-group="'+ck.replace(/"/g,'\\"')+'"]');
+    if(gh) gh.scrollIntoView({behavior:'smooth',block:'center'});
+    return; }
+  // --- (P2) collapse/expand a single group ---
+  const gt=e.target.closest && e.target.closest('td.gtoggle');
+  if(gt && gt.dataset.gtoggle!=null){ const ck=gt.dataset.gtoggle;
+    state.collapsed[ck]=!state.collapsed[ck]; paintCETable(); return; }
+  // --- (P2) collapse all / expand all ---
+  if(e.target.id==='collapseGroups'){ toggleAllGroups(); return; }
+  // controls
+  if(e.target.id==='moverSort'){ state.sortKey='__mover'; state.dir=-1; markDirty(); paintCETable(); return; }
+  if(e.target.id==='ceReset'){ state.search=''; state.group=''; state.filters={}; state.sortKey='__mover'; state.dir=-1;
+    state.watchOnly=false; state.rule=''; state.selMode=false; sel.clear(); activeView=null; renderApp(); return; }
+  if(e.target.id==='monthlyLink'){ e.preventDefault();
+    alert('Links out to the monthly deep-dive report (separate build). Monthly data never loads in this weekly view.'); return; }
+  const fc=e.target.closest('.fchip');
+  if(fc){ const dim=fc.dataset.fdim, val=fc.dataset.fval; const arr=state.filters[dim]=state.filters[dim]||[];
+    const idx=arr.indexOf(val); if(idx>=0) arr.splice(idx,1); else arr.push(val);
+    if(!arr.length) delete state.filters[dim]; markDirty(); renderApp(); return; }
+  const th=e.target.closest('th.sortable');
+  if(th){ const k=th.dataset.sort; if(state.sortKey===k) state.dir*=-1; else { state.sortKey=k; state.dir=(k==='name'?1:-1); } markDirty(); paintCETable(); return; }
+  // Section-1 headline card → market drawer
+  const mcard=e.target.closest('[data-market-drawer]');
+  if(mcard){ openMarketDrawer(); return; }
+  // row / mover click → CE drawer (but not when clicking the select checkbox or the star)
+  if(e.target.dataset && e.target.dataset.selce!=null) return;
+  const el=e.target.closest('[data-ce]');
+  if(el){ openDrawer(el.dataset.ce); }
+});
+// keyboard: Enter/Space on the focused headline card opens the market drawer
+document.getElementById('app').addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ') && e.target.closest && e.target.closest('[data-market-drawer]')){
+    e.preventDefault(); openMarketDrawer(); }
+});
+document.getElementById('app').addEventListener('input',e=>{
+  if(e.target.id==='ceSearch'){ state.search=e.target.value; markDirty(); paintCETable(); return; }
+  if(e.target.id==='ceRule'){ state.rule=e.target.value; lsSet('rule', state.rule); markDirty(); paintCETable(); return; }  // (3) highlight rule
+});
+document.getElementById('app').addEventListener('change',e=>{
+  if(e.target.id==='ceGroup'){ state.group=e.target.value; markDirty(); renderApp(); return; }
+  // (2) select-mode row checkbox
+  if(e.target.dataset && e.target.dataset.selce!=null){
+    const id=e.target.dataset.selce; e.target.checked?sel.add(id):sel.delete(id);
+    const n=document.getElementById('selN'); if(n) n.textContent=sel.size; return;
+  }
+});
+
+// boot
+state.rule=lsGet('rule','');   // restore last-used highlight rule for the first market
+renderTabs(); renderMeta(); renderApp();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Real company revenue data — never on GitHub (lives in ws + analytics safepoint + locally)
+thoughts/shared/weekly-report-v1/*.html
+scripts/weekly_report/sample_data.json
+**/snapshot_*.json
+.cache/
+__pycache__/
