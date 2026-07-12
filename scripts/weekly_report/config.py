@@ -31,6 +31,7 @@ MAX_BYTES_BILLED = 30 * 1024 ** 3  # 30 GB cap per query (analytics-skill hygien
 
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
 ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.google_ads_campaign_stats`"
+ADS_CAMPAIGN_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.ads_campaign_stats`"
 DIM_CE = f"`{BQ_PROJECT}.{BQ_DATASET}.dim_combined_entities`"
 FCT_ORDERS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_orders`"
 FCT_BOOKINGS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_bookings`"
