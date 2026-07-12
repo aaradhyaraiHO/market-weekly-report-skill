@@ -500,18 +500,6 @@ function renderHead(M){
     ) : '';
   const disagree = (wh && wh.clocks_disagree) ? '<div class="sub" style="margin-top:6px;color:var(--amber)">⚠ clocks disagree — raw & structural point opposite ways</div>' : '';
 
-  // themes: diffuse only; concentrated single-CE cuts demoted (spec §4.3)
-  let themesCard='';
-  if(wh && (wh.themes||[]).length){
-    const realT=wh.themes.filter(t=>!t.concentrated), concT=wh.themes.filter(t=>t.concentrated);
-    const rows=realT.map(t=>'<div style="padding:5px 0;border-bottom:1px solid var(--rule)">'+
-      '<span class="chip '+(t.direction==='loss'?'red':'green')+'">'+esc(t.direction)+'</span> '+
-      '<b>'+esc(t.dim)+': '+esc(t.value)+'</b> <span class="sub">'+t.index+'× · '+t.n_ces+' CEs · '+
-      fmtMoney(t.flow_usd)+' ('+t.share_of_flow_pct+'% of flow)</span></div>').join('')+
-      (concT.length?'<div class="sub" style="padding-top:9px">Concentrated (single-CE) cuts — see movers, not group themes: '+
-        concT.map(t=>esc(t.value)+' ('+fmtMoney(t.flow_usd)+')').join(' · ')+'</div>':'');
-    themesCard='<div class="card" style="margin-top:14px"><h3>Themes <span class="n">· contribution index ≥1.5× · diffuse only</span></h3>'+rows+'</div>';
-  }
 
   return ''+
   '<section id="s1"><div class="sec-head"><span class="sec-num">1</span><h2>Market headlines</h2>'+
@@ -533,7 +521,7 @@ function renderHead(M){
       (drops||'<div class="emptystate">No drops this week <b>✅</b></div>')+'</div>'+
     '<div class="card movers"><h3>Top gains <span class="n">· '+moverSub+'</span></h3>'+
       (gains||'<div class="emptystate">No gains this week</div>')+'</div>'+
-  '</div>'+themesCard+'</section>';
+  '</div></section>';
 }
 
 /* =====================================================================
