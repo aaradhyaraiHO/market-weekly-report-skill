@@ -585,8 +585,8 @@ function statusChip(s){
   return '<span class="chip '+c+'">'+esc(s)+'</span>';
 }
 /* ---------- market review — localStorage (per-market, like CE notes) ---------- */
-function mrKey(){ return ‘wr_market_review::’+MARKETS[mi].meta.market_slug; }
-function getMarketReview(){ try{ return JSON.parse(localStorage.getItem(mrKey())||’null’); }catch(e){ return null; } }
+function mrKey(){ return 'wr_market_review::'+MARKETS[mi].meta.market_slug; }
+function getMarketReview(){ try{ return JSON.parse(localStorage.getItem(mrKey())||'null'); }catch(e){ return null; } }
 function saveMarketReview(text){
   if(text && text.trim()) localStorage.setItem(mrKey(), JSON.stringify({text:text, updated:new Date().toISOString()}));
   else localStorage.removeItem(mrKey());
@@ -597,57 +597,57 @@ function renderFollowup(M){
   const rows = M.followup||[];
   let fuBody;
   if(!rows.length){
-    fuBody=’<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>’;
+    fuBody='<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>';
   } else {
-    fuBody=’<div class="tablewrap"><table><thead><tr>’+
-      ‘<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>’+
-      rows.map(r=>’<tr class="cerow" data-ce="’+esc(r.ce_id)+’">’+
-        ‘<td class="ce stick"><span class="cn">’+esc(r.ce_name)+’</span></td>’+
-        ‘<td class="mono">’+esc(r.flagged_week)+’</td>’+
-        ‘<td>’+esc(r.signal)+’</td>’+
-        ‘<td>’+statusChip(r.status_now)+’</td></tr>’).join(‘’)+
-      ‘</tbody></table></div>’;
+    fuBody='<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>'+
+      rows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span></td>'+
+        '<td class="mono">'+esc(r.flagged_week)+'</td>'+
+        '<td>'+esc(r.signal)+'</td>'+
+        '<td>'+statusChip(r.status_now)+'</td></tr>').join('')+
+      '</tbody></table></div>';
   }
 
   // market review content
   const mr = getMarketReview();
-  const mrText = mr && mr.text ? mr.text : ‘’;
-  const mrWhen = mr && mr.updated ? ‘saved ‘+new Date(mr.updated).toLocaleString() : ‘not saved yet’;
+  const mrText = mr && mr.text ? mr.text : '';
+  const mrWhen = mr && mr.updated ? 'saved '+new Date(mr.updated).toLocaleString() : 'not saved yet';
   const ctx = M.market_review_context||[];
-  const ctxHtml = ctx.length ? ‘<div class="mr-context">’+
-    ctx.map(c=>’<div class="mr-context-item"><div class="mr-src">’+esc(c.source||’slack’)+(c.channel?’ · ‘+esc(c.channel):’’)+’</div>’+
-      ‘<div class="mr-txt">’+esc(c.text)+’</div>’+
-      (c.timestamp?’<div class="mr-when">’+esc(c.timestamp)+’</div>’:’’)+’</div>’).join(‘’)+’</div>’ : ‘’;
+  const ctxHtml = ctx.length ? '<div class="mr-context">'+
+    ctx.map(c=>'<div class="mr-context-item"><div class="mr-src">'+esc(c.source||'slack')+(c.channel?' · '+esc(c.channel):'')+'</div>'+
+      '<div class="mr-txt">'+esc(c.text)+'</div>'+
+      (c.timestamp?'<div class="mr-when">'+esc(c.timestamp)+'</div>':'')+'</div>').join('')+'</div>' : '';
 
-  const mrBody = ‘<div class="mr-panel">’+
-    ‘<div class="mr-prompt">Weekly market review for <b>’+esc(M.meta.market)+’</b> · w/c ‘+esc(M.meta.week_start)+
-    ‘. Your narrative persists locally across weeks — use it to capture the "so what" beyond the numbers.</div>’+
+  const mrBody = '<div class="mr-panel">'+
+    '<div class="mr-prompt">Weekly market review for <b>'+esc(M.meta.market)+'</b> · w/c '+esc(M.meta.week_start)+
+    '. Your narrative persists locally across weeks — use it to capture the "so what" beyond the numbers.</div>'+
     ctxHtml+
-    ‘<div class="mr-review"><textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn\’t capture…\n\ne.g. \’Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.\’">’+esc(mrText)+’</textarea>’+
-    ‘<div class="mr-meta"><span id="mrSaved" class="mr-saved">’+esc(mrWhen)+’</span>’+
-      ‘<span class="mono">key: wr_market_review::’+esc(M.meta.market_slug)+’</span></div></div></div>’;
+    '<div class="mr-review"><textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn’t capture…\n\ne.g. ‘Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.’">'+esc(mrText)+'</textarea>'+
+    '<div class="mr-meta"><span id="mrSaved" class="mr-saved">'+esc(mrWhen)+'</span>'+
+      '<span class="mono">key: wr_market_review::'+esc(M.meta.market_slug)+'</span></div></div></div>';
 
-  const fuCnt = rows.length ? ‘<span class="cnt">(‘+rows.length+’)</span>’ : ‘’;
-  const mrHas = mrText ? ‘ · ●’ : ‘’;
+  const fuCnt = rows.length ? '<span class="cnt">('+rows.length+')</span>' : '';
+  const mrHas = mrText ? ' · ●' : '';
 
-  return ‘<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>’+
-    ‘<span class="sub">last week’s flagged CEs + your market review</span></div>’+
-    ‘<div class="s2tabs">’+
-      ‘<div class="s2tab active" data-s2tab="followup">Follow-up’+fuCnt+’</div>’+
-      ‘<div class="s2tab" data-s2tab="review">Market Review’+esc(mrHas)+’</div>’+
-    ‘</div>’+
-    ‘<div class="s2pane active" id="s2-followup">’+fuBody+’</div>’+
-    ‘<div class="s2pane" id="s2-review">’+mrBody+’</div>’+
-    ‘</section>’;
+  return '<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>'+
+    '<span class="sub">last week’s flagged CEs + your market review</span></div>'+
+    '<div class="s2tabs">'+
+      '<div class="s2tab active" data-s2tab="followup">Follow-up'+fuCnt+'</div>'+
+      '<div class="s2tab" data-s2tab="review">Market Review'+esc(mrHas)+'</div>'+
+    '</div>'+
+    '<div class="s2pane active" id="s2-followup">'+fuBody+'</div>'+
+    '<div class="s2pane" id="s2-review">'+mrBody+'</div>'+
+    '</section>';
 }
 function wireMarketReview(){
-  const ta=document.getElementById(‘mrText’); if(!ta || ta.dataset.wired) return;
-  ta.dataset.wired=’1’;
-  ta.addEventListener(‘input’,()=>{
+  const ta=document.getElementById('mrText'); if(!ta || ta.dataset.wired) return;
+  ta.dataset.wired='1';
+  ta.addEventListener('input',()=>{
     clearTimeout(mrTimer);
     mrTimer=setTimeout(()=>{ saveMarketReview(ta.value);
-      const el=document.getElementById(‘mrSaved’);
-      if(el) el.textContent=’saved ‘+new Date().toLocaleString(); },400);
+      const el=document.getElementById('mrSaved');
+      if(el) el.textContent='saved '+new Date().toLocaleString(); },400);
   });
 }
 
