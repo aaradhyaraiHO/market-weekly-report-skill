@@ -177,6 +177,10 @@ svg.spark{display:block}
 .cmt-box textarea:focus{outline:none;border-color:var(--purps)}
 .cmt-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint)}
 .cmt-saved{color:var(--green);font-weight:600}
+.sync-badge{font-family:var(--sans);font-size:10.5px;font-weight:600;margin-left:auto}
+.cmt-author{font-family:var(--sans);font-size:12.5px;font-weight:500;padding:7px 11px;border:1.5px solid var(--rule-dark);
+  border-radius:10px;background:#fff;color:var(--ink);width:180px;margin-bottom:8px}
+.cmt-author:focus{outline:none;border-color:var(--purps)}
 .io-row{display:flex;gap:8px;margin-top:12px}
 .mono{font-family:var(--sans)}
 a.outlink{color:var(--purps);text-decoration:none;font-family:var(--sans);font-size:12px;font-weight:600;border-bottom:1px solid rgba(128,0,255,.35)}
@@ -334,13 +338,82 @@ function sparkline(vals, opt){
     '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'+dot+'</svg>';
 }
 
-/* ---------- comments (localStorage, persists week-over-week) ---------- */
+/* ---------- comments (localStorage + Google Sheet sync) ---------- */
+const NOTES_URL = DATA.notes_url || '';
+const SYNC_OK = NOTES_URL.length > 0;
+let syncStatus = SYNC_OK ? 'idle' : 'off';
+
 function cmtKey(ceId){ return 'wr_comments::'+MARKETS[mi].meta.market_slug+'::'+ceId; }
 function getComment(ceId){ try{ return JSON.parse(localStorage.getItem(cmtKey(ceId))||'null'); }catch(e){ return null; } }
 function hasComment(ceId){ const c=getComment(ceId); return !!(c && c.text && c.text.trim()); }
-function saveComment(ceId,text){
-  if(text && text.trim()) localStorage.setItem(cmtKey(ceId), JSON.stringify({text:text, updated:new Date().toISOString()}));
-  else localStorage.removeItem(cmtKey(ceId));
+function getAuthor(){ return localStorage.getItem('wr_author')||''; }
+function setAuthor(v){ localStorage.setItem('wr_author', v.trim()); }
+
+function saveComment(ceId, text){
+  const now = new Date().toISOString();
+  if(text && text.trim()){
+    const obj = {text:text, updated:now, author:getAuthor()};
+    localStorage.setItem(cmtKey(ceId), JSON.stringify(obj));
+    sheetUpsert(ceId, text, now);
+  } else {
+    localStorage.removeItem(cmtKey(ceId));
+    sheetUpsert(ceId, '', now);
+  }
+}
+
+function sheetUpsert(ceId, text, now){
+  if(!SYNC_OK) return;
+  const M = MARKETS[mi];
+  const ce = M.ces.find(c => String(c.ce_id)===String(ceId));
+  syncStatus = 'syncing';
+  fetch(NOTES_URL, {
+    method:'POST', redirect:'follow',
+    headers:{'Content-Type':'text/plain'},
+    body: JSON.stringify({
+      action:'upsert',
+      market_slug: M.meta.market_slug,
+      ce_id: String(ceId),
+      ce_name: ce ? ce.ce_name : '',
+      week_start: M.meta.week_start || '',
+      author: getAuthor(),
+      text: text,
+      section: 'drawer',
+      status: (text && text.trim()) ? 'open' : 'resolved'
+    })
+  }).then(r=>r.json()).then(()=>{ syncStatus='synced'; updateSyncBadge(); })
+    .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
+}
+
+function syncPull(){
+  if(!SYNC_OK) return Promise.resolve();
+  const M = MARKETS[mi];
+  syncStatus = 'syncing';
+  return fetch(NOTES_URL+'?action=list&market='+encodeURIComponent(M.meta.market_slug)+'&status=open', {redirect:'follow'})
+    .then(r=>r.json())
+    .then(data=>{
+      (data.notes||[]).forEach(n=>{
+        if(!n.ce_id || !n.text || !n.text.trim()) return;
+        const local = getComment(n.ce_id);
+        const remoteTs = new Date(n.updated||0).getTime();
+        const localTs = local ? new Date(local.updated||0).getTime() : 0;
+        if(remoteTs > localTs){
+          localStorage.setItem(cmtKey(n.ce_id), JSON.stringify({
+            text: n.text, updated: n.updated, author: n.author||''
+          }));
+        }
+      });
+      syncStatus = 'synced'; updateSyncBadge(); paintCETable();
+    })
+    .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
+}
+
+function updateSyncBadge(){
+  const el = document.getElementById('syncBadge');
+  if(!el) return;
+  const map = {off:'● local only', idle:'', syncing:'↻ syncing…', synced:'✓ synced', error:'⚠ sync failed'};
+  const cls = {off:'amb', syncing:'amb', synced:'pos', error:'neg'};
+  el.textContent = map[syncStatus]||'';
+  el.className = 'sync-badge '+(cls[syncStatus]||'');
 }
 
 /* ---------- BGM customization: per-market saved views / groups / watchlist / rule ----------
@@ -1523,12 +1596,16 @@ function openDrawer(ceId){
         '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
         '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
       kmBlock + shapBlock + resourceBlocks(ce) +
-      '<div class="dr-sec-t">Notes · persists week-over-week</div>'+
-      '<div class="cmt-box"><textarea id="cmtText" placeholder="Your running note on this CE. Saved locally and carried across weeks…">'+esc(cmtText)+'</textarea>'+
+      '<div class="dr-sec-t">Notes · synced to sheet <span id="syncBadge" class="sync-badge"></span></div>'+
+      '<div class="cmt-box">'+
+        '<input type="text" class="cmt-author" id="cmtAuthor" placeholder="Your name" value="'+esc(getAuthor())+'">'+
+        '<textarea id="cmtText" placeholder="Your running note on this CE. Syncs to the shared Google Sheet…">'+esc(cmtText)+'</textarea>'+
         '<div class="cmt-meta"><span id="cmtSaved" class="cmt-saved">'+esc(cmtWhen)+'</span>'+
-          '<span class="mono">key: wr_comments::'+esc(M.meta.market_slug)+'::'+esc(ce.ce_id)+'</span></div>'+
+          (c&&c.author?'<span class="mono">by '+esc(c.author)+'</span>':'')+
+        '</div>'+
         '<div class="io-row"><button class="btn" id="cmtExport">Export notes (JSON)</button>'+
           '<button class="btn" id="cmtImport">Import notes</button>'+
+          '<button class="btn" id="cmtSync" title="Pull latest from sheet">↻ Sync</button>'+
           '<input type="file" id="cmtFile" accept="application/json" style="display:none"></div>'+
       '</div>'+
     '</div>';
@@ -1542,14 +1619,21 @@ function openDrawer(ceId){
   document.getElementById('drClose').onclick=closeDrawer;
   wireCeKmHover(ce, weeks, wk, wkLy);
   const ta=document.getElementById('cmtText');
+  const authorIn=document.getElementById('cmtAuthor');
   ta.addEventListener('input',()=>{
     clearTimeout(drawerTimer);
     drawerTimer=setTimeout(()=>{ saveComment(ceId,ta.value);
       document.getElementById('cmtSaved').textContent='saved '+new Date().toLocaleString(); },350);
   });
+  authorIn.addEventListener('change',()=>{ setAuthor(authorIn.value); });
   document.getElementById('cmtExport').onclick=exportNotes;
   document.getElementById('cmtImport').onclick=()=>document.getElementById('cmtFile').click();
   document.getElementById('cmtFile').onchange=importNotes;
+  document.getElementById('cmtSync').onclick=()=>{ syncPull().then(()=>{
+    const fresh=getComment(ceId); if(fresh&&fresh.text) ta.value=fresh.text;
+    document.getElementById('cmtSaved').textContent=fresh&&fresh.updated?'synced '+new Date(fresh.updated).toLocaleString():'no remote note';
+  }); };
+  updateSyncBadge();
   // watchlist star MIRROR — same per-market watchlist as the row star.
   const dstar=document.querySelector('#drawer .drawer-star');
   if(dstar) dstar.onclick=()=>{ toggleWatch(ceId); const on=getWatch().has(ceId);
@@ -1736,6 +1820,7 @@ document.getElementById('app').addEventListener('change',e=>{
 // boot
 state.rule=lsGet('rule','');   // restore last-used highlight rule for the first market
 renderTabs(); renderMeta(); renderApp();
+syncPull();
 </script>
 </body>
 </html>

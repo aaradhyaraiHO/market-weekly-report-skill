@@ -21,6 +21,7 @@ block emitted by build_snapshot.py.
 from __future__ import annotations
 
 import datetime as dt
+import os
 
 # --------------------------------------------------------------------------- #
 # BigQuery
@@ -131,6 +132,12 @@ VALIDATION_NA = {
     "cv_excluded": 0,
 }
 
+
+# --------------------------------------------------------------------------- #
+# Notes backend (Google Sheet + Apps Script web app)
+# --------------------------------------------------------------------------- #
+NOTES_SHEET_ID = os.environ.get("WR_NOTES_SHEET_ID", "")
+NOTES_SCRIPT_URL = os.environ.get("WR_NOTES_SCRIPT_URL", "")
 
 # --------------------------------------------------------------------------- #
 # Date helpers
