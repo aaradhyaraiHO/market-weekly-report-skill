@@ -365,22 +365,20 @@ function sheetUpsert(ceId, text, now){
   if(!SYNC_OK) return;
   const M = MARKETS[mi];
   const ce = M.ces.find(c => String(c.ce_id)===String(ceId));
+  const params = new URLSearchParams({
+    action:'upsert',
+    market_slug: M.meta.market_slug,
+    ce_id: String(ceId),
+    ce_name: ce ? ce.ce_name : '',
+    week_start: M.meta.week_start || '',
+    author: getAuthor(),
+    text: text,
+    section: 'drawer',
+    status: (text && text.trim()) ? 'open' : 'resolved'
+  });
   syncStatus = 'syncing';
-  fetch(NOTES_URL, {
-    method:'POST', redirect:'follow',
-    headers:{'Content-Type':'text/plain'},
-    body: JSON.stringify({
-      action:'upsert',
-      market_slug: M.meta.market_slug,
-      ce_id: String(ceId),
-      ce_name: ce ? ce.ce_name : '',
-      week_start: M.meta.week_start || '',
-      author: getAuthor(),
-      text: text,
-      section: 'drawer',
-      status: (text && text.trim()) ? 'open' : 'resolved'
-    })
-  }).then(r=>r.json()).then(()=>{ syncStatus='synced'; updateSyncBadge(); })
+  fetch(NOTES_URL+'?'+params.toString(), {redirect:'follow'})
+    .then(r=>r.json()).then(()=>{ syncStatus='synced'; updateSyncBadge(); })
     .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
 }
 
