@@ -1135,11 +1135,12 @@ function renderBuckets(M){
   else{
     const nGrad=newCes.filter(r=>r.lane==='A_graduated').length, nPace=newCes.filter(r=>r.lane==='B_on_pace').length;
     newBody=cbar(newCes.length,'New Pro+',nGrad,'',(nPace+' on pace to Pro'))+
-      _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num">Run-rate/mo</th><th class="num">Paid ROI</th><th class="num">Δ Rev WoW</th><th class="num">Clicks</th><th class="num">RPC</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Paid ROI</th><th class="num">Δ Rev WoW</th><th class="num">Clicks</th><th class="num">RPC</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       newCes.map(r=>{ const ln=newLane[r.lane]||[r.lane,'ghost'];
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
           '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span></td>'+
           '<td>'+chip(ln[1],ln[0])+'</td><td><b>'+esc(r.band||'—')+'</b></td>'+
+          '<td class="num">'+(r.mo_since_launch==null?'<span class="idbr">—</span>':'<b>'+r.mo_since_launch+'</b>mo')+'</td>'+
           '<td class="num">'+fmtMoney(r.run_rate_mo)+dsub((r.dollars_to_pro>0?fmtMoney(r.dollars_to_pro)+' to Pro':'at Pro+'))+'</td>'+
           '<td class="num">'+fmtPct(r.roi,0)+'</td>'+
           '<td class="num '+sgn(r.rev_wow_pct)+'">'+fmtDelta(r.rev_wow_pct,0)+'</td>'+
@@ -1149,20 +1150,22 @@ function renderBuckets(M){
   }
 
   // LIFECYCLE - Iteration
-  const itLane={A_mmp_no_traction:['MMP · no traction','amber'],B_traction_no_mmp:['Traction · no MMP','blue']};
+  const itReasonC={'Waiting for takeoff':'amber','Needs inputs':'blue','Manual check':'ghost','Untapped':'violet'};
   let itBody;
-  if(!iters.length){ itBody='<div class="emptystate">No iteration candidates.</div>'; }
+  if(!iters.length){ itBody='<div class="emptystate">No iteration / untapped candidates.</div>'; }
   else{
-    const nA=iters.filter(r=>r.lane==='A_mmp_no_traction').length, nB=iters.filter(r=>r.lane==='B_traction_no_mmp').length;
-    itBody=cbar(iters.length,'Iterate / candidate',nA+' / '+nB,'',(nA+' MMP no-traction · '+nB+' traction no-MMP'))+
-      _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num">Run-rate/mo</th><th class="num">Rev WoW</th><th class="num">Clicks WoW</th><th>MMP handover</th><th>Rev &rsquo;26 v &rsquo;25</th>',
-      iters.map(r=>{ const ln=itLane[r.lane]||[r.lane,'ghost']; const t=r.traction||{};
+    const nIt=iters.filter(r=>r.lane==='iteration').length, nUn=iters.filter(r=>r.lane==='untapped').length, nNew=iters.filter(r=>r.new_this_week).length;
+    itBody=cbar(iters.length,'Iteration / Untapped',nIt+' / '+nUn,'',(nNew?'<b>'+nNew+' new this week</b> · ':'')+'never Pro+')+
+      _tbl('<th class="stick">Combined Entity</th><th>Reason</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Clicks 4w</th><th class="num">CVR 4w</th><th>MMP handover</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      iters.map(r=>{ const t=r.traction||{};
+        const cvrCls=(r.cvr_4w!=null&&r.cvr_cat_med!=null)?(r.cvr_4w<r.cvr_cat_med?'neg':'pos'):'';
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+(r.has_mmp?' <span class="chip ghost">MMP ✓</span>':'')+'</td>'+
-          '<td>'+chip(ln[1],ln[0])+'</td><td><b>'+esc(r.band||'—')+'</b></td>'+
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+(r.has_mmp?' <span class="chip ghost">MMP ✓</span>':'')+(r.new_this_week?' <span class="chip green">NEW</span>':'')+'</td>'+
+          '<td>'+chip(itReasonC[r.reason]||'ghost',r.reason)+'</td><td><b>'+esc(r.band||'—')+'</b></td>'+
+          '<td class="num">'+(r.mo_since_launch==null?'<span class="idbr">—</span>':'<b>'+r.mo_since_launch+'</b>mo')+'</td>'+
           '<td class="num">'+fmtMoney(r.run_rate_mo)+'</td>'+
-          '<td class="num '+sgn(t.rev_wow_pct)+'">'+fmtDelta(t.rev_wow_pct,0)+'</td>'+
-          '<td class="num '+sgn(t.clicks_wow_pct)+'">'+fmtDelta(t.clicks_wow_pct,0)+'</td>'+
+          '<td class="num">'+fmtInt(r.clicks_4w)+dsub(fmtDelta(t.clicks_wow_pct,0)+' WoW')+'</td>'+
+          '<td class="num"><span class="'+cvrCls+'">'+fmtPct(r.cvr_4w,1)+'</span>'+dsub('cat '+fmtPct(r.cvr_cat_med,1))+'</td>'+
           '<td class="idbr">'+esc(r.mmp_handover_date||'—')+'</td>'+
           '<td>'+dualSpark(r.ce_id)+'</td></tr>'; }).join(''));
   }
@@ -1174,7 +1177,7 @@ function renderBuckets(M){
     _bucketBlock('🚀','Scale-Up','Efficient with room to grow — Paid ROI ≥ 155% in ≥ 3 of the last 4 weeks and not just-cliffed. Ranked by est. incremental revenue/wk.', scaleBody)+
     _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Yield spiked vs its 28-day baseline — same detector, upside. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
     _bucketBlock('🌱','New CEs','Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.', newBody)+
-    _bucketBlock('🌱','Iteration','Needs team input — has MMP input but no traction (iterate), or gaining traction with no MMP yet (bring the team in).', itBody)+
+    _bucketBlock('🌱','Iteration / Untapped','Non-graduated CEs (never Pro+). Iteration (team is on it) diagnoses why it is stuck — waiting for takeoff (low clicks) · needs inputs (CVR below category) · manual check. Untapped = real scale, nobody working it. Clicks/CVR pooled over 4 weeks; NEW = handover in the last 2 weeks.', itBody)+
     '</section>';
 }
 
