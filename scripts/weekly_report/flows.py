@@ -1,16 +1,16 @@
 """
-Week header — structural flows, week type, dual clock, themes (spec §4).
+Week header — trend movers, week type, dual clock, themes (spec §4).
 
-The "what kind of week was it" engine. Raw WoW/YoY can mask the real story
-(NA week 2026-06-29: raw net +$11K but structurally a "mostly loss" week vs the
-July-4 LY ramp). So every CE's move is split into:
+Top movers ranked by 4-week trailing average deviation (W0 − avg(W-1..W-4)),
+with a seasonal context tag derived from LY same-week WoW:
+  - "seasonal"         LY moved the same direction, ≥30% of the TY magnitude
+  - "against season"   LY moved the opposite direction — needs investigation
+  - "mostly TY"        same direction but LY was small relative to TY — real win/loss
+  - "no LY"            no comparable LY data
 
-    structural delta = actual WoW $ − seasonally-EXPECTED WoW $
-
-where the expected ramp is the ratio of 3-week *centered* LY averages
-(LY[t-1,t,t+1] ÷ LY[t-2,t-1,t]), capped at ±100% of last-week revenue, with a
-guard: no expectation when the LY base < $200 (fall back to raw WoW). Locked
-after the v2 backtest 2026-07-07.
+The structural engine (LY-ratio-based expected WoW) is retained for week-type
+classification, dual-clock resolution, and theme attribution — but NOT for
+mover ranking, where it produced artifacts from LY/TY scale mismatches.
 
 Emits snapshot['market_summary']['headlines']['flows' | 'week_type' |
 'dual_clock' | 'themes' | 'routing'].
@@ -21,6 +21,7 @@ import datetime as dt
 
 EXPECTED_CAP = 1.0          # cap expected WoW at ±100% of last-week revenue
 LY_BASE_FLOOR = 200.0       # no seasonal expectation below this LY base (raw WoW)
+TY_LY_SCALE_CAP = 10.0     # if TY W-1 > 10× LY avg base, LY ratio is noise -> raw WoW
 THEME_INDEX_MIN = 1.5       # contribution index >= this to flag a theme
 THEME_MIN_CES = 3           # ... and at least this many CEs
 THEME_MIN_FLOW = 2000.0     # ... and >= this many $ of flow (materiality floor, spec §4.2)
@@ -84,6 +85,10 @@ def per_ce_structural(ces, ly_forward_rev):
         ly_t, ly_tm1, ly_tm2 = wly[-1].get("revenue"), wly[-2].get("revenue"), wly[-3].get("revenue")
         ly_tp1 = ly_forward_rev.get(ce["ce_id"])
         ratio = _expected_ratio(ly_tm2, ly_tm1, ly_t, ly_tp1)
+        if ratio is not None and wm1_rev and None not in (ly_tm2, ly_tm1, ly_t):
+            ly_avg = (ly_tm2 + ly_tm1 + ly_t) / 3.0
+            if ly_avg > 0 and wm1_rev / ly_avg > TY_LY_SCALE_CAP:
+                ratio = None
         struct, bl_sensitive = _structural(w0_rev, wm1_rev, ratio)
         if struct is None:
             continue
@@ -94,6 +99,69 @@ def per_ce_structural(ces, ly_forward_rev):
             "metadata": ce.get("metadata") or {},
         })
     return per_ce
+
+
+TREND_MIN_REV = 200.0       # skip CEs with W-1 < this
+
+
+def _seasonal_tag(delta_4w, ly_wow):
+    """Classify the 4-week trend delta against LY same-week WoW."""
+    if ly_wow is None:
+        return "no LY"
+    if abs(delta_4w) < 200:
+        return ""
+    same_dir = (delta_4w > 0) == (ly_wow > 0)
+    if same_dir and abs(ly_wow) > abs(delta_4w) * 0.3:
+        return "seasonal"
+    elif not same_dir:
+        return "against season"
+    return "mostly TY"
+
+
+def per_ce_trend(ces):
+    """Per-CE trend movers: W0 − trailing 4-week avg, plus LY seasonal context.
+    Returns [{ce_id, ce_name, delta_4w, raw_wow, ly_wow, tag, w0_rev}]."""
+    out = []
+    for ce in ces:
+        wk = ce.get("weekly") or []
+        wly = ce.get("weekly_ly") or []
+        if len(wk) < 5:
+            continue
+        revs = [w.get("revenue") for w in wk[-5:]]
+        if any(v is None for v in revs):
+            continue
+        wm4, wm3, wm2, wm1, w0 = revs
+        if wm1 < TREND_MIN_REV:
+            continue
+
+        raw_wow = w0 - wm1
+        avg4 = (wm1 + wm2 + wm3 + wm4) / 4.0
+        delta_4w = w0 - avg4
+
+        ly_wow = None
+        ly_w0_rev = None
+        if len(wly) >= 2:
+            ly_w0_rev = wly[-1].get("revenue")
+            ly_wm1 = wly[-2].get("revenue")
+            if ly_w0_rev is not None and ly_wm1 is not None and ly_wm1 > TREND_MIN_REV:
+                ly_wow = ly_w0_rev - ly_wm1
+
+        yoy_growth = None
+        if ly_w0_rev and ly_w0_rev > TREND_MIN_REV:
+            yoy_growth = (w0 / ly_w0_rev) - 1.0
+
+        out.append({
+            "ce_id": ce["ce_id"],
+            "ce_name": ce["ce_name"],
+            "delta_4w": round(delta_4w, 0),
+            "raw_wow": round(raw_wow, 0),
+            "ly_wow": round(ly_wow, 0) if ly_wow is not None else None,
+            "yoy_growth": round(yoy_growth, 2) if yoy_growth is not None else None,
+            "tag": _seasonal_tag(delta_4w, ly_wow),
+            "w0_rev": w0,
+            "metadata": ce.get("metadata") or {},
+        })
+    return out
 
 
 def build_header(ces, ly_forward_rev, market_weekly, w0_start: dt.date,
@@ -198,6 +266,35 @@ def build_header(ces, ly_forward_rev, market_weekly, w0_start: dt.date,
     routing = ("market_rca" if n80_loss >= N80_LOSS_LARGE
                else "cards" if n80_loss <= N80_LOSS_SMALL else "mixed")
 
+    # Trend movers — union of top-10-by-raw-WoW and top-10-by-4w-trend, deduped.
+    # Captures both sudden drops (raw) and sustained declines (trend).
+    trend = per_ce_trend(ces)
+    by_raw_drop = sorted([c for c in trend if c["raw_wow"] < 0],
+                         key=lambda c: c["raw_wow"])[:10]
+    by_4w_drop = sorted([c for c in trend if c["delta_4w"] < 0],
+                        key=lambda c: c["delta_4w"])[:10]
+    seen = set()
+    trend_drops = []
+    for c in sorted(by_raw_drop + by_4w_drop,
+                    key=lambda c: min(c["raw_wow"], c["delta_4w"])):
+        if c["ce_id"] not in seen:
+            seen.add(c["ce_id"])
+            trend_drops.append(c)
+    trend_drops = trend_drops[:10]
+
+    by_raw_gain = sorted([c for c in trend if c["raw_wow"] > 0],
+                         key=lambda c: -c["raw_wow"])[:10]
+    by_4w_gain = sorted([c for c in trend if c["delta_4w"] > 0],
+                        key=lambda c: -c["delta_4w"])[:10]
+    seen = set()
+    trend_gains = []
+    for c in sorted(by_raw_gain + by_4w_gain,
+                    key=lambda c: -max(c["raw_wow"], c["delta_4w"])):
+        if c["ce_id"] not in seen:
+            seen.add(c["ce_id"])
+            trend_gains.append(c)
+    trend_gains = trend_gains[:10]
+
     return {
         "raw": {"revenue_w0": round(raw_rev, 0),
                 "wow_pct": round(raw_wow, 1) if raw_wow is not None else None,
@@ -205,15 +302,13 @@ def build_header(ces, ly_forward_rev, market_weekly, w0_start: dt.date,
         "structural": {
             "gains_usd": round(G, 0), "losses_usd": round(L, 0), "net_usd": round(G - L, 0),
             "n80_gain": n80_gain, "n80_loss": n80_loss,
-            "top_gainers": [{"ce_id": c["ce_id"], "ce_name": c["ce_name"],
-                             "struct_usd": round(c["struct"], 0),
-                             "baseline_sensitive": c["baseline_sensitive"]} for c in gainers[:10]],
-            "top_droppers": [{"ce_id": c["ce_id"], "ce_name": c["ce_name"],
-                              "struct_usd": round(c["struct"], 0),
-                              "baseline_sensitive": c["baseline_sensitive"]} for c in droppers[:10]],
+        },
+        "trend": {
+            "top_gainers": trend_gains,
+            "top_droppers": trend_drops,
         },
         "week_type": wtype,
-        "calibration": calibration,   # {method: p75_52w|floor, threshold_usd}
+        "calibration": calibration,
         "dual_clock_label": dual,
         "clocks_disagree": disagree,
         "themes": themes[:12],

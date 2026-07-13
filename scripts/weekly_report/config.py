@@ -27,7 +27,7 @@ import datetime as dt
 # --------------------------------------------------------------------------- #
 BQ_PROJECT = "headout-analytics"
 BQ_DATASET = "analytics_reporting"
-MAX_BYTES_BILLED = 30 * 1024 ** 3  # 30 GB cap per query (analytics-skill hygiene)
+MAX_BYTES_BILLED = 40 * 1024 ** 3  # 40 GB cap per query (analytics-skill hygiene)
 
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
 ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.ads_campaign_stats`"

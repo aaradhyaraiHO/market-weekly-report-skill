@@ -76,16 +76,21 @@ section{margin-top:44px}
 .mover .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .mover .nm:hover{color:var(--purps);text-decoration:underline}
 .mover .dv{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
-/* dual-lens mover rows — struct & raw in aligned labeled columns */
-.mvr{display:grid;grid-template-columns:15px 1fr 76px 68px;gap:8px;align-items:baseline;font-size:13px;padding:5px 0;border-top:1px solid var(--rule)}
+/* trend mover rows — Δtrend + raw + seasonal context tag */
+.mvr{display:grid;grid-template-columns:15px 1fr 72px 64px auto;gap:6px;align-items:baseline;font-size:13px;padding:5px 0;border-top:1px solid var(--rule)}
 .mvr:first-of-type{border-top:none}
 .mvr .rk{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-faint)}
 .mvr .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .mvr .nm:hover{color:var(--purps);text-decoration:underline}
 .mvr .st{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
 .mvr .rw{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:500;font-size:11.5px;color:var(--ink-faint);text-align:right;white-space:nowrap}
-.mvr .rw.diverge{color:var(--amber);font-weight:700}
-.mvh{display:grid;grid-template-columns:15px 1fr 76px 68px;gap:8px;font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);padding-bottom:5px;border-bottom:1.3px solid var(--rule-dark)}
+.mvr .rw.pos{color:#5B8C5A} .mvr .rw.neg{color:#B56576}
+.mvr .tag{font-family:var(--sans);font-size:10px;font-weight:600;white-space:nowrap;padding:1px 6px;border-radius:4px}
+.mvr .tag.seasonal{background:var(--rule);color:var(--ink-faint)}
+.mvr .tag.against{background:var(--amber-bg);color:var(--amber)}
+.mvr .tag.mostly-ty{background:#E8F5E9;color:#2E7D32}
+.mvr .tag.no-ly{background:var(--rule);color:var(--ink-faint);opacity:0.6}
+.mvh{display:grid;grid-template-columns:15px 1fr 72px 64px auto;gap:6px;font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);padding-bottom:5px;border-bottom:1.3px solid var(--rule-dark)}
 .mvh span:nth-child(3),.mvh span:nth-child(4){text-align:right}
 .spark-wrap{margin-top:7px}
 
@@ -436,54 +441,44 @@ function renderHead(M){
     ' <span class="'+sgn(roiDeltaPP)+'" style="font-weight:600">('+
     (roiDeltaPP>0?'+':MINUS)+Math.abs(roiDeltaPP).toFixed(1)+'pp)</span>';
 
-  // raw WoW Δ per CE — for the dual-lens mover rows
-  const rawDelta = {};
-  (M.ces||[]).forEach(c=>{ const w=c.weekly||[]; if(w.length>=2){
-    const a=w[w.length-1].revenue, b=w[w.length-2].revenue;
-    if(a!=null&&b!=null) rawDelta[c.ce_id]=a-b; } });
-
-  // Show BOTH structural and raw, in aligned labeled columns (struct | raw).
-  // struct is primary (bold, colored); raw is muted, and turns amber when it
-  // materially disagrees (sign flip, or raw <½ / >2× structural) — so you see
-  // both numbers AND the divergence at a glance (Cruises-Chicago: −$29.7K / −$3.3K).
-  const diverges = (st,raw)=>{
-    if(raw==null||st==null) return false;
-    if((st>=0)!==(raw>=0)) return true;
-    if(st===0) return Math.abs(raw)>=1000;
-    const r=raw/st; return r<0.5 || r>2.0;
-  };
-  const MVHEAD='<div class="mvh"><span></span><span></span><span>struct</span><span>raw</span></div>';
-  const mvS = (c,cls,i)=>{ const raw=rawDelta[c.ce_id], dv=diverges(c.struct_usd,raw);
-    return '<div class="mvr"><span class="rk">'+(i+1)+'</span>'+
-      '<span class="nm" data-ce="'+esc(c.ce_id)+'">'+esc(c.ce_name)+
-      (c.baseline_sensitive?' <span class="sub">~bl</span>':'')+'</span>'+
-      '<span class="st '+cls+'">'+fmtMoneyDelta(c.struct_usd)+'</span>'+
-      '<span class="rw'+(dv?' diverge':'')+'"'+(dv?' title="raw & structural disagree"':'')+'>'+
-        (raw!=null?fmtMoneyDelta(raw):'—')+'</span></div>'; };
-  // fallback mover (no structural engine): raw only, classic single-column
+  // Trend movers: union of raw WoW + 4-week trend, with seasonal context tag
+  const tagCls = t => t==='against season'?'against':t==='seasonal'?'seasonal':t==='mostly TY'?'mostly-ty':'no-ly';
+  const MVHEAD='<div class="mvh"><span></span><span></span><span>Δ trend</span><span>raw</span><span></span></div>';
+  const mvT = (c,cls,i)=>{
+    const tip = c.ly_wow!=null?'LY WoW: '+fmtMoneyDelta(c.ly_wow):'no LY data';
+    return '<div class="mvr" title="'+esc(tip)+'"><span class="rk">'+(i+1)+'</span>'+
+      '<span class="nm" data-ce="'+esc(c.ce_id)+'">'+esc(c.ce_name)+'</span>'+
+      '<span class="st '+sgn(c.delta_4w)+'">'+fmtMoneyDelta(c.delta_4w)+'</span>'+
+      '<span class="rw '+sgn(c.raw_wow)+'">'+fmtMoneyDelta(c.raw_wow)+'</span>'+
+      (c.tag?'<span class="tag '+tagCls(c.tag)+'">'+esc(c.tag)+'</span>':'')+'</div>'; };
+  // fallback mover (no trend engine): raw only
   const mvR = (m,i)=> '<div class="mover"><span class="rk">'+(i+1)+'</span>'+
      '<span class="nm" data-ce="'+esc(m.ce_id)+'">'+esc(m.ce_name)+'</span>'+
      '<span class="dv '+sgn(m.delta_wow)+'">'+fmtMoneyDelta(m.delta_wow)+'</span></div>';
 
   let drops, gains, moverSub;
-  if(wh){
-    const dr=(wh.structural.top_droppers||[]).slice(0,6).map((c,i)=>mvS(c,'neg',i)).join('');
-    const gn=(wh.structural.top_gainers||[]).slice(0,6).map((c,i)=>mvS(c,'pos',i)).join('');
+  if(wh && wh.trend){
+    const dr=(wh.trend.top_droppers||[]).slice(0,10).map((c,i)=>mvT(c,'neg',i)).join('');
+    const gn=(wh.trend.top_gainers||[]).slice(0,10).map((c,i)=>mvT(c,'pos',i)).join('');
     drops = dr ? MVHEAD+dr : ''; gains = gn ? MVHEAD+gn : '';
-    moverSub='structural Δ vs LY · raw beside · amber = disagree';
+    moverSub='top by 4-week trend OR raw WoW';
   } else {
     drops=(h.top_drops||[]).map(mvR).join(''); gains=(h.top_gainers||[]).map(mvR).join('');
     moverSub='Δ rev WoW';
   }
+  const moverNote = (wh&&wh.trend) ?
+    '<div class="sub" style="margin-top:10px;font-size:10px;line-height:1.5;color:var(--ink-faint)">'+
+      '<b>Δ trend</b> vs 4-wk avg · <b>raw</b> vs W-1 · tag vs LY: '+
+      'seasonal, <span style="color:var(--amber)">against season</span> (investigate), mostly TY (real shift)</div>' : '';
 
   // Plain-language read — translate the dual-clock into one sentence a BGM gets
   // instantly (the "so what", not the jargon). This is the header's headline.
   function plainRead(wh){
-    const s=wh.structural, wow=h.wow_pct;
+    const s=wh.structural, wow=h.wow_pct, tr=wh.trend||{};
     const rawTxt = (wow==null) ? 'moved' :
       Math.abs(wow)<2 ? 'roughly flat ('+fmtDelta(wow)+' WoW)' :
       (wow>0?'up ':'down ')+fmtDelta(Math.abs(wow))+' WoW';
-    const pool = s.net_usd<0 ? (s.top_droppers||[]) : (s.top_gainers||[]);
+    const pool = s.net_usd<0 ? (tr.top_droppers||[]) : (tr.top_gainers||[]);
     const names = pool.slice(0,2).map(c=>esc(c.ce_name));
     const drv = names.length ? ' — mostly '+names.join(' and ') : '';
     if(s.net_usd<0)
@@ -495,11 +490,9 @@ function renderHead(M){
       '<div style="font-size:13.5px;line-height:1.5;color:var(--ink-soft);margin-bottom:10px">'+plainRead(wh)+'</div>'
     ) : '';
   // N80 counts, hover to reveal the CEs behind them (native title tooltip).
-  const _names = (arr,n)=>{ const names=(arr||[]).slice(0,n).map(c=>c.ce_name);
-    const more=(n>names.length)?0:((arr||[]).length>n?0:0); return names; };
   const lossN = wh ? wh.structural.n80_loss : 0, gainN = wh ? wh.structural.n80_gain : 0;
-  const lossTip = wh ? esc((wh.structural.top_droppers||[]).slice(0,lossN).map(c=>c.ce_name).join(', ')) : '';
-  const gTop = wh ? (wh.structural.top_gainers||[]).slice(0,10).map(c=>c.ce_name) : [];
+  const lossTip = wh&&wh.trend ? esc((wh.trend.top_droppers||[]).slice(0,lossN).map(c=>c.ce_name).join(', ')) : '';
+  const gTop = wh&&wh.trend ? (wh.trend.top_gainers||[]).slice(0,10).map(c=>c.ce_name) : [];
   const gainTip = wh ? esc(gTop.join(', ')+(gainN>gTop.length?', …+'+(gainN-gTop.length)+' more':'')) : '';
   const hov = 'cursor:help;border-bottom:1px dotted var(--ink-faint)';
   const structRows = wh ? (
@@ -529,9 +522,11 @@ function renderHead(M){
       disagree+
     '</div>'+
     '<div class="card movers"><h3>Top drops <span class="n">· '+moverSub+'</span></h3>'+
-      (drops||'<div class="emptystate">No drops this week <b>✅</b></div>')+'</div>'+
+      (drops||'<div class="emptystate">No drops this week <b>✅</b></div>')+
+      moverNote+'</div>'+
     '<div class="card movers"><h3>Top gains <span class="n">· '+moverSub+'</span></h3>'+
-      (gains||'<div class="emptystate">No gains this week</div>')+'</div>'+
+      (gains||'<div class="emptystate">No gains this week</div>')+
+      moverNote+'</div>'+
   '</div></section>';
 }
 
