@@ -152,13 +152,16 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
             ELSE count_conversions_online
         END)                                                      AS conversions,
         SUM(sum_conversion_value_offline_revenue)                AS offline_revenue,
+        SUM(count_impressions)                                   AS paid_impressions,
         SUM(count_clicks)                                        AS paid_clicks,
         SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv
 
-    FROM {config.ADS_STATS}
+    FROM {config.ADS_CAMPAIGN_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
+          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
+          AND campaign_advertising_channel_type = 'SEARCH'
 
     GROUP BY 1, 2
     """
@@ -514,21 +517,33 @@ def ce_funnel(
 # Daily paid series for the fluctuation engine  (CM1/conv POF)
 # --------------------------------------------------------------------------- #
 def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """Daily CE paid series: CM1, CM1 conversions, clicks, spend."""
+    """Daily CE paid series: CM1, CM1 conversions, clicks, spend (Google Search + Bing)."""
     sql = f"""
     SELECT
         campaign_target_combined_entity_id                        AS combined_entity_id,
         ANY_VALUE(campaign_target_combined_entity_name)          AS combined_entity_name,
         report_date,
-        SUM(sum_conversion_value_offline_contribution_margin)    AS cm1,
-        SUM(count_conversions_offline_contribution_margin)       AS conversions,
+        SUM(CASE
+            WHEN report_date >= '2025-09-01'
+                 AND sum_conversion_value_offline_contribution_margin > 0
+                THEN sum_conversion_value_offline_contribution_margin
+            ELSE sum_conversion_value_calculated_contribution_margin
+        END)                                                      AS cm1,
+        SUM(CASE
+            WHEN report_date >= '2025-09-01'
+                 AND count_conversions_offline_contribution_margin > 0
+                THEN count_conversions_offline_contribution_margin
+            ELSE count_conversions_online
+        END)                                                      AS conversions,
         SUM(count_clicks)                                        AS clicks,
         SUM(sum_spend)                                           AS spend
 
-    FROM {config.ADS_STATS}
+    FROM {config.ADS_CAMPAIGN_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
+          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
+          AND campaign_advertising_channel_type = 'SEARCH'
 
     GROUP BY 1, 3
     """
@@ -569,10 +584,10 @@ def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.
 # --------------------------------------------------------------------------- #
 def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """
-    Per-campaign as-of tROAS + spend over the window. Uses campaign_target_roas
-    (as-of report_date) so day-over-day changes are detectable; the current_*
-    variant is constant across dates. tROAS is stored in percentage points
-    (150 == 150%).
+    Per-campaign as-of tROAS + spend over the window (Google Search + Bing).
+    Uses campaign_target_roas (as-of report_date) so day-over-day changes are
+    detectable; the current_* variant is constant across dates. tROAS is stored
+    in percentage points (150 == 150%).
     """
     sql = f"""
     SELECT
@@ -584,10 +599,12 @@ def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
         current_campaign_bidding_strategy       AS strategy,
         sum_spend                               AS spend
 
-    FROM {config.ADS_STATS}
+    FROM {config.ADS_CAMPAIGN_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
+          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
+          AND campaign_advertising_channel_type = 'SEARCH'
 
     ORDER BY campaign_id, report_date
     """

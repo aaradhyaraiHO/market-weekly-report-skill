@@ -126,10 +126,11 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
     coupon_wallet = _f(p, "coupon_wallet") if paid is not None else 0.0
     cm1 = _f(p, "cm1") if paid is not None else None
     conversions = _f(p, "conversions") if paid is not None else None
+    paid_impressions = _f(p, "paid_impressions") if paid is not None else None
     paid_clicks = _f(p, "paid_clicks") if paid is not None else None
     conv_value_gbv = _f(p, "conv_value_gbv") if paid is not None else None
 
-    # Paid RoI (google_ads_campaign_stats): CM1 / (spend + coupon_wallet).
+    # Paid RoI (ads_campaign_stats, Google Search + Bing): CM1 / (spend + coupon_wallet).
     roi = None
     if spend is not None and spend >= config.WEEKLY_SPEND_FLOOR:
         roi = _pct(cm1, spend + coupon_wallet, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
@@ -169,21 +170,23 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "tr_pct": _pct(revenue, gbv_comp) if biz is not None else None,
         # canon: completion rate = GBV completed / GBV booked
         "cr_pct": _pct(gbv_comp, gbv) if biz is not None else None,
+        "cm2": _num(revenue - ad_spend_total) if biz is not None else None,
         "spend": _num(spend),
         "cm1": _num(cm1),
         "roi_pct": roi,                       # Paid RoI (campaign, coupon-inclusive)
         "cm1_business": _num(cm1_business),
         "gross_marketing_cost": _num(gross_mktg_cost),
         "roi1_pct": roi1,                     # canonical business ROI(1)
-        "paid_conv_value": _num(conv_value_gbv),
+        "paid_impressions": int(paid_impressions) if _num(paid_impressions) is not None else None,
         "paid_clicks": int(paid_clicks) if _num(paid_clicks) is not None else None,
+        "paid_ctr_pct": _pct(paid_clicks, paid_impressions) if paid is not None else None,
+        "paid_conv_value": _num(conv_value_gbv),
         "paid_conversions": int(conversions) if _num(conversions) is not None else None,
-        # canon: Paid CVR = offline CM conversions / paid clicks
         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
-        # canon: CPC = ad spend / paid clicks (both google_ads_campaign_stats)
         "cpc": _num(spend / paid_clicks) if (paid_clicks and paid is not None) else None,
         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
-        # LY (−364d) revenue for this week — powers the All-CE 12-wk TY/LY sparkline.
+        "paid_rpc": _num(revenue / paid_clicks) if (paid_clicks and revenue is not None and paid is not None) else None,
+        "paid_cm2": _num(revenue - spend) if (spend is not None and revenue is not None) else None,
         "revenue_ly": _num(yoy_rev) if yoy_rev else None,
         "cm1_per_conv": _num(cm1 / conversions) if (conversions and paid is not None) else None,
         "paid_contribution_pct": (
@@ -604,7 +607,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         roi1 = _pct(cm1_business, gross_mktg_cost,
                     gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
 
-        # Paid metrics (google_ads_campaign_stats).
+        # Paid metrics (ads_campaign_stats — Google Search + Bing).
+        paid_impressions = float(pw["paid_impressions"].sum()) if "paid_impressions" in pw else 0
         paid_clicks = float(pw["paid_clicks"].sum())
         paid_conv = float(pw["conversions"].sum())
         conv_value_gbv = float(pw["conv_value_gbv"].sum())
@@ -617,12 +621,14 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         }
 
         ly_wk = float(sum(v for (c, aw), v in ly_rev.items() if aw == wk))
+        ad_spend_all = float(bw["ad_spend_total"].sum())
         market_weekly.append({
             "week": config.iso(wk),
             "revenue": _num(rev),
             "gbv": _num(gbv),
             "orders": int(orders),
             "clicks": int(clicks),
+            "cm2": _num(rev - ad_spend_all),
             "spend": _num(spend),
             "cm1": _num(cm1),
             "roi_pct": paid_roi,                 # Paid RoI (campaign, coupon-inclusive)
@@ -636,13 +642,17 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "cm1_business": _num(cm1_business),
             "gross_marketing_cost": _num(gross_mktg_cost),
             "roi1_pct": roi1,
-            # paid conversion value on the GBV basis + paid clicks/CVR
-            "paid_conv_value": _num(conv_value_gbv),
+            "paid_impressions": int(paid_impressions),
             "paid_clicks": int(paid_clicks),
+            "paid_ctr_pct": _pct(paid_clicks, paid_impressions),
+            "paid_conv_value": _num(conv_value_gbv),
             "paid_conversions": int(paid_conv),
             "paid_cvr_pct": paid_cvr,
             "avg_cm1": _num(cm1 / paid_conv) if paid_conv else None,
             "cpc": _num(spend / paid_clicks) if paid_clicks else None,
+            "paid_rpc": _num(rev / paid_clicks) if paid_clicks else None,
+            "paid_cm2": _num(rev - spend),
+            "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
         })
@@ -671,9 +681,6 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # percentage points (delta_abs = w0 - wm1); absolute-value metrics
     # (Revenue/GBV/Paid Conv Value/Paid Clicks) report a raw-unit delta.
     # (key, label, market_weekly field, ly weekly_ly field | None)
-    # LY is available only for business metrics + paid clicks; the offline-paid
-    # metrics (Paid RoI / Conv Value / CVR) have no LY — the LY window predates
-    # the 2025-09-01 offline-attribution migration.
     KEY_METRIC_SPEC = [
         # Business / Funnel
         ("revenue", "Revenue", "revenue", "revenue"),
@@ -735,91 +742,47 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         mkt_levels.get(w0_start, {}), mkt_levels.get(wm1_start, {})
     )
 
-    # ---- LY 12-week market series (for TY-vs-LY sparklines) ----
-    # Business metrics + paid clicks only; offline-paid metrics have no LY.
-    ly_biz_cols = [
-        "revenue", "gbv", "gbv_completed", "orders", "co_marketing_commission",
-        "insider_commission", "direct_costs", "ad_spend_total", "coupon_discount",
-        "wallet_credits", "affiliate_commission", "creator_collab_costs",
-        "creator_collab_coupon_costs",
-    ]
-    ly_mkt = ly.groupby("aligned_week")[ly_biz_cols].sum()
+    # ---- LY 12-week series (full metrics via _weekly_metrics for TY-vs-LY sparklines) ----
     paid_ly = fetch.ce_weekly_ads(market, ly_start, ly_end)
     if not paid_ly.empty:
-        paid_ly["aligned_week"] = pd.to_datetime(paid_ly["week"]).dt.date.map(
+        paid_ly["week"] = pd.to_datetime(paid_ly["week"]).dt.date
+        paid_ly["aligned_week"] = paid_ly["week"].map(
             lambda d: d + dt.timedelta(days=config.YOY_LAG_DAYS)
         )
-        ly_paid_agg_cols = ["paid_clicks", "spend", "coupon_wallet", "cm1", "conversions", "conv_value_gbv"]
-        ly_paid_mkt = paid_ly.groupby("aligned_week")[ly_paid_agg_cols].sum()
-    else:
-        ly_paid_mkt = pd.DataFrame()
+        paid_ly["combined_entity_id"] = paid_ly["combined_entity_id"].astype(str)
+
+    ly_biz_idx = {(r["combined_entity_id"], r["aligned_week"]): r
+                  for _, r in ly.iterrows()}
+    ly_paid_idx = ({(r["combined_entity_id"], r["aligned_week"]): r
+                    for _, r in paid_ly.iterrows()} if not paid_ly.empty else {})
+
+    # Market-level LY
+    ly_biz_cols = [c for c in ly.columns if c not in ("combined_entity_id", "combined_entity_name", "week", "aligned_week")]
+    ly_mkt_biz = ly.groupby("aligned_week")[ly_biz_cols].sum()
+    ly_mkt_paid = (paid_ly.groupby("aligned_week")[[c for c in paid_ly.columns
+                   if c not in ("combined_entity_id", "week", "aligned_week")]].sum()
+                   if not paid_ly.empty else pd.DataFrame())
 
     weekly_ly = []
     for wk in weeks:
-        row = {"week": config.iso(wk)}
-        if wk in ly_mkt.index:
-            r = ly_mkt.loc[wk]
-            gbv_l, gbvc_l, rev_l = float(r["gbv"]), float(r["gbv_completed"]), float(r["revenue"])
-            cm1_b = rev_l + float(r["co_marketing_commission"]) + float(r["insider_commission"]) - float(r["direct_costs"])
-            gmc_l = sum(float(r[c]) for c in (
-                "ad_spend_total", "coupon_discount", "wallet_credits",
-                "affiliate_commission", "creator_collab_costs", "creator_collab_coupon_costs"))
-            orders_l = float(r["orders"])
-            row.update({
-                "revenue": _num(rev_l),
-                "gbv": _num(gbv_l),
-                "orders": int(orders_l) if orders_l else None,
-                "aov": _num(gbv_l / orders_l) if orders_l else None,
-                "cr_pct": _pct(gbvc_l, gbv_l),
-                "tr_pct": _pct(rev_l, gbvc_l),
-                "roi1_pct": _pct(cm1_b, gmc_l, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT)),
-            })
-        else:
-            row.update({k: None for k in ("revenue", "gbv", "orders", "aov", "cr_pct", "tr_pct", "roi1_pct")})
-        if wk in ly_paid_mkt.index:
-            p = ly_paid_mkt.loc[wk]
-            pc_l = float(p["paid_clicks"])
-            sp_l = float(p["spend"])
-            cw_l = float(p["coupon_wallet"])
-            cm1_l = float(p["cm1"])
-            conv_l = float(p["conversions"])
-            cvg_l = float(p["conv_value_gbv"])
-            row.update({
-                "paid_clicks": int(pc_l) if pc_l else None,
-                "paid_cvr_pct": _pct(conv_l, pc_l, gate=(0.0, config.CVR_MAX_PCT)),
-                "paid_conv_value": _num(cvg_l),
-                "avg_cm1": _num(cm1_l / conv_l) if conv_l else None,
-                "roi_pct": _pct(cm1_l, sp_l + cw_l, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT)),
-            })
-        else:
-            row.update({k: None for k in ("paid_clicks", "paid_cvr_pct", "paid_conv_value", "avg_cm1", "roi_pct")})
+        b = ly_mkt_biz.loc[wk] if wk in ly_mkt_biz.index else None
+        p = ly_mkt_paid.loc[wk] if (not ly_mkt_paid.empty and wk in ly_mkt_paid.index) else None
+        row = _weekly_metrics(b, p)
+        row["week"] = config.iso(wk)
         weekly_ly.append(row)
 
-    # ---- per-CE LY series (CE-drawer TY/LY sparklines; same 6 comparable metrics) ----
-    ly_ce = {idx: r for idx, r in ly.groupby(["combined_entity_id", "aligned_week"])[ly_biz_cols].sum().iterrows()}
-    ly_clicks_ce = (
-        {idx: v for idx, v in paid_ly.groupby(["combined_entity_id", "aligned_week"])["paid_clicks"].sum().items()}
-        if not paid_ly.empty else {}
-    )
+    # Per-CE LY
     for ce in ces:
         cid = ce["ce_id"]
         wly = []
         for wk in weeks:
-            row = {"week": config.iso(wk)}
-            r = ly_ce.get((cid, wk))
-            if r is not None:
-                gbv_l, gbvc_l, rev_l = float(r["gbv"]), float(r["gbv_completed"]), float(r["revenue"])
-                cm1_b = rev_l + float(r["co_marketing_commission"]) + float(r["insider_commission"]) - float(r["direct_costs"])
-                gmc_l = sum(float(r[c]) for c in (
-                    "ad_spend_total", "coupon_discount", "wallet_credits",
-                    "affiliate_commission", "creator_collab_costs", "creator_collab_coupon_costs"))
-                row.update({"revenue": _num(rev_l), "gbv": _num(gbv_l), "cr_pct": _pct(gbvc_l, gbv_l),
-                            "tr_pct": _pct(rev_l, gbvc_l),
-                            "roi1_pct": _pct(cm1_b, gmc_l, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))})
-            else:
-                row.update({k: None for k in ("revenue", "gbv", "cr_pct", "tr_pct", "roi1_pct")})
-            cl = ly_clicks_ce.get((cid, wk))
-            row["paid_clicks"] = int(cl) if cl is not None else None
+            b = ly_biz_idx.get((cid, wk))
+            p = ly_paid_idx.get((cid, wk))
+            row = _weekly_metrics(
+                b if b is not None else None,
+                p if p is not None else None,
+            )
+            row["week"] = config.iso(wk)
             wly.append(row)
         ce["weekly_ly"] = wly
 

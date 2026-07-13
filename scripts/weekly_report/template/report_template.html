@@ -134,6 +134,7 @@ tr.subtot td{background:rgba(128,0,255,.055);font-family:var(--sans);font-weight
 .btn:hover{border-color:var(--purps);color:var(--purps)}
 .btn.dark{background:var(--purps);color:#fff;border-color:var(--purps)}
 .btn.dark:hover{background:var(--purps-deep);color:#fff}
+.ce-km-tab.on{background:var(--purps);color:#fff;border-color:var(--purps)}
 .countline{font-family:var(--sans);font-size:12px;font-weight:500;color:var(--ink-soft);margin-top:11px;display:flex;gap:24px;flex-wrap:wrap}
 .countline b{color:var(--ink);font-weight:700}
 
@@ -1365,20 +1366,31 @@ function wireKmHover(km, weeks, wkly, wklyLy){
 // CE key-metrics config: label + weekly field + LY field (weekly_ly has only
 // the 6 comparable metrics) + display format. Metrics without an LY field show
 // "LY n/a". Order matches the mockup's METRICS list.
-const CE_METRICS = [
-  {k:'revenue',   label:'Revenue',         fmt:'money', ly:'revenue'},
-  {k:'gbv',       label:'GBV',             fmt:'money', ly:'gbv'},
-  {k:'orders',    label:'Orders',          fmt:'count', ly:null},
-  {k:'clicks',    label:'Clicks',          fmt:'count', ly:null},
-  {k:'cvr_pct',   label:'CVR%',            fmt:'pct',   ly:null},
-  {k:'aov',       label:'AOV',             fmt:'money', ly:null},
-  {k:'tr_pct',    label:'TR%',             fmt:'pct',   ly:'tr_pct'},
-  {k:'cr_pct',    label:'CR%',             fmt:'pct',   ly:'cr_pct'},
-  {k:'roi1_pct',  label:'ROI 1',           fmt:'pct',   ly:'roi1_pct'},
-  {k:'paid_conv_value', label:'Paid Conv Value', fmt:'money', ly:null},
-  {k:'paid_cvr_pct',    label:'Paid CVR',        fmt:'pct',   ly:null},
-  {k:'paid_clicks',     label:'Paid Clicks',     fmt:'count', ly:'paid_clicks'},
+const CE_METRICS_OVERALL = [
+  {k:'revenue',   label:'Revenue',   fmt:'money', ly:'revenue'},
+  {k:'gbv',       label:'GBV',       fmt:'money', ly:'gbv'},
+  {k:'orders',    label:'Orders',    fmt:'count', ly:'orders'},
+  {k:'cvr_pct',   label:'CVR',       fmt:'pct',   ly:'cvr_pct'},
+  {k:'aov',       label:'AOV',       fmt:'money', ly:'aov'},
+  {k:'tr_pct',    label:'TR%',       fmt:'pct',   ly:'tr_pct'},
+  {k:'cm2',       label:'CM2',       fmt:'money', ly:'cm2'},
+  {k:'cr_pct',    label:'CR%',       fmt:'pct',   ly:'cr_pct'},
+  {k:'roi1_pct',  label:'ROI 1',     fmt:'pct',   ly:'roi1_pct'},
 ];
+const CE_METRICS_PAID = [
+  {k:'paid_clicks',      label:'Paid Clicks',      fmt:'count', ly:'paid_clicks'},
+  {k:'paid_ctr_pct',     label:'Paid CTR',          fmt:'pct',   ly:'paid_ctr_pct'},
+  {k:'spend',            label:'Paid Ads Spend',    fmt:'money', ly:'spend'},
+  {k:'cpc',              label:'Paid CPC',          fmt:'money', ly:'cpc'},
+  {k:'paid_rpc',         label:'RPC',               fmt:'money', ly:'paid_rpc'},
+  {k:'paid_conversions', label:'Paid Conversions',  fmt:'count', ly:'paid_conversions'},
+  {k:'paid_cvr_pct',     label:'Paid CVR',          fmt:'pct',   ly:'paid_cvr_pct'},
+  {k:'cm1',              label:'Paid CM1',          fmt:'money', ly:'cm1'},
+  {k:'paid_cm2',         label:'Paid CM2',          fmt:'money', ly:'paid_cm2'},
+  {k:'roi_pct',          label:'Paid ROI',          fmt:'pct',   ly:'roi_pct'},
+  {k:'cm1_per_conv',     label:'Paid Avg CM1',      fmt:'money', ly:'cm1_per_conv'},
+];
+const CE_METRICS = CE_METRICS_OVERALL;
 
 // pp delta (percentage-point) with explicit sign — for funnel rate stages.
 function ppDelta(v){ if(v==null||isNaN(v)) return '—';
@@ -1474,28 +1486,38 @@ function openDrawer(ceId){
     .filter(x=>x[1]).map(x=>'<span class="chip ghost">'+esc(x[1])+'</span>').join('');
   const watched=getWatch().has(ceId);
 
-  // ----- key-metrics table (W0 / W-1 / Δ% + 12-wk TY/LY spark + hover) -----
-  const rowsHtml = CE_METRICS.map(mm=>{
-    const ty = wk.map(x=>x[mm.k]);
-    const ly = (mm.ly && wkLy) ? wkLy.map(x=>x[mm.ly]) : null;
-    const cur=w0?w0[mm.k]:null, prev=w1?w1[mm.k]:null;
-    const dpct=(prev!=null && prev!==0 && cur!=null)?(cur-prev)/Math.abs(prev)*100:null;
-    const spk = kmSparkline('ce_'+mm.k, ty, ly) + (ly?'':'<div class="lyna">LY n/a</div>');
-    return '<tr><td>'+esc(mm.label)+'</td>'+
-      '<td class="w0">'+kmFmt(cur,mm.fmt)+'</td>'+
-      '<td>'+kmFmt(prev,mm.fmt)+'</td>'+
-      '<td class="'+sgn(dpct)+'">'+fmtDelta(dpct)+'</td>'+
-      '<td class="spk">'+spk+'</td></tr>';
-  }).join('');
+  // ----- key-metrics tables (Overall + Paid tabs, W0 / W-1 / Δ% + 12-wk TY/LY spark + hover) -----
+  function buildKmRows(specs){
+    return specs.map(mm=>{
+      const ty = wk.map(x=>x[mm.k]);
+      const ly = (mm.ly && wkLy) ? wkLy.map(x=>x[mm.ly]) : null;
+      const cur=w0?w0[mm.k]:null, prev=w1?w1[mm.k]:null;
+      const dpct=(prev!=null && prev!==0 && cur!=null)?(cur-prev)/Math.abs(prev)*100:null;
+      const spk = kmSparkline('ce_'+mm.k, ty, ly) + (ly?'':'<div class="lyna">LY n/a</div>');
+      return '<tr><td>'+esc(mm.label)+'</td>'+
+        '<td class="w0">'+kmFmt(cur,mm.fmt)+'</td>'+
+        '<td>'+kmFmt(prev,mm.fmt)+'</td>'+
+        '<td class="'+sgn(dpct)+'">'+fmtDelta(dpct)+'</td>'+
+        '<td class="spk">'+spk+'</td></tr>';
+    }).join('');
+  }
+  const overallRows=buildKmRows(CE_METRICS_OVERALL);
+  const paidRows=buildKmRows(CE_METRICS_PAID);
+  const kmTable=specs=>'<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ %</th>'+
+    '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+specs+'</tbody></table>';
   const kmBlock=''+
     '<div class="dr-sec-t" style="display:flex;align-items:baseline;gap:10px">'+
       '<span>Key metrics · 12-week trend</span>'+
       '<span class="km-legend"><span><i></i>This year</span><span><i class="ly"></i>Last year</span><span>hover for values</span></span>'+
     '</div>'+
-    '<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ %</th>'+
-      '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<div class="ce-km-tabs" style="display:flex;gap:6px;margin-bottom:8px">'+
+      '<button class="btn ce-km-tab on" data-tab="overall">Overall</button>'+
+      '<button class="btn ce-km-tab" data-tab="paid">Paid</button>'+
+    '</div>'+
+    '<div id="ceKmOverall">'+kmTable(overallRows)+'</div>'+
+    '<div id="ceKmPaid" style="display:none">'+kmTable(paidRows)+'</div>'+
     '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric. '+
-      'Metrics without an LY line have no comparable −364d window yet.</div>';
+      'Metrics without an LY line have no comparable −364d window yet. Paid = Google Search + Bing.</div>';
 
   // ----- WoW Shapley (reuse market-drawer pattern; hide when null) -----
   let shapBlock='';
@@ -1553,6 +1575,17 @@ function openDrawer(ceId){
 
   try {
   document.getElementById('drClose').onclick=closeDrawer;
+  // Tab switching for Overall / Paid
+  document.querySelectorAll('.ce-km-tab').forEach(btn=>{
+    btn.onclick=()=>{
+      document.querySelectorAll('.ce-km-tab').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      const tab=btn.dataset.tab;
+      document.getElementById('ceKmOverall').style.display=tab==='overall'?'':'none';
+      document.getElementById('ceKmPaid').style.display=tab==='paid'?'':'none';
+      wireCeKmHover(ce, weeks, wk, wkLy);
+    };
+  });
   wireCeKmHover(ce, weeks, wk, wkLy);
   const ta=document.getElementById('cmtText');
   ta.addEventListener('input',()=>{
@@ -1576,7 +1609,7 @@ function wireCeKmHover(ce, weeks, wk, wkLy){
   const tip=document.getElementById('kmtip');
   document.querySelectorAll('#drawer svg[data-k]').forEach(svg=>{
     const key=svg.dataset.k;                 // "ce_<field>"
-    const mm=CE_METRICS.find(x=>'ce_'+x.k===key); if(!mm) return;
+    const mm=CE_METRICS_OVERALL.find(x=>'ce_'+x.k===key)||CE_METRICS_PAID.find(x=>'ce_'+x.k===key); if(!mm) return;
     const t=mm.fmt;
     const ty = wk.map(x=>x[mm.k]);
     const ly = (mm.ly && wkLy) ? wkLy.map(x=>x[mm.ly]) : null;
