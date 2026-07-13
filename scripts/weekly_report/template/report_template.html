@@ -95,6 +95,20 @@ section{margin-top:44px}
 .spark-wrap{margin-top:7px}
 
 .tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:16px;background:var(--card);max-height:74vh;box-shadow:var(--shadow)}
+.cbar{display:flex;flex-wrap:wrap;gap:24px;align-items:center;background:#FAF8FE;border:1px solid var(--rule);border-radius:12px;padding:11px 18px;margin:0 0 12px}
+.cbar-k{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--purps);white-space:nowrap}
+.cbar-m{display:flex;flex-direction:column;gap:1px}
+.cbar-l{font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint)}
+.cbar-v{font-family:var(--disp);font-size:16px;font-weight:800;white-space:nowrap;color:var(--ink)}
+.cbar-r{font-size:13.5px;font-weight:600;color:var(--ink);margin-left:auto}
+.d{font-weight:600;font-size:11px;white-space:nowrap}
+.idbr{color:var(--ink-faint);font-weight:600;font-size:11.5px}
+.drv{font-weight:600;white-space:nowrap}
+#s4 tbody td{padding-top:13px;padding-bottom:13px;vertical-align:middle;font-variant-numeric:tabular-nums}
+#s4 .cn{font-weight:700}
+.fxexp{cursor:pointer;color:var(--purps);font-weight:700;font-size:10px;background:#F3ECFF;border-radius:6px;padding:1px 6px;margin-left:5px;user-select:none;white-space:nowrap;vertical-align:1px}
+.fxexp:hover{background:#E7DAFF}
+.fxfull{font-size:11px;line-height:1.6;margin-top:4px;padding-left:2px;border-left:2px solid var(--rule);padding-left:8px}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
 thead th{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);text-align:left;
   padding:11px 11px;border-bottom:1.5px solid var(--rule-dark);background:var(--paper-deep);position:sticky;top:0;white-space:nowrap;z-index:3}
@@ -135,6 +149,9 @@ tr.subtot td{background:rgba(128,0,255,.055);font-family:var(--sans);font-weight
 .fchip{font-family:var(--sans);font-size:11.5px;font-weight:600;padding:4px 12px;border:1.3px solid var(--rule-dark);border-radius:99px;background:#fff;color:var(--ink-soft);cursor:pointer;transition:all .12s}
 .fchip:hover{border-color:var(--purps);color:var(--purps)}
 .fchip.on{background:var(--purps);color:#fff;border-color:var(--purps)}
+.fcount{color:var(--ink-faint);font-weight:700;font-size:9.5px} .fchip.on .fcount{color:rgba(255,255,255,.8)}
+.fchips.hidden{display:none}
+.moref{border-style:dashed!important;color:var(--purps)!important;border-color:var(--purps)!important;margin-left:6px}
 .btn{font-family:var(--sans);font-size:11.5px;font-weight:600;padding:8px 14px;border:1.5px solid var(--rule-dark);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;transition:all .12s}
 .btn:hover{border-color:var(--purps);color:var(--purps)}
 .btn.dark{background:var(--purps);color:#fff;border-color:var(--purps)}
@@ -338,7 +355,7 @@ td.selcol input,th.selcol input{cursor:pointer}
 const DATA = JSON.parse(document.getElementById('report-data').textContent);
 const MARKETS = DATA.markets;
 let mi = 0;                       // current market index
-const state = { sortKey:'__mover', dir:-1, group:'', search:'', filters:{}, watchOnly:false, rule:'', selMode:false, collapsed:{} };
+const state = { sortKey:'__mover', dir:-1, group:'', search:'', filters:{}, watchOnly:false, rule:'', selMode:false, collapsed:{}, filtersOpen:false };
 let ceCtxTotRev = 0;   // total W0 revenue of the currently-filtered rows (for Contrib %); set in paintCETable
 const sel = new Set();            // CE ids checked in select mode (transient)
 let activeView = null;            // index of the currently-applied saved view
@@ -676,6 +693,23 @@ function distinct(rows, key){
   return Array.from(s).sort();
 }
 
+// --- Diagnostic-bucket membership (from buckets_final) for the CE-all filter ---
+const BUCKET_FILTER = [
+  {group:'🛡️ Defend',    tags:[['losing_money','Losing Money'],['fluct_down','RPC Fluctuations ↓']]},
+  {group:'🚀 Compound',  tags:[['scale_up','Scale-Up'],['fluct_up','RPC Fluctuations ↑']]},
+  {group:'🌱 Lifecycle', tags:[['new_ces','New CEs'],['iteration','Iteration']]},
+];
+let _bktMembMi=null,_bktMemb=null;
+function bucketMembers(){
+  if(_bktMembMi===mi && _bktMemb) return _bktMemb;
+  _bktMemb={}; const bf=MARKETS[mi].buckets_final||{}, D=bf.defend||{}, C=bf.compound||{}, L=bf.lifecycle||{};
+  const add=(arr,tag)=>(arr||[]).forEach(x=>{ (_bktMemb[x.ce_id]=_bktMemb[x.ce_id]||{})[tag]=1; });
+  add((D.losing_money||{}).bleeders,'losing_money'); add(D.seasonality_down,'fluct_down');
+  add(C.scale_up,'scale_up'); add(C.seasonality_up,'fluct_up');
+  add(L.new_ces,'new_ces'); add(L.iteration,'iteration');
+  _bktMembMi=mi; return _bktMemb;
+}
+
 function renderAllCE(M){
   const rows = M.ces.map(ceRow);
   // top movers (by |Δ rev|) — for the badge in the name cell
@@ -692,6 +726,19 @@ function renderAllCE(M){
     }).join('');
     return '<div class="fgroup"><span class="flabel">'+dim.label+'</span>'+chips+'</div>';
   }).join('');
+
+  // bucket-membership filter chips (Defend / Compound / Lifecycle → sub-buckets, with counts)
+  const mem=bucketMembers(); const bcount={};
+  Object.keys(mem).forEach(id=>Object.keys(mem[id]).forEach(t=>bcount[t]=(bcount[t]||0)+1));
+  const bktHtml = BUCKET_FILTER.map(g=>{
+    const chips=g.tags.map(tl=>{ const on=(state.filters.__bkt||[]).indexOf(tl[0])>=0;
+      return '<span class="fchip'+(on?' on':'')+'" data-bkt="'+tl[0]+'">'+tl[1]+' <span class="fcount">'+(bcount[tl[0]]||0)+'</span></span>';
+    }).join('');
+    return '<div class="fgroup"><span class="flabel">'+g.group+'</span>'+chips+'</div>';
+  }).join('');
+  // metadata filters collapse behind a toggle; auto-open if one is active
+  const activeMeta=Object.keys(state.filters).filter(k=>k!=='__bkt' && (state.filters[k]||[]).length).length;
+  const metaOpen=state.filtersOpen || activeMeta>0;
 
   const groupOpts = GROUP_DIMS.map(o=>'<option value="'+o.v+'"'+(state.group===o.v?' selected':'')+'>'+o.label+'</option>').join('');
 
@@ -716,7 +763,13 @@ function renderAllCE(M){
       '<div><label>&nbsp;</label><button class="btn dark" id="moverSort">↕ Top movers</button></div>'+
       '<div><label>&nbsp;</label><button class="btn" id="ceReset">Reset</button></div>'+
     '</div>'+
-    (fdimHtml?'<div class="fchips">'+fdimHtml+'</div>':'')+
+    ((bktHtml||fdimHtml)?
+      '<div class="fchips">'+
+        '<div class="fgroup"><span class="flabel" style="color:var(--purps)">Bucket</span></div>'+bktHtml+
+        (fdimHtml?'<button class="fchip moref" id="moreFilters">'+(metaOpen?'▾ Hide filters':'▸ More filters')+(activeMeta?' <span class="fcount">'+activeMeta+'</span>':'')+'</button>':'')+
+      '</div>'+
+      (fdimHtml?'<div class="fchips'+(metaOpen?'':' hidden')+'" id="metaFilters">'+fdimHtml+'</div>':'')
+    :'')+
     // --- (2) custom-group builder (shown in select mode) ---
     '<div class="selbar" id="selBar" style="display:'+(state.selMode?'flex':'none')+'">'+
       '<span><b id="selN">'+sel.size+'</b> selected</span>'+
@@ -745,7 +798,10 @@ function passesFilters(r){
     const hay=(r.ce.ce_name+' '+(md.city||'')+' '+(md.category||'')+' '+(md.subcategory||'')).toLowerCase();
     if(hay.indexOf(q)<0) return false;
   }
+  const bsel=state.filters.__bkt;
+  if(bsel && bsel.length){ const m=bucketMembers()[r.ce.ce_id]||{}; if(!bsel.some(t=>m[t])) return false; }
   for(const key in state.filters){
+    if(key==='__bkt') continue;
     const sel=state.filters[key];
     if(sel && sel.length){ if(sel.indexOf(r.ce.metadata[key])<0) return false; }
   }
@@ -1043,120 +1099,150 @@ function _tbl(head, bodyRows){
 
 // SECTION 4 — Diagnostic buckets (B1 ROI/CM2 · B2 CM1/Conv · B3 Losing Ground · B4 Scale)
 function renderBuckets(M){
-  // Cross-bucket cascade: render each CE only in its HOME bucket, within the
-  // 10-row problem cap (in_store = counted, not shown; is_win = a B1 recovery).
-  const _cas = rows => { rows=rows||[]; return {
-    shown: rows.filter(r=>r.is_home!==false && !r.in_store && !r.is_win),
-    wins: rows.filter(r=>r.is_win),
-    store: rows.filter(r=>r.is_home!==false && r.in_store).length }; };
-  const _also = r => (r.also_in&&r.also_in.length)
-    ? ' '+r.also_in.map(b=>'<span class="chip ghost" style="font-size:8.5px;padding:0 5px">also '+esc(b)+'</span>').join('') : '';
-  const _store = (n,label)=> n?'<div class="sub" style="margin-top:6px">+ '+n+' more '+esc(label)+' in store (below the 10-row cap)</div>':'';
+  const BF=M.buckets_final||{};
+  const D=BF.defend||{}, C=BF.compound||{}, L=BF.lifecycle||{};
+  const LM=D.losing_money||{}, bleeders=LM.bleeders||[], recovered=LM.recovered||[], suppressed=LM.suppressed||[], burn=LM.burn_line||{};
+  const seasDn=D.seasonality_down||[], seasUp=C.seasonality_up||[], scale=C.scale_up||[];
+  const newCes=L.new_ces||[], iters=L.iteration||[];
+  const ceBy={}; (M.ces||[]).forEach(c=>ceBy[c.ce_id]=c);
+  const rev10=id=>{const c=ceBy[id]; return (c&&c.weekly)?c.weekly.slice(-10).map(w=>w.revenue):[];};
+  const chip=(cls,txt)=>'<span class="chip '+cls+'">'+esc(txt)+'</span>';
+  const tierChip=t=>{ if(t==null||(''+t).toLowerCase()==='none') return '—'; const c=({hero:'green',pro:'blue',seed:'amber',longtail:'ghost'})[(''+t).toLowerCase()]||'ghost'; return chip(c,t); };
+  const lmStatus=s=>{ const u=(''+s).toUpperCase(); const c=(u==='ESCALATING'||u==='CHRONIC')?'red':(u==='NEW'||u==='NW')?'blue':'amber'; return chip(c,s); };
+  const verdictChip=v=>chip(v==='+ve'?'green':v==='-ve'?'red':'ghost', v||'—');
+  const causeChip=t=>{ if(!t) return '—'; const c=t==='unexplained'?'red':t==='input-induced'?'ghost':t==='supply-linked'?'amber':'green'; return chip(c,t); };
+  const ppDelta=v=>(v==null||isNaN(v))?'—':((v>0?'+':(v<0?MINUS:''))+Math.abs(v).toFixed(0)+'pp');
+  const colr=(v,txt)=>{ const c=v<=-25?'var(--red)':v<=-10?'var(--amber)':'var(--green)'; return '<span style="color:'+c+'">'+txt+'</span>'; };
+  const rpcVs4w=(rpc,v)=>{ const base=(rpc==null||isNaN(rpc))?'—':(+rpc).toFixed(2); if(v==null||isNaN(v)) return base; const s=v<0?MINUS:'+'; return base+' '+colr(v,'('+s+Math.abs(v).toFixed(0)+'% 4w)'); };
+  const swingCell=(sig,sw)=>{ sig=esc(sig||''); if(sw==null||isNaN(sw)) return (sig+' —').trim(); const ar=sw>=0?'↑':'↓'; const col=sw>=0?'var(--green)':'var(--red)'; const inner='<span style="color:'+col+'">'+ar+Math.abs(sw).toFixed(0)+'%</span>'; return sig?sig+' '+inner:inner; };
+  const winAbbr=w=>(({sustained_3d:'3d',wow:'WoW',sdlw:'SDLW'})[w])||(w||'');
+  const dsub=txt=>' <span class="d" style="color:var(--ink-faint)">('+txt+')</span>';
+  const tierMini=t=>(['Hero','Pro','Seed','Longtail'].indexOf(''+t)>=0)?' '+tierChip(t):'';
+  // Δrev decomposition: lead driver inline; "+N" expands the remaining factors in-row (no drawer)
+  const drvCell=r=>{ const fs=(r.factor_deltas||[]).filter(f=>f.usd!=null&&Math.abs(f.usd)>=1); if(!fs.length) return '—';
+    const seg=f=>{ const u=f.usd,col=u>=0?'var(--green)':'var(--red)',ar=u>=0?'↑':'↓'; return '<span style="color:'+col+'">'+ar+esc(f.label)+' '+fmtMoney(Math.abs(u))+'</span>'; };
+    const d=fs.find(f=>f.label===r.dominant)||fs[0]; const rest=fs.filter(f=>f!==d);
+    if(!rest.length) return '<b>'+seg(d)+'</b>';
+    return '<div><b>'+seg(d)+'</b><span class="fxexp" data-n="'+rest.length+'">+'+rest.length+'</span></div>'+
+      '<div class="fxfull" style="display:none">'+rest.map(seg).join(' · ')+'</div>'; };
+  const dualSpark=id=>{ const ce=ceBy[id]||{}; const ty=(ce.weekly||[]).slice(-10).map(w=>w.revenue), ly=(ce.weekly_ly||[]).slice(-10).map(w=>w.revenue); return kmSparkline('fx_'+id, ty, ly); };
+  const fluxCbar=items=>{ if(!items.length) return '';
+    const net=items.reduce((s,r)=>s+(+r.delta_rev||0),0);
+    const nv=items.filter(r=>r.verdict==='-ve').length, np=items.filter(r=>r.verdict==='+ve').length, nh=items.filter(r=>r.verdict==='hold').length;
+    const reason=[nv?nv+' −ve':'',np?np+' +ve':'',nh?nh+' hold':''].filter(Boolean).join(' · ');
+    return cbar(items.length,'Net Δ Rev wk',fmtMoneyDelta(net),sgn(net),reason); };
+  const cbar=(n,ml,mv,mc,reason)=>'<div class="cbar"><span class="cbar-k">Cohort ('+n+' CEs)</span>'+
+    '<div class="cbar-m"><span class="cbar-l">'+ml+'</span><span class="cbar-v '+(mc||'')+'">'+mv+'</span></div>'+
+    (reason?'<div class="cbar-r">'+reason+'</div>':'')+'</div>';
 
-  // ---------- B1 · ROI / CM2 Movement ----------
-  const B1=(M.bucket_b1||{});
-  const b1c=_cas(B1.rows), b1=b1c.shown, b1std=B1.standing_count||0;
-  const winsLine = b1c.wins.length? '<div class="sub" style="margin-top:8px;color:var(--green)"><b>✅ '+b1c.wins.length+' recovered (EXIT):</b> '+b1c.wins.map(r=>esc(r.ce_name)).join(' · ')+'</div>':'';
-  // P2.1 zero-spend transitions · P2.2 long-tail burn · P2.3 gray-zone counters
-  const zse=B1.zero_spend_exits||[];
-  const zseLine = zse.length? '<div class="sub" style="margin-top:6px;color:var(--amber)">⚠️ <b>'+zse.length+' went to zero spend</b> while still &lt;100% ROI (paused, not recovered): '+
-    zse.slice(0,6).map(z=>esc(z.ce_name)+' <span class="sub">(was '+fmtPct(z.roi_last_pct,0)+', '+fmtMoney(z.spend_last)+')</span>').join(' · ')+(zse.length>6?' <span class="sub">+'+(zse.length-6)+' more</span>':'')+'</div>':'';
-  const burn=B1.burn_line||{};
-  const burnLine = (burn.count)? '<div class="sub" style="margin-top:6px">+ <b>'+burn.count+' CEs</b> · <span class="neg">'+fmtMoneyDelta(burn.bleed_wk_total)+'/wk</span> bleeding below the $1k/4w spend floor (not shown individually)</div>':'';
-  const gz=B1.gray_zone||{};
-  const gzParts=[]; if(gz.near_floor) gzParts.push(gz.near_floor+' within 5pp of the 100% floor'); if(gz.near_transition) gzParts.push(gz.near_transition+' near transition (70%)'); if(gz.near_critical) gzParts.push(gz.near_critical+' near critical (20%)');
-  const gzLine = gzParts.length? '<div class="sub" style="margin-top:6px">Near triggers: '+gzParts.join(' · ')+'</div>':'';
-  let b1body;
-  if(!b1.length && !b1c.wins.length){ b1body='<div class="emptystate">No ROI/CM2 movement this week. <b>✅</b></div>'+zseLine+burnLine+gzLine; }
+  // DEFEND - Losing Money — clean value(Δ) layout + cohort bar + dual TY/LY spark
+  const lmU=s=>(''+s).toUpperCase();
+  let lmBody;
+  if(!bleeders.length){ lmBody='<div class="emptystate">No CEs bleeding above the $1k / 4-week gate. <b>✅</b></div>'; }
   else{
-    b1body=(b1.length?_tbl('<th class="stick">Combined Entity</th><th>Movement</th><th class="num">ROI W0</th><th class="num">W-1</th>'+
-      '<th class="num">Δpp</th><th class="num">tROAS</th><th class="num">wks&lt;100</th><th>RPC 8w</th><th class="num">CM2 bleed/wk</th><th>Action</th>',
-      b1.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
-        '<td>'+_moveChip(r.movement)+'</td>'+
-        '<td class="num">'+fmtPct(r.roi_w0_pct,0)+'</td>'+
-        '<td class="num">'+fmtPct(r.roi_wm1_pct,0)+'</td>'+
-        '<td class="num '+sgn(r.roi_drop_pp!=null?-r.roi_drop_pp:null)+'">'+(r.roi_drop_pp!=null?(r.roi_drop_pp>=0?MINUS:'+')+Math.abs(r.roi_drop_pp).toFixed(0)+'pp':'—')+'</td>'+
-        '<td class="num">'+fmtPct(r.troas_target_pct,0)+'</td>'+
-        '<td class="num">'+(r.weeks_below_100||0)+'</td>'+
-        '<td>'+sparkline(r.spark_rpc||[],{w:80,h:22})+'</td>'+
-        '<td class="num '+sgn(r.cm2_bleed_wk)+'">'+fmtMoneyDelta(r.cm2_bleed_wk)+'</td>'+
-        '<td>'+esc(r.action||'—')+'</td></tr>').join('')):'')+
-      winsLine+_store(b1c.store,'B1')+
-      (b1std?'<div class="sub" style="margin-top:6px">+ '+b1std+' standing below 100% (no movement) — see monthly</div>':'')+
-      zseLine+burnLine+gzLine;
+    const lmTotal=bleeders.reduce((s,r)=>s+(+r.cm2_bleed_wk||0),0);
+    const nEsc=bleeders.filter(r=>lmU(r.status)==='ESCALATING').length, nChr=bleeders.filter(r=>lmU(r.status)==='CHRONIC').length, nNew=bleeders.filter(r=>lmU(r.status)==='NEW'||lmU(r.status)==='NW').length;
+    const lmReason=[nEsc?nEsc+' escalating':'',nChr?nChr+' chronic':'',nNew?nNew+' new':''].filter(Boolean).join(' · ');
+    lmBody=cbar(bleeders.length,'Total CM2 bleed/wk',fmtMoneyDelta(lmTotal),'neg',lmReason)+
+      _tbl('<th class="stick">Combined Entity</th><th>Status</th><th class="num">Paid ROI</th><th class="num">CM2 bleed/wk</th><th class="num">Spend</th><th>RPC · CPC</th><th class="num">Clicks · TR%</th><th class="num">YoY</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      bleeders.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+tierMini(r.tier)+(r.movement_b1?'<div class="idbr">'+esc(r.movement_b1)+'</div>':'')+'</td>'+
+        '<td>'+lmStatus(r.status)+'<div class="idbr" style="margin-top:2px">'+(r.weeks||0)+'w bleeding</div></td>'+
+        '<td class="num">'+fmtPct(r.roi,0)+' <span class="d '+sgn(r.roi_dpp)+'">('+ppDelta(r.roi_dpp)+' WoW)</span></td>'+
+        '<td class="num neg"><b>'+fmtMoneyDelta(r.cm2_bleed_wk)+'</b></td>'+
+        '<td class="num">'+fmtMoney(r.spend_wk)+dsub('4w '+fmtMoney(r.spend_4w))+'</td>'+
+        '<td>'+rpcVs4w(r.rpc,r.rpc_vs_4w)+dsub('CPC '+fmtCpc(r.cpc))+'</td>'+
+        '<td class="num">'+fmtInt(r.clicks)+dsub('TR '+fmtPct(r.tr_pct,0))+'</td>'+
+        '<td class="num '+sgn(r.yoy)+'">'+fmtDelta(r.yoy,0)+'</td>'+
+        '<td>'+dualSpark(r.ce_id)+'</td></tr>').join(''));
   }
+  let lmFn='';
+  if(recovered.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--green)"><b>✅ '+recovered.length+' recovered:</b> '+recovered.map(r=>esc(r.ce_name)+' ('+fmtPct(r.roi,0)+', was bleeding '+r.was_bleeding_wks+'w)').join(' · ')+'</div>'; }
+  if(suppressed.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--amber)">⚠️ '+suppressed.length+' suppressed (funded, null ROI — verify tracking): '+suppressed.map(r=>esc(r.ce_name)+' ('+fmtMoney(r.spend_4w)+' 4w)').join(' · ')+'</div>'; }
+  if(burn.count){ lmFn+='<div class="sub" style="margin-top:6px">+ '+burn.count+' sub-$1k CEs bleeding <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the individual gate</div>'; }
 
-  // ---------- B2 · Unexplained CM1/Conv Swings ----------
-  const b2c=_cas(M.bucket1_fluctuations), b2=b2c.shown;
-  // P2.3 gray-zone: CVR WoW drops just short of the 30% trigger
-  const b2gz=((M._diagnostics||{}).cvr_gray_zone_count)||0;
-  const b2gzLine = b2gz? '<div class="sub" style="margin-top:6px">Near triggers: '+b2gz+' with a CVR drop within 5pp of the 30% swing trigger</div>':'';
-  let b2body;
-  if(!b2.length){ b2body='<div class="emptystate">No unexplained CM1/conv swings home here this week. <b>✅</b></div>'+_store(b2c.store,'B2')+b2gzLine; }
+  // Fluctuations — clean value(Δ) layout, dominant driver inline (full 5 on hover), dual TY/LY spark
+  const fluxHead='<th class="stick">Combined Entity</th><th>Swing (vs 28d)</th><th class="num">Paid ROI</th><th class="num">Δ Rev wk</th><th>Δrev by factor</th><th class="num">Spend</th><th class="num">YoY</th><th>Verdict · Action</th><th>Rev &rsquo;26 v &rsquo;25</th>';
+  const fluxRows=items=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+    '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+tierMini(r.tier)+'</td>'+
+    '<td>'+swingCell(r.signal,r.swing_pct)+(r.window?dsub(winAbbr(r.window)):'')+'</td>'+
+    '<td class="num">'+fmtPct(r.roi,0)+dsub('2wk '+fmtPct(r.roi_2wk,0))+'</td>'+
+    '<td class="num '+sgn(r.delta_rev)+'">'+fmtMoneyDelta(r.delta_rev)+'</td>'+
+    '<td>'+drvCell(r)+'</td>'+
+    '<td class="num">'+fmtMoney(r.spend_wk)+dsub(fmtPct(r.paid_pct,0)+' paid')+'</td>'+
+    '<td class="num '+sgn(r.yoy)+'">'+fmtDelta(r.yoy,0)+'</td>'+
+    '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
+    '<td>'+dualSpark(r.ce_id)+'</td></tr>').join('');
+  const seasDnBody=seasDn.length?(fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No CM1/RPC fluctuation ↓ signals. <b>✅</b></div>';
+  const seasUpBody=seasUp.length?(fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No CM1/RPC fluctuation ↑ signals.</div>';
+
+  // COMPOUND - Scale-Up — clean value(Δ) layout + cohort bar + dual spark
+  let scaleBody;
+  if(!scale.length){ scaleBody='<div class="emptystate">No CEs clearing ROI ≥155% (≥3-of-4 wk).</div>'; }
   else{
-    b2body=_tbl('<th class="stick">Combined Entity</th><th>Signal</th><th>Dir</th><th class="num">Mag</th>'+
-      '<th>Cause</th><th>Swing driver</th><th class="num">Persist</th><th class="num">CV</th><th class="num">Spend wk</th><th>Recommendation</th>',
-      b2.map(r=>{ const e=r.evidence||{}, sd=r.swing_driver;
+    const scTotal=scale.reduce((s,r)=>s+(+r.est_incremental_wk||0),0), nSeas=scale.filter(r=>r.seasonality_flag).length;
+    scaleBody=cbar(scale.length,'Est incremental/wk',fmtMoneyDelta(scTotal),'pos',(nSeas?nSeas+' seasonality-flagged':'all structural'))+
+      _tbl('<th class="stick">Combined Entity</th><th class="num">Paid ROI 4w</th><th class="num">vs tROAS</th><th class="num">Est +/wk</th><th class="num">Spend 4w</th><th>RPC</th><th class="num">CVR</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      scale.map(r=>{ const flag=r.seasonality_flag?' '+chip('green','seas↑'):'';
+        const rvc=(r.rpc_vs_cat!=null)?dsub(fmtDelta(r.rpc_vs_cat,0)+' cat'):'';
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
-          '<td class="mono">'+esc(r.signal)+'</td>'+
-          '<td>'+dirChip(r.direction)+'</td>'+
-          '<td class="num">'+fmtDelta((r.direction==='down'?-1:1)*(r.magnitude_pct||0))+'</td>'+
-          '<td>'+_causeChip(r.cause_tag||'—')+'</td>'+
-          '<td>'+(sd?esc(sd.label)+' <span class="'+sgn(sd.value)+'">'+fmtMoneyDelta(sd.value)+'</span> <span class="sub">'+sd.share_pct+'%</span>':'—')+'</td>'+
-          '<td class="num">'+(e.persistence_days!=null?e.persistence_days+'d':'—')+'</td>'+
-          '<td class="num">'+(e.cv!=null?e.cv.toFixed(2):'—')+'</td>'+
-          '<td class="num">'+fmtMoney(r.spend_wk)+'</td>'+
-          '<td>'+esc(r.recommendation)+'</td></tr>';
-      }).join(''))+_store(b2c.store,'B2')+b2gzLine;
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+tierMini(r.tier)+'</td>'+
+          '<td class="num">'+fmtPct(r.roi_agg4,0)+dsub((r.wks_ge_155||0)+'/4 ≥155')+'</td>'+
+          '<td class="num '+sgn(r.pp_vs_troas)+'">'+ppDelta(r.pp_vs_troas)+flag+dsub('tROAS '+fmtPct(r.troas,0))+'</td>'+
+          '<td class="num pos"><b>'+fmtMoney(r.est_incremental_wk)+'</b></td>'+
+          '<td class="num">'+fmtMoney(r.spend_4w)+'</td>'+
+          '<td>'+((r.rpc==null)?'—':'$'+(+r.rpc).toFixed(2))+rvc+'</td>'+
+          '<td class="num">'+fmtPct(r.cvr_pct,1)+'</td>'+
+          '<td>'+dualSpark(r.ce_id)+'</td></tr>'; }).join(''));
   }
 
-  // ---------- B3 · Losing Ground ----------
-  const b3c=_cas((M.bucket_b3||{}).rows), b3=b3c.shown;
-  let b3body;
-  if(!b3.length){ b3body='<div class="emptystate">No Pro+ CEs home here this week. <b>✅</b></div>'+_store(b3c.store,'B3'); }
+  // LIFECYCLE - New CEs
+  const newLane={A_graduated:['New Pro+','green'],B_on_pace:['On pace → Pro','blue']};
+  let newBody;
+  if(!newCes.length){ newBody='<div class="emptystate">No CEs newly Pro+ or on pace to Pro.</div>'; }
   else{
-    b3body=_tbl('<th class="stick">Combined Entity</th><th>Band now</th><th>Projected</th><th class="num">Fall</th>'+
-      '<th class="num">wks on pace</th><th>Rev TY/LY</th><th>Reason</th><th class="num">Proj loss/mo</th><th>Action</th>',
-      b3.map(r=>{ const ty=(r.spark_rev||[]).slice(), ly=r.spark_rev_ly||[];
-        while(ty.length<ly.length) ty.push(null);
+    const nGrad=newCes.filter(r=>r.lane==='A_graduated').length, nPace=newCes.filter(r=>r.lane==='B_on_pace').length;
+    newBody=cbar(newCes.length,'New Pro+',nGrad,'',(nPace+' on pace to Pro'))+
+      _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num">Run-rate/mo</th><th class="num">Paid ROI</th><th class="num">Δ Rev WoW</th><th class="num">Clicks</th><th class="num">RPC</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      newCes.map(r=>{ const ln=newLane[r.lane]||[r.lane,'ghost'];
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
-        '<td>'+esc(r.band_now)+'</td>'+
-        '<td><span class="neg">'+esc(r.band_projected)+'</span></td>'+
-        '<td class="num">'+r.fall_bands+'</td>'+
-        '<td class="num">'+r.weeks_on_pace+'</td>'+
-        '<td>'+kmSparkline('b3_'+r.ce_id, ty, ly)+'</td>'+
-        '<td class="mono">'+esc(r.reason)+'</td>'+
-        '<td class="num neg">'+fmtMoneyDelta(-Math.abs(r.projected_monthly_loss||0))+'</td>'+
-        '<td>'+esc(r.action||'—')+'</td></tr>';}).join(''))+_store(b3c.store,'B3');
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span></td>'+
+          '<td>'+chip(ln[1],ln[0])+'</td><td><b>'+esc(r.band||'—')+'</b></td>'+
+          '<td class="num">'+fmtMoney(r.run_rate_mo)+dsub((r.dollars_to_pro>0?fmtMoney(r.dollars_to_pro)+' to Pro':'at Pro+'))+'</td>'+
+          '<td class="num">'+fmtPct(r.roi,0)+'</td>'+
+          '<td class="num '+sgn(r.rev_wow_pct)+'">'+fmtDelta(r.rev_wow_pct,0)+'</td>'+
+          '<td class="num">'+fmtInt(r.clicks)+dsub(fmtDelta(r.clicks_wow_pct,0))+'</td>'+
+          '<td class="num">'+((r.rpc==null)?'—':'$'+(+r.rpc).toFixed(2))+dsub('CVR '+fmtPct(r.cvr_pct,1))+'</td>'+
+          '<td>'+dualSpark(r.ce_id)+'</td></tr>'; }).join(''));
   }
 
-  // ---------- B4 · Scale Windows ----------
-  const b4c=_cas((M.bucket_b4||{}).rows), b4=b4c.shown;
-  let b4body;
-  if(!b4.length){ b4body='<div class="emptystate">No scaling windows home here this week.</div>'+_store(b4c.store,'B4'); }
+  // LIFECYCLE - Iteration
+  const itLane={A_mmp_no_traction:['MMP · no traction','amber'],B_traction_no_mmp:['Traction · no MMP','blue']};
+  let itBody;
+  if(!iters.length){ itBody='<div class="emptystate">No iteration candidates.</div>'; }
   else{
-    b4body=_tbl('<th class="stick">Combined Entity</th><th>Lane</th><th class="num">ROI W0</th>'+
-      '<th>Rev 10w</th><th class="num">Struct gain/wk</th><th class="num">Est +/wk</th><th>Gate</th><th>Action</th>',
-      b4.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
-        '<td>'+_laneChip(r.lane, r.lane_label)+'</td>'+
-        '<td class="num">'+fmtPct(r.roi_w0_pct,0)+'</td>'+
-        '<td>'+sparkline(r.spark_rev||[],{w:80,h:22})+'</td>'+
-        '<td class="num pos">'+fmtMoney(r.structural_gain_wk)+'</td>'+
-        '<td class="num pos">'+fmtMoney(r.est_incremental_wk)+'</td>'+
-        '<td class="sub">'+esc(r.gate_note)+'</td>'+
-        '<td>'+esc(r.action||'—')+'</td></tr>').join(''))+_store(b4c.store,'B4');
+    const nA=iters.filter(r=>r.lane==='A_mmp_no_traction').length, nB=iters.filter(r=>r.lane==='B_traction_no_mmp').length;
+    itBody=cbar(iters.length,'Iterate / candidate',nA+' / '+nB,'',(nA+' MMP no-traction · '+nB+' traction no-MMP'))+
+      _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num">Run-rate/mo</th><th class="num">Rev WoW</th><th class="num">Clicks WoW</th><th>MMP handover</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+      iters.map(r=>{ const ln=itLane[r.lane]||[r.lane,'ghost']; const t=r.traction||{};
+        return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+          '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+(r.has_mmp?' <span class="chip ghost">MMP ✓</span>':'')+'</td>'+
+          '<td>'+chip(ln[1],ln[0])+'</td><td><b>'+esc(r.band||'—')+'</b></td>'+
+          '<td class="num">'+fmtMoney(r.run_rate_mo)+'</td>'+
+          '<td class="num '+sgn(t.rev_wow_pct)+'">'+fmtDelta(t.rev_wow_pct,0)+'</td>'+
+          '<td class="num '+sgn(t.clicks_wow_pct)+'">'+fmtDelta(t.clicks_wow_pct,0)+'</td>'+
+          '<td class="idbr">'+esc(r.mmp_handover_date||'—')+'</td>'+
+          '<td>'+dualSpark(r.ce_id)+'</td></tr>'; }).join(''));
   }
 
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
-      '<span class="sub">movement-only · one home per cascade B1&gt;B2&gt;B3&gt;B4 · each row carries its action</span></div>'+
-    _bucketBlock('B1','ROI / CM2 Movement','entered / escalated / exited this week · pause · investigate · transition · ranked by CM2 bleed', b1body)+
-    _bucketBlock('B2','Unexplained CM1/Conv Swings','POF gates · cause routing (unexplained = nobody knows) · Shapley swing driver', b2body)+
-    _bucketBlock('B3','Losing Ground','Pro+ on pace to fall a band · dormant → inputs → paid-opt → manual', b3body)+
-    _bucketBlock('B4','Scale Windows','sticky · ⚡ NEW WAVE · 🔄 LOADING · probe-capped · ranked by est. incremental', b4body)+
+      '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
+    _bucketBlock('🛡️','Losing Money','Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked by weekly margin (CM2) bled.', lmBody+lmFn)+
+    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','Revenue quality dropped sharply — CM1/conv or RPC fell vs its 28-day baseline (held 3 days or WoW). Catches intra-week bleeds the weekly view hides; investigate or trim.', seasDnBody)+
+    _bucketBlock('🚀','Scale-Up','Efficient with room to grow — Paid ROI ≥ 155% in ≥ 3 of the last 4 weeks and not just-cliffed. Ranked by est. incremental revenue/wk.', scaleBody)+
+    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Yield spiked vs its 28-day baseline — same detector, upside. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
+    _bucketBlock('🌱','New CEs','Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.', newBody)+
+    _bucketBlock('🌱','Iteration','Needs team input — has MMP input but no traction (iterate), or gaining traction with no MMP yet (bring the team in).', itBody)+
     '</section>';
 }
 
@@ -1881,6 +1967,11 @@ document.getElementById('app').addEventListener('click',e=>{
     state.watchOnly=false; state.rule=''; state.selMode=false; sel.clear(); activeView=null; renderApp(); return; }
   if(e.target.id==='monthlyLink'){ e.preventDefault();
     alert('Links out to the monthly deep-dive report (separate build). Monthly data never loads in this weekly view.'); return; }
+  if(e.target.id==='moreFilters' || (e.target.closest && e.target.closest('#moreFilters'))){ state.filtersOpen=!state.filtersOpen; renderApp(); return; }
+  const bkc=e.target.closest('[data-bkt]');
+  if(bkc){ const tag=bkc.dataset.bkt; const arr=state.filters.__bkt=state.filters.__bkt||[];
+    const i=arr.indexOf(tag); if(i>=0) arr.splice(i,1); else arr.push(tag);
+    if(!arr.length) delete state.filters.__bkt; markDirty(); renderApp(); return; }
   const fc=e.target.closest('.fchip');
   if(fc){ const dim=fc.dataset.fdim, val=fc.dataset.fval; const arr=state.filters[dim]=state.filters[dim]||[];
     const idx=arr.indexOf(val); if(idx>=0) arr.splice(idx,1); else arr.push(val);
@@ -1890,6 +1981,12 @@ document.getElementById('app').addEventListener('click',e=>{
   // Section-1 headline card → market drawer
   const mcard=e.target.closest('[data-market-drawer]');
   if(mcard){ openMarketDrawer(); return; }
+  // Δrev-by-factor in-row expander (must precede the row→drawer fallback)
+  const fx=e.target.closest && e.target.closest('.fxexp');
+  if(fx){ const cell=fx.closest('td'); const full=cell&&cell.querySelector('.fxfull');
+    if(full){ const shown=full.style.display!=='none';
+      full.style.display=shown?'none':'block'; fx.textContent=shown?('+'+fx.dataset.n):'− hide'; }
+    return; }
   // row / mover click → CE drawer (but not when clicking the select checkbox or the star)
   if(e.target.dataset && e.target.dataset.selce!=null) return;
   const el=e.target.closest('[data-ce]');
