@@ -124,12 +124,13 @@ def market_weekly_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataF
 
 
 # --------------------------------------------------------------------------- #
-# CE-level weekly paid performance  (google_ads_campaign_stats)
+# CE-level weekly paid performance  (ads_campaign_stats — Google + Bing)
 # --------------------------------------------------------------------------- #
 def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
-    Weekly CE paid rollup: spend, coupon+wallet, CM1 (offline contribution
-    margin), CM1 conversions, offline revenue (pre-Sep-2025 fallback basis).
+    Weekly CE paid rollup: spend, coupon+wallet, CM1 (with pre/post Sep-2025
+    migration fallback), conversions, paid clicks, conv value.
+    Source: ads_campaign_stats (Google Ads + Microsoft/Bing, all campaign types).
     """
     sql = f"""
     SELECT
@@ -137,12 +138,21 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
         DATE_TRUNC(report_date, WEEK(MONDAY))                     AS week,
         SUM(sum_spend)                                            AS spend,
         SUM(sum_coupon_and_wallet_credits)                       AS coupon_wallet,
-        SUM(sum_conversion_value_offline_contribution_margin)    AS cm1,
-        SUM(count_conversions_offline_contribution_margin)       AS conversions,
+        -- CM1: offline contribution margin post-Sep-2025, calculated fallback pre-Sep
+        SUM(CASE
+            WHEN report_date >= '2025-09-01'
+                 AND sum_conversion_value_offline_contribution_margin > 0
+                THEN sum_conversion_value_offline_contribution_margin
+            ELSE sum_conversion_value_calculated_contribution_margin
+        END)                                                      AS cm1,
+        SUM(CASE
+            WHEN report_date >= '2025-09-01'
+                 AND count_conversions_offline_contribution_margin > 0
+                THEN count_conversions_offline_contribution_margin
+            ELSE count_conversions_online
+        END)                                                      AS conversions,
         SUM(sum_conversion_value_offline_revenue)                AS offline_revenue,
         SUM(count_clicks)                                        AS paid_clicks,
-        -- Paid Conversion Value on the GBV basis (perf-audit `offline_gb`) — the
-        -- default paid conversion value; offline gross-bookings post-2025-09-01.
         SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv
 
     FROM {config.ADS_STATS}

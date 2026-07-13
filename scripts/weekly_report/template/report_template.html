@@ -1207,9 +1207,10 @@ function kmDeltaAbs(v,t){
   return s+Math.round(a);
 }
 // map metric id -> display format bucket
-const KM_FMT = { revenue:'money', gbv:'money', cr_pct:'pct', tr_pct:'pct', paid_roi:'pct',
-  roi1:'pct', paid_conv_value:'money', paid_cvr:'pct', paid_clicks:'count' };
-const KM_ORDER = ['revenue','gbv','cr_pct','tr_pct','paid_roi','roi1','paid_conv_value','paid_cvr','paid_clicks'];
+const KM_FMT = { revenue:'money', gbv:'money', orders:'count', aov:'money', cr_pct:'pct', tr_pct:'pct',
+  paid_clicks:'count', paid_cvr:'pct', paid_conv_value:'money', avg_cm1:'money', paid_roi:'pct', roi1:'pct' };
+const KM_ORDER = ['revenue','gbv','orders','aov','cr_pct','tr_pct','paid_clicks','paid_cvr','paid_conv_value','avg_cm1','paid_roi','roi1'];
+const KM_PAID = new Set(['paid_clicks','paid_cvr','paid_conv_value','avg_cm1','paid_roi']);
 
 function openMarketDrawer(){
   const M=MARKETS[mi];
@@ -1218,6 +1219,29 @@ function openMarketDrawer(){
   const wkly=M.market_summary.weekly||[];
   const wklyLy=M.market_summary.weekly_ly||[];
   const weeks=wkly.map(w=>w.week);
+
+  // backfill key_metrics entries derivable from weekly[] when snapshot predates the spec
+  const w0r=wkly[wkly.length-1]||{}, wm1r=wkly[wkly.length-2]||{};
+  // compute avg_cm1 into weekly[] if missing (cm1 / paid_conversions)
+  if(w0r.cm1!=null && w0r.avg_cm1==null){
+    wkly.forEach(w=>{ if(w.cm1!=null && w.paid_conversions) w.avg_cm1=+(w.cm1/w.paid_conversions).toFixed(2); });
+  }
+  const KM_BACKFILL = [
+    {key:'orders',   label:'Orders',    field:'orders',    ly:'orders'},
+    {key:'aov',      label:'AOV',       field:'aov',       ly:'aov'},
+    {key:'avg_cm1',  label:'Avg CM1',   field:'avg_cm1',   ly:'avg_cm1'},
+  ];
+  KM_BACKFILL.forEach(bf=>{
+    if(km[bf.key]) return;
+    const v0=w0r[bf.field], v1=wm1r[bf.field];
+    if(v0==null) return;
+    const da=(v0!=null&&v1!=null)?v0-v1:null;
+    const dp=(v0!=null&&v1!=null&&v1!==0)?100*(v0/v1-1):null;
+    km[bf.key]={w0:v0, wm1:v1, delta_abs:da!=null?+da.toFixed(2):null,
+      delta_pct:dp!=null?+dp.toFixed(1):null, label:bf.label,
+      field:bf.field, has_ly:bf.ly!=null, ly_field:bf.ly};
+  });
+
   const rev=km.revenue||{};
   const wowPct = rev.delta_pct!=null ? rev.delta_pct : h.wow_pct;
   const yoyPct = (rev.yoy_pct!=null ? rev.yoy_pct : h.yoy_pct);
@@ -1229,7 +1253,8 @@ function openMarketDrawer(){
     const ly = (m.has_ly && m.ly_field) ? wklyLy.map(w=>w[m.ly_field]) : null;
     const spk = kmSparkline(k, ty, ly) + (m.has_ly?'':'<div class="lyna">LY n/a</div>');
     const dc=sgn(m.delta_pct);
-    return '<tr><td>'+esc(m.label)+'</td>'+
+    const lbl = KM_PAID.has(k) ? m.label+' *' : m.label;
+    return '<tr><td>'+esc(lbl)+'</td>'+
       '<td class="w0">'+kmFmt(m.w0,t)+'</td>'+
       '<td>'+kmFmt(m.wm1,t)+'</td>'+
       '<td class="'+sgn(m.delta_abs)+'">'+kmDeltaAbs(m.delta_abs,t)+'</td>'+
@@ -1243,8 +1268,8 @@ function openMarketDrawer(){
     '</div>'+
     '<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th>'+
       '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
-    '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric. '+
-      'Metrics without an LY line (Paid RoI / Paid Conv Value / Paid CVR) have no comparable −364d window yet.</div>';
+    '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric.'+
+      '<br>* Paid = Google Ads (Search, PMax, Display, Video) + Bing — all campaign types from ads_campaign_stats.</div>';
 
   // ----- WoW Shapley -----
   let shapBlock='';

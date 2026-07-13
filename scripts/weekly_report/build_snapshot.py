@@ -641,6 +641,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "paid_clicks": int(paid_clicks),
             "paid_conversions": int(paid_conv),
             "paid_cvr_pct": paid_cvr,
+            "avg_cm1": _num(cm1 / paid_conv) if paid_conv else None,
             "cpc": _num(spend / paid_clicks) if paid_clicks else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
@@ -674,15 +675,20 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # metrics (Paid RoI / Conv Value / CVR) have no LY — the LY window predates
     # the 2025-09-01 offline-attribution migration.
     KEY_METRIC_SPEC = [
+        # Business / Funnel
         ("revenue", "Revenue", "revenue", "revenue"),
         ("gbv", "GBV", "gbv", "gbv"),
+        ("orders", "Orders", "orders", "orders"),
+        ("aov", "AOV", "aov", "aov"),
         ("cr_pct", "CR%", "cr_pct", "cr_pct"),
         ("tr_pct", "TR%", "tr_pct", "tr_pct"),
-        ("paid_roi", "Paid RoI", "roi_pct", None),
-        ("roi1", "ROI 1", "roi1_pct", "roi1_pct"),
-        ("paid_conv_value", "Paid Conv Value", "paid_conv_value", None),
-        ("paid_cvr", "Paid CVR", "paid_cvr_pct", None),
+        # Paid / Marketing
         ("paid_clicks", "Paid Clicks", "paid_clicks", "paid_clicks"),
+        ("paid_cvr", "Paid CVR", "paid_cvr_pct", "paid_cvr_pct"),
+        ("paid_conv_value", "Paid Conv Value", "paid_conv_value", "paid_conv_value"),
+        ("avg_cm1", "Avg CM1", "avg_cm1", "avg_cm1"),
+        ("paid_roi", "Paid RoI", "roi_pct", "roi_pct"),
+        ("roi1", "ROI 1", "roi1_pct", "roi1_pct"),
     ]
 
     def _metric_block(field: str, *, yoy=False) -> dict:
@@ -732,7 +738,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # ---- LY 12-week market series (for TY-vs-LY sparklines) ----
     # Business metrics + paid clicks only; offline-paid metrics have no LY.
     ly_biz_cols = [
-        "revenue", "gbv", "gbv_completed", "co_marketing_commission",
+        "revenue", "gbv", "gbv_completed", "orders", "co_marketing_commission",
         "insider_commission", "direct_costs", "ad_spend_total", "coupon_discount",
         "wallet_credits", "affiliate_commission", "creator_collab_costs",
         "creator_collab_coupon_costs",
@@ -743,9 +749,10 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         paid_ly["aligned_week"] = pd.to_datetime(paid_ly["week"]).dt.date.map(
             lambda d: d + dt.timedelta(days=config.YOY_LAG_DAYS)
         )
-        ly_clicks = paid_ly.groupby("aligned_week")["paid_clicks"].sum()
+        ly_paid_agg_cols = ["paid_clicks", "spend", "coupon_wallet", "cm1", "conversions", "conv_value_gbv"]
+        ly_paid_mkt = paid_ly.groupby("aligned_week")[ly_paid_agg_cols].sum()
     else:
-        ly_clicks = pd.Series(dtype=float)
+        ly_paid_mkt = pd.DataFrame()
 
     weekly_ly = []
     for wk in weeks:
@@ -757,16 +764,35 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             gmc_l = sum(float(r[c]) for c in (
                 "ad_spend_total", "coupon_discount", "wallet_credits",
                 "affiliate_commission", "creator_collab_costs", "creator_collab_coupon_costs"))
+            orders_l = float(r["orders"])
             row.update({
                 "revenue": _num(rev_l),
                 "gbv": _num(gbv_l),
+                "orders": int(orders_l) if orders_l else None,
+                "aov": _num(gbv_l / orders_l) if orders_l else None,
                 "cr_pct": _pct(gbvc_l, gbv_l),
                 "tr_pct": _pct(rev_l, gbvc_l),
                 "roi1_pct": _pct(cm1_b, gmc_l, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT)),
             })
         else:
-            row.update({k: None for k in ("revenue", "gbv", "cr_pct", "tr_pct", "roi1_pct")})
-        row["paid_clicks"] = int(ly_clicks.get(wk)) if wk in getattr(ly_clicks, "index", []) else None
+            row.update({k: None for k in ("revenue", "gbv", "orders", "aov", "cr_pct", "tr_pct", "roi1_pct")})
+        if wk in ly_paid_mkt.index:
+            p = ly_paid_mkt.loc[wk]
+            pc_l = float(p["paid_clicks"])
+            sp_l = float(p["spend"])
+            cw_l = float(p["coupon_wallet"])
+            cm1_l = float(p["cm1"])
+            conv_l = float(p["conversions"])
+            cvg_l = float(p["conv_value_gbv"])
+            row.update({
+                "paid_clicks": int(pc_l) if pc_l else None,
+                "paid_cvr_pct": _pct(conv_l, pc_l, gate=(0.0, config.CVR_MAX_PCT)),
+                "paid_conv_value": _num(cvg_l),
+                "avg_cm1": _num(cm1_l / conv_l) if conv_l else None,
+                "roi_pct": _pct(cm1_l, sp_l + cw_l, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT)),
+            })
+        else:
+            row.update({k: None for k in ("paid_clicks", "paid_cvr_pct", "paid_conv_value", "avg_cm1", "roi_pct")})
         weekly_ly.append(row)
 
     # ---- per-CE LY series (CE-drawer TY/LY sparklines; same 6 comparable metrics) ----

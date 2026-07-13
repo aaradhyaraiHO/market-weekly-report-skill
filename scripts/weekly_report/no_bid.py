@@ -34,6 +34,7 @@ def _fetch_no_bid_campaigns(
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
+          AND ad_platform = 'Google Ads'
           AND current_campaign_status = 'ENABLED'
           AND (current_campaign_target_roas IS NULL OR current_campaign_target_roas = 0)
 
