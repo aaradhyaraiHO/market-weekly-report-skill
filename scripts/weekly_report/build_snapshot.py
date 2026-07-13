@@ -950,6 +950,11 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         "transitions": transitions,   # SCHEMA ADDITION: Phase-2 forward-compat
         "_diagnostics": diag,
     }
+    # FINAL bucket engine (2026-07-13): Defend/Compound over B1/B2/B4, reorganized —
+    # Losing Money (CM2 bleed + movement), Seasonality (one Fluctuations table), Scale-Up
+    # (ROI≥155% ≥3-of-4wk). Consumes the assembled snapshot above.
+    import buckets
+    snapshot["buckets_final"] = buckets.build_buckets(snapshot)
     return snapshot
 
 
