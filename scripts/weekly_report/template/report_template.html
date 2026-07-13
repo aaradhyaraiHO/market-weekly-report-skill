@@ -286,6 +286,32 @@ td.selcol input,th.selcol input{cursor:pointer}
 .sbar .d{text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700}
 .idx{font-family:var(--sans);font-size:11px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:6px}
 .idx.hot{background:var(--red-bg);color:var(--red)}.idx.warm{background:var(--green-bg);color:var(--green)}.idx.mute{background:var(--paper-deep);color:var(--ink-faint)}
+
+/* --- Section-2 sub-tabs (Follow-up / Market Review toggle) --- */
+.s2tabs{display:flex;gap:0;margin-bottom:16px;border:1.5px solid var(--rule-dark);border-radius:10px;overflow:hidden;width:fit-content}
+.s2tab{font-family:var(--sans);font-size:12.5px;font-weight:600;padding:8px 18px;background:#fff;color:var(--ink-soft);cursor:pointer;
+  border-right:1.5px solid var(--rule-dark);transition:all .12s;user-select:none;white-space:nowrap}
+.s2tab:last-child{border-right:none}
+.s2tab:hover{color:var(--purps);background:var(--purps-soft)}
+.s2tab.active{background:var(--purps);color:#fff;font-weight:700}
+.s2tab .cnt{font-size:11px;font-weight:500;margin-left:6px;opacity:.8}
+.s2pane{display:none}.s2pane.active{display:block}
+
+/* --- Market Review panel --- */
+.mr-panel{padding:0}
+.mr-review textarea{width:100%;min-height:200px;font-family:var(--sans);font-size:13.5px;padding:14px 16px;border:1.5px solid var(--rule-dark);
+  border-radius:12px;background:#fff;color:var(--ink);resize:vertical;line-height:1.6}
+.mr-review textarea:focus{outline:none;border-color:var(--purps)}
+.mr-review textarea::placeholder{color:var(--ink-faint)}
+.mr-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint)}
+.mr-saved{color:var(--green);font-weight:600}
+.mr-context{margin-top:18px}
+.mr-context-item{border:1px solid var(--rule);border-radius:12px;padding:13px 16px;background:var(--paper-deep);margin-bottom:10px}
+.mr-context-item .mr-src{font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--purps);margin-bottom:5px}
+.mr-context-item .mr-txt{font-family:var(--sans);font-size:13px;color:var(--ink);line-height:1.55}
+.mr-context-item .mr-when{font-family:var(--sans);font-size:10px;color:var(--ink-faint);margin-top:5px}
+.mr-prompt{font-family:var(--sans);font-size:12px;color:var(--ink-faint);line-height:1.6;margin-bottom:14px}
+.mr-prompt b{color:var(--ink);font-weight:600}
 </style>
 </head>
 <body>
@@ -541,23 +567,71 @@ function statusChip(s){
   else if(t.indexOf('soft')>=0||t.indexOf('still')>=0) c='amber';
   return '<span class="chip '+c+'">'+esc(s)+'</span>';
 }
+/* ---------- market review — localStorage (per-market, like CE notes) ---------- */
+function mrKey(){ return ‘wr_market_review::’+MARKETS[mi].meta.market_slug; }
+function getMarketReview(){ try{ return JSON.parse(localStorage.getItem(mrKey())||’null’); }catch(e){ return null; } }
+function saveMarketReview(text){
+  if(text && text.trim()) localStorage.setItem(mrKey(), JSON.stringify({text:text, updated:new Date().toISOString()}));
+  else localStorage.removeItem(mrKey());
+}
+let mrTimer=null;
+
 function renderFollowup(M){
   const rows = M.followup||[];
-  let body;
+  let fuBody;
   if(!rows.length){
-    body='<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>';
+    fuBody=’<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>’;
   } else {
-    body='<div class="tablewrap"><table><thead><tr>'+
-      '<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>'+
-      rows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-        '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span></td>'+
-        '<td class="mono">'+esc(r.flagged_week)+'</td>'+
-        '<td>'+esc(r.signal)+'</td>'+
-        '<td>'+statusChip(r.status_now)+'</td></tr>').join('')+
-      '</tbody></table></div>';
+    fuBody=’<div class="tablewrap"><table><thead><tr>’+
+      ‘<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>’+
+      rows.map(r=>’<tr class="cerow" data-ce="’+esc(r.ce_id)+’">’+
+        ‘<td class="ce stick"><span class="cn">’+esc(r.ce_name)+’</span></td>’+
+        ‘<td class="mono">’+esc(r.flagged_week)+’</td>’+
+        ‘<td>’+esc(r.signal)+’</td>’+
+        ‘<td>’+statusChip(r.status_now)+’</td></tr>’).join(‘’)+
+      ‘</tbody></table></div>’;
   }
-  return '<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>'+
-    '<span class="sub">last week’s flagged CEs · signal then → status now</span></div>'+body+'</section>';
+
+  // market review content
+  const mr = getMarketReview();
+  const mrText = mr && mr.text ? mr.text : ‘’;
+  const mrWhen = mr && mr.updated ? ‘saved ‘+new Date(mr.updated).toLocaleString() : ‘not saved yet’;
+  const ctx = M.market_review_context||[];
+  const ctxHtml = ctx.length ? ‘<div class="mr-context">’+
+    ctx.map(c=>’<div class="mr-context-item"><div class="mr-src">’+esc(c.source||’slack’)+(c.channel?’ · ‘+esc(c.channel):’’)+’</div>’+
+      ‘<div class="mr-txt">’+esc(c.text)+’</div>’+
+      (c.timestamp?’<div class="mr-when">’+esc(c.timestamp)+’</div>’:’’)+’</div>’).join(‘’)+’</div>’ : ‘’;
+
+  const mrBody = ‘<div class="mr-panel">’+
+    ‘<div class="mr-prompt">Weekly market review for <b>’+esc(M.meta.market)+’</b> · w/c ‘+esc(M.meta.week_start)+
+    ‘. Your narrative persists locally across weeks — use it to capture the "so what" beyond the numbers.</div>’+
+    ctxHtml+
+    ‘<div class="mr-review"><textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn\’t capture…\n\ne.g. \’Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.\’">’+esc(mrText)+’</textarea>’+
+    ‘<div class="mr-meta"><span id="mrSaved" class="mr-saved">’+esc(mrWhen)+’</span>’+
+      ‘<span class="mono">key: wr_market_review::’+esc(M.meta.market_slug)+’</span></div></div></div>’;
+
+  const fuCnt = rows.length ? ‘<span class="cnt">(‘+rows.length+’)</span>’ : ‘’;
+  const mrHas = mrText ? ‘ · ●’ : ‘’;
+
+  return ‘<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>’+
+    ‘<span class="sub">last week’s flagged CEs + your market review</span></div>’+
+    ‘<div class="s2tabs">’+
+      ‘<div class="s2tab active" data-s2tab="followup">Follow-up’+fuCnt+’</div>’+
+      ‘<div class="s2tab" data-s2tab="review">Market Review’+esc(mrHas)+’</div>’+
+    ‘</div>’+
+    ‘<div class="s2pane active" id="s2-followup">’+fuBody+’</div>’+
+    ‘<div class="s2pane" id="s2-review">’+mrBody+’</div>’+
+    ‘</section>’;
+}
+function wireMarketReview(){
+  const ta=document.getElementById(‘mrText’); if(!ta || ta.dataset.wired) return;
+  ta.dataset.wired=’1’;
+  ta.addEventListener(‘input’,()=>{
+    clearTimeout(mrTimer);
+    mrTimer=setTimeout(()=>{ saveMarketReview(ta.value);
+      const el=document.getElementById(‘mrSaved’);
+      if(el) el.textContent=’saved ‘+new Date().toLocaleString(); },400);
+  });
 }
 
 /* =====================================================================
@@ -1692,7 +1766,8 @@ function exportNotes(){
     if(k.indexOf(prefix)===0) out[k.slice(prefix.length)]=JSON.parse(localStorage.getItem(k)); }
   // also carry the BGM customizations for this market (views / groups / watchlist / rule)
   const custom={ views:getViews(), groups:getGroups(), watch:Array.from(getWatch()), rule:lsGet('rule','') };
-  const blob=new Blob([JSON.stringify({market:M.meta.market_slug,exported:new Date().toISOString(),notes:out,customizations:custom},null,2)],{type:'application/json'});
+  const review=getMarketReview();
+  const blob=new Blob([JSON.stringify({market:M.meta.market_slug,exported:new Date().toISOString(),notes:out,customizations:custom,market_review:review},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='wr_notes_'+M.meta.market_slug+'.json'; a.click(); URL.revokeObjectURL(a.href);
 }
@@ -1706,7 +1781,8 @@ function importNotes(ev){
     const c=obj.customizations;
     if(c){ if(c.views) setViews(c.views); if(c.groups) setGroups(c.groups);
       if(c.watch) setWatch(new Set(c.watch)); if(c.rule!=null) lsSet('rule', c.rule); }
-    alert('Imported '+Object.keys(notes).length+' note(s)'+(c?' + customizations':'')+'.');
+    if(obj.market_review) saveMarketReview(obj.market_review.text||'');
+    alert('Imported '+Object.keys(notes).length+' note(s)'+(c?' + customizations':'')+(obj.market_review?' + market review':'')+'.');
     activeView=null; renderApp();
   }catch(e){ alert('Could not parse that file.'); } };
   reader.readAsText(f);
@@ -1741,6 +1817,7 @@ function renderApp(){
   paintCETable();
   renderViewChips();       // (1) saved views bar
   refreshGroupList();      // (2) custom-group builder list
+  wireMarketReview();      // in case the review pane is visible
 }
 function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   state.search=''; state.group=''; state.filters={}; state.sortKey='__mover'; state.dir=-1;
@@ -1754,6 +1831,18 @@ document.getElementById('tabs').addEventListener('click',e=>{
 document.getElementById('scrim').addEventListener('click',closeDrawer);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
 document.getElementById('app').addEventListener('click',e=>{
+  // --- Section 2 sub-tabs (Follow-up / Market Review) ---
+  const s2t=e.target.closest('.s2tab');
+  if(s2t && s2t.dataset.s2tab){
+    document.querySelectorAll('.s2tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.s2pane').forEach(p=>p.classList.remove('active'));
+    s2t.classList.add('active');
+    const pane=document.getElementById('s2-'+s2t.dataset.s2tab);
+    if(pane) pane.classList.add('active');
+    // wire market review textarea auto-save when switching to the review tab
+    if(s2t.dataset.s2tab==='review') wireMarketReview();
+    return;
+  }
   // --- (1) saved views ---
   if(e.target.dataset && e.target.dataset.delview!=null){ deleteView(+e.target.dataset.delview); return; }
   const vc=e.target.closest && e.target.closest('.vchip');
