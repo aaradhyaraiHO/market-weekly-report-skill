@@ -160,19 +160,29 @@ svg.spark{display:block}
 .dr-stat{border:1px solid var(--rule);border-radius:12px;padding:11px 13px;background:var(--paper-deep)}
 .dr-stat .l{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
 .dr-stat .v{font-family:var(--disp);font-size:23px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:4px}
-.dr-sec-t{font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:22px 0 10px;border-bottom:1px solid var(--rule);padding-bottom:6px}
+.dr-sec-t{font-family:var(--sans);font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--purps);margin:24px 0 11px;border-bottom:1px solid var(--rule-dark);padding-bottom:7px}
 .trend-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .trend{border:1px solid var(--rule);border-radius:12px;padding:11px 12px;background:var(--paper-deep)}
 .trend .tl{font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);display:flex;justify-content:space-between}
 .trend .tl b{color:var(--ink);font-weight:700}
-.dr-table{width:100%;font-size:11.5px;border-collapse:collapse;margin-top:4px}
-.dr-table th{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);text-align:right;padding:6px 7px;border-bottom:1.3px solid var(--rule-dark);position:sticky;top:0;background:var(--paper)}
+.dr-table{width:100%;font-size:12px;border-collapse:collapse;margin-top:4px}
+.dr-table th{font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);text-align:right;padding:7px 7px;border-bottom:1.3px solid var(--rule-dark);background:var(--paper)}
 .dr-table th:first-child{text-align:left}
-.dr-table td{padding:5px 7px;text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--rule)}
-.dr-table td:first-child{text-align:left;color:var(--ink-soft)}
+.dr-table td{padding:6px 7px;text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--rule)}
+.dr-table td:first-child{text-align:left;color:var(--ink);font-weight:600}
 .dr-table tr:last-child td{font-weight:700;background:rgba(128,0,255,.05)}
 /* RE-SOURCE composition tables have no total row — neutralise last-row emphasis */
 .dr-table.plain tr:last-child td{font-weight:normal;background:none}
+/* Enriched TGID table — horizontally scrollable, compound cells */
+.tgid-scroll{overflow-x:auto;margin-top:4px;-webkit-overflow-scrolling:touch}
+.tgid-tbl{font-size:11px;min-width:920px}
+.tgid-tbl th,.tgid-tbl td{padding:5px 6px;white-space:nowrap}
+.tgid-tbl th.lft,.tgid-tbl td.lft{position:sticky;left:0;background:var(--paper);z-index:1;min-width:170px;max-width:190px;white-space:normal}
+.tgid-tbl td.lft{background:#fff}
+.tgid-tbl .cc-v{font-weight:600}
+.tgid-tbl .cc-d{font-size:9px;font-weight:600;line-height:1.2;margin-top:1px}
+.tgid-tbl .cc-d.pos{color:var(--green)}
+.tgid-tbl .cc-d.neg{color:var(--red)}
 .cmt-box textarea{width:100%;min-height:120px;font-family:var(--sans);font-size:13.5px;padding:12px 14px;border:1.5px solid var(--rule-dark);
   border-radius:12px;background:#fff;color:var(--ink);resize:vertical;line-height:1.5}
 .cmt-box textarea:focus{outline:none;border-color:var(--purps)}
@@ -230,7 +240,7 @@ table.km td.spk svg{vertical-align:middle;cursor:crosshair}
 .pacecard{border:1px dashed var(--rule-dark);border-radius:12px;padding:12px 14px;opacity:.7}
 .pacecard .l{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
 .pacecard .v{font-family:var(--disp);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
-.dr-cap{font-family:var(--sans);color:var(--ink-faint);font-size:11px;margin-top:9px;line-height:1.5}
+.dr-cap{font-family:var(--sans);color:var(--ink-soft);font-size:11px;margin-top:11px;line-height:1.55}
 
 /* --- BGM customization: saved views bar, select bar, star, hot rows, group tag --- */
 .views{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 16px;margin-bottom:12px;
@@ -1389,69 +1399,105 @@ function ppDelta(v){ if(v==null||isNaN(v)) return '—';
    no W0 activity simply omits them (graceful degrade). Order matches the
    ce_drawer_complete mockup. */
 function resourceBlocks(ce){
-  let html='';
+  // Each builder returns section HTML (header + table) or '' when empty.
+  const sec=(title, tableHtml)=>tableHtml
+    ? '<div class="dr-sec-t">'+title+'</div>'+tableHtml : '';
 
+  // ---- Channel mix ----
   const ch=ce.channels||[];
-  if(ch.length){
-    html+='<div class="dr-sec-t">Channel mix</div>'+
-      '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
-      ch.map(c=>'<tr><td>'+esc(c.channel)+'</td>'+
-        '<td>'+fmtMoney(c.rev)+'</td>'+
-        '<td class="'+sgn(c.wow_pct)+'">'+fmtDelta(c.wow_pct,0)+'</td>'+
-        '<td class="'+sgn(c.yoy_pct)+'">'+fmtDelta(c.yoy_pct,0)+'</td>'+
-        '<td>'+fmtPct(c.share_pct,0)+'</td></tr>').join('')+
-      '</tbody></table>';
-  }
+  const channelTbl = ch.length ?
+    '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
+    ch.map(c=>'<tr><td>'+esc(c.channel)+'</td>'+
+      '<td>'+fmtMoney(c.rev)+'</td>'+
+      '<td class="'+sgn(c.wow_pct)+'">'+fmtDelta(c.wow_pct,0)+'</td>'+
+      '<td class="'+sgn(c.yoy_pct)+'">'+fmtDelta(c.yoy_pct,0)+'</td>'+
+      '<td>'+fmtPct(c.share_pct,0)+'</td></tr>').join('')+
+    '</tbody></table>' : '';
 
+  // ---- Funnel ----
   const fn=ce.funnel||{};
   const stages=['LP Users','LP2S','S2C','C2O'].filter(s=>fn[s]);
-  if(stages.length){
-    html+='<div class="dr-sec-t">Funnel · LP → order</div>'+
-      '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
-      stages.map(s=>{
-        const v=fn[s], isUsers=(s==='LP Users');
-        const cur=isUsers?fmtInt(v.current):fmtPct(v.current,1);
-        const wf=isUsers?fmtDelta(v.wow,0):ppDelta(v.wow);
-        const yf=isUsers?fmtDelta(v.yoy,0):ppDelta(v.yoy);
-        return '<tr><td>'+esc(s)+'</td><td>'+cur+'</td>'+
-          '<td class="'+sgn(v.wow)+'">'+wf+'</td>'+
-          '<td class="'+sgn(v.yoy)+'">'+yf+'</td></tr>';
-      }).join('')+
-      '</tbody></table>';
-  }
+  const funnelTbl = stages.length ?
+    '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
+    stages.map(s=>{
+      const v=fn[s], isUsers=(s==='LP Users');
+      const cur=isUsers?fmtInt(v.current):fmtPct(v.current,1);
+      const wf=isUsers?fmtDelta(v.wow,0):ppDelta(v.wow);
+      const yf=isUsers?fmtDelta(v.yoy,0):ppDelta(v.yoy);
+      return '<tr><td>'+esc(s)+'</td><td>'+cur+'</td>'+
+        '<td class="'+sgn(v.wow)+'">'+wf+'</td>'+
+        '<td class="'+sgn(v.yoy)+'">'+yf+'</td></tr>';
+    }).join('')+
+    '</tbody></table>' : '';
 
-  const tg=ce.tgids||[];
-  if(tg.length){
-    html+='<div class="dr-sec-t">Top experiences (TGIDs)</div>'+
-      '<table class="dr-table plain"><thead><tr><th>Experience</th><th>Rev</th><th>Share</th></tr></thead><tbody>'+
-      tg.map(t=>'<tr><td>'+esc(t.experience)+' <span class="mono" style="color:var(--ink-faint)">'+esc(t.tgid)+'</span></td>'+
-        '<td>'+fmtMoney(t.rev)+'</td><td>'+fmtPct(t.share_pct,0)+'</td></tr>').join('')+
-      '</tbody></table>';
-  }
-
+  // ---- Lead-time ----
   const lt=ce.leadtime||[];
-  if(lt.length){
-    html+='<div class="dr-sec-t">Lead-time bands</div>'+
-      '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
-      lt.map(l=>'<tr><td>'+esc(l.band)+'</td>'+
-        '<td>'+fmtInt(l.bookings)+'</td>'+
-        '<td>'+fmtPct(l.share_pct,0)+'</td>'+
-        '<td>'+fmtMoney(l.rev)+'</td>'+
-        '<td>'+fmtMoney(l.aov)+'</td></tr>').join('')+
-      '</tbody></table>';
+  const leadtimeTbl = lt.length ?
+    '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
+    lt.map(l=>'<tr><td>'+esc(l.band)+'</td>'+
+      '<td>'+fmtInt(l.bookings)+'</td>'+
+      '<td>'+fmtPct(l.share_pct,0)+'</td>'+
+      '<td>'+fmtMoney(l.rev)+'</td>'+
+      '<td>'+fmtMoney(l.aov)+'</td></tr>').join('')+
+    '</tbody></table>' : '';
+
+  // ---- Countries ----
+  const ct=ce.countries||[];
+  const countriesTbl = ct.length ?
+    '<table class="dr-table plain"><thead><tr><th>Country</th><th>Orders</th><th>Rev</th><th>Share</th><th>AOV</th></tr></thead><tbody>'+
+    ct.slice(0,6).map(c=>'<tr><td>'+esc(c.country)+'</td>'+
+      '<td>'+fmtInt(c.orders)+'</td>'+
+      '<td>'+fmtMoney(c.rev)+'</td>'+
+      '<td>'+fmtPct(c.rev_share_pct,0)+'</td>'+
+      '<td>'+fmtMoney(c.aov)+'</td></tr>').join('')+
+    '</tbody></table>' : '';
+
+  // ---- TGIDs (full-width, enriched, horizontally scrollable) ----
+  const tg=ce.tgids||[];
+  let tgidHtml='';
+  if(tg.length){
+    const cc=(main, d, kind)=>{
+      let sub='';
+      if(d!=null && !isNaN(d)){
+        const txt = kind==='pp' ? ppDelta(d) : fmtDelta(d,0);
+        sub='<div class="cc-d '+sgn(d)+'">'+txt+'</div>';
+      }
+      return '<div class="cc-v">'+main+'</div>'+sub;
+    };
+    tgidHtml='<div class="dr-sec-t">Top experiences (TGIDs)</div>'+
+      '<div class="tgid-scroll"><table class="dr-table plain tgid-tbl"><thead><tr>'+
+        '<th class="lft">Experience</th><th>Rev</th><th>Share</th><th>RPC</th><th>AOV</th>'+
+        '<th>CR</th><th>TR</th><th>Sel Users</th><th>%Traf</th><th>S2C</th><th>C2O</th>'+
+        '<th>%0-2D</th><th>%3-7D</th><th>%7D+</th>'+
+      '</tr></thead><tbody>'+
+      tg.map(t=>'<tr>'+
+        '<td class="lft">'+esc(t.experience)+' <span class="mono" style="color:var(--ink-faint)">'+esc(t.tgid)+'</span></td>'+
+        '<td>'+cc(fmtMoney(t.rev), t.rev_yoy)+'</td>'+
+        '<td>'+fmtPct(t.share_pct,0)+'</td>'+
+        '<td>'+cc(fmtMoney(t.rpc), t.rpc_yoy)+'</td>'+
+        '<td>'+cc(fmtMoney(t.aov), t.aov_yoy)+'</td>'+
+        '<td>'+cc(fmtPct(t.cr_pct,1), t.cr_yoy_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.tr_pct,1), t.tr_yoy_pp, 'pp')+'</td>'+
+        '<td>'+fmtInt(t.sel_users)+'</td>'+
+        '<td>'+fmtPct(t.traffic_pct,0)+'</td>'+
+        '<td>'+cc(fmtPct(t.s2c_pct,1), t.s2c_yoy_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.c2o_pct,1), t.c2o_yoy_pp, 'pp')+'</td>'+
+        '<td>'+fmtPct(t.lt_02d,0)+'</td>'+
+        '<td>'+fmtPct(t.lt_37d,0)+'</td>'+
+        '<td>'+fmtPct(t.lt_7p,0)+'</td>'+
+      '</tr>').join('')+
+      '</tbody></table></div>'+
+      '<div class="dr-cap">Value = W0 week (actuals). Small line = YoY (−364d); rate metrics (CR/TR/S2C/C2O) in pp. '+
+      'Sel Users, %Traf, S2C, C2O from Mixpanel (PMax excluded). Lead-time bands = share of W0 bookings.</div>';
   }
 
-  const ct=ce.countries||[];
-  if(ct.length){
-    html+='<div class="dr-sec-t">Top countries</div>'+
-      '<table class="dr-table plain"><thead><tr><th>Country</th><th>Orders</th><th>Rev</th><th>Share</th><th>AOV</th></tr></thead><tbody>'+
-      ct.slice(0,6).map(c=>'<tr><td>'+esc(c.country)+'</td>'+
-        '<td>'+fmtInt(c.orders)+'</td>'+
-        '<td>'+fmtMoney(c.rev)+'</td>'+
-        '<td>'+fmtPct(c.rev_share_pct,0)+'</td>'+
-        '<td>'+fmtMoney(c.aov)+'</td></tr>').join('')+
-      '</tbody></table>';
-  }
+  // Compose: full-width sections stacked — Channel · Funnel · TGIDs · Lead-time · Countries
+  let html='';
+  html+=sec('Channel mix', channelTbl);
+  html+=sec('Funnel · LP → order', funnelTbl);
+  html+=tgidHtml;
+  html+=sec('Lead-time bands', leadtimeTbl);
+  html+=sec('Top countries', countriesTbl);
 
   if(html){
     html+='<div class="dr-cap">Composition for the W0 week. Channel mix &amp; lead-time use actual (booked) revenue; '+
