@@ -455,6 +455,24 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
                         wow = _chg(w0[col], wm1[col] if wm1 is not None else None)
                         yoy = _chg(w0[col], ly[col] if ly is not None else None)
                     funnel[label] = {"current": cur, "wm1": prev, "wow": wow, "yoy": yoy}
+
+                # Overall CVR (LP → order) = LP2S × S2C × C2O (each a %).
+                def _cvr(row):
+                    if row is None:
+                        return None
+                    try:
+                        v = float(row["lp2s"]) * float(row["s2c"]) * float(row["c2o"]) / 10000.0
+                        return v if v == v else None  # NaN guard
+                    except (TypeError, ValueError, KeyError):
+                        return None
+                cvr0, cvrm1, cvrly = _cvr(w0), _cvr(wm1), _cvr(ly)
+                if cvr0 is not None:
+                    funnel["CVR"] = {
+                        "current": _num(cvr0),
+                        "wm1": _num(cvrm1),
+                        "wow": _num(round(cvr0 - cvrm1, 2)) if cvrm1 is not None else None,
+                        "yoy": _num(round(cvr0 - cvrly, 2)) if cvrly is not None else None,
+                    }
         ce["funnel"] = funnel
 
 

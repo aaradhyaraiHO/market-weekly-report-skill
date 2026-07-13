@@ -1417,7 +1417,7 @@ function resourceBlocks(ce){
 
   // ---- Funnel ----
   const fn=ce.funnel||{};
-  const stages=['LP Users','LP2S','S2C','C2O'].filter(s=>fn[s]);
+  const stages=['LP Users','LP2S','S2C','C2O','CVR'].filter(s=>fn[s]);
   const funnelTbl = stages.length ?
     '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>W-1</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
     stages.map(s=>{
