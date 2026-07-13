@@ -276,27 +276,166 @@ def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
 #   • Window is the W0 reporting week only, so long-tail CEs degrade to few/empty
 #     rows — the drawer renders "—/n/a" for those, by design.
 # Each is ONE market-level batch query grouped by CE; build_snapshot splits per CE.
-def ce_tgids(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """W0 revenue by experience (TGID) per CE, from fct_orders (actuals basis)."""
+def ce_tgids(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+) -> pd.DataFrame:
+    """Enriched TGID table: rev, orders, GBV, completed GBV for W0 + W-1 + LY."""
     sql = """
     SELECT
         combined_entity_id,
-        CAST(experience_id AS STRING)       AS tgid,
-        ANY_VALUE(experience_name)          AS experience,
-        SUM(amount_revenue_usd)             AS rev
+        CAST(experience_id AS STRING)                              AS tgid,
+        ANY_VALUE(experience_name)                                 AS experience,
+
+        SUM(CASE WHEN DATE(created_at) BETWEEN @w0_s AND @w0_e
+            THEN amount_revenue_usd ELSE 0 END)                    AS rev,
+        COUNT(DISTINCT CASE WHEN DATE(created_at) BETWEEN @w0_s AND @w0_e
+            THEN order_id END)                                     AS orders,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @w0_s AND @w0_e
+            THEN order_value_usd ELSE 0 END)                       AS gbv,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @w0_s AND @w0_e
+            AND order_status = 'Completed'
+            THEN order_value_usd ELSE 0 END)                       AS completed_gbv,
+
+        SUM(CASE WHEN DATE(created_at) BETWEEN @wm1_s AND @wm1_e
+            THEN amount_revenue_usd ELSE 0 END)                    AS rev_wm1,
+        COUNT(DISTINCT CASE WHEN DATE(created_at) BETWEEN @wm1_s AND @wm1_e
+            THEN order_id END)                                     AS orders_wm1,
+
+        SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
+            THEN amount_revenue_usd ELSE 0 END)                    AS rev_ly,
+        COUNT(DISTINCT CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
+            THEN order_id END)                                     AS orders_ly,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
+            THEN order_value_usd ELSE 0 END)                       AS gbv_ly,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
+            AND order_status = 'Completed'
+            THEN order_value_usd ELSE 0 END)                       AS completed_gbv_ly
 
     FROM {tbl}
 
     WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @start AND @end
+          AND DATE(created_at) BETWEEN @ly_s AND @w0_e
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
           AND experience_id IS NOT NULL
 
     GROUP BY 1, 2
+    HAVING SUM(CASE WHEN DATE(created_at) BETWEEN @w0_s AND @w0_e
+               THEN amount_revenue_usd ELSE 0 END) > 0
+        OR SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
+               THEN amount_revenue_usd ELSE 0 END) > 0
     """.format(tbl=config.FCT_ORDERS)
     return query_df(
         sql, "ce_tgids",
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+            "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
+        },
+    )
+
+
+def ce_tgid_funnel(
+    ce_ids: list[str],
+    w0_start: dt.date, w0_end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+) -> pd.DataFrame:
+    """TGID-grain funnel: select users, S2C, C2O for W0 + LY."""
+    if not ce_ids:
+        return pd.DataFrame()
+    sql = """
+    SELECT
+        combined_entity_id,
+        CAST(experience_id AS STRING)                              AS tgid,
+
+        COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+            AND has_select_page_viewed THEN user_id END)           AS select_users,
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+                AND has_checkout_started THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+                AND has_select_page_viewed THEN user_id END), 0)
+        )                                                          AS s2c,
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+                AND has_order_completed THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+                AND has_checkout_started THEN user_id END), 0)
+        )                                                          AS c2o,
+
+        COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
+            AND has_select_page_viewed THEN user_id END)           AS select_users_ly,
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
+                AND has_checkout_started THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
+                AND has_select_page_viewed THEN user_id END), 0)
+        )                                                          AS s2c_ly,
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
+                AND has_order_completed THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
+                AND has_checkout_started THEN user_id END), 0)
+        )                                                          AS c2o_ly
+
+    FROM {tbl}
+
+    WHERE combined_entity_id IN UNNEST(@ce_ids)
+          AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
+          AND (event_date BETWEEN @w0_s AND @w0_e
+               OR event_date BETWEEN @ly_s AND @ly_e)
+
+    GROUP BY 1, 2
+    HAVING COUNT(DISTINCT CASE WHEN event_date BETWEEN @w0_s AND @w0_e
+               AND has_select_page_viewed THEN user_id END) > 0
+    """.format(tbl=config.MIXPANEL_FUNNEL)
+    return query_df(
+        sql, "ce_tgid_funnel",
+        {
+            "ce_ids": [str(c) for c in ce_ids],
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
+        },
+    )
+
+
+def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+    """TGID-grain lead-time distribution for W0."""
+    sql = """
+    WITH bookings AS (
+        SELECT
+            combined_entity_id,
+            CAST(experience_id AS STRING)       AS tgid,
+            CASE
+                WHEN lead_time_days BETWEEN 0 AND 2 THEN '0-2D'
+                WHEN lead_time_days BETWEEN 3 AND 7 THEN '3-7D'
+                WHEN lead_time_days > 7              THEN '7D+'
+            END                                     AS band,
+            booking_id
+        FROM {tbl}
+        WHERE business_market = @market
+              AND DATE(date_created_at_et) BETWEEN @start AND @end
+              AND lead_time_days IS NOT NULL
+              AND lead_time_days >= 0
+    ),
+    tgid_totals AS (
+        SELECT combined_entity_id, tgid, COUNT(DISTINCT booking_id) AS total
+        FROM bookings GROUP BY 1, 2
+    ),
+    banded AS (
+        SELECT combined_entity_id, tgid, band, COUNT(DISTINCT booking_id) AS cnt
+        FROM bookings WHERE band IS NOT NULL GROUP BY 1, 2, 3
+    )
+    SELECT b.combined_entity_id, b.tgid, b.band,
+        SAFE_DIVIDE(b.cnt, t.total) AS pct
+    FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid)
+    """.format(tbl=config.FCT_BOOKINGS)
+    return query_df(
+        sql, "ce_tgid_leadtime",
         {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
     )
 
