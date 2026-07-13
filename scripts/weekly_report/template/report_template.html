@@ -175,7 +175,7 @@ svg.spark{display:block}
 .dr-table.plain tr:last-child td{font-weight:normal;background:none}
 /* Enriched TGID table — horizontally scrollable, compound cells */
 .tgid-scroll{overflow-x:auto;margin-top:4px;-webkit-overflow-scrolling:touch}
-.tgid-tbl{font-size:11px;min-width:920px}
+.tgid-tbl{font-size:11px;min-width:1000px}
 .tgid-tbl th,.tgid-tbl td{padding:5px 6px;white-space:nowrap}
 .tgid-tbl th.lft,.tgid-tbl td.lft{position:sticky;left:0;background:var(--paper);z-index:1;min-width:170px;max-width:190px;white-space:normal}
 .tgid-tbl td.lft{background:#fff}
@@ -1406,9 +1406,10 @@ function resourceBlocks(ce){
   // ---- Channel mix ----
   const ch=ce.channels||[];
   const channelTbl = ch.length ?
-    '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>W-1</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
     ch.map(c=>'<tr><td>'+esc(c.channel)+'</td>'+
       '<td>'+fmtMoney(c.rev)+'</td>'+
+      '<td>'+fmtMoney(c.rev_wm1)+'</td>'+
       '<td class="'+sgn(c.wow_pct)+'">'+fmtDelta(c.wow_pct,0)+'</td>'+
       '<td class="'+sgn(c.yoy_pct)+'">'+fmtDelta(c.yoy_pct,0)+'</td>'+
       '<td>'+fmtPct(c.share_pct,0)+'</td></tr>').join('')+
@@ -1418,13 +1419,14 @@ function resourceBlocks(ce){
   const fn=ce.funnel||{};
   const stages=['LP Users','LP2S','S2C','C2O'].filter(s=>fn[s]);
   const funnelTbl = stages.length ?
-    '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Stage</th><th>W0</th><th>W-1</th><th>WoW</th><th>YoY</th></tr></thead><tbody>'+
     stages.map(s=>{
       const v=fn[s], isUsers=(s==='LP Users');
       const cur=isUsers?fmtInt(v.current):fmtPct(v.current,1);
+      const prev=isUsers?fmtInt(v.wm1):fmtPct(v.wm1,1);
       const wf=isUsers?fmtDelta(v.wow,0):ppDelta(v.wow);
       const yf=isUsers?fmtDelta(v.yoy,0):ppDelta(v.yoy);
-      return '<tr><td>'+esc(s)+'</td><td>'+cur+'</td>'+
+      return '<tr><td>'+esc(s)+'</td><td>'+cur+'</td><td>'+prev+'</td>'+
         '<td class="'+sgn(v.wow)+'">'+wf+'</td>'+
         '<td class="'+sgn(v.yoy)+'">'+yf+'</td></tr>';
     }).join('')+
@@ -1433,9 +1435,10 @@ function resourceBlocks(ce){
   // ---- Lead-time ----
   const lt=ce.leadtime||[];
   const leadtimeTbl = lt.length ?
-    '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>W-1</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
     lt.map(l=>'<tr><td>'+esc(l.band)+'</td>'+
       '<td>'+fmtInt(l.bookings)+'</td>'+
+      '<td>'+fmtInt(l.bookings_wm1)+'</td>'+
       '<td>'+fmtPct(l.share_pct,0)+'</td>'+
       '<td>'+fmtMoney(l.rev)+'</td>'+
       '<td>'+fmtMoney(l.aov)+'</td></tr>').join('')+
@@ -1466,28 +1469,29 @@ function resourceBlocks(ce){
     };
     tgidHtml='<div class="dr-sec-t">Top experiences (TGIDs)</div>'+
       '<div class="tgid-scroll"><table class="dr-table plain tgid-tbl"><thead><tr>'+
-        '<th class="lft">Experience</th><th>Rev</th><th>Share</th><th>RPC</th><th>AOV</th>'+
+        '<th class="lft">Experience</th><th>Rev</th><th>W-1</th><th>Share</th><th>RPC</th><th>AOV</th>'+
         '<th>CR</th><th>TR</th><th>Sel Users</th><th>%Traf</th><th>S2C</th><th>C2O</th>'+
         '<th>%0-2D</th><th>%3-7D</th><th>%7D+</th>'+
       '</tr></thead><tbody>'+
       tg.map(t=>'<tr>'+
         '<td class="lft">'+esc(t.experience)+' <span class="mono" style="color:var(--ink-faint)">'+esc(t.tgid)+'</span></td>'+
-        '<td>'+cc(fmtMoney(t.rev), t.rev_yoy)+'</td>'+
+        '<td>'+cc(fmtMoney(t.rev), t.rev_wow)+'</td>'+
+        '<td>'+fmtMoney(t.rev_wm1)+'</td>'+
         '<td>'+fmtPct(t.share_pct,0)+'</td>'+
-        '<td>'+cc(fmtMoney(t.rpc), t.rpc_yoy)+'</td>'+
-        '<td>'+cc(fmtMoney(t.aov), t.aov_yoy)+'</td>'+
-        '<td>'+cc(fmtPct(t.cr_pct,1), t.cr_yoy_pp, 'pp')+'</td>'+
-        '<td>'+cc(fmtPct(t.tr_pct,1), t.tr_yoy_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtMoney(t.rpc), t.rpc_wow)+'</td>'+
+        '<td>'+cc(fmtMoney(t.aov), t.aov_wow)+'</td>'+
+        '<td>'+cc(fmtPct(t.cr_pct,1), t.cr_wow_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.tr_pct,1), t.tr_wow_pp, 'pp')+'</td>'+
         '<td>'+fmtInt(t.sel_users)+'</td>'+
         '<td>'+fmtPct(t.traffic_pct,0)+'</td>'+
-        '<td>'+cc(fmtPct(t.s2c_pct,1), t.s2c_yoy_pp, 'pp')+'</td>'+
-        '<td>'+cc(fmtPct(t.c2o_pct,1), t.c2o_yoy_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.s2c_pct,1), t.s2c_wow_pp, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.c2o_pct,1), t.c2o_wow_pp, 'pp')+'</td>'+
         '<td>'+fmtPct(t.lt_02d,0)+'</td>'+
         '<td>'+fmtPct(t.lt_37d,0)+'</td>'+
         '<td>'+fmtPct(t.lt_7p,0)+'</td>'+
       '</tr>').join('')+
       '</tbody></table></div>'+
-      '<div class="dr-cap">Value = W0 week (actuals). Small line = YoY (−364d); rate metrics (CR/TR/S2C/C2O) in pp. '+
+      '<div class="dr-cap">Value = W0 week (actuals); W-1 = prior week. Small line = WoW (W0 vs W-1); rate metrics (CR/TR/S2C/C2O) in pp. '+
       'Sel Users, %Traf, S2C, C2O from Mixpanel (PMax excluded). Lead-time bands = share of W0 bookings.</div>';
   }
 

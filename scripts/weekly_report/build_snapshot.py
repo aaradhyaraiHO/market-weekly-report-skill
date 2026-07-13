@@ -279,23 +279,24 @@ def _attach_resource_breakdowns(
                 orders = _safe(r["orders"])
                 gbv = _safe(r["gbv"])
                 gbv_c = _safe(r["completed_gbv"])
-                rev_ly = _safe(r.get("rev_ly"))
-                orders_ly = _safe(r.get("orders_ly"))
-                gbv_ly = _safe(r.get("gbv_ly"))
-                gbv_c_ly = _safe(r.get("completed_gbv_ly"))
                 rev_wm1 = _safe(r.get("rev_wm1"))
+                orders_wm1 = _safe(r.get("orders_wm1"))
+                gbv_wm1 = _safe(r.get("gbv_wm1"))
+                gbv_c_wm1 = _safe(r.get("completed_gbv_wm1"))
+                rev_ly = _safe(r.get("rev_ly"))
 
                 if rev <= 0 and rev_ly <= 0:
                     continue
 
+                # W0 + W-1 derived metrics (deltas are WoW: W0 vs W-1)
                 rpc = rev / orders if orders else None
-                rpc_ly = rev_ly / orders_ly if orders_ly else None
+                rpc_wm1 = rev_wm1 / orders_wm1 if orders_wm1 else None
                 aov = gbv / orders if orders else None
-                aov_ly = gbv_ly / orders_ly if orders_ly else None
+                aov_wm1 = gbv_wm1 / orders_wm1 if orders_wm1 else None
                 cr = 100.0 * gbv_c / gbv if gbv else None
-                cr_ly = 100.0 * gbv_c_ly / gbv_ly if gbv_ly else None
+                cr_wm1 = 100.0 * gbv_c_wm1 / gbv_wm1 if gbv_wm1 else None
                 tr = 100.0 * rev / gbv_c if gbv_c else None
-                tr_ly = 100.0 * rev_ly / gbv_c_ly if gbv_c_ly else None
+                tr_wm1 = 100.0 * rev_wm1 / gbv_c_wm1 if gbv_c_wm1 else None
 
                 tid = str(r["tgid"])
                 fn = fn_idx.get((cid, tid))
@@ -303,8 +304,8 @@ def _attach_resource_breakdowns(
                 sel = _safe(fn.get("select_users")) if has_fn else 0
                 s2c = _safe(fn.get("s2c")) * 100 if (has_fn and fn.get("s2c") is not None) else None
                 c2o = _safe(fn.get("c2o")) * 100 if (has_fn and fn.get("c2o") is not None) else None
-                s2c_ly = _safe(fn.get("s2c_ly")) * 100 if (has_fn and fn.get("s2c_ly") is not None) else None
-                c2o_ly = _safe(fn.get("c2o_ly")) * 100 if (has_fn and fn.get("c2o_ly") is not None) else None
+                s2c_wm1 = _safe(fn.get("s2c_wm1")) * 100 if (has_fn and fn.get("s2c_wm1") is not None) else None
+                c2o_wm1 = _safe(fn.get("c2o_wm1")) * 100 if (has_fn and fn.get("c2o_wm1") is not None) else None
 
                 lt = lt_idx.get((cid, tid), {})
 
@@ -312,23 +313,23 @@ def _attach_resource_breakdowns(
                     "tgid": tid,
                     "experience": r["experience"] or tid,
                     "rev": _num(rev),
-                    "rev_yoy": _dp(rev, rev_ly),
+                    "rev_wm1": _num(rev_wm1),
                     "rev_wow": _dp(rev, rev_wm1),
                     "share_pct": _share(rev, total_rev),
                     "rpc": _num(rpc),
-                    "rpc_yoy": _dp(rpc, rpc_ly),
+                    "rpc_wow": _dp(rpc, rpc_wm1),
                     "aov": _num(aov),
-                    "aov_yoy": _dp(aov, aov_ly),
+                    "aov_wow": _dp(aov, aov_wm1),
                     "cr_pct": _num(cr),
-                    "cr_yoy_pp": _dpp(cr, cr_ly),
+                    "cr_wow_pp": _dpp(cr, cr_wm1),
                     "tr_pct": _num(tr),
-                    "tr_yoy_pp": _dpp(tr, tr_ly),
+                    "tr_wow_pp": _dpp(tr, tr_wm1),
                     "sel_users": int(sel) if sel else None,
                     "traffic_pct": _num(100.0 * sel / total_sel) if (total_sel and sel) else None,
                     "s2c_pct": _num(s2c),
-                    "s2c_yoy_pp": _dpp(s2c, s2c_ly),
+                    "s2c_wow_pp": _dpp(s2c, s2c_wm1),
                     "c2o_pct": _num(c2o),
-                    "c2o_yoy_pp": _dpp(c2o, c2o_ly),
+                    "c2o_wow_pp": _dpp(c2o, c2o_wm1),
                     "lt_02d": _num(100.0 * lt.get("0-2D", 0)) if lt.get("0-2D") is not None else None,
                     "lt_37d": _num(100.0 * lt.get("3-7D", 0)) if lt.get("3-7D") is not None else None,
                     "lt_7p": _num(100.0 * lt.get("7D+", 0)) if lt.get("7D+") is not None else None,
@@ -347,10 +348,12 @@ def _attach_resource_breakdowns(
                 if r is None:
                     continue
                 bk = float(r["bookings"] or 0)
+                bk_wm1 = float(r.get("bookings_wm1") or 0)
                 ov = float(r["order_value"] or 0)
                 leadtime.append({
                     "band": band,
                     "bookings": _num(bk),
+                    "bookings_wm1": _num(bk_wm1),
                     "share_pct": _share(bk, total_bk),
                     "rev": _num(r["rev"]),
                     "aov": _num(ov / bk) if bk else None,
@@ -428,6 +431,7 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
                 channels.append({
                     "channel": channel,
                     "rev": _num(w0),
+                    "rev_wm1": _num(per.get("wm1", 0.0)),
                     "wow_pct": _chg(w0, per.get("wm1")),
                     "yoy_pct": _chg(w0, per.get("ly")),
                     "share_pct": _num(round(100.0 * w0 / total_w0, 1)) if total_w0 else None,
@@ -443,13 +447,14 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
             if w0 is not None:
                 for label, col, is_rate in _FUNNEL_STAGES:
                     cur = _num(w0[col])
+                    prev = _num(wm1[col]) if (wm1 is not None and wm1[col] is not None) else None
                     if is_rate:
                         wow = _num(round(float(w0[col]) - float(wm1[col]), 1)) if wm1 is not None and wm1[col] is not None else None
                         yoy = _num(round(float(w0[col]) - float(ly[col]), 1)) if ly is not None and ly[col] is not None else None
                     else:
                         wow = _chg(w0[col], wm1[col] if wm1 is not None else None)
                         yoy = _chg(w0[col], ly[col] if ly is not None else None)
-                    funnel[label] = {"current": cur, "wow": wow, "yoy": yoy}
+                    funnel[label] = {"current": cur, "wm1": prev, "wow": wow, "yoy": yoy}
         ce["funnel"] = funnel
 
 
@@ -874,9 +879,9 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     _attach_resource_breakdowns(
         ces,
         fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, ly_w0_start, ly_w0_end),
+        fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_tgid_leadtime(market, w0_start, w0_end),
-        fetch.ce_leadtime(market, w0_start, w0_end),
+        fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
         fetch.ce_countries(market, w0_start, w0_end),
     )
     _attach_channels_funnel(
