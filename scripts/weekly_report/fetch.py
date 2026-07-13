@@ -303,6 +303,11 @@ def ce_tgids(
             THEN amount_revenue_usd ELSE 0 END)                    AS rev_wm1,
         COUNT(DISTINCT CASE WHEN DATE(created_at) BETWEEN @wm1_s AND @wm1_e
             THEN order_id END)                                     AS orders_wm1,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @wm1_s AND @wm1_e
+            THEN order_value_usd ELSE 0 END)                       AS gbv_wm1,
+        SUM(CASE WHEN DATE(created_at) BETWEEN @wm1_s AND @wm1_e
+            AND order_status = 'Completed'
+            THEN order_value_usd ELSE 0 END)                       AS completed_gbv_wm1,
 
         SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
             THEN amount_revenue_usd ELSE 0 END)                    AS rev_ly,
@@ -342,9 +347,10 @@ def ce_tgids(
 def ce_tgid_funnel(
     ce_ids: list[str],
     w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
     ly_start: dt.date, ly_end: dt.date,
 ) -> pd.DataFrame:
-    """TGID-grain funnel: select users, S2C, C2O for W0 + LY."""
+    """TGID-grain funnel: select users, S2C, C2O for W0 + W-1 + LY."""
     if not ce_ids:
         return pd.DataFrame()
     sql = """
@@ -367,6 +373,19 @@ def ce_tgid_funnel(
                 AND has_checkout_started THEN user_id END), 0)
         )                                                          AS c2o,
 
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @wm1_s AND @wm1_e
+                AND has_checkout_started THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @wm1_s AND @wm1_e
+                AND has_select_page_viewed THEN user_id END), 0)
+        )                                                          AS s2c_wm1,
+        SAFE_DIVIDE(
+            COUNT(DISTINCT CASE WHEN event_date BETWEEN @wm1_s AND @wm1_e
+                AND has_order_completed THEN user_id END),
+            NULLIF(COUNT(DISTINCT CASE WHEN event_date BETWEEN @wm1_s AND @wm1_e
+                AND has_checkout_started THEN user_id END), 0)
+        )                                                          AS c2o_wm1,
+
         COUNT(DISTINCT CASE WHEN event_date BETWEEN @ly_s AND @ly_e
             AND has_select_page_viewed THEN user_id END)           AS select_users_ly,
         SAFE_DIVIDE(
@@ -387,6 +406,7 @@ def ce_tgid_funnel(
     WHERE combined_entity_id IN UNNEST(@ce_ids)
           AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
           AND (event_date BETWEEN @w0_s AND @w0_e
+               OR event_date BETWEEN @wm1_s AND @wm1_e
                OR event_date BETWEEN @ly_s AND @ly_e)
 
     GROUP BY 1, 2
@@ -398,6 +418,7 @@ def ce_tgid_funnel(
         {
             "ce_ids": [str(c) for c in ce_ids],
             "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
             "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
         },
     )
@@ -440,8 +461,12 @@ def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.Data
     )
 
 
-def ce_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """W0 bookings/revenue by lead-time band per CE, from fct_bookings (actuals)."""
+def ce_leadtime(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+) -> pd.DataFrame:
+    """Bookings/revenue by lead-time band per CE for W0 + W-1, from fct_bookings."""
     sql = """
     SELECT
         combined_entity_id,
@@ -451,14 +476,19 @@ def ce_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame
             WHEN lead_time_days BETWEEN 5 AND 7 THEN '5-7D'
             WHEN lead_time_days > 7           THEN '7D+'
         END                                 AS band,
-        COUNT(DISTINCT booking_id)          AS bookings,
-        SUM(price_net_usd)                  AS rev,
-        SUM(price_payable_usd)              AS order_value
+        COUNT(DISTINCT IF(DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e,
+            booking_id, NULL))              AS bookings,
+        COUNT(DISTINCT IF(DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e,
+            booking_id, NULL))              AS bookings_wm1,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e,
+            price_net_usd, 0))              AS rev,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e,
+            price_payable_usd, 0))          AS order_value
 
     FROM {tbl}
 
     WHERE business_market = @market
-          AND DATE(date_created_at_et) BETWEEN @start AND @end
+          AND DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
           AND lead_time_days IS NOT NULL
           AND lead_time_days >= 0
 
@@ -466,7 +496,11 @@ def ce_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame
     """.format(tbl=config.FCT_BOOKINGS)
     return query_df(
         sql, "ce_leadtime",
-        {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        },
     )
 
 
