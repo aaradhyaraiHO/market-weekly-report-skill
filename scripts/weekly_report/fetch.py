@@ -156,7 +156,7 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
         SUM(count_clicks)                                        AS paid_clicks,
         SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv
 
-    FROM {config.ADS_CAMPAIGN_STATS}
+    FROM {config.ADS_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
@@ -538,7 +538,7 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
         SUM(count_clicks)                                        AS clicks,
         SUM(sum_spend)                                           AS spend
 
-    FROM {config.ADS_CAMPAIGN_STATS}
+    FROM {config.ADS_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
@@ -599,7 +599,7 @@ def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
         current_campaign_bidding_strategy       AS strategy,
         sum_spend                               AS spend
 
-    FROM {config.ADS_CAMPAIGN_STATS}
+    FROM {config.ADS_STATS}
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
