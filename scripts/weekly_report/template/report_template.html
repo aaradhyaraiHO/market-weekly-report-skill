@@ -454,6 +454,19 @@ function postNote(ceId, text){
     });
 }
 
+function deleteNote(ceId){
+  // remove this week's row from cache + sheet
+  const slug=slugKey(), m=notesData[slug]||{};
+  if(m[String(ceId)]) m[String(ceId)]=m[String(ceId)].filter(n=>String(n.week_start)!==String(curWeek()));
+  saveCache();
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi];
+  const params=new URLSearchParams({action:'delete', market_slug:M.meta.market_slug,
+    ce_id:String(ceId), week_start:curWeek()});
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
+    .then(r=>r.json()).catch(()=>{});
+}
+
 function syncPull(){
   loadCache();
   if(!SYNC_OK){ updateSyncBadge(); return Promise.resolve(); }
@@ -1732,7 +1745,16 @@ function openDrawer(ceId){
     setTimeout(()=>{ btn.textContent='Save'; btn.classList.remove('saved'); },1500);
     paintCETable();   // refresh ● dot
   };
-  document.getElementById('cmtClear').onclick=()=>{ ta.value=''; paintCount(); ta.focus(); };
+  document.getElementById('cmtClear').onclick=()=>{
+    const had=ta.value.trim().length>0;
+    ta.value=''; paintCount();
+    if(had && confirm('Delete this week’s note for this CE?')){
+      deleteNote(ceId).then(()=>{
+        document.getElementById('cmtSaved').textContent='deleted';
+        paintCETable();
+      });
+    } else { ta.focus(); }
+  };
 
   const postBtn=document.getElementById('postBtn');
   if(postBtn && postBtn.classList.contains('btn-post')){

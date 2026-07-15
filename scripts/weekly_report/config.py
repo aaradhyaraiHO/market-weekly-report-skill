@@ -137,7 +137,7 @@ VALIDATION_NA = {
 # Notes backend (Google Sheet + Apps Script web app)
 # --------------------------------------------------------------------------- #
 NOTES_SHEET_ID = os.environ.get("WR_NOTES_SHEET_ID", "1hC_IAsJrlPcpFv5K49eRtcwgK6i_DkAt4ZvETxlK-s8")
-NOTES_SCRIPT_URL = os.environ.get("WR_NOTES_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbzyr4kiG4PW61490CoqEQjIreeCV_9eeb7amiDgZ9uqgORe4gDWSzUAjvx8CfNmp2vLmQ/exec")
+NOTES_SCRIPT_URL = os.environ.get("WR_NOTES_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbx5sEl5Q5ZF9vt3WO7pwfacYBpoJYlorONOJ9izy06x4_jU4RNwtcJtfhmbMh9rx1vOdA/exec")
 
 # Market -> primary Slack channel for "Post to #channel" (id + display name).
 # Channel IDs verified against the monthly-review market_channels mapping; the

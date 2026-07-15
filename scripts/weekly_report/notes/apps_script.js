@@ -38,6 +38,16 @@ function getSheet() {
   return sh;
 }
 
+// Normalize a week value to YYYY-MM-DD. Sheets auto-types "2026-07-06" into a
+// Date (read back as an ISO datetime), so all comparisons/output go through this.
+function ymd(v) {
+  if (v == null || v === "") return "";
+  if (Object.prototype.toString.call(v) === "[object Date]") {
+    return Utilities.formatDate(v, "UTC", "yyyy-MM-dd");
+  }
+  return String(v).slice(0, 10);
+}
+
 function allRows() {
   var sh = getSheet();
   var last = sh.getLastRow();
@@ -47,6 +57,8 @@ function allRows() {
   for (var i = 0; i < data.length; i++) {
     var obj = {};
     for (var j = 0; j < HEADERS.length; j++) obj[HEADERS[j]] = data[i][j];
+    obj.ce_id = String(obj.ce_id);        // stable string keys
+    obj.week_start = ymd(obj.week_start);  // normalize date → YYYY-MM-DD
     obj._row = i + 2;
     results.push(obj);
   }
@@ -56,21 +68,32 @@ function allRows() {
 // A note row is unique per (market, ce, week).
 function findRow(market, ceId, week) {
   var rows = allRows();
+  var w = ymd(week);
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].market_slug === market &&
-        String(rows[i].ce_id) === String(ceId) &&
-        String(rows[i].week_start) === String(week)) return rows[i];
+        rows[i].ce_id === String(ceId) &&
+        rows[i].week_start === w) return rows[i];
   }
   return null;
 }
 
 function writeRow(sh, existing, vals) {
+  var row;
   if (existing) {
     sh.getRange(existing._row, 1, 1, HEADERS.length).setValues([vals]);
-    return existing._row;
+    row = existing._row;
+  } else {
+    sh.appendRow(vals);
+    row = sh.getLastRow();
   }
-  sh.appendRow(vals);
-  return sh.getLastRow();
+  // A Slack `ts` (e.g. 1784091923.149229) must stay an EXACT string — if Sheets
+  // stores it as a number it loses the last digit and threading/permalinks break.
+  // Force the ts + week_start cells to plain-text format and rewrite as strings.
+  var tsCol = HEADERS.indexOf("slack_thread_ts") + 1;   // 9
+  var wkCol = HEADERS.indexOf("week_start") + 1;         // 4
+  sh.getRange(row, tsCol).setNumberFormat("@").setValue(String(vals[tsCol - 1] || ""));
+  sh.getRange(row, wkCol).setNumberFormat("@").setValue(String(vals[wkCol - 1] || ""));
+  return row;
 }
 
 function doGet(e) {
@@ -100,8 +123,28 @@ function doGet(e) {
     return jsonResp({ ok: true, action: existing ? "updated" : "created", updated: now });
   }
 
+  if (action === "delete") {
+    var sh2 = getSheet();
+    var found = findRow(p.market_slug, p.ce_id, p.week_start);
+    if (found) { sh2.deleteRow(found._row); return jsonResp({ ok: true, action: "deleted" }); }
+    return jsonResp({ ok: false, error: "not found" });
+  }
+
   if (action === "post") {
     return doPostToSlack(p);
+  }
+
+  // Diagnostic: verify the token + report its OAuth scopes (no posting).
+  if (action === "auth") {
+    var tok = PropertiesService.getScriptProperties().getProperty("SLACK_BOT_TOKEN");
+    if (!tok) return jsonResp({ ok: false, error: "SLACK_BOT_TOKEN not set in Script properties" });
+    var r = UrlFetchApp.fetch("https://slack.com/api/auth.test", {
+      method: "post", headers: { Authorization: "Bearer " + tok }, muteHttpExceptions: true });
+    var j = JSON.parse(r.getContentText());
+    var scopes = r.getAllHeaders()["x-oauth-scopes"] || "";
+    return jsonResp({ ok: j.ok, bot: j.user, team: j.team, error: j.error,
+                      scopes: scopes,
+                      can_post_public: String(scopes).indexOf("chat:write.public") >= 0 });
   }
 
   return jsonResp({ ok: false, error: "unknown action: " + action });
@@ -175,4 +218,15 @@ function getPermalink(token, channel, ts) {
 function jsonResp(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * ONE-TIME: run this from the editor to grant the external-request scope
+ * (needed for Slack). Select `authorizeExternal` in the Run dropdown → Run →
+ * Allow the "Connect to an external service" prompt. Safe to keep or delete.
+ */
+function authorizeExternal() {
+  var r = UrlFetchApp.fetch("https://slack.com/api/auth.test", { muteHttpExceptions: true });
+  Logger.log(r.getContentText());
+  return r.getResponseCode();
 }
