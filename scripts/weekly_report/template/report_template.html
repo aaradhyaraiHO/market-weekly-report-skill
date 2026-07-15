@@ -1377,6 +1377,7 @@ const CE_METRICS_OVERALL = [
 const CE_METRICS_PAID = [
   {k:'paid_clicks',      label:'Paid Clicks',      fmt:'count', ly:'paid_clicks'},
   {k:'paid_ctr_pct',     label:'Paid CTR',          fmt:'pct',   ly:'paid_ctr_pct'},
+  {k:'paid_sis_pct',     label:'Paid SIS (Google)', fmt:'pct',   ly:'paid_sis_pct'},
   {k:'spend',            label:'Paid Ads Spend',    fmt:'money', ly:'spend'},
   {k:'cpc',              label:'Paid CPC',          fmt:'money', ly:'cpc'},
   {k:'paid_rpc',         label:'RPC',               fmt:'money', ly:'paid_rpc'},
@@ -1554,7 +1555,7 @@ function openDrawer(ceId){
     '<div id="ceKmOverall">'+kmTable(overallRows)+'</div>'+
     '<div id="ceKmPaid" style="display:none">'+kmTable(paidRows)+'</div>'+
     '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric. '+
-      'Metrics without an LY line have no comparable −364d window yet. Paid = Google Search + Bing.</div>';
+      'Metrics without an LY line have no comparable −364d window yet. Paid = Google Search + Bing; SIS is Google Search only.</div>';
 
   // ----- WoW Shapley (reuse market-drawer pattern; hide when null) -----
   let shapBlock='';
