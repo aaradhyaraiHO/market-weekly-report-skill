@@ -139,6 +139,15 @@ VALIDATION_NA = {
 NOTES_SHEET_ID = os.environ.get("WR_NOTES_SHEET_ID", "1hC_IAsJrlPcpFv5K49eRtcwgK6i_DkAt4ZvETxlK-s8")
 NOTES_SCRIPT_URL = os.environ.get("WR_NOTES_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbzyr4kiG4PW61490CoqEQjIreeCV_9eeb7amiDgZ9uqgORe4gDWSzUAjvx8CfNmp2vLmQ/exec")
 
+# Market -> primary Slack channel for "Post to #channel" (id + display name).
+# Channel IDs verified against the monthly-review market_channels mapping; the
+# REVENUE_ALERT_SLACK_TOKEN bot must be invited to each channel it posts to.
+NOTES_SLACK_CHANNELS = {
+    "north_america": {"id": "CNSHDD2H1",   "name": "mkt-usa"},
+    "italy":         {"id": "C045L2WQ79P", "name": "mkt-italy-switzerland-malta"},
+    "oceania":       {"id": "CHKRLFDPU",   "name": "mkt-anz"},
+}
+
 # --------------------------------------------------------------------------- #
 # Date helpers
 # --------------------------------------------------------------------------- #

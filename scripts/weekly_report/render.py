@@ -24,7 +24,7 @@ import os
 import subprocess
 import sys
 
-from config import NOTES_SCRIPT_URL
+from config import NOTES_SCRIPT_URL, NOTES_SLACK_CHANNELS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "report_template.html")
@@ -90,6 +90,7 @@ def render(markets, template_path):
         "schema_version": markets[0]["meta"].get("schema_version", 1),
         "markets": markets,
         "notes_url": notes_url or None,
+        "notes_channels": NOTES_SLACK_CHANNELS,
     }
     # escape '<' so a stray '</script>' in data can never close the tag early
     data_json = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
