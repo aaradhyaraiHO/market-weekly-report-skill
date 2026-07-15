@@ -955,6 +955,18 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # (ROI≥155% ≥3-of-4wk). Consumes the assembled snapshot above.
     import buckets
     snapshot["buckets_final"] = buckets.build_buckets(snapshot)
+    try:
+        import pp
+        snapshot["prepurchase"] = pp.build_pp(snapshot)   # §6 PP tracking (dim_pp_allotments → CE)
+    except Exception as e:
+        print(f"  [pp] skipped: {e}")
+        snapshot["prepurchase"] = []
+    try:
+        import seasonality_llm
+        n = seasonality_llm.attach(snapshot)   # Explore layer: high/low-season info tag per CE (guarded)
+        print(f"  seasonality tags attached: {n}")
+    except Exception as e:
+        print(f"  seasonality_llm.attach skipped ({e!r})")
     return snapshot
 
 
