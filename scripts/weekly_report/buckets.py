@@ -31,13 +31,16 @@ WEEKS_PER_MONTH = 4.345
 PRO_WEEKLY = PRO_MONTHLY / WEEKS_PER_MONTH          # ≈ $767/wk
 ONPACE_FRAC = 0.70                                  # Lane B: ≥70% of Pro-weekly
 RUNRATE_WKS = 4                                      # trailing-4wk run-rate
+ITER_TAKEOFF_CLK4 = 100                             # Iteration "waiting for takeoff": <100 clicks / 4wk (≈ monthly floor)
 
 # Band helpers — prefer the canonical bands.py; fall back to inline Pro threshold.
 try:
     import os as _os, sys as _sys
     _sys.path.insert(0, _os.path.expanduser("~/analytics"))
-    from scripts.ce_buckets.bands import band_for as _band_for, is_pro_plus as _is_pro_plus
+    from scripts.ce_buckets.bands import (band_for as _band_for, is_pro_plus as _is_pro_plus,
+                                          band_rank as _band_rank)
 except Exception:  # not importable from the worktree → replicate Pro gate inline
+    _LADDER = ["Does Not Exist", "Long Tail", "Seed", "Pro", "2x Pro", "Hero", "2x Hero", "5x Hero"]
     def _band_for(revenue, window="monthly"):
         v = revenue or 0
         if v <= 0: return "Does Not Exist"
@@ -47,6 +50,8 @@ except Exception:  # not importable from the worktree → replicate Pro gate inl
         return "Long Tail"
     def _is_pro_plus(band):
         return band in {"Pro", "2x Pro", "Hero", "2x Hero", "5x Hero"}
+    def _band_rank(band):
+        return _LADDER.index(band) if band in _LADDER else 0
 
 
 def _rows(o): return (o.get("rows") if isinstance(o, dict) else o) or []
@@ -243,7 +248,7 @@ def scale_up(ces, troas, market_weekly, cat_rpc, cat_cvr):
     return out
 
 
-def new_ces(ces, prior_pp=None):
+def new_ces(ces, prior_pp=None, launch_map=None):
     """LIFECYCLE · New CEs — graduation-focused, two lanes.
 
     Canonical OKR definition: New Pro+ = a CE's FIRST Pro+ period with no Pro+ in
@@ -260,7 +265,7 @@ def new_ces(ces, prior_pp=None):
     Lane B — On run-rate to Pro: NOT Pro+ yet, weekly run-rate ≥70% of Pro-weekly
       ($767) AND rising (revenue up in ≥2 of last 3 weeks).
     """
-    prior_pp = prior_pp or {}
+    prior_pp = prior_pp or {}; launch_map = launch_map or {}
     out = []
     for ce in ces:
         wk = ce.get("weekly") or []
@@ -285,6 +290,7 @@ def new_ces(ces, prior_pp=None):
             "spend_wk": (round(w0["spend"]) if w0.get("spend") is not None else None),
             "yoy": w0.get("yoy_pct"),
             "rev_wow_pct": _wow_pct(rev), "clicks_wow_pct": _wow_pct(clk),
+            "mo_since_launch": launch_map.get(_num_id(ce["ce_id"])),
         }
         if _is_pro_plus(band):
             cid = str(ce["ce_id"])
@@ -304,44 +310,78 @@ def new_ces(ces, prior_pp=None):
     return out
 
 
-def iteration(ces, mmp_map):
-    """LIFECYCLE · Iteration — MMP-execution-focused, two lanes.
+def iteration(ces, mmp_map, cat_cvr, prior_pp=None, week_start=None, launch_map=None):
+    """LIFECYCLE · Iteration / Untapped — weekly adaptation of the monthly
+    ce_buckets definition (classify.py §6). Both require never-Pro+; split by MMP.
 
-    mmp_map = {numeric_ce_id: {has_team_input_l6m, mmp_handover_date,
-      first_mmp_handover_date, mmp_iteration_count_l6m}} from fetch_mmp_sheet.
-    CEs absent from the map are treated as has_team_input_l6m == False.
+    Base gate: existing CE, NEVER Pro+ (prior-4Q quarterly gate `prior_pp` AND not
+    currently Pro+ by run-rate band). Clean complements on MMP recency:
 
-    Lane A — MMP, no traction: has_team_input_l6m AND rev/clicks flat-or-down over
-      last 4wk (mean(last 2wk) ≤ mean(prior 2wk) on revenue).
-    Lane B — Traction, no MMP: NOT has_team_input_l6m AND never Pro (run-rate < Pro)
-      AND revenue OR clicks rising ≥2 consecutive weeks.
+    ITERATION (has_team_input_l6m) — reason CASCADE (what to fix), computed on
+      TRAILING-4WK POOLED signals (single-week clicks/CVR are too noisy for these
+      low-traffic CEs — see the weekly/monthly cadence note):
+        1. "Waiting for takeoff" — 4wk clicks < ITER_TAKEOFF_CLK4 (barely any traffic)
+        2. "Needs inputs"        — 4wk pooled CVR < category median (converts poorly)
+        3. "Manual check"        — on it, has clicks + OK CVR, still not graduating
+    UNTAPPED (no MMP) — dormant complement: ≥ Seed scale, never Pro+, nobody working it.
+
+    new_this_week = MMP handover within 14 days of week_start (freshly handed over) —
+    the weekly *change* overlay on an otherwise slow-moving state bucket.
     """
+    prior_pp = prior_pp or {}; launch_map = launch_map or {}
+    ws = None
+    if week_start:
+        try:
+            import datetime as _dt
+            ws = _dt.date.fromisoformat(str(week_start)[:10])
+        except Exception:
+            ws = None
     out = []
     for ce in ces:
         wk = ce.get("weekly") or []
         if not _active(ce) or len(wk) < 4: continue
-        mmp = mmp_map.get(_num_id(ce["ce_id"])) or {}
+        cid = str(ce["ce_id"])
+        mmp = mmp_map.get(_num_id(cid)) or {}
         has_mmp = bool(mmp.get("has_team_input_l6m"))
-        rev, clk = _rev_series(wk), _clk_series(wk)
         rr_wk = _run_rate_wk(wk); rr_mo = rr_wk * WEEKS_PER_MONTH
         band = _band_for(rr_mo, "monthly")
-        last2, prior2 = rev[-2:], rev[-4:-2]
-        flat_or_down = (sum(last2) / len(last2)) <= (sum(prior2) / len(prior2)) if prior2 else False
-        lane = None
-        if has_mmp and flat_or_down:
-            lane = "A_mmp_no_traction"
-        elif (not has_mmp) and (not _is_pro_plus(band)) and \
-                (_rising_consec(rev) or _rising_consec(clk)):
-            lane = "B_traction_no_mmp"
-        if lane is None: continue
+        # never Pro+ : not Pro+ in prior 4Q (quarterly gate) AND not currently Pro+
+        if _is_pro_plus(band) or prior_pp.get(cid) is True: continue
+        rev, clk = _rev_series(wk), _clk_series(wk)
+        clk4 = sum((w.get("clicks") or 0) for w in wk[-4:])
+        ord4 = sum((w.get("orders") or 0) for w in wk[-4:])
+        cvr4 = (100.0 * ord4 / clk4) if clk4 else None
+        cat_med = cat_cvr.get((ce.get("metadata") or {}).get("category"))
+        new_flag = False
+        if ws and mmp.get("mmp_handover_date"):
+            try:
+                import datetime as _dt
+                hd = _dt.date.fromisoformat(str(mmp["mmp_handover_date"])[:10])
+                new_flag = 0 <= (ws - hd).days <= 14
+            except Exception:
+                pass
+        if has_mmp:
+            if clk4 < ITER_TAKEOFF_CLK4:
+                lane, reason = "iteration", "Waiting for takeoff"
+            elif cvr4 is not None and cat_med is not None and cvr4 < cat_med:
+                lane, reason = "iteration", "Needs inputs"
+            else:
+                lane, reason = "iteration", "Manual check"
+        else:
+            if _band_rank(band) < _band_rank("Seed"): continue   # Untapped keeps a ≥Seed floor
+            lane, reason = "untapped", "Untapped"
         out.append({
-            "ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "lane": lane,
-            "has_mmp": has_mmp, "mmp_handover_date": mmp.get("mmp_handover_date"),
+            "ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "lane": lane, "reason": reason,
+            "has_mmp": has_mmp, "new_this_week": new_flag,
+            "mmp_handover_date": mmp.get("mmp_handover_date"),
             "mmp_iteration_count_l6m": mmp.get("mmp_iteration_count_l6m"),
-            "traction": {"rev_wow_pct": _wow_pct(rev), "clicks_wow_pct": _wow_pct(clk)},
             "band": band, "run_rate_mo": round(rr_mo),
+            "mo_since_launch": launch_map.get(_num_id(cid)),
+            "clicks_4w": round(clk4), "cvr_4w": (round(cvr4, 1) if cvr4 is not None else None),
+            "cvr_cat_med": (round(cat_med, 1) if cat_med is not None else None),
+            "traction": {"rev_wow_pct": _wow_pct(rev), "clicks_wow_pct": _wow_pct(clk)},
         })
-    out.sort(key=lambda r: (r["lane"], -r["run_rate_mo"]))
+    out.sort(key=lambda r: (r["lane"], not r["new_this_week"], -r["run_rate_mo"]))
     return out
 
 
@@ -391,6 +431,50 @@ def _prior_proplus_map(snap):
         return {}
 
 
+def _launch_map(snap):
+    """{numeric_ce_id: months_since_first_ga_click}. Guarded CE-age proxy.
+
+    Months since the CE's FIRST paid Google-Ads click (ads_campaign_stats, Google
+    Ads only, earliest report_date with clicks>0). NOT the Headout launch/creation
+    date — understates true age for CEs that ran on Bing or grew organically first.
+    Matches the monthly notebook's "Mo since launch". Empty map on any failure.
+    """
+    meta = snap.get("meta") or {}
+    week = meta.get("week_start")
+    try:
+        import os, sys, datetime
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import config
+        from bq import query_df
+        ids = sorted({_num_id(c["ce_id"]) for c in snap.get("ces", [])})
+        ws = datetime.date.fromisoformat(str(week)[:10])
+        sql = f"""
+        SELECT CAST(campaign_target_combined_entity_id AS STRING) AS ce_id,
+               MIN(CASE WHEN count_clicks > 0 THEN report_date END) AS first_click
+        FROM `{config.BQ_PROJECT}.{config.BQ_DATASET}.ads_campaign_stats`
+        WHERE ad_platform = 'Google Ads'
+              AND CAST(campaign_target_combined_entity_id AS STRING) IN UNNEST(@ids)
+        GROUP BY 1
+        """
+        df = query_df(sql, "ce_launch", {"ids": ids})
+        out = {}
+        for _, r in df.iterrows():
+            fc = r["first_click"]
+            if fc is None or str(fc) in ("", "None", "NaT"):
+                continue
+            try:
+                d = (fc if (hasattr(fc, "isoformat") and not isinstance(fc, str))
+                     else datetime.date.fromisoformat(str(fc)[:10]))
+                out[str(r["ce_id"])] = max(0, round((ws - d).days / 30.44))
+            except Exception:
+                continue
+        return out
+    except Exception as e:
+        print(f"[buckets] WARNING: launch-date fetch failed ({e!r}); "
+              f"New CEs 'Mo since launch' will be blank.")
+        return {}
+
+
 def _mmp_map(snap):
     """Build the MMP status map via the monthly pipeline loader (guarded).
 
@@ -425,13 +509,15 @@ def build_buckets(snap):
     seas = seasonality(fl, ces, cat_rpc, cat_cvr)
     mmp = _mmp_map(snap)
     prior_pp = _prior_proplus_map(snap)
+    launch = _launch_map(snap)
     return {
         "defend": {"losing_money": losing_money(ces, b1, cat_rpc),
                    "seasonality_down": [s for s in seas if s["direction"] == "down"]},
         "compound": {"scale_up": scale_up(ces, troas, mw, cat_rpc, cat_cvr),
                      "seasonality_up": [s for s in seas if s["direction"] == "up"]},
-        "lifecycle": {"new_ces": new_ces(ces, prior_pp),
-                      "iteration": iteration(ces, mmp)},
+        "lifecycle": {"new_ces": new_ces(ces, prior_pp, launch),
+                      "iteration": iteration(ces, mmp, cat_cvr, prior_pp,
+                                             (snap.get("meta") or {}).get("week_start"), launch)},
     }
 
 
@@ -454,8 +540,7 @@ if __name__ == "__main__":
     print(f"== LIFECYCLE · New CEs {len(nc)} (A graduated {len(la)} · B on-pace {len(lb)}) ==")
     for r in (la[:3] + lb[:3]):
         print(f"    {r['ce_name'][:24]:24s} {r['lane']:12s} {r['band']:8s} rr ${r['run_rate_mo']:>6}/mo · to-pro ${r['dollars_to_pro']:>5} · {r['trajectory']}")
-    ia = [r for r in it if r["lane"] == "A_mmp_no_traction"]; ib = [r for r in it if r["lane"] == "B_traction_no_mmp"]
-    print(f"== LIFECYCLE · Iteration {len(it)} (A MMP/no-traction {len(ia)} · B traction/no-MMP {len(ib)}) ==")
-    for r in (ia[:3] + ib[:3]):
-        t = r["traction"]
-        print(f"    {r['ce_name'][:24]:24s} {r['lane']:18s} mmp {str(r['has_mmp']):5s} · {r['band']:8s} rr ${r['run_rate_mo']:>6}/mo · rev {t['rev_wow_pct']}% clk {t['clicks_wow_pct']}%")
+    ia = [r for r in it if r["lane"] == "iteration"]; ib = [r for r in it if r["lane"] == "untapped"]
+    print(f"== LIFECYCLE · Iteration {len(it)} (iteration {len(ia)} · untapped {len(ib)}) ==")
+    for r in (ia[:4] + ib[:2]):
+        print(f"    {r['ce_name'][:24]:24s} {r['lane']:9s} {r['reason']:20s} {'NEW' if r['new_this_week'] else '   '} · {r['band']:8s} clk4w {r['clicks_4w']:>5} · CVR4w {r['cvr_4w']}/{r['cvr_cat_med']}cat")
