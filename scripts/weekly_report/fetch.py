@@ -154,7 +154,13 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
         SUM(sum_conversion_value_offline_revenue)                AS offline_revenue,
         SUM(count_impressions)                                   AS paid_impressions,
         SUM(count_clicks)                                        AS paid_clicks,
-        SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv
+        SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv,
+        -- Search Impression Share — GOOGLE SEARCH ONLY. Bing's
+        -- count_eligible_searches is unreliable (yields SIS > 100%), so SIS is
+        -- Google-only (perf-audit canon: SUM(impr)/SUM(eligible), never
+        -- AVG(search_impression_share)).
+        SUM(IF(ad_platform = 'Google Ads', count_impressions, 0))       AS sis_impr,
+        SUM(IF(ad_platform = 'Google Ads', count_eligible_searches, 0)) AS sis_elig
 
     FROM {config.ADS_STATS}
 

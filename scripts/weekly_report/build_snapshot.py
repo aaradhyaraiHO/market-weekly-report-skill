@@ -129,6 +129,9 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
     paid_impressions = _f(p, "paid_impressions") if paid is not None else None
     paid_clicks = _f(p, "paid_clicks") if paid is not None else None
     conv_value_gbv = _f(p, "conv_value_gbv") if paid is not None else None
+    # Search Impression Share (Google search only): impr / eligible searches.
+    sis_impr = _f(p, "sis_impr") if paid is not None else None
+    sis_elig = _f(p, "sis_elig") if paid is not None else None
 
     # Paid RoI (ads_campaign_stats, Google Search + Bing): CM1 / (spend + coupon_wallet).
     roi = None
@@ -180,6 +183,8 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "paid_impressions": int(paid_impressions) if _num(paid_impressions) is not None else None,
         "paid_clicks": int(paid_clicks) if _num(paid_clicks) is not None else None,
         "paid_ctr_pct": _pct(paid_clicks, paid_impressions) if paid is not None else None,
+        # Search Impression Share — Google search only (impr / eligible searches).
+        "paid_sis_pct": _pct(sis_impr, sis_elig, gate=(0.0, 100.0)) if paid is not None else None,
         "paid_conv_value": _num(conv_value_gbv),
         "paid_conversions": int(conversions) if _num(conversions) is not None else None,
         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
@@ -722,6 +727,9 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         conv_value_gbv = float(pw["conv_value_gbv"].sum())
         paid_roi = _pct(cm1, spend + coupon, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
         paid_cvr = _pct(paid_conv, paid_clicks, gate=(0.0, config.CVR_MAX_PCT))
+        # Search Impression Share (Google search only).
+        sis_impr = float(pw["sis_impr"].sum()) if "sis_impr" in pw else 0
+        sis_elig = float(pw["sis_elig"].sum()) if "sis_elig" in pw else 0
 
         mkt_levels[wk] = {
             "clicks": clicks, "orders": orders, "gbv": gbv,
@@ -753,6 +761,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "paid_impressions": int(paid_impressions),
             "paid_clicks": int(paid_clicks),
             "paid_ctr_pct": _pct(paid_clicks, paid_impressions),
+            "paid_sis_pct": _pct(sis_impr, sis_elig, gate=(0.0, 100.0)),
             "paid_conv_value": _num(conv_value_gbv),
             "paid_conversions": int(paid_conv),
             "paid_cvr_pct": paid_cvr,
