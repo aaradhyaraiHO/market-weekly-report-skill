@@ -225,7 +225,50 @@ svg.spark{display:block}
 .cmt-box textarea:focus{outline:none;border-color:var(--purps)}
 .cmt-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint)}
 .cmt-saved{color:var(--green);font-weight:600}
+.sync-badge{font-family:var(--sans);font-size:10.5px;font-weight:600;margin-left:auto}
+.cmt-author{font-family:var(--sans);font-size:12.5px;font-weight:500;padding:7px 11px;border:1.5px solid var(--rule-dark);
+  border-radius:10px;background:#fff;color:var(--ink);width:180px;margin-bottom:8px}
+.cmt-author:focus{outline:none;border-color:var(--purps)}
 .io-row{display:flex;gap:8px;margin-top:12px}
+
+/* ── GM note component ── */
+.gm-note-card{border:1px solid var(--rule);border-radius:16px;padding:16px 18px 14px;background:var(--card);box-shadow:var(--shadow)}
+.gm-note-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:11px}
+.gm-note-title{font-size:14px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:6px}
+.gm-note-title .icon{font-size:15px}
+.gm-note-meta{font-size:11.5px;font-weight:500;color:var(--ink-faint);margin-left:8px}
+.gm-note-hint{font-size:10px;font-weight:500;color:var(--ink-faint);text-align:right;white-space:nowrap;flex-shrink:0}
+.gm-textarea-wrap{margin:2px 0 10px}
+.gm-textarea{width:100%;min-height:88px;font-family:var(--sans);font-size:13.5px;font-weight:500;line-height:1.55;color:var(--ink);
+  padding:12px 14px 12px 16px;border:1.5px solid var(--rule-dark);border-left:3.5px solid var(--green);border-radius:12px;background:#fff;resize:vertical;transition:border-color .14s}
+.gm-textarea:focus{outline:none;border-color:var(--purps);border-left-color:var(--green)}
+.gm-textarea::placeholder{color:var(--ink-faint);font-weight:400}
+.gm-actions{display:flex;align-items:center;gap:8px}
+.btn-save{background:var(--purps);color:#fff;border:1.5px solid var(--purps);font-weight:700}
+.btn-save:hover{background:var(--purps-deep);border-color:var(--purps-deep);color:#fff}
+.btn-save.saved{background:var(--green);border-color:var(--green);color:#fff}
+.btn-clear{background:#fff;color:var(--ink-soft);border:1.5px solid var(--rule-dark);font-weight:700}
+.btn-clear:hover{border-color:var(--purps);color:var(--purps)}
+.btn-post{background:#fff;color:var(--green);border:1.5px solid var(--green);font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.btn-post:hover{background:var(--green-bg)}
+.btn-post.posting{opacity:.6;pointer-events:none}
+.btn-thread{background:#fff;color:var(--green);border:1.5px solid var(--green);font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn-thread:hover{background:var(--green-bg)}
+.btn-thread .arr{font-size:13px;line-height:1;transition:transform .14s}
+.btn-thread:hover .arr{transform:translateX(2px)}
+.char-count{margin-left:auto;font-size:11px;font-weight:500;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.char-count.warn{color:var(--amber);font-weight:700}
+.hist-toggle{display:flex;align-items:center;gap:5px;margin-top:14px;padding:0;background:none;border:none;font-family:var(--sans);font-size:12px;font-weight:700;color:var(--purps);cursor:pointer}
+.hist-toggle:hover{color:var(--purps-deep)}
+.hist-toggle .caret{display:inline-block;transition:transform .2s;font-size:10px}
+.hist-toggle .caret.open{transform:rotate(90deg)}
+.hist-list{overflow:hidden;max-height:0;opacity:0;transition:max-height .3s ease,opacity .2s ease,margin .2s ease}
+.hist-list.open{max-height:600px;opacity:1;margin-top:12px}
+.hist-entry{margin-bottom:13px}
+.hist-entry:last-child{margin-bottom:0}
+.hist-when{font-size:10.5px;font-weight:600;color:var(--ink-faint);margin-bottom:4px}
+.hist-when .hist-link{color:var(--purps);text-decoration:none;font-weight:700}
+.hist-text{font-size:12.5px;font-style:italic;color:var(--ink-soft);line-height:1.55;padding-left:12px;border-left:3px solid var(--rule-dark)}
 .mono{font-family:var(--sans)}
 a.outlink{color:var(--purps);text-decoration:none;font-family:var(--sans);font-size:12px;font-weight:600;border-bottom:1px solid rgba(128,0,255,.35)}
 a.outlink:hover{color:var(--purps-deep);border-bottom-color:var(--purps-deep)}
@@ -414,13 +457,125 @@ function sparkline(vals, opt){
     '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'+dot+'</svg>';
 }
 
-/* ---------- comments (localStorage, persists week-over-week) ---------- */
-function cmtKey(ceId){ return 'wr_comments::'+MARKETS[mi].meta.market_slug+'::'+ceId; }
-function getComment(ceId){ try{ return JSON.parse(localStorage.getItem(cmtKey(ceId))||'null'); }catch(e){ return null; } }
-function hasComment(ceId){ const c=getComment(ceId); return !!(c && c.text && c.text.trim()); }
-function saveComment(ceId,text){
-  if(text && text.trim()) localStorage.setItem(cmtKey(ceId), JSON.stringify({text:text, updated:new Date().toISOString()}));
-  else localStorage.removeItem(cmtKey(ceId));
+/* ---------- GM notes (per-week, localStorage cache + Google Sheet + Slack) ----------
+   A note is one-per-CE-per-week. The current week is editable; prior weeks
+   render as a read-only History trail. Sheet is source of truth; localStorage
+   is an instant cache + offline fallback. Save → sheet; Post → Slack thread. */
+const NOTES_URL = DATA.notes_url || '';
+const NOTES_CHANNELS = DATA.notes_channels || {};
+const SYNC_OK = NOTES_URL.length > 0;
+let syncStatus = SYNC_OK ? 'idle' : 'off';
+
+// notesData[slug][ce_id] = [ {week_start, note, author, updated, slack_channel,
+//                             slack_thread_ts, slack_permalink}, … ]  (any order)
+let notesData = {};
+
+function slugKey(){ return MARKETS[mi].meta.market_slug; }
+function curWeek(){ return MARKETS[mi].meta.week_start || ''; }
+function getAuthor(){ return localStorage.getItem('wr_author')||''; }
+function setAuthor(v){ localStorage.setItem('wr_author', v.trim()); }
+function channelFor(slug){ return NOTES_CHANNELS[slug] || null; }
+
+function cacheKey(){ return 'wr_notes::'+slugKey(); }
+function loadCache(){ try{ notesData[slugKey()] = JSON.parse(localStorage.getItem(cacheKey())||'{}'); }catch(e){ notesData[slugKey()]={}; } }
+function saveCache(){ try{ localStorage.setItem(cacheKey(), JSON.stringify(notesData[slugKey()]||{})); }catch(e){} }
+
+function ceNotes(ceId){ const m=notesData[slugKey()]||{}; return m[String(ceId)]||[]; }
+function noteFor(ceId){ return ceNotes(ceId).find(n=>String(n.week_start)===String(curWeek())) || null; }
+function historyFor(ceId){
+  return ceNotes(ceId)
+    .filter(n=>String(n.week_start)!==String(curWeek()) && n.note && n.note.trim())
+    .sort((a,b)=>String(b.week_start).localeCompare(String(a.week_start)));
+}
+// "has a note this week" — drives the ● dot in the CE table.
+function hasComment(ceId){ const n=noteFor(ceId); return !!(n && n.note && n.note.trim()); }
+
+function putLocal(ceId, patch){
+  const slug=slugKey(); notesData[slug]=notesData[slug]||{};
+  const arr=notesData[slug][String(ceId)]=notesData[slug][String(ceId)]||[];
+  let row=arr.find(n=>String(n.week_start)===String(curWeek()));
+  if(!row){ row={week_start:curWeek()}; arr.push(row); }
+  Object.assign(row, patch);
+  saveCache();
+}
+
+function saveNote(ceId, text){
+  const now=new Date().toISOString();
+  putLocal(ceId, {note:text, author:getAuthor(), updated:now});
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi], ce=M.ces.find(c=>String(c.ce_id)===String(ceId));
+  const params=new URLSearchParams({
+    action:'upsert', market_slug:M.meta.market_slug, ce_id:String(ceId),
+    ce_name:ce?ce.ce_name:'', week_start:curWeek(), note:text, author:getAuthor()
+  });
+  syncStatus='syncing'; updateSyncBadge();
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
+    .then(r=>r.json()).then(()=>{ syncStatus='synced'; updateSyncBadge(); })
+    .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
+}
+
+function postNote(ceId, text){
+  if(!SYNC_OK) return Promise.reject('sync off');
+  const M=MARKETS[mi], ce=M.ces.find(c=>String(c.ce_id)===String(ceId));
+  const ch=channelFor(M.meta.market_slug);
+  if(!ch) return Promise.reject('no channel');
+  const params=new URLSearchParams({
+    action:'post', market_slug:M.meta.market_slug, ce_id:String(ceId),
+    ce_name:ce?ce.ce_name:'', week_start:curWeek(), channel:ch.id,
+    text:text, author:getAuthor(), report_url:location.href
+  });
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
+    .then(r=>r.json())
+    .then(res=>{
+      if(!res.ok) throw new Error(res.error||'post failed');
+      putLocal(ceId, {note:text, author:getAuthor(), updated:new Date().toISOString(),
+                      slack_channel:ch.id, slack_thread_ts:res.ts, slack_permalink:res.permalink});
+      return res;
+    });
+}
+
+function deleteNote(ceId){
+  // remove this week's row from cache + sheet
+  const slug=slugKey(), m=notesData[slug]||{};
+  if(m[String(ceId)]) m[String(ceId)]=m[String(ceId)].filter(n=>String(n.week_start)!==String(curWeek()));
+  saveCache();
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi];
+  const params=new URLSearchParams({action:'delete', market_slug:M.meta.market_slug,
+    ce_id:String(ceId), week_start:curWeek()});
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
+    .then(r=>r.json()).catch(()=>{});
+}
+
+function syncPull(){
+  loadCache();
+  if(!SYNC_OK){ updateSyncBadge(); return Promise.resolve(); }
+  const M=MARKETS[mi]; syncStatus='syncing'; updateSyncBadge();
+  return fetch(NOTES_URL+'?action=list&market='+encodeURIComponent(M.meta.market_slug),{redirect:'follow'})
+    .then(r=>r.json())
+    .then(data=>{
+      const slug=M.meta.market_slug; notesData[slug]={};
+      (data.notes||[]).forEach(n=>{
+        if(!n.ce_id) return;
+        const id=String(n.ce_id);
+        (notesData[slug][id]=notesData[slug][id]||[]).push({
+          week_start:String(n.week_start||''), note:n.note||'', author:n.author||'',
+          updated:n.updated||'', slack_channel:n.slack_channel||'',
+          slack_thread_ts:n.slack_thread_ts||'', slack_permalink:n.slack_permalink||''
+        });
+      });
+      saveCache();
+      syncStatus='synced'; updateSyncBadge(); paintCETable();
+    })
+    .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
+}
+
+function updateSyncBadge(){
+  const el=document.getElementById('syncBadge');
+  if(!el) return;
+  const map={off:'● local only', idle:'', syncing:'↻ syncing…', synced:'✓ synced', error:'⚠ sync failed'};
+  const cls={off:'amb', syncing:'amb', synced:'pos', error:'neg'};
+  el.textContent=map[syncStatus]||''; el.className='sync-badge '+(cls[syncStatus]||'');
 }
 
 /* ---------- BGM customization: per-market saved views / groups / watchlist / rule ----------
@@ -1869,9 +2024,28 @@ function openDrawer(ceId){
       '<div class="dr-cap">5-factor decomposition of the WoW revenue move (USD). Bars diverge from centre: red = drag, green = lift.</div>';
   }
 
-  const c=getComment(ceId);
-  const cmtText=c&&c.text?c.text:'';
-  const cmtWhen=c&&c.updated?'saved '+new Date(c.updated).toLocaleString():'not saved yet';
+  const cur=noteFor(ceId);
+  const curText=cur&&cur.note?cur.note:'';
+  const curWhen=cur&&cur.updated?'saved '+new Date(cur.updated).toLocaleString():'not saved yet';
+  const hist=historyFor(ceId);
+  const ch=channelFor(M.meta.market_slug);
+  const hasThread=!!(cur&&cur.slack_thread_ts);
+  const NOTE_MAX=600;
+
+  const histHtml = hist.length ? (
+    '<button class="hist-toggle" id="histToggle"><span class="caret" id="histCaret">▶</span> History ('+hist.length+')</button>'+
+    '<div class="hist-list" id="histList">'+
+      hist.map(h=>'<div class="hist-entry"><div class="hist-when">'+esc(h.week_start)+' · '+esc(h.author||'—')+
+        (h.slack_permalink?' · <a class="hist-link" href="'+esc(h.slack_permalink)+'" target="_blank">thread ↗</a>':'')+
+        '</div><div class="hist-text">'+esc(h.note)+'</div></div>').join('')+
+    '</div>'
+  ) : '';
+
+  const postBtnHtml = ch ? (
+    hasThread
+      ? '<a class="btn btn-thread" id="postBtn" href="'+esc(cur.slack_permalink||'#')+'" target="_blank">View thread in #'+esc(ch.name)+' <span class="arr">→</span></a>'
+      : '<button class="btn btn-post" id="postBtn">Post to #'+esc(ch.name)+'</button>'
+  ) : '';
 
   document.getElementById('drawer').innerHTML=
     '<div class="dr-head"><button class="close" id="drClose">×</button>'+
@@ -1887,13 +2061,24 @@ function openDrawer(ceId){
         '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
         '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
       kmBlock + shapBlock + resourceBlocks(ce) +
-      '<div class="dr-sec-t">Notes · persists week-over-week</div>'+
-      '<div class="cmt-box"><textarea id="cmtText" placeholder="Your running note on this CE. Saved locally and carried across weeks…">'+esc(cmtText)+'</textarea>'+
-        '<div class="cmt-meta"><span id="cmtSaved" class="cmt-saved">'+esc(cmtWhen)+'</span>'+
-          '<span class="mono">key: wr_comments::'+esc(M.meta.market_slug)+'::'+esc(ce.ce_id)+'</span></div>'+
-        '<div class="io-row"><button class="btn" id="cmtExport">Export notes (JSON)</button>'+
-          '<button class="btn" id="cmtImport">Import notes</button>'+
-          '<input type="file" id="cmtFile" accept="application/json" style="display:none"></div>'+
+      '<div class="dr-sec-t"><span>Notes</span><span id="syncBadge" class="sync-badge"></span></div>'+
+      '<div class="gm-note-card">'+
+        '<div class="gm-note-head">'+
+          '<span class="gm-note-title"><span class="icon">📝</span> GM note'+
+            '<span class="gm-note-meta">W/C '+esc(curWeek())+(getAuthor()?' · '+esc(getAuthor()):'')+'</span></span>'+
+          '<span class="gm-note-hint">one note per CE · visible to all · carries forward</span>'+
+        '</div>'+
+        '<input type="text" class="cmt-author" id="cmtAuthor" placeholder="Your name" value="'+esc(getAuthor())+'">'+
+        '<div class="gm-textarea-wrap"><textarea class="gm-textarea" id="cmtText" maxlength="'+NOTE_MAX+'" '+
+          'placeholder="What is happening with this CE that the data cannot see?">'+esc(curText)+'</textarea></div>'+
+        '<div class="gm-actions">'+
+          '<button class="btn btn-save" id="cmtSave">Save</button>'+
+          '<button class="btn btn-clear" id="cmtClear">Clear</button>'+
+          postBtnHtml+
+          '<span class="char-count" id="charCount"></span>'+
+        '</div>'+
+        '<div class="cmt-meta" style="margin-top:8px"><span id="cmtSaved" class="cmt-saved">'+esc(curWhen)+'</span></div>'+
+        histHtml+
       '</div>'+
     '</div>';
 
@@ -1917,14 +2102,55 @@ function openDrawer(ceId){
   });
   wireCeKmHover(ce, weeks, wk, wkLy);
   const ta=document.getElementById('cmtText');
-  ta.addEventListener('input',()=>{
-    clearTimeout(drawerTimer);
-    drawerTimer=setTimeout(()=>{ saveComment(ceId,ta.value);
-      document.getElementById('cmtSaved').textContent='saved '+new Date().toLocaleString(); },350);
-  });
-  document.getElementById('cmtExport').onclick=exportNotes;
-  document.getElementById('cmtImport').onclick=()=>document.getElementById('cmtFile').click();
-  document.getElementById('cmtFile').onchange=importNotes;
+  const authorIn=document.getElementById('cmtAuthor');
+  const cc=document.getElementById('charCount');
+  const NOTE_MAX2=600;
+  function paintCount(){ const n=ta.value.length; cc.textContent=n+' / ~'+NOTE_MAX2;
+    cc.className='char-count'+(n>NOTE_MAX2*0.9?' warn':''); }
+  paintCount();
+  ta.addEventListener('input',paintCount);
+  authorIn.addEventListener('change',()=>{ setAuthor(authorIn.value); });
+
+  document.getElementById('cmtSave').onclick=()=>{
+    const btn=document.getElementById('cmtSave');
+    saveNote(ceId, ta.value).then(()=>{
+      document.getElementById('cmtSaved').textContent='saved '+new Date().toLocaleString();
+    });
+    btn.textContent='Saved ✓'; btn.classList.add('saved');
+    setTimeout(()=>{ btn.textContent='Save'; btn.classList.remove('saved'); },1500);
+    paintCETable();   // refresh ● dot
+  };
+  document.getElementById('cmtClear').onclick=()=>{
+    const had=ta.value.trim().length>0;
+    ta.value=''; paintCount();
+    if(had && confirm('Delete this week’s note for this CE?')){
+      deleteNote(ceId).then(()=>{
+        document.getElementById('cmtSaved').textContent='deleted';
+        paintCETable();
+      });
+    } else { ta.focus(); }
+  };
+
+  const postBtn=document.getElementById('postBtn');
+  if(postBtn && postBtn.classList.contains('btn-post')){
+    postBtn.onclick=()=>{
+      if(!ta.value.trim()){ ta.focus(); return; }
+      postBtn.textContent='Posting…'; postBtn.classList.add('posting');
+      // Save first so the sheet always holds what was broadcast, then post.
+      saveNote(ceId, ta.value)
+        .then(()=>postNote(ceId, ta.value))
+        .then(res=>{ openDrawer(ceId); })   // re-render → button becomes "View thread"
+        .catch(err=>{ postBtn.textContent='Post failed'; postBtn.classList.remove('posting');
+          console.error('post failed:', err); });
+    };
+  }
+  updateSyncBadge();
+
+  const histT=document.getElementById('histToggle');
+  if(histT) histT.onclick=()=>{
+    document.getElementById('histList').classList.toggle('open');
+    document.getElementById('histCaret').classList.toggle('open');
+  };
   // watchlist star MIRROR — same per-market watchlist as the row star.
   const dstar=document.querySelector('#drawer .drawer-star');
   if(dstar) dstar.onclick=()=>{ toggleWatch(ceId); const on=getWatch().has(ceId);
@@ -2034,7 +2260,9 @@ function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   state.search=''; state.group=''; state.filters={}; state.sortKey='__mover'; state.dir=-1;
   state.watchOnly=false; state.selMode=false; sel.clear(); activeView=null;
   state.rule=lsGet('rule','');   // restore last-used highlight rule for this market
-  renderTabs(); renderMeta(); renderApp(); window.scrollTo(0,0); }
+  renderTabs(); renderMeta(); renderApp(); window.scrollTo(0,0);
+  syncPull();   // load this market's notes (cache first, then sheet)
+}
 
 // delegated events
 document.getElementById('tabs').addEventListener('click',e=>{
@@ -2147,6 +2375,7 @@ document.getElementById('app').addEventListener('change',e=>{
 // boot
 state.rule=lsGet('rule','');   // restore last-used highlight rule for the first market
 renderTabs(); renderMeta(); renderApp();
+syncPull();
 </script>
 </body>
 </html>

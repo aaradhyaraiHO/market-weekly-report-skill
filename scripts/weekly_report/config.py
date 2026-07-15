@@ -21,6 +21,7 @@ block emitted by build_snapshot.py.
 from __future__ import annotations
 
 import datetime as dt
+import os
 
 # --------------------------------------------------------------------------- #
 # BigQuery
@@ -131,6 +132,21 @@ VALIDATION_NA = {
     "cv_excluded": 0,
 }
 
+
+# --------------------------------------------------------------------------- #
+# Notes backend (Google Sheet + Apps Script web app)
+# --------------------------------------------------------------------------- #
+NOTES_SHEET_ID = os.environ.get("WR_NOTES_SHEET_ID", "1hC_IAsJrlPcpFv5K49eRtcwgK6i_DkAt4ZvETxlK-s8")
+NOTES_SCRIPT_URL = os.environ.get("WR_NOTES_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbx5sEl5Q5ZF9vt3WO7pwfacYBpoJYlorONOJ9izy06x4_jU4RNwtcJtfhmbMh9rx1vOdA/exec")
+
+# Market -> primary Slack channel for "Post to #channel" (id + display name).
+# Channel IDs verified against the monthly-review market_channels mapping; the
+# REVENUE_ALERT_SLACK_TOKEN bot must be invited to each channel it posts to.
+NOTES_SLACK_CHANNELS = {
+    "north_america": {"id": "CNSHDD2H1",   "name": "mkt-usa"},
+    "italy":         {"id": "C045L2WQ79P", "name": "mkt-italy-switzerland-malta"},
+    "oceania":       {"id": "CHKRLFDPU",   "name": "mkt-anz"},
+}
 
 # --------------------------------------------------------------------------- #
 # Date helpers
