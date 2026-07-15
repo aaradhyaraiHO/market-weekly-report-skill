@@ -28,6 +28,10 @@ import datetime as dt
 BQ_PROJECT = "headout-analytics"
 BQ_DATASET = "analytics_reporting"
 MAX_BYTES_BILLED = 30 * 1024 ** 3  # 30 GB cap per query (analytics-skill hygiene)
+# PP tracking: current prepurchase SEASON start. Fixed anchor (NOT rolling) — an
+# allotment created months ago can still be selling / carrying liability now, so we
+# scope to the season, not a window relative to the report week. Bump each season.
+PP_SEASON_START = "2026-04-01"
 
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
 ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.google_ads_campaign_stats`"

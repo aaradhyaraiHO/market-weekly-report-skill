@@ -1,8 +1,14 @@
 """PP tracking bucket — dim_pp_allotments (STR/liability) joined to the CE weekly
-funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides)."""
+funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides).
+
+Scope: the CURRENT prepurchase season (config.PP_SEASON_START), NOT a window
+relative to the report week — allotments created months ago can still be selling
+or carrying liability now, so a rolling window would wrongly drop live inventory.
+"""
 from __future__ import annotations
-import subprocess, csv, io
+import math
 import config
+from bq import query_df
 
 PP_SQL = """
 WITH pp AS (
@@ -10,7 +16,7 @@ WITH pp AS (
          SUM(count_uploaded_tickets) uploaded, SUM(count_sold_tickets) sold,
          SUM(loss_liability_usd) loss_liab, MAX(DATE(latest_ticket_uploaded_at)) last_upload
   FROM `{proj}.{ds}.dim_pp_allotments`
-  WHERE allotment_created_at >= '2026-04-01' AND count_uploaded_tickets > 0
+  WHERE DATE(allotment_created_at) >= DATE(@season_start) AND count_uploaded_tickets > 0
   GROUP BY 1),
 map AS (SELECT DISTINCT tour_id, combined_entity_id
         FROM `{proj}.{ds}.dim_experience_listings` WHERE tour_id IS NOT NULL),
@@ -25,23 +31,39 @@ GROUP BY 1,2,3 HAVING uploaded > 0
 """.format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET)
 
 
+def _i(v):
+    try:
+        f = float(v)
+        return 0 if math.isnan(f) else int(f)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _f(v):
+    try:
+        f = float(v)
+        return 0.0 if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return 0.0
+
+
 _PP_CACHE = None
 
 
 def pp_by_ce():
+    """All PP allotments this season (NA/IT/OC), keyed by ce_id. Cached per process
+    (season-scoped, market-independent). Uses the shared bq.query_df client."""
     global _PP_CACHE
     if _PP_CACHE is not None:
         return _PP_CACHE
-    out = subprocess.run(["bq", "query", "--use_legacy_sql=false", "--format=csv", "--max_rows=1000",
-                          f"--maximum_bytes_billed={config.MAX_BYTES_BILLED}", PP_SQL],
-                         capture_output=True, text=True)
-    if out.returncode != 0:
-        raise SystemExit("PP query failed:\n" + out.stderr[-800:])
+    df = query_df(PP_SQL, "pp_allotments", {"season_start": config.PP_SEASON_START})
     res = {}
-    for r in csv.DictReader(io.StringIO(out.stdout)):
+    for _, r in df.iterrows():
+        lu = r["last_upload"]
+        lu = None if (lu is None or (isinstance(lu, float) and math.isnan(lu))) else str(lu)[:10]
         res[str(r["ce_id"])] = {"market": r["market"], "ce": r["ce"],
-            "uploaded": int(r["uploaded"]), "sold": int(r["sold"]),
-            "loss_liab": float(r["loss_liab"] or 0), "last_upload": r["last_upload"]}
+            "uploaded": _i(r["uploaded"]), "sold": _i(r["sold"]),
+            "loss_liab": _f(r["loss_liab"]), "last_upload": lu}
     _PP_CACHE = res
     return res
 
@@ -53,7 +75,7 @@ def build_pp(snap):
     ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
     try:
         ppmap = pp_by_ce()
-    except SystemExit:
+    except Exception:
         return []
     rows = []
     for cid, ppd in ppmap.items():
@@ -84,7 +106,9 @@ def pp_row(ce, ppd):
     w0 = wk[-1] if wk else {}
     wm1 = wk[-2] if len(wk) > 1 else {}
     str_pct = round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None
-    # materiality: PP sold vs CE orders over the snapshot window (approx)
+    # materiality: PP sold (season-cumulative) vs CE orders (trailing ~12wk in the
+    # snapshot). Windows differ by design — a rough "how big is PP vs recent demand"
+    # ratio, NOT a same-period share. Labeled as such in the render.
     ce_orders = _sum(wk, "orders", 0)
     pp_pct_orders = round(ppd["sold"] / ce_orders * 100) if ce_orders else None
     # CVR level + WoW

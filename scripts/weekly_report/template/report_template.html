@@ -1284,7 +1284,7 @@ function renderLevers(M){
           '<td class="num">'+(r.cm2_4w==null?'—':(fmtMoney(r.cm2_4w)+' '+(r.cm2_trend||'')))+'</td>'+
           '<td class="mono">'+esc(r.last_upload)+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
-      '<div class="sub" style="margin-top:4px">STR ≥95% under-bought (reorder) · &lt;60% over-bought (liability) · CM2/CVR = CE funnel while PP active. No verdict — reviewer decides.</div>';
+      '<div class="sub" style="margin-top:4px">STR ≥95% under-bought (reorder) · &lt;60% over-bought (liability) · PP %ord = PP sold (season) vs CE orders (12wk) — rough scale, not same-period · CM2/CVR = CE funnel while PP active. No verdict — reviewer decides.</div>';
   }
 
   return '<section id="s6"><div class="sec-head"><span class="sec-num">6</span><h2>Levers visibility</h2>'+
