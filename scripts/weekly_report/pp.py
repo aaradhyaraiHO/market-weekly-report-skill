@@ -1,9 +1,11 @@
 """PP tracking bucket — dim_pp_allotments (STR/liability) joined to the CE weekly
 funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides).
 
-Scope: the CURRENT prepurchase season (config.PP_SEASON_START), NOT a window
-relative to the report week — allotments created months ago can still be selling
-or carrying liability now, so a rolling window would wrongly drop live inventory.
+Scope: ACTIVE inventory as of the report week — allotments that are Open AND whose
+tickets are still valid for upcoming dates (or open-dated). This is validity/status-
+based, NOT a creation-date anchor: an allotment created months ago stays in while its
+tickets are still sellable, and expired/closed ones drop out. Self-updating (relative
+to the report week's validity), so there is no manual "season start" to maintain.
 """
 from __future__ import annotations
 import math
@@ -16,7 +18,9 @@ WITH pp AS (
          SUM(count_uploaded_tickets) uploaded, SUM(count_sold_tickets) sold,
          SUM(loss_liability_usd) loss_liab, MAX(DATE(latest_ticket_uploaded_at)) last_upload
   FROM `{proj}.{ds}.dim_pp_allotments`
-  WHERE DATE(allotment_created_at) >= DATE(@season_start) AND count_uploaded_tickets > 0
+  WHERE allotment_status = 'Open'
+        AND (ticket_validity_timestamp IS NULL OR DATE(ticket_validity_timestamp) >= DATE(@week))
+        AND count_uploaded_tickets > 0
   GROUP BY 1),
 map AS (SELECT DISTINCT tour_id, combined_entity_id
         FROM `{proj}.{ds}.dim_experience_listings` WHERE tour_id IS NOT NULL),
@@ -47,16 +51,15 @@ def _f(v):
         return 0.0
 
 
-_PP_CACHE = None
+_PP_CACHE = {}
 
 
-def pp_by_ce():
-    """All PP allotments this season (NA/IT/OC), keyed by ce_id. Cached per process
-    (season-scoped, market-independent). Uses the shared bq.query_df client."""
-    global _PP_CACHE
-    if _PP_CACHE is not None:
-        return _PP_CACHE
-    df = query_df(PP_SQL, "pp_allotments", {"season_start": config.PP_SEASON_START})
+def pp_by_ce(week):
+    """Active PP allotments (Open + valid-for-upcoming) across NA/IT/OC as of `week`,
+    keyed by ce_id. Cached per (report week). Uses the shared bq.query_df client."""
+    if week in _PP_CACHE:
+        return _PP_CACHE[week]
+    df = query_df(PP_SQL, "pp_allotments", {"week": week})
     res = {}
     for _, r in df.iterrows():
         lu = r["last_upload"]
@@ -64,17 +67,18 @@ def pp_by_ce():
         res[str(r["ce_id"])] = {"market": r["market"], "ce": r["ce"],
             "uploaded": _i(r["uploaded"]), "sold": _i(r["sold"]),
             "loss_liab": _f(r["loss_liab"]), "last_upload": lu}
-    _PP_CACHE = res
+    _PP_CACHE[week] = res
     return res
 
 
 def build_pp(snap):
     """Report-engine entry: PP rows for THIS snapshot's market, joined to CE funnel.
     Returns [] on any failure (guarded — never breaks the report)."""
-    market = (snap.get("meta") or {}).get("market")
+    meta = snap.get("meta") or {}
+    market = meta.get("market")
     ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
     try:
-        ppmap = pp_by_ce()
+        ppmap = pp_by_ce(meta.get("week_start"))
     except Exception:
         return []
     rows = []
