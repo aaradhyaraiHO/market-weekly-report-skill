@@ -1075,6 +1075,16 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         print(f"  seasonality tags attached: {n}")
     except Exception as e:
         print(f"  seasonality_llm.attach skipped ({e!r})")
+    # Slack digest (S3 agent step) — read a sidecar if the skill wrote one for this
+    # market+week, so the Market Review tab shows the "signal beyond the data" cards.
+    # Sidecar: .cache/weekly_report/slack_context_{slug}_{week}.json (list of cards).
+    sc = OUT_DIR / f"slack_context_{market_slug}_{config.iso(w0_start)}.json"
+    if sc.exists():
+        try:
+            snapshot["market_review_context"] = json.loads(sc.read_text())
+            print(f"  [slack] loaded {len(snapshot['market_review_context'])} context cards from {sc.name}")
+        except Exception as e:
+            print(f"  [slack] sidecar load skipped ({e!r})")
     return snapshot
 
 

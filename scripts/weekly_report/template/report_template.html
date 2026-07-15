@@ -11,7 +11,7 @@
   --purps:#8000FF; --purps-deep:#6a00d6; --purps-soft:#F1E8FF;
   --candy:#FF2D6F; --candy-soft:#FFE3EC;
   --paper:#ffffff; --paper-deep:#F7F3FF; --card:#ffffff;
-  --ink:#1A1526; --ink-soft:#5C5470; --ink-faint:#9B93AC;
+  --ink:#1A1526; --ink-soft:#5C5470; --ink-faint:#9B93AC; --ink-head:#332D45;
   --rule:#ECE6F8; --rule-dark:#DAD1EF;
   --red:#E5384F; --red-bg:#FDE7EA;
   --amber:#B5810B; --amber-bg:#FAF0D5;
@@ -37,7 +37,7 @@ body{
 
 .masthead{border-bottom:2px solid var(--rule);padding-bottom:20px;position:relative}
 .mast-kicker{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--purps)}
-.masthead h1{font-family:var(--disp);font-weight:800;font-size:44px;line-height:1.02;letter-spacing:-.025em;margin:9px 0 6px}
+.masthead h1{font-family:var(--disp);font-weight:800;font-size:44px;line-height:1.02;letter-spacing:-.025em;margin:9px 0 6px;color:var(--ink-head)}
 .masthead h1 em{font-style:normal;font-weight:800;color:var(--purps)}
 .mast-meta{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink-soft);display:flex;gap:22px;flex-wrap:wrap;margin-top:10px}
 .mast-meta b{font-weight:700;color:var(--ink)}
@@ -50,10 +50,20 @@ body{
 .tab .trev{opacity:.85;margin-left:9px;font-size:12px;font-weight:600}
 
 section{margin-top:44px}
-.sec-head{display:flex;align-items:baseline;gap:13px;border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:17px}
+.sec-head{display:flex;align-items:baseline;gap:13px;border-bottom:1.5px solid var(--rule-dark);padding-bottom:8px;margin-bottom:17px}
 .sec-num{font-family:var(--sans);font-size:12px;font-weight:700;color:#fff;background:var(--purps);padding:3px 10px;border-radius:7px;letter-spacing:.02em}
-.sec-head h2{font-family:var(--disp);font-size:23px;font-weight:800;letter-spacing:-.02em}
+.sec-head h2{font-family:var(--disp);font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink-head)}
 .sec-head .sub{font-family:var(--sans);font-size:11.5px;font-weight:500;color:var(--ink-faint);margin-left:auto;text-align:right}
+/* collapsible section (§2) — explicit Show/Hide button, collapsed by default */
+.sec-btn{font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.02em;margin-left:14px;padding:6px 15px;
+  border-radius:999px;border:1.5px solid var(--purps);background:var(--purps);color:#fff;cursor:pointer;white-space:nowrap;
+  align-self:center;transition:background .15s,color .15s}
+.sec-btn:hover{background:var(--purps-dark,#6B00D6)}
+.collapsible.collapsed .sec-btn{background:#fff;color:var(--purps)}
+.collapsible.collapsed .sec-body{display:none}
+.collapsible.collapsed .expanded-only{display:none}
+.collapsible:not(.collapsed) .collapsed-only{display:none}
+.collapsible.collapsed .sec-head{margin-bottom:0;border-bottom-style:dashed}
 
 .chip{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.02em;padding:2px 9px;border-radius:99px;white-space:nowrap;vertical-align:1px}
 .chip.red{background:var(--red-bg);color:var(--red)} .chip.amber{background:var(--amber-bg);color:var(--amber)}
@@ -76,20 +86,25 @@ section{margin-top:44px}
 .mover .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .mover .nm:hover{color:var(--purps);text-decoration:underline}
 .mover .dv{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
-/* trend mover rows — Δtrend + raw + seasonal context tag */
-.mvr{display:grid;grid-template-columns:15px 1fr 72px 64px auto;gap:6px;align-items:baseline;font-size:13px;padding:5px 0;border-top:1px solid var(--rule)}
+/* trend mover rows — one directional Δ + lens label + seasonal tag */
+.mvr{display:grid;grid-template-columns:15px 1fr auto 92px;gap:9px;align-items:baseline;font-size:13px;padding:6px 0;border-top:1px solid var(--rule)}
 .mvr:first-of-type{border-top:none}
 .mvr .rk{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-faint)}
 .mvr .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .mvr .nm:hover{color:var(--purps);text-decoration:underline}
-.mvr .st{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
-.mvr .rw{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:500;font-size:11.5px;color:var(--ink-faint);text-align:right;white-space:nowrap}
-.mvr .rw.pos{color:#5B8C5A} .mvr .rw.neg{color:#B56576}
-.mvr .tag{font-family:var(--sans);font-size:10px;font-weight:600;white-space:nowrap;padding:1px 6px;border-radius:4px}
+.mvr .st{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;white-space:nowrap}
+.mvr .st .prim{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:700}
+.mvr .st .prim.pos{color:var(--green)} .mvr .st .prim.neg{color:var(--red)} .mvr .st .prim.amb{color:var(--amber)}
+.mvr .st .lens{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-faint);margin-left:5px}
+.mvr .st .alt{font-size:10px;color:var(--ink-faint);font-variant-numeric:tabular-nums;margin-top:1px}
+.mvr .st .alt .lens{color:var(--ink-faint)}
+.mvr .tag{font-family:var(--sans);font-size:9.5px;font-weight:600;white-space:nowrap;padding:2px 7px;border-radius:5px;text-align:center;justify-self:end}
 .mvr .tag.seasonal{background:var(--rule);color:var(--ink-faint)}
 .mvr .tag.against{background:var(--amber-bg);color:var(--amber)}
 .mvr .tag.mostly-ty{background:#E8F5E9;color:#2E7D32}
-.mvr .tag.no-ly{background:var(--rule);color:var(--ink-faint);opacity:0.6}
+.mvr .tag.no-ly{background:transparent;color:var(--ink-faint);opacity:0.5}
+.mvh{display:grid;grid-template-columns:15px 1fr auto 92px;gap:9px;font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding-bottom:6px;border-bottom:1.3px solid var(--rule-dark)}
+.mvh span:nth-child(3){text-align:right} .mvh span:nth-child(4){text-align:center}
 .mvh{display:grid;grid-template-columns:15px 1fr 72px 64px auto;gap:6px;font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);padding-bottom:5px;border-bottom:1.3px solid var(--rule-dark)}
 .mvh span:nth-child(3),.mvh span:nth-child(4){text-align:right}
 .spark-wrap{margin-top:7px}
@@ -323,10 +338,16 @@ td.selcol input,th.selcol input{cursor:pointer}
 .mr-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--ink-faint)}
 .mr-saved{color:var(--green);font-weight:600}
 .mr-context{margin-top:18px}
-.mr-context-item{border:1px solid var(--rule);border-radius:12px;padding:13px 16px;background:var(--paper-deep);margin-bottom:10px}
-.mr-context-item .mr-src{font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--purps);margin-bottom:5px}
-.mr-context-item .mr-txt{font-family:var(--sans);font-size:13px;color:var(--ink);line-height:1.55}
-.mr-context-item .mr-when{font-family:var(--sans);font-size:10px;color:var(--ink-faint);margin-top:5px}
+.mr-ctx-head{font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.mr-ctx-head .cnt{background:var(--rule);color:var(--ink-soft);border-radius:999px;padding:1px 8px;font-size:10px}
+.mr-context-item{border:1px solid var(--rule);border-left:3px solid var(--rule-dark);border-radius:10px;padding:11px 15px;background:var(--paper-deep);margin-bottom:8px}
+.mr-context-item.k-drop{border-left-color:var(--red)}
+.mr-context-item.k-gain{border-left-color:var(--green)}
+.mr-context-item.k-ops{border-left-color:var(--ink-faint)}
+.mr-ctx-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px}
+.mr-context-item .mr-title{font-family:var(--sans);font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.3}
+.mr-context-item .mr-meta2{font-family:var(--sans);font-size:9.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap}
+.mr-context-item .mr-txt{font-family:var(--sans);font-size:12.5px;color:var(--ink-soft);line-height:1.5}
 .mr-prompt{font-family:var(--sans);font-size:12px;color:var(--ink-faint);line-height:1.6;margin-bottom:14px}
 .mr-prompt b{color:var(--ink);font-weight:600}
 </style>
@@ -334,8 +355,8 @@ td.selcol input,th.selcol input{cursor:pointer}
 <body>
 <div class="page">
   <div class="masthead">
-    <div class="mast-kicker">Headout · Growth · Weekly Market Report</div>
-    <h1>The Weekly <em>Ledger</em></h1>
+    <div class="mast-kicker">Headout · Growth · The Weekly <em>Ledger</em></div>
+    <h1 id="mastTitle">North America</h1>
     <div class="mast-meta" id="mastMeta"></div>
   </div>
 
@@ -484,16 +505,23 @@ function renderHead(M){
     ' <span class="'+sgn(roiDeltaPP)+'" style="font-weight:600">('+
     (roiDeltaPP>0?'+':MINUS)+Math.abs(roiDeltaPP).toFixed(1)+'pp)</span>';
 
-  // Trend movers: union of raw WoW + 4-week trend, with seasonal context tag
+  // Trend movers: one directional number per row (the bigger move in the card's
+  // direction), labelled with its lens (4-WK = vs 4-week avg · WoW = vs last week),
+  // plus a seasonal tag vs LY. Both numbers are in the hover.
   const tagCls = t => t==='against season'?'against':t==='seasonal'?'seasonal':t==='mostly TY'?'mostly-ty':'no-ly';
-  const MVHEAD='<div class="mvh"><span></span><span></span><span>Δ trend</span><span>raw</span><span></span></div>';
-  const mvT = (c,cls,i)=>{
-    const tip = c.ly_wow!=null?'LY WoW: '+fmtMoneyDelta(c.ly_wow):'no LY data';
-    return '<div class="mvr" title="'+esc(tip)+'"><span class="rk">'+(i+1)+'</span>'+
+  const MVHEAD='<div class="mvh"><span></span><span>Combined Entity</span><span>Δ move</span><span>vs LY</span></div>';
+  const mvT = (c,dir,i)=>{
+    const t=c.delta_4w, r=c.raw_wow;
+    const prim = dir==='drop' ? Math.min(t,r) : Math.max(t,r);
+    const other = (prim===t) ? r : t;
+    const lens = (prim===t) ? '4-wk' : 'WoW', otherLens = (prim===t) ? 'WoW' : '4-wk';
+    // second line only when the two lenses disagree in direction (choppy CE)
+    const diverge = other!=null && Math.abs(other)>=100 && (prim>=0)!==(other>=0);
+    const altLine = diverge ? '<span class="alt">'+fmtMoneyDelta(other)+'<span class="lens">'+otherLens+'</span></span>' : '';
+    return '<div class="mvr"><span class="rk">'+(i+1)+'</span>'+
       '<span class="nm" data-ce="'+esc(c.ce_id)+'">'+esc(c.ce_name)+'</span>'+
-      '<span class="st '+sgn(c.delta_4w)+'">'+fmtMoneyDelta(c.delta_4w)+'</span>'+
-      '<span class="rw '+sgn(c.raw_wow)+'">'+fmtMoneyDelta(c.raw_wow)+'</span>'+
-      (c.tag?'<span class="tag '+tagCls(c.tag)+'">'+esc(c.tag)+'</span>':'')+'</div>'; };
+      '<span class="st"><span class="prim '+sgn(prim)+'">'+fmtMoneyDelta(prim)+'<span class="lens">'+lens+'</span></span>'+altLine+'</span>'+
+      (c.tag?'<span class="tag '+tagCls(c.tag)+'">'+esc(c.tag)+'</span>':'<span class="tag no-ly">—</span>')+'</div>'; };
   // fallback mover (no trend engine): raw only
   const mvR = (m,i)=> '<div class="mover"><span class="rk">'+(i+1)+'</span>'+
      '<span class="nm" data-ce="'+esc(m.ce_id)+'">'+esc(m.ce_name)+'</span>'+
@@ -501,18 +529,20 @@ function renderHead(M){
 
   let drops, gains, moverSub;
   if(wh && wh.trend){
-    const dr=(wh.trend.top_droppers||[]).slice(0,10).map((c,i)=>mvT(c,'neg',i)).join('');
-    const gn=(wh.trend.top_gainers||[]).slice(0,10).map((c,i)=>mvT(c,'pos',i)).join('');
+    const dr=(wh.trend.top_droppers||[]).slice(0,10).map((c,i)=>mvT(c,'drop',i)).join('');
+    const gn=(wh.trend.top_gainers||[]).slice(0,10).map((c,i)=>mvT(c,'gain',i)).join('');
     drops = dr ? MVHEAD+dr : ''; gains = gn ? MVHEAD+gn : '';
-    moverSub='top by 4-week trend OR raw WoW';
+    moverSub='biggest move · 4-wk or WoW';
   } else {
     drops=(h.top_drops||[]).map(mvR).join(''); gains=(h.top_gainers||[]).map(mvR).join('');
     moverSub='Δ rev WoW';
   }
   const moverNote = (wh&&wh.trend) ?
-    '<div class="sub" style="margin-top:10px;font-size:10px;line-height:1.5;color:var(--ink-faint)">'+
-      '<b>Δ trend</b> vs 4-wk avg · <b>raw</b> vs W-1 · tag vs LY: '+
-      'seasonal, <span style="color:var(--amber)">against season</span> (investigate), mostly TY (real shift)</div>' : '';
+    '<div class="sub" style="margin-top:11px;font-size:10px;line-height:1.55;color:var(--ink-faint)">'+
+      '<b>Δ move</b> = the bigger swing, tagged <b>4-WK</b> (vs 4-week avg) or <b>WoW</b> (vs last week); '+
+      'a muted second line appears only when the two disagree (up on one, down on the other). '+
+      '<b>vs LY</b>: seasonal = last year moved the same way · '+
+      '<span style="color:var(--amber)">against season</span> = opposite, investigate · mostly TY = real shift</div>' : '';
 
   // Plain-language read — translate the dual-clock into one sentence a BGM gets
   // instantly (the "so what", not the jargon). This is the header's headline.
@@ -614,30 +644,86 @@ function renderFollowup(M){
   const mrText = mr && mr.text ? mr.text : '';
   const mrWhen = mr && mr.updated ? 'saved '+new Date(mr.updated).toLocaleString() : 'not saved yet';
   const ctx = M.market_review_context||[];
-  const ctxHtml = ctx.length ? '<div class="mr-context">'+
-    ctx.map(c=>'<div class="mr-context-item"><div class="mr-src">'+esc(c.source||'slack')+(c.channel?' · '+esc(c.channel):'')+'</div>'+
-      '<div class="mr-txt">'+esc(c.text)+'</div>'+
-      (c.timestamp?'<div class="mr-when">'+esc(c.timestamp)+'</div>':'')+'</div>').join('')+'</div>' : '';
+  // grouped Slack-signal design: Risk / Tailwind / Context sections, each a card of rows.
+  // Uses the report's own tokens (var(--red/green/purps/amber)) + .chip classes for consistency.
+  const CG={risk:'var(--red)',win:'var(--green)',ctx:'var(--purps)'};
+  const TC={risk:'red',win:'green',watch:'amber',ctx:'violet'};   // -> report .chip classes
+  const MC={red:'var(--red)',green:'var(--green)',amber:'var(--amber)',purps:'var(--purps)'};
+  const GDEF=[{k:'risk',t:'Risks & watch-outs'},{k:'win',t:'Tailwinds & momentum'},{k:'ctx',t:'Market & ops context'}];
+  const mrow=(c,first)=>{ const mc=MC[c.metric_kind]||'var(--ink-soft)', chip=TC[c.tag_kind||c.group]||'violet';
+    return '<div style="display:flex;gap:14px;padding:11px 16px;'+(first?'':'border-top:1px solid var(--rule)')+'">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+          (c.link
+            ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink);text-decoration:none">'+esc(c.ce||'')+' <span style="color:var(--purps);font-weight:800">↗</span></a>'
+            : '<span style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink)">'+esc(c.ce||'')+'</span>')+
+          (c.tag?'<span class="chip '+chip+'">'+esc(c.tag)+'</span>':'')+
+          (c.link
+            ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap;text-decoration:none">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</a>'
+            : '<span style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</span>')+
+        '</div>'+
+        (c.so_what?'<div style="font-family:var(--sans);font-weight:600;font-size:12.5px;line-height:1.4;color:var(--ink);margin-top:4px">'+esc(c.so_what)+'</div>':'')+
+        (c.body?'<div style="font-family:var(--sans);font-size:12px;line-height:1.45;color:var(--ink-soft);margin-top:2px">'+esc(c.body)+'</div>':'')+
+      '</div>'+
+      (c.metric?'<div style="flex:none;align-self:center;text-align:right;min-width:92px;display:flex;align-items:center;justify-content:flex-end;gap:7px">'+
+        '<span style="width:6px;height:6px;border-radius:50%;background:'+(CG[c.group]||'var(--purps)')+';flex:none"></span>'+
+        '<span style="font-family:var(--sans);font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums;color:'+mc+';white-space:nowrap">'+esc(c.metric)+'</span></div>':'')+
+    '</div>'; };
+  const mrgroup=(g)=>{ const items=ctx.filter(c=>c.group===g.k); if(!items.length) return '';
+    return '<div style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
+        '<span style="width:9px;height:9px;border-radius:3px;background:'+CG[g.k]+'"></span>'+
+        '<span style="font-family:var(--sans);font-weight:700;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:'+CG[g.k]+'">'+g.t+'</span>'+
+        '<span style="font-family:var(--sans);font-weight:600;font-size:10.5px;color:var(--ink-faint)">'+items.length+' signal'+(items.length>1?'s':'')+'</span>'+
+        '<span style="flex:1;height:1px;background:var(--rule)"></span></div>'+
+      '<div style="background:var(--card);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)">'+
+        items.map((c,i)=>mrow(c,i===0)).join('')+'</div></div>'; };
+  const legend = '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">'+
+    '<div style="display:flex;align-items:center;gap:9px"><span style="font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Slack signal · beyond the data</span>'+
+    '<span style="font-family:var(--sans);font-weight:700;font-size:11px;color:var(--purps);background:var(--purps-soft);padding:2px 9px;border-radius:99px">'+ctx.length+'</span></div>'+
+    '<div style="margin-left:auto;display:flex;gap:14px;flex-wrap:wrap;font-family:var(--sans);font-weight:600;font-size:11px;color:var(--ink-soft)">'+
+      '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--red)"></span>Risk / watch-out</span>'+
+      '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--green)"></span>Tailwind / momentum</span>'+
+      '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--purps)"></span>Market / ops context</span></div></div>';
+  const ctxHtml = ctx.length ? legend + GDEF.map(mrgroup).join('') : '';
 
-  const mrBody = '<div class="mr-panel">'+
+  const mrBody = '<div class="mr-panel" style="max-width:940px">'+
     '<div class="mr-prompt">Weekly market review for <b>'+esc(M.meta.market)+'</b> · w/c '+esc(M.meta.week_start)+
     '. Your narrative persists locally across weeks — use it to capture the "so what" beyond the numbers.</div>'+
     ctxHtml+
-    '<div class="mr-review"><textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn’t capture…\n\ne.g. ‘Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.’">'+esc(mrText)+'</textarea>'+
-    '<div class="mr-meta"><span id="mrSaved" class="mr-saved">'+esc(mrWhen)+'</span>'+
-      '<span class="mono">key: wr_market_review::'+esc(M.meta.market_slug)+'</span></div></div></div>';
+    '<div style="margin-top:24px;background:var(--card);border:1.5px solid var(--rule);border-radius:16px;padding:4px;box-shadow:var(--shadow)">'+
+      '<div style="display:flex;align-items:center;gap:9px;padding:13px 16px 8px">'+
+        '<span style="font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--purps)">✦ Your market review</span>'+
+        '<span style="font-family:var(--sans);font-weight:500;font-size:11px;color:var(--ink-faint)">persists across weeks</span>'+
+        '<span id="mrSaved" style="margin-left:auto;font-family:var(--sans);font-weight:600;font-size:11px;color:var(--green)">'+esc(mrWhen)+'</span></div>'+
+      '<div style="padding:0 16px 16px" class="mr-review">'+
+        '<textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn’t capture…\n\ne.g. ‘Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.’">'+esc(mrText)+'</textarea>'+
+        '<div style="margin-top:7px;font-family:var(--sans);font-size:10px;color:var(--ink-faint)">key: wr_market_review::'+esc(M.meta.market_slug)+'</div>'+
+      '</div></div></div>';
 
   const fuCnt = rows.length ? '<span class="cnt">('+rows.length+')</span>' : '';
   const mrHas = mrText ? ' · ●' : '';
+  // collapsed-state summary: counts so the reader knows what's inside without expanding
+  const nSig = (M.market_review_context||[]).length;
+  const summary = [rows.length+' flagged CE'+(rows.length===1?'':'s'),
+    nSig?nSig+' Slack signal'+(nSig===1?'':'s'):null,
+    mrText?'note saved':null].filter(Boolean).join(' · ');
 
-  return '<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>'+
-    '<span class="sub">last week’s flagged CEs + your market review</span></div>'+
-    '<div class="s2tabs">'+
-      '<div class="s2tab active" data-s2tab="followup">Follow-up'+fuCnt+'</div>'+
-      '<div class="s2tab" data-s2tab="review">Market Review'+esc(mrHas)+'</div>'+
+  return '<section id="s2" class="collapsible collapsed">'+
+    '<div class="sec-head">'+
+      '<span class="sec-num">2</span><h2>'+esc(M.meta.market)+' Digest</h2>'+
+      '<span class="sub"><span class="collapsed-only">'+esc(summary)+'</span>'+
+        '<span class="expanded-only">flagged-CE follow-ups · Slack signal · your review</span></span>'+
+      '<button class="sec-btn" aria-expanded="false">'+
+        '<span class="collapsed-only">Show ▾</span><span class="expanded-only">Hide ▴</span></button></div>'+
+    '<div class="sec-body">'+
+      '<div class="s2tabs">'+
+        '<div class="s2tab active" data-s2tab="followup">Follow-up'+fuCnt+'</div>'+
+        '<div class="s2tab" data-s2tab="review">Market Review'+esc(mrHas)+'</div>'+
+      '</div>'+
+      '<div class="s2pane active" id="s2-followup">'+fuBody+'</div>'+
+      '<div class="s2pane" id="s2-review">'+mrBody+'</div>'+
     '</div>'+
-    '<div class="s2pane active" id="s2-followup">'+fuBody+'</div>'+
-    '<div class="s2pane" id="s2-review">'+mrBody+'</div>'+
     '</section>';
 }
 function wireMarketReview(){
@@ -1924,6 +2010,7 @@ function renderTabs(){
 }
 function renderMeta(){
   const M=MARKETS[mi];
+  const mt=document.getElementById('mastTitle'); if(mt) mt.textContent=M.meta.market;
   document.getElementById('mastMeta').innerHTML=
     '<span>Market: <b>'+esc(M.meta.market)+'</b></span>'+
     '<span>Week: '+esc(M.meta.week_start)+' → '+esc(M.meta.week_end)+'</span>'+
@@ -1955,6 +2042,15 @@ document.getElementById('tabs').addEventListener('click',e=>{
 document.getElementById('scrim').addEventListener('click',closeDrawer);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
 document.getElementById('app').addEventListener('click',e=>{
+  // --- collapsible section: explicit Show/Hide button ---
+  const tog=e.target.closest('.sec-btn');
+  if(tog){
+    const sec=tog.closest('.collapsible');
+    if(sec){ const open=sec.classList.toggle('collapsed')===false;
+      tog.setAttribute('aria-expanded', open?'true':'false');
+      if(open){ const rev=sec.querySelector('.s2tab[data-s2tab="review"].active'); if(rev) wireMarketReview(); } }
+    return;
+  }
   // --- Section 2 sub-tabs (Follow-up / Market Review) ---
   const s2t=e.target.closest('.s2tab');
   if(s2t && s2t.dataset.s2tab){
