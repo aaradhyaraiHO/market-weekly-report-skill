@@ -1,8 +1,18 @@
 """PP tracking bucket — dim_pp_allotments (STR/liability) joined to the CE weekly
-funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides)."""
+funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides).
+
+Scope: ACTIVE inventory as of the report week — allotments that are Open AND whose
+tickets are still valid for upcoming dates (or open-dated). This is validity/status-
+based, NOT a creation-date anchor: an allotment created months ago stays in while its
+tickets are still sellable, and expired/closed ones drop out. Self-updating (relative
+to the report week's validity), so there is no manual "season start" to maintain.
+"""
 from __future__ import annotations
-import subprocess, csv, io
+import math
 import config
+from bq import query_df
+
+STALE_DAYS = 180   # Open allotment with no upload in 6+ months → flag as possibly stale
 
 PP_SQL = """
 WITH pp AS (
@@ -10,7 +20,9 @@ WITH pp AS (
          SUM(count_uploaded_tickets) uploaded, SUM(count_sold_tickets) sold,
          SUM(loss_liability_usd) loss_liab, MAX(DATE(latest_ticket_uploaded_at)) last_upload
   FROM `{proj}.{ds}.dim_pp_allotments`
-  WHERE allotment_created_at >= '2026-04-01' AND count_uploaded_tickets > 0
+  WHERE allotment_status = 'Open'
+        AND (ticket_validity_timestamp IS NULL OR DATE(ticket_validity_timestamp) >= DATE(@week))
+        AND count_uploaded_tickets > 0
   GROUP BY 1),
 map AS (SELECT DISTINCT tour_id, combined_entity_id
         FROM `{proj}.{ds}.dim_experience_listings` WHERE tour_id IS NOT NULL),
@@ -25,35 +37,56 @@ GROUP BY 1,2,3 HAVING uploaded > 0
 """.format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET)
 
 
-_PP_CACHE = None
+def _i(v):
+    try:
+        f = float(v)
+        return 0 if math.isnan(f) else int(f)
+    except (TypeError, ValueError):
+        return 0
 
 
-def pp_by_ce():
-    global _PP_CACHE
-    if _PP_CACHE is not None:
-        return _PP_CACHE
-    out = subprocess.run(["bq", "query", "--use_legacy_sql=false", "--format=csv", "--max_rows=1000",
-                          f"--maximum_bytes_billed={config.MAX_BYTES_BILLED}", PP_SQL],
-                         capture_output=True, text=True)
-    if out.returncode != 0:
-        raise SystemExit("PP query failed:\n" + out.stderr[-800:])
+def _f(v):
+    try:
+        f = float(v)
+        return 0.0 if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return 0.0
+
+
+_PP_CACHE = {}
+
+
+def pp_by_ce(week):
+    """Active PP allotments (Open + valid-for-upcoming) across NA/IT/OC as of `week`,
+    keyed by ce_id. Cached per (report week). Uses the shared bq.query_df client."""
+    if week in _PP_CACHE:
+        return _PP_CACHE[week]
+    df = query_df(PP_SQL, "pp_allotments", {"week": week})
     res = {}
-    for r in csv.DictReader(io.StringIO(out.stdout)):
+    for _, r in df.iterrows():
+        lu = r["last_upload"]
+        lu = None if (lu is None or (isinstance(lu, float) and math.isnan(lu))) else str(lu)[:10]
         res[str(r["ce_id"])] = {"market": r["market"], "ce": r["ce"],
-            "uploaded": int(r["uploaded"]), "sold": int(r["sold"]),
-            "loss_liab": float(r["loss_liab"] or 0), "last_upload": r["last_upload"]}
-    _PP_CACHE = res
+            "uploaded": _i(r["uploaded"]), "sold": _i(r["sold"]),
+            "loss_liab": _f(r["loss_liab"]), "last_upload": lu}
+    _PP_CACHE[week] = res
     return res
 
 
 def build_pp(snap):
     """Report-engine entry: PP rows for THIS snapshot's market, joined to CE funnel.
     Returns [] on any failure (guarded — never breaks the report)."""
-    market = (snap.get("meta") or {}).get("market")
+    import datetime
+    meta = snap.get("meta") or {}
+    market = meta.get("market")
+    try:
+        wsd = datetime.date.fromisoformat(str(meta.get("week_start"))[:10])
+    except Exception:
+        wsd = None
     ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
     try:
-        ppmap = pp_by_ce()
-    except SystemExit:
+        ppmap = pp_by_ce(meta.get("week_start"))
+    except Exception:
         return []
     rows = []
     for cid, ppd in ppmap.items():
@@ -67,6 +100,14 @@ def build_pp(snap):
                  "str_pct": round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None,
                  "loss_liab": ppd["loss_liab"], "last_upload": ppd["last_upload"],
                  "pp_pct_orders": None, "cvr": None, "cvr_wow": None, "cm2_4w": None, "cm2_trend": None}
+        # stale flag: Open allotment with no upload in STALE_DAYS+ — likely a status-hygiene
+        # artifact (never closed), not genuinely live. Flagged, NOT dropped — reviewer verifies.
+        r["stale"] = False
+        if wsd and r.get("last_upload"):
+            try:
+                r["stale"] = (wsd - datetime.date.fromisoformat(str(r["last_upload"])[:10])).days > STALE_DAYS
+            except Exception:
+                pass
         r["ce_id"] = cid
         rows.append(r)
     rows.sort(key=lambda x: -(x["uploaded"] or 0))
@@ -84,7 +125,9 @@ def pp_row(ce, ppd):
     w0 = wk[-1] if wk else {}
     wm1 = wk[-2] if len(wk) > 1 else {}
     str_pct = round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None
-    # materiality: PP sold vs CE orders over the snapshot window (approx)
+    # materiality: PP sold (season-cumulative) vs CE orders (trailing ~12wk in the
+    # snapshot). Windows differ by design — a rough "how big is PP vs recent demand"
+    # ratio, NOT a same-period share. Labeled as such in the render.
     ce_orders = _sum(wk, "orders", 0)
     pp_pct_orders = round(ppd["sold"] / ce_orders * 100) if ce_orders else None
     # CVR level + WoW
