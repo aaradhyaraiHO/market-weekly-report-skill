@@ -12,6 +12,8 @@ import math
 import config
 from bq import query_df
 
+STALE_DAYS = 180   # Open allotment with no upload in 6+ months → flag as possibly stale
+
 PP_SQL = """
 WITH pp AS (
   SELECT tour_id,
@@ -74,8 +76,13 @@ def pp_by_ce(week):
 def build_pp(snap):
     """Report-engine entry: PP rows for THIS snapshot's market, joined to CE funnel.
     Returns [] on any failure (guarded — never breaks the report)."""
+    import datetime
     meta = snap.get("meta") or {}
     market = meta.get("market")
+    try:
+        wsd = datetime.date.fromisoformat(str(meta.get("week_start"))[:10])
+    except Exception:
+        wsd = None
     ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
     try:
         ppmap = pp_by_ce(meta.get("week_start"))
@@ -93,6 +100,14 @@ def build_pp(snap):
                  "str_pct": round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None,
                  "loss_liab": ppd["loss_liab"], "last_upload": ppd["last_upload"],
                  "pp_pct_orders": None, "cvr": None, "cvr_wow": None, "cm2_4w": None, "cm2_trend": None}
+        # stale flag: Open allotment with no upload in STALE_DAYS+ — likely a status-hygiene
+        # artifact (never closed), not genuinely live. Flagged, NOT dropped — reviewer verifies.
+        r["stale"] = False
+        if wsd and r.get("last_upload"):
+            try:
+                r["stale"] = (wsd - datetime.date.fromisoformat(str(r["last_upload"])[:10])).days > STALE_DAYS
+            except Exception:
+                pass
         r["ce_id"] = cid
         rows.append(r)
     rows.sort(key=lambda x: -(x["uploaded"] or 0))
