@@ -113,7 +113,43 @@ tr.grouphead td.gtoggle{cursor:pointer;user-select:none}
 tr.grouphead:hover td.gtoggle{color:var(--purps)}
 tr.grouphead .caret{display:inline-block;width:14px;color:var(--purps);font-weight:700}
 tr.grouphead .gcnt{color:var(--ink-faint);font-weight:600;letter-spacing:0;text-transform:none;margin-left:7px}
+/* combined group row: header label + inline Σ-subtotal metrics on one line */
+tr.grouprow td{background:var(--paper-deep);font-weight:700;border-top:2px solid var(--rule-dark);border-bottom:1px solid var(--rule-dark)}
+tr.grouprow td.gtoggle{cursor:pointer;user-select:none;color:var(--purps-deep);font-family:var(--sans);
+  font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+tr.grouprow:hover td.gtoggle{color:var(--purps)}
+tr.grouprow td.gtoggle .caret{display:inline-block;width:14px;color:var(--purps);font-weight:700}
+tr.grouprow td.gtoggle .gcnt{color:var(--ink-faint);font-weight:600;letter-spacing:0;text-transform:none;margin-left:7px}
+tr.grouprow td.mcell .md{font-size:9.5px;font-weight:600}
+tr.grouprow:hover td.stick{background:var(--paper-deep)}
+/* overall→paid divider */
+th.gdiv,td.gdiv{border-left:2px solid var(--rule-dark)}
 tr.subtot td{background:rgba(128,0,255,.055);font-family:var(--sans);font-weight:700;font-size:12px;border-bottom:1.5px solid var(--rule-dark)}
+/* per-metric expand/collapse */
+thead tr.hrow1 th{top:0}
+thead tr.hrow2 th{top:36px}
+/* paid block: subtle tint on the whole group's headers (unifies them as "paid") */
+thead th.paidcol{background:rgba(128,0,255,.05)}
+/* grand-total row for the current filter/group set — sticky under the header */
+tr.totrow td{background:#efe6ff;font-weight:800;font-size:12px;border-top:2px solid var(--purps);border-bottom:2px solid var(--rule-dark);position:sticky;top:37px;z-index:1}
+tr.totrow td.totlabel{color:var(--purps-deep);text-transform:uppercase;font-size:11px;letter-spacing:.05em}
+tr.totrow td.stick{z-index:2}
+tr.totrow.exp td{top:69px}   /* taller header when any metric is expanded */
+tr.totrow td.mcell .md{font-size:9.5px;font-weight:700}
+thead th.mexp{text-align:center;background:var(--violet-bg);color:var(--purps);border-left:1px solid var(--rule-dark);border-right:1px solid var(--rule-dark)}
+thead th.mexp .sortable{cursor:pointer}
+thead th.sub{font-size:8.5px;color:var(--ink-faint);padding:6px 9px;background:var(--paper-deep)}
+thead th.sub.exp0{border-left:1px solid var(--rule-dark)}
+thead th.sub.exp1{border-right:1px solid var(--rule-dark)}
+.mtog{cursor:pointer;user-select:none;margin-left:5px;font-size:10px;color:var(--purps);border:1px solid var(--rule-dark);border-radius:5px;padding:0 4px;background:#fff;letter-spacing:0}
+.mtog:hover{background:var(--violet-bg)}
+td.mcell .mv{font-weight:600}
+td.mcell .md{display:block;font-size:9.5px;font-weight:600;margin-top:1px;letter-spacing:0}
+td.exp0,th.sub.exp0{border-left:1px solid var(--rule-dark)}
+td.exp1,th.sub.exp1{border-right:1px solid var(--rule-dark)}
+td.exp0{font-weight:700}
+td.exp0,td.exp,td.exp1{background:rgba(128,0,255,.022)}
+tbody tr.cerow:hover td.exp0,tbody tr.cerow:hover td.exp,tbody tr.cerow:hover td.exp1{background:rgba(128,0,255,.06)}
 .moverbadge{font-size:11px;margin-right:4px}
 .cmtdot{color:var(--purps);margin-left:5px}
 .ceid{font-family:var(--sans);font-size:10px;font-weight:600;color:var(--ink-faint);font-variant-numeric:tabular-nums}
@@ -313,8 +349,9 @@ td.selcol input,th.selcol input{cursor:pointer}
 const DATA = JSON.parse(document.getElementById('report-data').textContent);
 const MARKETS = DATA.markets;
 let mi = 0;                       // current market index
-const state = { sortKey:'__mover', dir:-1, group:'', search:'', filters:{}, watchOnly:false, rule:'', selMode:false, collapsed:{} };
+const state = { sortKey:'__mover', dir:-1, group:'', search:'', filters:{}, watchOnly:false, rule:'', selMode:false, collapsed:{}, expand:{} };
 let ceCtxTotRev = 0;   // total W0 revenue of the currently-filtered rows (for Contrib %); set in paintCETable
+let ceMktTotRev = 0;   // total W0 revenue of the WHOLE market (unfiltered) — for the TOTAL row's share-of-market
 const sel = new Set();            // CE ids checked in select mode (transient)
 let activeView = null;            // index of the currently-applied saved view
 
@@ -594,26 +631,52 @@ function renderFollowup(M){
 /* =====================================================================
    SECTION 3 — All-CE view (the core surface)
    ===================================================================== */
-const COLS = [
+// Static leading columns (never expand). Sort via sv().
+const STATIC_COLS = [
   {k:'name', label:'Combined Entity', stick:true, sort:true, sv:r=>r.ce.ce_name.toLowerCase()},
   {k:'spark',label:'12-wk rev', sort:false},
-  {k:'rev',  label:'Rev W0', num:true, sort:true, sv:r=>r.w0.revenue, rd:r=>fmtMoney(r.w0.revenue)},
   {k:'contrib', label:'Contrib %', num:true, sort:true, sv:r=>r.w0.revenue,
-    rd:r=>fmtPct(ceCtxTotRev? 100*(r.w0.revenue||0)/ceCtxTotRev : null, 1)},
-  {k:'dwk',  label:'Δ Rev WoW', num:true, sort:true, sv:r=>r.dwk, rd:r=>'<span class="'+sgn(r.dwk)+'">'+fmtMoneyDelta(r.dwk)+'</span>'},
-  {k:'wow',  label:'WoW %', num:true, sort:true, sv:r=>r.wow, rd:r=>'<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+'</span>'},
-  {k:'yoy',  label:'YoY %', num:true, sort:true, sv:r=>r.w0.yoy_pct, rd:r=>'<span class="'+sgn(r.w0.yoy_pct)+'">'+fmtDelta(r.w0.yoy_pct)+'</span>'},
-  {k:'ord',  label:'Orders', num:true, sort:true, sv:r=>r.w0.orders, rd:r=>fmtInt(r.w0.orders)},
-  {k:'clk',  label:'Clicks', num:true, sort:true, sv:r=>r.w0.clicks, rd:r=>fmtInt(r.w0.clicks)},
-  {k:'cpc',  label:'CPC', num:true, sort:true, sv:r=>r.w0.cpc, rd:r=>fmtCpc(r.w0.cpc)},
-  {k:'cvr',  label:'CVR', num:true, sort:true, sv:r=>r.w0.cvr_pct, rd:r=>fmtPct(r.w0.cvr_pct)},
-  {k:'aov',  label:'AOV', num:true, sort:true, sv:r=>r.w0.aov, rd:r=>fmtMoney(r.w0.aov)},
-  {k:'tr',   label:'TR', num:true, sort:true, sv:r=>r.w0.tr_pct, rd:r=>fmtPct(r.w0.tr_pct)},
-  {k:'spd',  label:'Spend', num:true, sort:true, sv:r=>r.w0.spend, rd:r=>fmtMoney(r.w0.spend)},
-  {k:'cm1',  label:'CM1', num:true, sort:true, sv:r=>r.w0.cm1, rd:r=>fmtMoney(r.w0.cm1)},
-  {k:'roi',  label:'ROI', num:true, sort:true, sv:r=>r.w0.roi_pct, rd:r=>fmtPct(r.w0.roi_pct,0)},
-  {k:'paid', label:'Paid %', num:true, sort:true, sv:r=>r.w0.paid_contribution_pct, rd:r=>fmtPct(r.w0.paid_contribution_pct,0)},
+    tip:'Share of the currently-filtered W0 revenue (Σ = 100% across shown CEs).'},
 ];
+// Expandable metric columns. Collapsed → W0 value + (WoW Δ%) beneath.
+// Expanded → W0 · W-1 · Change · Change% · YoY%. `fld` is the weekly[] key,
+// shared by w0 / w1 / weekly_ly rows (all built by _weekly_metrics).
+// Ordered: overall/business metrics first, then paid (Google Search + Bing).
+// `grp:'paid'` on the first paid metric draws a divider before the paid block.
+// `tip` → hover explaining how each calculated metric is derived.
+// grp → banded header ('overall' | 'paid'). Column labels stay unprefixed;
+// the band label carries the "Paid" context once (saves width). tip → hover.
+const METRIC_COLS = [
+  {k:'rev',   label:'Revenue', grp:'overall', fmt:'money', fld:'revenue', tip:'Predicted revenue (sum_revenue_predicted). Δ vs W-1 / LY.'},
+  {k:'orders',label:'Orders',  grp:'overall', fmt:'int',   fld:'orders',  tip:'Completed order count.'},
+  {k:'aov',   label:'AOV',     grp:'overall', fmt:'money', fld:'aov',     tip:'AOV = GBV ÷ orders.'},
+  {k:'tr',    label:'TR',      grp:'overall', fmt:'pct',   fld:'tr_pct',  tip:'Take rate = revenue ÷ completed GBV.'},
+  {k:'cr',    label:'CR',      grp:'overall', fmt:'pct',   fld:'cr_pct',  tip:'Completion rate = completed GBV ÷ booked GBV.'},
+  {k:'clicks',label:'Clicks',  grp:'paid', fmt:'int',   fld:'clicks',    tip:'Paid ad clicks. Paid = Google Search + Bing only.'},
+  {k:'cvr',   label:'CVR',     grp:'paid', fmt:'pct',   fld:'cvr_pct',   tip:'Paid CVR = ad conversions ÷ ad clicks. Paid = Google Search + Bing only.'},
+  {k:'cpc',   label:'CPC',     grp:'paid', fmt:'cpc',   fld:'cpc',       tip:'CPC = paid spend ÷ paid clicks. Paid = Google Search + Bing only.'},
+  {k:'rpc',   label:'RPC',     grp:'paid', fmt:'cpc',   fld:'paid_rpc',  tip:'RPC = revenue ÷ paid clicks. Paid = Google Search + Bing only.'},
+  {k:'spend', label:'Spend',   grp:'paid', fmt:'money', fld:'spend',     tip:'Paid ad spend. Paid = Google Search + Bing only.'},
+  {k:'cm1',   label:'CM1',     grp:'paid', fmt:'money', fld:'cm1',       tip:'Offline contribution margin (calc-CM fallback pre-Sep-2025). Paid = Google Search + Bing only.'},
+  {k:'cm2',   label:'CM2',     grp:'paid', fmt:'money', fld:'paid_cm2',  tip:'CM2 = revenue − paid spend. Paid = Google Search + Bing only.'},
+  {k:'roi',   label:'ROI',     grp:'paid', fmt:'pctn',  fld:'roi_pct',   tip:'ROI = CM1 ÷ (spend + coupon/wallet). Paid = Google Search + Bing only.'},
+];
+const FIRST_PAID=(METRIC_COLS.find(m=>m.grp==='paid')||{}).k;  // divider column key
+function lyRow(r){ const a=r.ce.weekly_ly; return (a&&a.length)?a[a.length-1]:null; }
+function mW0(r,m){ return r.w0?r.w0[m.fld]:null; }
+function mW1(r,m){ const w=r.w1; return w?w[m.fld]:null; }
+function mLY(r,m){ const w=lyRow(r); return w?w[m.fld]:null; }
+function mFmt(v,f){ if(v==null||isNaN(v)) return '—';
+  if(f==='money') return fmtMoney(v); if(f==='cpc') return fmtCpc(v); if(f==='int') return fmtInt(v);
+  if(f==='pct') return fmtPct(v,1); if(f==='pctn') return fmtPct(v,0); return ''+v; }
+function mChg(a,b,f){ if(a==null||b==null||isNaN(a)||isNaN(b)) return '—';
+  const d=a-b, s=d>0?'+':(d<0?MINUS:''), x=Math.abs(d);
+  if(f==='money') return s+fmtMoney(x); if(f==='cpc') return s+'$'+x.toFixed(2);
+  if(f==='pct'||f==='pctn') return s+x.toFixed(1)+'pp'; return s+fmtInt(x); }
+function pctChg(a,b){ return (a==null||b==null||b===0||isNaN(a)||isNaN(b))?null:100*(a/b-1); }
+function colCount(){ let n=STATIC_COLS.length; METRIC_COLS.forEach(m=>n+=state.expand[m.k]?5:1); return n+(state.selMode?1:0); }
+// metric-expand controls: collapse/expand all
+function anyMetricExpanded(){ return METRIC_COLS.some(m=>state.expand[m.k]); }
 const FILTER_DIMS = [
   {key:'management_type', label:'Mgmt'},
   {key:'evolution', label:'Evolution'},
@@ -671,6 +734,7 @@ function renderAllCE(M){
       '<div><label>&nbsp;</label><button class="btn'+(state.watchOnly?' dark':'')+'" id="watchOnly">★ Watchlist only</button></div>'+
       '<div><label>&nbsp;</label><button class="btn'+(state.selMode?' dark':'')+'" id="selMode">☑ Select CEs</button></div>'+
       '<div><label>&nbsp;</label><button class="btn dark" id="moverSort">↕ Top movers</button></div>'+
+      '<div><label>&nbsp;</label><button class="btn" id="expandMetrics">⇔ Expand metrics</button></div>'+
       '<div><label>&nbsp;</label><button class="btn" id="ceReset">Reset</button></div>'+
     '</div>'+
     (fdimHtml?'<div class="fchips">'+fdimHtml+'</div>':'')+
@@ -721,7 +785,11 @@ function sortRows(rows){
   const k=state.sortKey, dir=state.dir;
   let sv;
   if(k==='__mover') sv=r=>Math.abs(r.dwk);
-  else { const col=COLS.find(c=>c.k===k); sv = col&&col.sv ? col.sv : (r=>0); }
+  else {
+    const sc=STATIC_COLS.find(c=>c.k===k);
+    if(sc&&sc.sv) sv=sc.sv;
+    else { const mc=METRIC_COLS.find(c=>c.k===k); sv = mc ? (r=>mW0(r,mc)) : (r=>0); }
+  }
   return rows.slice().sort((a,a2)=>{
     let x=sv(a), y=sv(a2);
     const xn=(x==null||(typeof x==='number'&&isNaN(x))), yn=(y==null||(typeof y==='number'&&isNaN(y)));
@@ -743,74 +811,107 @@ function rowHtml(r,topMovers,rf){
   if(state.selMode){
     tds+='<td class="selcol"><input type="checkbox" data-selce="'+esc(id)+'"'+(sel.has(id)?' checked':'')+'></td>';
   }
-  COLS.forEach(c=>{
-    if(c.k==='name'){
-      tds+='<td class="ce stick">'+
-        '<span class="star'+(watched?' on':'')+'" data-star="'+esc(id)+'" title="watchlist">'+(watched?'★':'☆')+'</span> '+
-        '<span class="cn">'+moverBadge(topMovers,id)+esc(r.ce.ce_name)+
-        ' <span class="ceid">'+esc(id)+'</span>'+
-        ' <a class="omni" href="'+omniLink(id)+'" target="_blank" rel="noopener" title="Open in Omni (12-wk)" onclick="event.stopPropagation()">↗</a>'+
-        (g?'<span class="gtag">'+esc(g)+'</span>':'')+
-        (hasComment(id)?'<span class="cmtdot" title="has a saved note">●</span>':'')+'</span>'+
-        '<small>'+esc(md.city||'')+' · '+esc(md.category||'')+' · '+esc(md.tier||'')+'</small></td>';
-    } else if(c.k==='spark'){
-      // TY (solid) + LY (dashed) revenue mini-trend; no data-k so no per-row
-      // hover wiring — keeps the table instant at 400+ CEs (hover lives in the drawer).
-      const ty=r.ce.weekly.map(x=>x.revenue);
-      const ly=r.ce.weekly_ly?r.ce.weekly_ly.map(x=>x.revenue):null;
-      tds+='<td>'+kmSparkline('', ty, ly).replace(' data-k=""','')+'</td>';
+  // static leading columns
+  tds+='<td class="ce stick">'+
+    '<span class="star'+(watched?' on':'')+'" data-star="'+esc(id)+'" title="watchlist">'+(watched?'★':'☆')+'</span> '+
+    '<span class="cn">'+moverBadge(topMovers,id)+esc(r.ce.ce_name)+
+    ' <span class="ceid">'+esc(id)+'</span>'+
+    ' <a class="omni" href="'+omniLink(id)+'" target="_blank" rel="noopener" title="Open in Omni (12-wk)" onclick="event.stopPropagation()">↗</a>'+
+    (g?'<span class="gtag">'+esc(g)+'</span>':'')+
+    (hasComment(id)?'<span class="cmtdot" title="has a saved note">●</span>':'')+'</span>'+
+    '<small>'+esc(md.city||'')+' · '+esc(md.category||'')+' · '+esc(md.tier||'')+'</small></td>';
+  const ty=r.ce.weekly.map(x=>x.revenue);
+  const ly=r.ce.weekly_ly?r.ce.weekly_ly.map(x=>x.revenue):null;
+  tds+='<td>'+kmSparkline('', ty, ly).replace(' data-k=""','')+'</td>';
+  tds+='<td class="num">'+fmtPct(ceCtxTotRev? 100*(r.w0.revenue||0)/ceCtxTotRev : null, 1)+'</td>';
+  // metric columns — collapsed (value + WoW%) or expanded (W0/W-1/Δ/Δ%/YoY)
+  METRIC_COLS.forEach(m=>{
+    const a=mW0(r,m), b=mW1(r,m), l=mLY(r,m), cp=pctChg(a,b), yp=pctChg(a,l), dvc=m.k===FIRST_PAID?' gdiv':'';
+    if(state.expand[m.k]){
+      tds+='<td class="num exp0'+dvc+'">'+mFmt(a,m.fmt)+'</td>'+
+           '<td class="num exp">'+mFmt(b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+mChg(a,b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+fmtDelta(cp,0)+'</td>'+
+           '<td class="num exp1 '+sgn(yp)+'">'+fmtDelta(yp,0)+'</td>';
     } else {
-      tds+='<td class="num">'+c.rd(r)+'</td>';
+      tds+='<td class="num mcell'+dvc+'"><span class="mv">'+mFmt(a,m.fmt)+'</span>'+
+           '<span class="md '+sgn(cp)+'">'+fmtDelta(cp,0)+'</span></td>';
     }
   });
   return '<tr class="cerow'+(hot?' hot':'')+'" data-ce="'+esc(id)+'">'+tds+'</tr>';
 }
 
-function subtotalHtml(groupRows){
-  // Aggregate raw additive components, then recompute every ratio metric as
-  // Σnumerator / Σdenominator — NOT an average of per-CE ratios (which would be
-  // wrong and is why CPC/CVR/AOV/TR/Paid % used to render blank on collapse).
-  let rev0=0,rev1=0,revLy=0,ord=0,clk=0,pclk=0,spd=0,cpw=0,cm1=0,gbv=0,gbvC=0,adConv=0,organic=0;
-  let anyClk=false,anyPclk=false,anySpd=false,anyLy=false,anyGbvC=false,anyAdConv=false;
-  groupRows.forEach(r=>{ const w=r.w0;
-    rev0+=w.revenue||0; rev1+=(r.w1&&r.w1.revenue)||0;
-    if(w.revenue_ly!=null){revLy+=w.revenue_ly;anyLy=true;}
-    ord+=w.orders||0;
-    if(w.clicks!=null){clk+=w.clicks;anyClk=true;}
-    if(w.paid_clicks!=null){pclk+=w.paid_clicks;anyPclk=true;}
-    if(w.spend!=null){spd+=w.spend;anySpd=true;}
-    if(w.coupon_wallet!=null){cpw+=w.coupon_wallet;}
-    if(w.cm1!=null){cm1+=w.cm1;}
-    if(w.gbv!=null){gbv+=w.gbv;}
-    if(w.gbv_completed!=null){gbvC+=w.gbv_completed;anyGbvC=true;}
-    if(w.ad_conversions!=null){adConv+=w.ad_conversions;anyAdConv=true;}
-    if(w.organic_gbv!=null){organic+=w.organic_gbv;}
+// Σ-based aggregation of the raw components for one period (pick returns the
+// weekly row: r.w0 | r.w1 | lyRow(r)). Ratio metrics recompute as Σnum/Σden —
+// never an average of per-CE ratios.
+function _aggPeriod(rows, pick){
+  const a={rev:0,ord:0,clk:0,pclk:0,spd:0,cpw:0,cm1:0,gbv:0,gbvC:0,adConv:0,organic:0};
+  rows.forEach(r=>{ const w=pick(r); if(!w) return;
+    a.rev+=w.revenue||0; a.ord+=w.orders||0; a.clk+=w.clicks||0; a.pclk+=w.paid_clicks||0;
+    a.spd+=w.spend||0; a.cpw+=w.coupon_wallet||0; a.cm1+=w.cm1||0; a.gbv+=w.gbv||0;
+    a.gbvC+=w.gbv_completed||0; a.adConv+=w.ad_conversions||0; a.organic+=w.organic_gbv||0; });
+  return a;
+}
+function _metricVal(a,k){ switch(k){
+  case 'rev':return a.rev; case 'orders':return a.ord; case 'clicks':return a.clk;
+  case 'cpc':return a.pclk?a.spd/a.pclk:null; case 'cvr':return a.clk?a.adConv/a.clk*100:null;
+  case 'aov':return a.ord?a.gbv/a.ord:null; case 'tr':return a.gbvC?a.rev/a.gbvC*100:null;
+  case 'cr':return a.gbv?a.gbvC/a.gbv*100:null;
+  case 'rpc':return a.pclk?a.rev/a.pclk:null;
+  case 'spend':return a.spd; case 'cm1':return a.cm1; case 'cm2':return a.rev-a.spd;
+  case 'roi':return (a.spd+a.cpw)?a.cm1/(a.spd+a.cpw)*100:null;
+  case 'paid':return a.gbvC?Math.max(0,Math.min(100,100*(1-a.organic/a.gbvC))):null;
+  default:return null; } }
+
+// One combined row per group: caret + label + CE count in the sticky name cell,
+// then the group's Σ-subtotal metrics inline (so a collapsed group is a single
+// line, not a header + a separate subtotal row). Clickable to expand/collapse.
+function groupRowHtml(ckey, glabel, gv, gr, open){
+  const aW0=_aggPeriod(gr, r=>r.w0);
+  const aW1=_aggPeriod(gr, r=>r.w1);
+  const aLY=_aggPeriod(gr, r=>lyRow(r));
+  let tds='<td class="stick gtoggle" data-gtoggle="'+esc(ckey)+'">'+
+      '<span class="caret">'+(open?'▾':'▸')+'</span>'+esc(glabel)+': '+esc(gv)+
+      '<span class="gcnt">'+gr.length+' CE'+(gr.length===1?'':'s')+'</span></td>'+
+    '<td></td>'+  // spark
+    '<td class="num">'+fmtPct(ceCtxTotRev? 100*aW0.rev/ceCtxTotRev : null, 1)+'</td>';  // contrib
+  METRIC_COLS.forEach(m=>{
+    const a=_metricVal(aW0,m.k), b=_metricVal(aW1,m.k), l=_metricVal(aLY,m.k), cp=pctChg(a,b), yp=pctChg(a,l), dvc=m.k===FIRST_PAID?' gdiv':'';
+    if(state.expand[m.k]){
+      tds+='<td class="num exp0'+dvc+'">'+mFmt(a,m.fmt)+'</td>'+
+           '<td class="num exp">'+mFmt(b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+mChg(a,b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+fmtDelta(cp,0)+'</td>'+
+           '<td class="num exp1 '+sgn(yp)+'">'+fmtDelta(yp,0)+'</td>';
+    } else {
+      tds+='<td class="num mcell'+dvc+'"><span class="mv">'+mFmt(a,m.fmt)+'</span>'+
+           '<span class="md '+sgn(cp)+'">'+fmtDelta(cp,0)+'</span></td>';
+    }
   });
-  const dwk=rev0-rev1;
-  const cell={
-    rev:fmtMoney(rev0),
-    contrib:fmtPct(ceCtxTotRev? 100*rev0/ceCtxTotRev : null, 1),
-    dwk:'<span class="'+sgn(dwk)+'">'+fmtMoneyDelta(dwk)+'</span>',
-    wow:(v=>'<span class="'+sgn(v)+'">'+fmtDelta(v)+'</span>')(rev1? (rev0-rev1)/rev1*100 : null),
-    yoy:(v=>'<span class="'+sgn(v)+'">'+fmtDelta(v)+'</span>')(anyLy&&revLy? (rev0/revLy-1)*100 : null),
-    ord:fmtInt(ord),
-    clk:anyClk?fmtInt(clk):'—',
-    cpc:(anyPclk&&pclk)?fmtCpc(spd/pclk):'—',                // Σspend / Σpaid-clicks
-    cvr:(anyAdConv&&clk)?fmtPct(adConv/clk*100):'—',         // Σad-conv / Σclicks
-    aov:ord?fmtMoney(gbv/ord):'—',                           // ΣGBV / Σorders
-    tr:(anyGbvC&&gbvC)?fmtPct(rev0/gbvC*100):'—',            // Σrev / Σcompleted-GBV
-    spd:anySpd?fmtMoney(spd):'—',
-    cm1:anySpd?fmtMoney(cm1):'—',
-    roi:(anySpd&&(spd+cpw))?fmtPct(cm1/(spd+cpw)*100,0):'—', // Paid RoI = ΣCM1/(Σspend+Σcoupon+wallet)
-    paid:(anyGbvC&&gbvC)?fmtPct(Math.max(0,Math.min(100,100*(1-organic/gbvC))),0):'—'
-  };
-  let tds='';
-  COLS.forEach(c=>{
-    if(c.k==='name') tds+='<td class="stick">'+groupRows.length+' CEs · subtotal</td>';
-    else if(c.k==='spark') tds+='<td></td>';
-    else tds+='<td class="num">'+(cell[c.k]!=null?cell[c.k]:'')+'</td>';
+  return '<tr class="grouprow'+(open?' open':'')+'" data-group="'+esc(ckey)+'">'+(state.selMode?'<td class="selcol"></td>':'')+tds+'</tr>';
+}
+
+// Grand-total row for the whole currently-filtered set. Recomputes on every
+// filter change and stays pinned at the top of the table body.
+function totalRowHtml(rows){
+  const aW0=_aggPeriod(rows, r=>r.w0), aW1=_aggPeriod(rows, r=>r.w1), aLY=_aggPeriod(rows, r=>lyRow(r));
+  let tds='<td class="stick totlabel">TOTAL · '+rows.length+' CE'+(rows.length===1?'':'s')+'</td>'+
+    '<td></td><td class="num" title="Filtered set’s share of full-market W0 revenue">'+
+      fmtPct(ceMktTotRev? 100*aW0.rev/ceMktTotRev : null, 1)+'</td>';   // share of market (changes on filter)
+  METRIC_COLS.forEach(m=>{
+    const a=_metricVal(aW0,m.k), b=_metricVal(aW1,m.k), l=_metricVal(aLY,m.k), cp=pctChg(a,b), yp=pctChg(a,l), dvc=m.k===FIRST_PAID?' gdiv':'';
+    if(state.expand[m.k]){
+      tds+='<td class="num exp0'+dvc+'">'+mFmt(a,m.fmt)+'</td>'+
+           '<td class="num exp">'+mFmt(b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+mChg(a,b,m.fmt)+'</td>'+
+           '<td class="num exp '+sgn(cp)+'">'+fmtDelta(cp,0)+'</td>'+
+           '<td class="num exp1 '+sgn(yp)+'">'+fmtDelta(yp,0)+'</td>';
+    } else {
+      tds+='<td class="num mcell'+dvc+'"><span class="mv">'+mFmt(a,m.fmt)+'</span>'+
+           '<span class="md '+sgn(cp)+'">'+fmtDelta(cp,0)+'</span></td>';
+    }
   });
-  return '<tr class="subtot">'+(state.selMode?'<td class="selcol"></td>':'')+tds+'</tr>';
+  return '<tr class="totrow'+(anyMetricExpanded()?' exp':'')+'">'+(state.selMode?'<td class="selcol"></td>':'')+tds+'</tr>';
 }
 
 // group key for a row under the current group-by (metadata dim, "My groups",
@@ -849,23 +950,42 @@ function paintCETable(){
   // subtotals/strip. Set before any row/subtotal render reads it.
   ceCtxTotRev = rows.reduce((s,r)=>s+(r.w0.revenue||0),0);
   const allRows = M.ces.map(ceRow);
+  ceMktTotRev = allRows.reduce((s,r)=>s+(r.w0.revenue||0),0);   // full-market denom for TOTAL row
   const byAbs = allRows.slice().sort((a,b)=>Math.abs(b.dwk)-Math.abs(a.dwk));
   const topMovers={}; byAbs.slice(0,10).forEach(r=>{ topMovers[r.ce.ce_id]= r.dwk>=0?'up':'down'; });
 
   const rf=ruleFn();
 
-  // header (leading select column only in select mode)
-  let head='<tr>'+(state.selMode?'<th class="selcol stick"></th>':'')+COLS.map(c=>{
+  // header — 2 rows: metric names (with expand toggles) + sub-label row (only
+  // when a metric is expanded). Overall/Paid split is shown by the divider
+  // (gdiv) before the first paid column; the "Paid" context lives in tooltips.
+  const arrow=c=>{
+    if(state.sortKey===c) return '<span class="ar">'+(state.dir<0?'▼':'▲')+'</span>';
+    if(state.sortKey==='__mover'&&c==='rev') return '<span class="ar">↕</span>';
+    return '';
+  };
+  const firstPaid=(METRIC_COLS.find(m=>m.grp==='paid')||{}).k;
+  const dv=m=>m.k===firstPaid?' gdiv':'';   // divider before the first paid col
+  const anyExp=anyMetricExpanded();
+  let r1=(state.selMode?'<th class="selcol stick" rowspan="2"></th>':'');
+  STATIC_COLS.forEach(c=>{
     const isSort=c.sort!==false;
-    let ar='';
-    if(state.sortKey===c.k) ar='<span class="ar">'+(state.dir<0?'▼':'▲')+'</span>';
-    if(state.sortKey==='__mover'&&c.k==='dwk') ar='<span class="ar">↕</span>';
-    return '<th class="'+(c.num?'num ':'')+(c.stick?'stick ':'')+(isSort?'sortable':'')+'"'+
-      (isSort?' data-sort="'+c.k+'"':'')+'>'+esc(c.label)+ar+'</th>';
-  }).join('')+'</tr>';
+    r1+='<th rowspan="2" class="'+(c.num?'num ':'')+(c.stick?'stick ':'')+(isSort?'sortable':'')+'"'+
+      (isSort?' data-sort="'+c.k+'"':'')+(c.tip?' title="'+esc(c.tip)+'"':'')+'>'+esc(c.label)+arrow(c.k)+'</th>';
+  });
+  METRIC_COLS.forEach(m=>{
+    const ex=state.expand[m.k], tog='<span class="mtog" data-expand="'+m.k+'" title="'+(ex?'collapse':'expand W0/W-1/Δ/YoY')+'">'+(ex?'&gt;&lt;':'&lt;&gt;')+'</span>';
+    const ti=m.tip?' title="'+esc(m.tip)+'"':'';
+    const pc=(m.grp==='paid')?' paidcol':'';   // whole paid block gets a subtle tint
+    if(ex) r1+='<th class="num mexp'+dv(m)+pc+'" colspan="5"'+ti+'><span class="sortable" data-sort="'+m.k+'">'+esc(m.label)+arrow(m.k)+'</span> '+tog+'</th>';
+    else   r1+='<th rowspan="2" class="num sortable mcolh'+dv(m)+pc+'" data-sort="'+m.k+'"'+ti+'>'+esc(m.label)+arrow(m.k)+' '+tog+'</th>';
+  });
+  let r2='';
+  METRIC_COLS.forEach(m=>{ if(state.expand[m.k]){ const pc=(m.grp==='paid')?' paidcol':''; r2+='<th class="num sub exp0'+dv(m)+pc+'">W0</th><th class="num sub'+pc+'">W-1</th><th class="num sub'+pc+'">Change</th><th class="num sub'+pc+'">WoW %</th><th class="num sub exp1'+pc+'">YoY %</th>'; } });
+  let head='<tr class="hrow1">'+r1+'</tr>'+(anyExp?'<tr class="hrow2">'+r2+'</tr>':'');
 
-  const gspan=COLS.length+(state.selMode?1:0);
-  let body='';
+  const gspan=colCount();
+  let body=totalRowHtml(rows);   // grand total for the current filter, pinned at top
   if(state.group){
     const gk=state.group;
     // "My groups" clusters by custom-group membership, "Diagnostic bucket" by
@@ -879,14 +999,12 @@ function paintCETable(){
       const gr=sortRows(groups[gv]);
       // collapsed state keyed by "groupByDim|groupValue" (survives re-renders this session)
       const ckey=gk+'|'+gv, open=!state.collapsed[ckey];
-      body+='<tr class="grouphead" data-group="'+esc(ckey)+'"><td class="stick gtoggle" colspan="'+gspan+'" data-gtoggle="'+esc(ckey)+'">'+
-        '<span class="caret">'+(open?'▾':'▸')+'</span>'+esc(glabel)+': '+esc(gv)+
-        '<span class="gcnt">'+gr.length+' CE'+(gr.length===1?'':'s')+'</span></td></tr>';
+      // combined header+subtotal row (1 line per group); members below when open
+      body+=groupRowHtml(ckey, glabel, gv, gr, open);
       if(open) body+=gr.map(r=>rowHtml(r,topMovers,rf)).join('');
-      body+=subtotalHtml(gr);
     });
   } else {
-    body=sortRows(rows).map(r=>rowHtml(r,topMovers,rf)).join('');
+    body+=sortRows(rows).map(r=>rowHtml(r,topMovers,rf)).join('');   // += keeps the TOTAL row
   }
 
   document.getElementById('ceTableWrap').innerHTML='<table><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
@@ -1405,7 +1523,7 @@ const CE_METRICS_PAID = [
   {k:'paid_sis_pct',     label:'Paid SIS (Google)', fmt:'pct',   ly:'paid_sis_pct'},
   {k:'spend',            label:'Paid Ads Spend',    fmt:'money', ly:'spend'},
   {k:'cpc',              label:'Paid CPC',          fmt:'cpc',   ly:'cpc'},
-  {k:'paid_rpc',         label:'RPC',               fmt:'cpc',   ly:'paid_rpc'},
+  {k:'paid_rpc',         label:'Paid RPC',          fmt:'cpc',   ly:'paid_rpc'},
   {k:'paid_conversions', label:'Paid Conversions',  fmt:'count', ly:'paid_conversions'},
   {k:'paid_cvr_pct',     label:'Paid CVR',          fmt:'pct',   ly:'paid_cvr_pct'},
   {k:'cm1',              label:'Paid CM1',          fmt:'money', ly:'cm1'},
@@ -1807,7 +1925,7 @@ document.getElementById('app').addEventListener('click',e=>{
   const sb=e.target.closest && e.target.closest('.sbar');
   if(sb && sb.dataset.gstrip!=null){ const ck=sb.dataset.gstrip;
     state.collapsed[ck]=false; paintCETable();
-    const gh=document.querySelector('tr.grouphead[data-group="'+ck.replace(/"/g,'\\"')+'"]');
+    const gh=document.querySelector('tr.grouprow[data-group="'+ck.replace(/"/g,'\\"')+'"]');
     if(gh) gh.scrollIntoView({behavior:'smooth',block:'center'});
     return; }
   // --- (P2) collapse/expand a single group ---
@@ -1819,15 +1937,19 @@ document.getElementById('app').addEventListener('click',e=>{
   // controls
   if(e.target.id==='moverSort'){ state.sortKey='__mover'; state.dir=-1; markDirty(); paintCETable(); return; }
   if(e.target.id==='ceReset'){ state.search=''; state.group=''; state.filters={}; state.sortKey='__mover'; state.dir=-1;
-    state.watchOnly=false; state.rule=''; state.selMode=false; sel.clear(); activeView=null; renderApp(); return; }
+    state.watchOnly=false; state.rule=''; state.selMode=false; state.expand={}; sel.clear(); activeView=null; renderApp(); return; }
   if(e.target.id==='monthlyLink'){ e.preventDefault();
     alert('Links out to the monthly deep-dive report (separate build). Monthly data never loads in this weekly view.'); return; }
   const fc=e.target.closest('.fchip');
   if(fc){ const dim=fc.dataset.fdim, val=fc.dataset.fval; const arr=state.filters[dim]=state.filters[dim]||[];
     const idx=arr.indexOf(val); if(idx>=0) arr.splice(idx,1); else arr.push(val);
     if(!arr.length) delete state.filters[dim]; markDirty(); renderApp(); return; }
-  const th=e.target.closest('th.sortable');
-  if(th){ const k=th.dataset.sort; if(state.sortKey===k) state.dir*=-1; else { state.sortKey=k; state.dir=(k==='name'?1:-1); } markDirty(); paintCETable(); return; }
+  // metric expand/collapse toggle (must come before sort — it lives inside the header)
+  const et=e.target.closest('[data-expand]');
+  if(et){ const k=et.dataset.expand; state.expand[k]=!state.expand[k]; markDirty(); paintCETable(); return; }
+  if(e.target.id==='expandMetrics'){ const on=anyMetricExpanded(); METRIC_COLS.forEach(m=>state.expand[m.k]=!on); markDirty(); paintCETable(); return; }
+  const sortEl=e.target.closest('[data-sort]');
+  if(sortEl){ const k=sortEl.dataset.sort; if(state.sortKey===k) state.dir*=-1; else { state.sortKey=k; state.dir=(k==='name'?1:-1); } markDirty(); paintCETable(); return; }
   // Section-1 headline card → market drawer
   const mcard=e.target.closest('[data-market-drawer]');
   if(mcard){ openMarketDrawer(); return; }
