@@ -1620,7 +1620,7 @@ function resourceBlocks(ce){
   // ---- Channel mix ----
   const ch=ce.channels||[];
   const channelTbl = ch.length ?
-    '<table class="dr-table plain"><thead><tr><th>Channel</th><th>W0</th><th>W-1</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Channel</th><th>Rev</th><th>W-1</th><th>WoW</th><th>YoY</th><th>Share</th></tr></thead><tbody>'+
     ch.map(c=>'<tr><td>'+esc(c.channel)+'</td>'+
       '<td>'+fmtMoney(c.rev)+'</td>'+
       '<td>'+fmtMoney(c.rev_wm1)+'</td>'+
@@ -1649,7 +1649,7 @@ function resourceBlocks(ce){
   // ---- Lead-time ----
   const lt=ce.leadtime||[];
   const leadtimeTbl = lt.length ?
-    '<table class="dr-table plain"><thead><tr><th>Band</th><th>W0</th><th>W-1</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Band</th><th>Bookings</th><th>W-1</th><th>Share</th><th>Rev</th><th>AOV</th></tr></thead><tbody>'+
     lt.map(l=>'<tr><td>'+esc(l.band)+'</td>'+
       '<td>'+fmtInt(l.bookings)+'</td>'+
       '<td>'+fmtInt(l.bookings_wm1)+'</td>'+
@@ -1688,8 +1688,7 @@ function resourceBlocks(ce){
   html+=sec('Top countries', countriesTbl);
 
   if(html){
-    html+='<div class="dr-cap">Composition for the W0 week; W0 / W-1 = this week vs prior week '+
-      '(Channel mix W0/W-1 = revenue, Lead-time W0/W-1 = bookings). Channel mix &amp; lead-time use actual (booked) revenue; '+
+    html+='<div class="dr-cap">Composition for the W0 week. Channel mix &amp; lead-time use actual (booked) revenue; '+
       'shares are within-CE. Channel &amp; funnel carry WoW (vs W-1) and YoY (−364d); funnel rate deltas are in pp.</div>';
   }
   return html;
