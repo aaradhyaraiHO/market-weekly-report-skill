@@ -275,6 +275,8 @@ def _attach_resource_breakdowns(
         g = tg_by_ce.get(cid)
         if g is not None:
             total_rev = float(g["rev"].sum())
+            total_rev_wm1 = float(g["rev_wm1"].sum()) if "rev_wm1" in g else 0.0
+            total_rev_ly = float(g["rev_ly"].sum()) if "rev_ly" in g else 0.0
             # total select users for %Traffic denominator
             total_sel = sum(_safe(fn_idx.get((cid, str(r["tgid"])), {}).get("select_users"))
                             for _, r in g.iterrows())
@@ -314,13 +316,22 @@ def _attach_resource_breakdowns(
 
                 lt = lt_idx.get((cid, tid), {})
 
+                # Revenue-share shift: within-CE share for W0 / W-1 / LY → pp deltas.
+                share_now = 100.0 * rev / total_rev if total_rev else None
+                share_wm1 = 100.0 * rev_wm1 / total_rev_wm1 if total_rev_wm1 else None
+                share_ly = 100.0 * rev_ly / total_rev_ly if total_rev_ly else None
+
                 tgids.append({
                     "tgid": tid,
                     "experience": r["experience"] or tid,
                     "rev": _num(rev),
                     "rev_wm1": _num(rev_wm1),
                     "rev_wow": _dp(rev, rev_wm1),
+                    "orders": int(orders) if orders else None,
+                    "orders_wow": _dp(orders, orders_wm1),
                     "share_pct": _share(rev, total_rev),
+                    "share_wow_pp": _dpp(share_now, share_wm1),
+                    "share_yoy_pp": _dpp(share_now, share_ly),
                     "rpc": _num(rpc),
                     "rpc_wow": _dp(rpc, rpc_wm1),
                     "aov": _num(aov),
@@ -373,13 +384,18 @@ def _attach_resource_breakdowns(
             total_rev = float(g["rev"].sum())
             for _, r in g.sort_values("orders", ascending=False).head(_COUNTRIES_TOP_N).iterrows():
                 od = float(r["orders"] or 0)
+                od_wm1 = float(r.get("orders_wm1") or 0)
                 rev = float(r["rev"] or 0)
+                rev_wm1 = float(r.get("rev_wm1") or 0)
                 ov = float(r["order_value"] or 0)
                 countries.append({
                     "country": r["country"],
                     "orders": _num(od),
+                    "orders_wow": _dp(od, od_wm1),
                     "order_share_pct": _share(od, total_ord),
                     "rev": _num(rev),
+                    "rev_wm1": _num(rev_wm1),
+                    "rev_wow": _dp(rev, rev_wm1),
                     "rev_share_pct": _share(rev, total_rev),
                     "aov": _num(ov / od) if od else None,
                 })
@@ -909,7 +925,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_tgid_leadtime(market, w0_start, w0_end),
         fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-        fetch.ce_countries(market, w0_start, w0_end),
+        fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
     )
     _attach_channels_funnel(
         ces,

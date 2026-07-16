@@ -509,20 +509,31 @@ def ce_leadtime(
     )
 
 
-def ce_countries(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """W0 orders/revenue by customer country per CE, from fct_orders (actuals)."""
+def ce_countries(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+) -> pd.DataFrame:
+    """Orders/revenue by customer country per CE for W0 + W-1, from fct_orders."""
     sql = """
     SELECT
         combined_entity_id,
         card_issuing_country                AS country,
-        COUNT(DISTINCT order_id)            AS orders,
-        SUM(amount_revenue_usd)             AS rev,
-        SUM(order_value_usd)                AS order_value
+        COUNT(DISTINCT IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            order_id, NULL))                AS orders,
+        COUNT(DISTINCT IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
+            order_id, NULL))                AS orders_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            amount_revenue_usd, 0))         AS rev,
+        SUM(IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
+            amount_revenue_usd, 0))         AS rev_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            order_value_usd, 0))            AS order_value
 
     FROM {tbl}
 
     WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @start AND @end
+          AND DATE(created_at) BETWEEN @wm1_s AND @w0_e
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
           AND card_issuing_country IS NOT NULL
@@ -531,7 +542,11 @@ def ce_countries(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFram
     """.format(tbl=config.FCT_ORDERS)
     return query_df(
         sql, "ce_countries",
-        {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        },
     )
 
 

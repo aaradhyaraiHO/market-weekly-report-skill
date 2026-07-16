@@ -116,6 +116,12 @@ tr.grouphead .gcnt{color:var(--ink-faint);font-weight:600;letter-spacing:0;text-
 tr.subtot td{background:rgba(128,0,255,.055);font-family:var(--sans);font-weight:700;font-size:12px;border-bottom:1.5px solid var(--rule-dark)}
 .moverbadge{font-size:11px;margin-right:4px}
 .cmtdot{color:var(--purps);margin-left:5px}
+.ceid{font-family:var(--sans);font-size:10px;font-weight:600;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.howto{font-family:var(--sans);font-size:11.5px;line-height:1.6;color:var(--ink-soft);background:var(--paper-deep);border:1px solid var(--rule);border-radius:10px;padding:11px 14px;margin:14px 0}
+.howto b{color:var(--ink);font-weight:700}
+a.omni{text-decoration:none;color:var(--purps);font-weight:700;font-size:11px;margin-left:2px;opacity:.65}
+a.omni:hover{opacity:1}
+.dr-head .kick a.omni{color:var(--purps);text-decoration:none;border-bottom:1px solid rgba(128,0,255,.35)}
 
 .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:14px 16px;border:1px solid var(--rule);border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
 .controls .search{flex:1;min-width:200px}
@@ -175,7 +181,7 @@ svg.spark{display:block}
 .dr-table.plain tr:last-child td{font-weight:normal;background:none}
 /* Enriched TGID table — horizontally scrollable, compound cells */
 .tgid-scroll{overflow-x:auto;margin-top:4px;-webkit-overflow-scrolling:touch}
-.tgid-tbl{font-size:11px;min-width:1000px}
+.tgid-tbl{font-size:11px;min-width:1080px}
 .tgid-tbl th,.tgid-tbl td{padding:5px 6px;white-space:nowrap}
 .tgid-tbl th.lft,.tgid-tbl td.lft{position:sticky;left:0;background:var(--paper);z-index:1;min-width:170px;max-width:190px;white-space:normal}
 .tgid-tbl td.lft{background:#fff}
@@ -319,6 +325,14 @@ function fmtMoney(v){ if(v==null||isNaN(v)) return '—'; const a=Math.abs(v);
   return s.replace('$-','-$'); }
 function fmtInt(v){ return (v==null||isNaN(v))?'—':Math.round(v).toLocaleString('en-US'); }
 function fmtCpc(v){ return (v==null||isNaN(v))?'—':'$'+(+v).toFixed(2); }   // sub-$ metric — needs cents
+// Per-CE Omni deep link — 12-week window, filtered to this CE (format from
+// monthly rca_helper.build_omni_month_link; weekly date-filter variant).
+function omniLink(ceId){
+  const f = encodeURIComponent(JSON.stringify({values:[String(ceId)]}));
+  const d = encodeURIComponent(JSON.stringify({left_side:'12 complete weeks ago',right_side:'12 weeks'}));
+  const c = encodeURIComponent('combined_entity_stats.report_timestamp[week]');
+  return 'https://headout.omniapp.co/dashboards/5368ab53?f--iv8lWOuS='+f+'&f--uvd3KWWJ='+d+'&c--fYgxW0mY='+c;
+}
 function fmtPct(v,dp){ dp=dp==null?1:dp; return (v==null||isNaN(v))?'—':(+v).toFixed(dp)+'%'; }
 function fmtDelta(v,dp){ dp=dp==null?1:dp; if(v==null||isNaN(v)) return '—';
   const s=v>0?'+':(v<0?MINUS:''); return s+Math.abs(v).toFixed(dp)+'%'; }
@@ -671,6 +685,14 @@ function renderAllCE(M){
 
   return '<section id="s3"><div class="sec-head"><span class="sec-num">3</span><h2>All-CE view</h2>'+
     '<span class="sub">every CE × 12 wks · sort · filter · group · star · save views · click a row for the deep dive</span></div>'+
+    '<div class="howto"><b>How to use:</b> '+
+      '<b>Click a row</b> → CE deep dive drawer. '+
+      '<b>↗</b> next to a name → open that CE in Omni. '+
+      '<b>★</b> → watchlist (persists week-over-week). '+
+      '<b>Filter</b> chips + <b>search</b> narrow the list; <b>Group by</b> adds subtotals. '+
+      '<b>Highlight rule</b> flags rows (e.g. <span class="mono">roi&lt;145</span>, <span class="mono">wow&lt;-20</span>). '+
+      '<b>Save view</b> remembers your filters/sort; <b>Select CEs → Add to group</b> tags a durable custom set.'+
+    '</div>'+
     viewsBar+
     controls+
     '<div id="ceStrip"></div>'+
@@ -726,6 +748,8 @@ function rowHtml(r,topMovers,rf){
       tds+='<td class="ce stick">'+
         '<span class="star'+(watched?' on':'')+'" data-star="'+esc(id)+'" title="watchlist">'+(watched?'★':'☆')+'</span> '+
         '<span class="cn">'+moverBadge(topMovers,id)+esc(r.ce.ce_name)+
+        ' <span class="ceid">'+esc(id)+'</span>'+
+        ' <a class="omni" href="'+omniLink(id)+'" target="_blank" rel="noopener" title="Open in Omni (12-wk)" onclick="event.stopPropagation()">↗</a>'+
         (g?'<span class="gtag">'+esc(g)+'</span>':'')+
         (hasComment(id)?'<span class="cmtdot" title="has a saved note">●</span>':'')+'</span>'+
         '<small>'+esc(md.city||'')+' · '+esc(md.category||'')+' · '+esc(md.tier||'')+'</small></td>';
@@ -1216,6 +1240,7 @@ function kmFmt(v,t){
   if(v==null||isNaN(v)) return '—';
   if(t==='money'){ const a=Math.abs(v);
     if(a>=1e6) return '$'+(v/1e6).toFixed(2)+'M'; if(a>=1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+Math.round(v); }
+  if(t==='cpc') return '$'+(+v).toFixed(2);   // CPC/RPC — always cents (double-decimal)
   if(t==='pct') return (+v).toFixed(2)+'%';
   if(t==='count'){ const a=Math.abs(v); return a>=1e3?(v/1e3).toFixed(1)+'K':''+Math.round(v); }
   return ''+v;
@@ -1379,8 +1404,8 @@ const CE_METRICS_PAID = [
   {k:'paid_ctr_pct',     label:'Paid CTR',          fmt:'pct',   ly:'paid_ctr_pct'},
   {k:'paid_sis_pct',     label:'Paid SIS (Google)', fmt:'pct',   ly:'paid_sis_pct'},
   {k:'spend',            label:'Paid Ads Spend',    fmt:'money', ly:'spend'},
-  {k:'cpc',              label:'Paid CPC',          fmt:'money', ly:'cpc'},
-  {k:'paid_rpc',         label:'RPC',               fmt:'money', ly:'paid_rpc'},
+  {k:'cpc',              label:'Paid CPC',          fmt:'cpc',   ly:'cpc'},
+  {k:'paid_rpc',         label:'RPC',               fmt:'cpc',   ly:'paid_rpc'},
   {k:'paid_conversions', label:'Paid Conversions',  fmt:'count', ly:'paid_conversions'},
   {k:'paid_cvr_pct',     label:'Paid CVR',          fmt:'pct',   ly:'paid_cvr_pct'},
   {k:'cm1',              label:'Paid CM1',          fmt:'money', ly:'cm1'},
@@ -1448,10 +1473,12 @@ function resourceBlocks(ce){
   // ---- Countries ----
   const ct=ce.countries||[];
   const countriesTbl = ct.length ?
-    '<table class="dr-table plain"><thead><tr><th>Country</th><th>Orders</th><th>Rev</th><th>Share</th><th>AOV</th></tr></thead><tbody>'+
+    '<table class="dr-table plain"><thead><tr><th>Country</th><th>Orders</th><th>WoW</th><th>Rev</th><th>WoW</th><th>Share</th><th>AOV</th></tr></thead><tbody>'+
     ct.slice(0,6).map(c=>'<tr><td>'+esc(c.country)+'</td>'+
       '<td>'+fmtInt(c.orders)+'</td>'+
+      '<td class="'+sgn(c.orders_wow)+'">'+fmtDelta(c.orders_wow,0)+'</td>'+
       '<td>'+fmtMoney(c.rev)+'</td>'+
+      '<td class="'+sgn(c.rev_wow)+'">'+fmtDelta(c.rev_wow,0)+'</td>'+
       '<td>'+fmtPct(c.rev_share_pct,0)+'</td>'+
       '<td>'+fmtMoney(c.aov)+'</td></tr>').join('')+
     '</tbody></table>' : '';
@@ -1468,9 +1495,17 @@ function resourceBlocks(ce){
       }
       return '<div class="cc-v">'+main+'</div>'+sub;
     };
+    // Share cell: value + dual WoW / YoY pp shift beneath.
+    const shareCell=(v, w, y)=>{
+      const parts=[];
+      if(w!=null && !isNaN(w)) parts.push('<span class="'+sgn(w)+'">'+ppDelta(w)+'</span>');
+      if(y!=null && !isNaN(y)) parts.push('<span class="'+sgn(y)+'">'+ppDelta(y)+'y</span>');
+      const sub = parts.length ? '<div class="cc-d">'+parts.join(' / ')+'</div>' : '';
+      return '<div class="cc-v">'+fmtPct(v,0)+'</div>'+sub;
+    };
     tgidHtml='<div class="dr-sec-t">Top experiences (TGIDs)</div>'+
       '<div class="tgid-scroll"><table class="dr-table plain tgid-tbl"><thead><tr>'+
-        '<th class="lft">Experience</th><th>Rev</th><th>W-1</th><th>Share</th><th>RPC</th><th>AOV</th>'+
+        '<th class="lft">Experience</th><th>Rev</th><th>W-1</th><th>Orders</th><th>Share</th><th>RPC</th><th>AOV</th>'+
         '<th>CR</th><th>TR</th><th>Sel Users</th><th>%Traf</th><th>S2C</th><th>C2O</th>'+
         '<th>%0-2D</th><th>%3-7D</th><th>%7D+</th>'+
       '</tr></thead><tbody>'+
@@ -1478,7 +1513,8 @@ function resourceBlocks(ce){
         '<td class="lft">'+esc(t.experience)+' <span class="mono" style="color:var(--ink-faint)">'+esc(t.tgid)+'</span></td>'+
         '<td>'+cc(fmtMoney(t.rev), t.rev_wow)+'</td>'+
         '<td>'+fmtMoney(t.rev_wm1)+'</td>'+
-        '<td>'+fmtPct(t.share_pct,0)+'</td>'+
+        '<td>'+cc(fmtInt(t.orders), t.orders_wow)+'</td>'+
+        '<td>'+shareCell(t.share_pct, t.share_wow_pp, t.share_yoy_pp)+'</td>'+
         '<td>'+cc(fmtMoney(t.rpc), t.rpc_wow)+'</td>'+
         '<td>'+cc(fmtMoney(t.aov), t.aov_wow)+'</td>'+
         '<td>'+cc(fmtPct(t.cr_pct,1), t.cr_wow_pp, 'pp')+'</td>'+
@@ -1493,7 +1529,7 @@ function resourceBlocks(ce){
       '</tr>').join('')+
       '</tbody></table></div>'+
       '<div class="dr-cap">Value = W0 week (actuals); W-1 = prior week. Small line = WoW (W0 vs W-1); rate metrics (CR/TR/S2C/C2O) in pp. '+
-      'Sel Users, %Traf, S2C, C2O from Mixpanel (PMax excluded). Lead-time bands = share of W0 bookings.</div>';
+      'Share sub-line = WoW / YoY pp shift (the "y" tag marks YoY). Sel Users, %Traf, S2C, C2O from Mixpanel (PMax excluded). Lead-time bands = share of W0 bookings.</div>';
   }
 
   // Compose: full-width sections stacked — Channel · Funnel · TGIDs · Lead-time · Countries
@@ -1584,7 +1620,8 @@ function openDrawer(ceId){
 
   document.getElementById('drawer').innerHTML=
     '<div class="dr-head"><button class="close" id="drClose">×</button>'+
-      '<div class="kick">CE deep dive · '+esc(M.meta.market)+' · '+esc(ce.ce_id)+'</div>'+
+      '<div class="kick">CE deep dive · '+esc(M.meta.market)+' · '+esc(ce.ce_id)+
+        ' · <a class="omni" href="'+omniLink(ce.ce_id)+'" target="_blank" rel="noopener">Open in Omni ↗</a></div>'+
       '<h2>'+esc(ce.ce_name)+'</h2><div class="dr-chips">'+chips+'</div></div>'+
     '<div class="dr-body">'+
       '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">'+
