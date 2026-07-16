@@ -722,6 +722,33 @@ def ce_funnel(
 
 
 # --------------------------------------------------------------------------- #
+# Weekly overall CVR series (Mixpanel page-funnel) — for the drawer Overall tab.
+# Overall CVR = order-completed users ÷ LP users, all traffic, PMax excluded
+# (matches the CE-Health funnel definition). Weekly grain for the 12-wk trend.
+# --------------------------------------------------------------------------- #
+def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Weekly LP users + order-completed users per CE (Mixpanel, PMax excluded)."""
+    if not ce_ids:
+        return pd.DataFrame()
+    sql = """
+    SELECT
+        combined_entity_id,
+        DATE_TRUNC(event_date, WEEK(MONDAY))                        AS week,
+        COUNT(DISTINCT user_id)                                     AS lp_users,
+        COUNT(DISTINCT IF(has_order_completed, user_id, NULL))      AS order_users
+    FROM {tbl}
+    WHERE combined_entity_id IN UNNEST(@ce_ids)
+          AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
+          AND event_date BETWEEN @start AND @end
+    GROUP BY 1, 2
+    """.format(tbl=config.MIXPANEL_FUNNEL)
+    return query_df(
+        sql, "ce_weekly_funnel",
+        {"ce_ids": [str(c) for c in ce_ids], "start": config.iso(start), "end": config.iso(end)},
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Daily paid series for the fluctuation engine  (CM1/conv POF)
 # --------------------------------------------------------------------------- #
 def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:

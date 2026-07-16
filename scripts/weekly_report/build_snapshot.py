@@ -955,6 +955,15 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         fetch.ce_channels(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
     )
+    # Overall CVR (funnel: order-users ÷ LP users, all traffic) — surfaced on the
+    # drawer Overall tab from the already-fetched funnel (W0/W-1 only; no 12-wk
+    # series, so no sparkline — a weekly Mixpanel scan would blow the byte cap).
+    for ce in ces:
+        cvr = (ce.get("funnel") or {}).get("CVR")
+        wkly = ce.get("weekly") or []
+        if cvr and len(wkly) >= 2:
+            wkly[-1]["overall_cvr_pct"] = cvr.get("current")
+            wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
 
     # ---- Week-type calibration: p75 of the trailing-52-week |WoW-Δ| distribution.
     # Small markets churn more, so a fixed $-floor mislabels them (spec §4). Pull
