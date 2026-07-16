@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 """Generate a standalone MOCKUP of the redesigned Losing Money table (real NA data).
-Uses the report's Figtree + color tokens. No changes to the real report."""
+Uses the report's Figtree + color tokens. No changes to the real report.
+
+Post-handoff fixes applied (2026-07-16 review — ONLY these three):
+  - Spend Δ4w base = prior-4 weeks (wk[-5:-1]), same as every other Δ4w — it previously
+    included the current week in its own base, dampening ramps (Seattle Whale +60%→+166%)
+  - Tier chip (Hero/Pro) on the CE cell
+  - null-ROI split: spend_wk==0 → PAUSED (confirm intentional) vs spend>0 → tracking gap
+"""
 import json, os
 
 SNAP = os.path.expanduser("~/market-weekly-report-skill/.claude/worktrees/diagnostic/.cache/weekly_report/snapshot_north_america_2026-06-29.json")
@@ -15,12 +22,7 @@ def mean(xs):
 def metrics(ce):
     wk = ce.get("weekly") or []
     w0 = wk[-1] if wk else {}
-    prior = wk[-5:-1]                      # 4 weeks before current
-    def g(k): return w0.get(k)
-    def dpct(now, base):                   # % change vs prior-4wk avg
-        b = mean([w.get(base_k) for w in prior]) if False else None
-        return None
-    spend_series=[w.get("spend") for w in wk]
+    prior = wk[-5:-1]                      # 4 weeks before current — base for EVERY Δ4w
     cm2_series=[( (w.get("cm1") or 0) - (w.get("spend") or 0) ) for w in wk]
     def vs_prior(key, pp=False):
         now = w0.get(key); base = mean([w.get(key) for w in prior])
@@ -28,8 +30,8 @@ def metrics(ce):
         return (now-base) if pp else (now/base-1)*100 if base else None
     sp4 = sum((w.get("spend") or 0) for w in wk[-4:])
     cm2_4w = sum(cm2_series[-4:])
-    spend_avg4 = mean([w.get("spend") for w in wk[-4:]])
-    spend_dvs4 = ((w0.get("spend")/spend_avg4 -1)*100) if (w0.get("spend") and spend_avg4) else None
+    spend_base = mean([w.get("spend") for w in prior])   # prior-only (was wk[-4:] — dampened ramps)
+    spend_dvs4 = ((w0.get("spend")/spend_base -1)*100) if (w0.get("spend") and spend_base) else None
     orders4 = sum((w.get("orders") or 0) for w in wk[-4:])
     return dict(
         roi=w0.get("roi_pct"), roi_dpp=(w0.get("roi_pct")-wk[-2].get("roi_pct")) if (len(wk)>1 and w0.get("roi_pct") is not None and wk[-2].get("roi_pct") is not None) else None,
@@ -44,10 +46,11 @@ def metrics(ce):
     )
 
 # Classify funded CEs (spend_4w>$1k):
-#   FULL WASTE  = 0 paid conversions in 4w → spend, zero return = total loss (shows as ROI~0 or null)
-#   TRACKING GAP= ROI null BUT has conversions → current-week CM1 feed gap (has bookings; NOT waste)
+#   FULL WASTE  = 0 paid conversions in 4w → spend, zero return = total loss
+#   PAUSED      = spend_wk==0 → not bleeding NOW; confirm the pause was intentional
+#   TRACKING GAP= ROI null with spend>0 → true current-week CM1 feed gap (verify)
 #   BLEEDER     = ROI<100 with material 4w bleed
-bleeders=[]; full_waste=[]; tracking_gap=[]
+bleeders=[]; full_waste=[]; tracking_gap=[]; paused=[]
 for ce in d["ces"]:
     wk=ce.get("weekly") or []
     if len(wk)<4: continue
@@ -56,7 +59,9 @@ for ce in d["ces"]:
     m=metrics(ce); roi=wk[-1].get("roi_pct")
     if m["adconv4"]==0:                       # spend, zero paid conversions = FULL WASTE
         full_waste.append((ce,m)); continue
-    if roi is None:                           # has conversions but ROI didn't compute = feed gap
+    if not (wk[-1].get("spend") or 0):        # spend stopped this week → PAUSED, not a feed gap
+        paused.append((ce,m)); continue
+    if roi is None:                           # spending but ROI didn't compute = true feed gap
         tracking_gap.append((ce,m)); continue
     if roi<100 and (m["cm2_4w"] or 0) <= -200:   # material bleeder
         bleeders.append((ce,m))
@@ -96,7 +101,6 @@ def spark(series,weeks=None,w=104,h=26):
         dots+=(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.3" fill="{("var(--red)" if v<0 else "var(--green)")}" fill-opacity="0.45"/>'
                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="#000" fill-opacity="0" pointer-events="all"><title>{lbl}  CM2 {money(v)}</title></circle>')
     up = xs[-1]>=xs[0]; col="var(--green)" if up else "var(--red)"
-    lx,ly=X(n-1),Y(series[-1]) if series[-1] is not None else (X(n-1),Y(xs[-1]))
     dot=f'<circle cx="{X(n-1):.1f}" cy="{Y([v for v in series if v is not None][-1]):.1f}" r="2" fill="{col}"/>'
     zero_y=h-pad-(h-2*pad)*(0-lo)/rng if lo<=0<=hi else None
     zl=f'<line x1="0" y1="{zero_y:.1f}" x2="{w}" y2="{zero_y:.1f}" stroke="var(--rule-dark)" stroke-width="1" stroke-dasharray="2 2"/>' if zero_y is not None else ""
@@ -148,12 +152,19 @@ UNIT='<span style="font-weight:500;font-size:10px;color:var(--ink-faint)">/wk</s
 def moneyd(val, four):
     return f'<div class="v neg">{money(val)}{UNIT}</div><div class="d mut">{money(four)} 4w</div>'
 
+def tier_chip(ce):
+    t=((ce.get("metadata") or {}).get("tier") or "")
+    for w in ("Hero","Pro"):
+        if w.lower() in t.lower():
+            return f'<span class="chip ghost" title="{t}">{w}</span>'
+    return ""
+
 rows=""
 # FULL WASTE at top (funded, 0 paid conversions in 4w = total loss)
 for ce,m in full_waste:
     sea=ce.get("season") or {}; gi=GL.get(sea.get("phase"),("·","ghost"))
     seachip=f'<span class="chip {gi[1]}" title="{sea.get("note","")}">{gi[0]} {sea.get("note","")}</span>' if sea.get("note") else ""
-    rows+=f'''<tr class="waste"><td><b>{ce["ce_name"]}</b> <span class="idbr">[{ce["ce_id"]}]</span> {seachip}<div class="sub">0 paid conversions on {money(m['spend_4w'])} (4w) — total loss</div></td>
+    rows+=f'''<tr class="waste"><td><b>{ce["ce_name"]}</b> <span class="idbr">[{ce["ce_id"]}]</span> {tier_chip(ce)}{seachip}<div class="sub">0 paid conversions on {money(m['spend_4w'])} (4w) — total loss</div></td>
     <td><span class="chip red">FULL WASTE</span></td><td class="num">{roi_cell(m['roi'] if m['roi'] is not None else 0, m['roi_dpp'], m['roi_v4'])}</td><td class="num">{moneyd(m['cm2_wk'] if m['cm2_wk'] is not None else -(m['spend_wk'] or 0), m['cm2_4w'])}</td>
     <td class="num">{spend_cell(m)}</td>
     <td class="num">{vd(m['rpc'],m['rpc_v4'],dp=2,prefix='$')}</td><td class="num">{vd(m['cpc'],m['cpc_v4'],gooddir=-1,dp=2,prefix='$')}</td>
@@ -166,7 +177,7 @@ for ce,m in bleeders[:8]:
     st,stc,stsub=status_of(ce)
     sea=ce.get("season") or {}; gi=GL.get(sea.get("phase"),("·","ghost"))
     seachip=f'<span class="chip {gi[1]}" title="{sea.get("note","")}">{gi[0]} {sea.get("note","")}</span>' if sea.get("note") else ""
-    rows+=f'''<tr><td><b>{ce["ce_name"]}</b> <span class="idbr">[{ce["ce_id"]}]</span> {seachip}</td>
+    rows+=f'''<tr><td><b>{ce["ce_name"]}</b> <span class="idbr">[{ce["ce_id"]}]</span> {tier_chip(ce)}{seachip}</td>
     <td><span class="chip {stc}">{st}</span><div class="sub">{stsub}</div></td>
     <td class="num">{roi_cell(m['roi'], m['roi_dpp'], m['roi_v4'])}</td>
     <td class="num">{moneyd(m['cm2_wk'],m['cm2_4w'])}</td>
@@ -189,10 +200,14 @@ for ce in d["ces"]:
         burn.append((ce["ce_name"], spw*(roi/100-1)))
 burn_total=sum(b for _,b in burn)
 burn_names=", ".join(n for n,_ in sorted(burn, key=lambda x:x[1]))   # worst-first, ALL names
+pz_html=""
+if paused:
+    items=" · ".join(f"{c['ce_name']} ({money(m['spend_4w'])} 4w, {m['orders4']:.0f} orders)" for c,m in sorted(paused,key=lambda x:-(x[1]['spend_4w'] or 0)))
+    pz_html=f'<br><span class="k" style="color:var(--ink-soft)">⏸ {len(paused)} paused this week (was funded 4w):</span> {items} <span style="color:var(--ink-faint)">— spend stopped, ROI reads null. Confirm the pause was intentional; if not, it&rsquo;s a feed/bid problem.</span>'
 tg_html=""
 if tracking_gap:
     items=" · ".join(f"{c['ce_name']} ({m['orders4']:.0f} orders, ${m['spend_4w']:,} 4w)" for c,m in sorted(tracking_gap,key=lambda x:-(x[1]['spend_4w'] or 0)))
-    tg_html=f'<br><span class="k" style="color:var(--amber)">⚠ {len(tracking_gap)} null-ROI — CM1 feed gap (has bookings, verify tracking):</span> {items} <span style="color:var(--ink-faint)">— current-week CM1 didn&rsquo;t populate, so ROI reads null; these ARE converting (see orders). NOT waste.</span>'
+    tg_html=f'<br><span class="k" style="color:var(--amber)">⚠ {len(tracking_gap)} null-ROI — CM1 feed gap (spending, has bookings, verify tracking):</span> {items} <span style="color:var(--ink-faint)">— current-week CM1 didn&rsquo;t populate, so ROI reads null; these ARE converting (see orders). NOT waste.</span>'
 HTML=f'''<!doctype html><html><head><meta charset="utf-8">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap');
@@ -237,11 +252,11 @@ tr.waste{{background:#FDF3F4}}
 <th class="num">Spend <span class="hb">Δ4w</span></th><th class="num">RPC <span class="hb">Δ4w</span></th><th class="num">CPC <span class="hb">Δ4w</span></th><th class="num">Clicks <span class="hb">Δ4w</span></th><th class="num">TR% <span class="hb">Δ4w</span></th><th>CM2 trend 12w</th>
 </tr></thead><tbody>{rows}</tbody></table></div>
 <div class="fn">
-<span class="k" style="color:var(--green)">✅ 1 recovered:</span> Cruises - San Francisco (171%, was bleeding 2w){tg_html}<br>
+<span class="k" style="color:var(--green)">✅ 1 recovered:</span> Cruises - San Francisco (171%, was bleeding 2w){pz_html}{tg_html}<br>
 <span class="k dashed" title="{burn_names}">+ {len(burn)} sub-$1k CEs bleeding {money(burn_total)}/wk below the individual gate</span> <span style="color:var(--ink-faint)">(hover for the full list)</span>
 </div>
 <div class="fn" style="color:var(--ink-faint)">value on top · <span style="color:var(--green)">green</span>/<span style="color:var(--red)">red</span> Δ below = favorable/unfavorable move · <b>ROI shows both</b> WoW (vs last week, acute) and 4w (vs 4-week avg, structural); every other metric Δ is <b>vs the prior-4-week average</b> (Clicks neutral — volume isn&rsquo;t good/bad on a bleeder); acute week-over-week cliffs are flagged by the <b>ESCALATING</b> status chip · CM2 = weekly rate <b>/wk</b> + 4-week total · <b style="color:var(--amber)">↑</b> on Spend = ramped &gt;25% WoW (over-investing on a bleeder) · spark = weekly CM2 (CM1−spend) over 12w, dashed line = 0, hover a point for its value</div>
 </body></html>'''
 open(OUT,"w").write(HTML)
 print("wrote", OUT)
-print(f"bleeders: {len(bleeders)} · full-waste: {len(full_waste)} · tracking-gap: {len(tracking_gap)} · burn: {len(burn)}")
+print(f"bleeders: {len(bleeders)} · full-waste: {len(full_waste)} · paused: {len(paused)} · tracking-gap: {len(tracking_gap)} · burn: {len(burn)}")
