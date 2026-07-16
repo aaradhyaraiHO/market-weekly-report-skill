@@ -129,6 +129,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
     paid_impressions = _f(p, "paid_impressions") if paid is not None else None
     paid_clicks = _f(p, "paid_clicks") if paid is not None else None
     conv_value_gbv = _f(p, "conv_value_gbv") if paid is not None else None
+    offline_rev = _f(p, "offline_revenue") if paid is not None else None   # paid-attributed net rev (for Paid RPC)
     # Search Impression Share (Google search only): impr / eligible searches.
     sis_impr = _f(p, "sis_impr") if paid is not None else None
     sis_elig = _f(p, "sis_elig") if paid is not None else None
@@ -190,8 +191,11 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
         "cpc": _num(spend / paid_clicks) if (paid_clicks and paid is not None) else None,
         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
-        "paid_rpc": _num(revenue / paid_clicks) if (paid_clicks and revenue is not None and paid is not None) else None,
-        "paid_cm2": _num(revenue - spend) if (spend is not None and revenue is not None) else None,
+        # Paid RPC = paid-attributed net revenue ÷ paid clicks (not total revenue).
+        "paid_revenue": _num(offline_rev),
+        "paid_rpc": _num(offline_rev / paid_clicks) if (paid_clicks and offline_rev is not None and paid is not None) else None,
+        # Paid CM2 = paid net revenue − paid spend (paid-attributed, not total rev).
+        "paid_cm2": _num(offline_rev - spend) if (spend is not None and offline_rev is not None) else None,
         "revenue_ly": _num(yoy_rev) if yoy_rev else None,
         "cm1_per_conv": _num(cm1 / conversions) if (conversions and paid is not None) else None,
         "paid_contribution_pct": (
@@ -262,7 +266,12 @@ def _attach_resource_breakdowns(
     lt_idx = {}
     if not tgid_lt_df.empty:
         for _, r in tgid_lt_df.iterrows():
-            lt_idx.setdefault((str(r["combined_entity_id"]), str(r["tgid"])), {})[r["band"]] = _safe(r["pct"])
+            wm1 = r.get("pct_wm1")
+            has_wm1 = wm1 is not None and not (isinstance(wm1, float) and math.isnan(wm1))
+            lt_idx.setdefault((str(r["combined_entity_id"]), str(r["tgid"])), {})[r["band"]] = {
+                "pct": _safe(r["pct"]),
+                "wm1": _safe(wm1) if has_wm1 else None,
+            }
 
     def _share(part, total):
         return _num(round(100.0 * part / total, 0)) if total else None
@@ -275,6 +284,8 @@ def _attach_resource_breakdowns(
         g = tg_by_ce.get(cid)
         if g is not None:
             total_rev = float(g["rev"].sum())
+            total_rev_wm1 = float(g["rev_wm1"].sum()) if "rev_wm1" in g else 0.0
+            total_rev_ly = float(g["rev_ly"].sum()) if "rev_ly" in g else 0.0
             # total select users for %Traffic denominator
             total_sel = sum(_safe(fn_idx.get((cid, str(r["tgid"])), {}).get("select_users"))
                             for _, r in g.iterrows())
@@ -293,16 +304,6 @@ def _attach_resource_breakdowns(
                 if rev <= 0 and rev_ly <= 0:
                     continue
 
-                # W0 + W-1 derived metrics (deltas are WoW: W0 vs W-1)
-                rpc = rev / orders if orders else None
-                rpc_wm1 = rev_wm1 / orders_wm1 if orders_wm1 else None
-                aov = gbv / orders if orders else None
-                aov_wm1 = gbv_wm1 / orders_wm1 if orders_wm1 else None
-                cr = 100.0 * gbv_c / gbv if gbv else None
-                cr_wm1 = 100.0 * gbv_c_wm1 / gbv_wm1 if gbv_wm1 else None
-                tr = 100.0 * rev / gbv_c if gbv_c else None
-                tr_wm1 = 100.0 * rev_wm1 / gbv_c_wm1 if gbv_c_wm1 else None
-
                 tid = str(r["tgid"])
                 fn = fn_idx.get((cid, tid))
                 has_fn = fn is not None
@@ -312,7 +313,29 @@ def _attach_resource_breakdowns(
                 s2c_wm1 = _safe(fn.get("s2c_wm1")) * 100 if (has_fn and fn.get("s2c_wm1") is not None) else None
                 c2o_wm1 = _safe(fn.get("c2o_wm1")) * 100 if (has_fn and fn.get("c2o_wm1") is not None) else None
 
+                # W0 + W-1 derived metrics (deltas are WoW: W0 vs W-1)
+                aov = gbv / orders if orders else None
+                aov_wm1 = gbv_wm1 / orders_wm1 if orders_wm1 else None
+                cr = 100.0 * gbv_c / gbv if gbv else None
+                cr_wm1 = 100.0 * gbv_c_wm1 / gbv_wm1 if gbv_wm1 else None
+                tr = 100.0 * rev / gbv_c if gbv_c else None
+                tr_wm1 = 100.0 * rev_wm1 / gbv_c_wm1 if gbv_c_wm1 else None
+                # RPC = revenue per select-user via the driver product:
+                # S2O × AOV × CR × TR  (S2O = S2C × C2O, user-based). Ties out to
+                # the funnel + economics columns shown in the table.
+                def _rpc(s2c_, c2o_, aov_, cr_, tr_):
+                    if None in (s2c_, c2o_, aov_, cr_, tr_):
+                        return None
+                    return (s2c_ / 100.0) * (c2o_ / 100.0) * aov_ * (cr_ / 100.0) * (tr_ / 100.0)
+                rpc = _rpc(s2c, c2o, aov, cr, tr)
+                rpc_wm1 = _rpc(s2c_wm1, c2o_wm1, aov_wm1, cr_wm1, tr_wm1)
+
                 lt = lt_idx.get((cid, tid), {})
+
+                # Revenue-share shift: within-CE share for W0 / W-1 / LY → pp deltas.
+                share_now = 100.0 * rev / total_rev if total_rev else None
+                share_wm1 = 100.0 * rev_wm1 / total_rev_wm1 if total_rev_wm1 else None
+                share_ly = 100.0 * rev_ly / total_rev_ly if total_rev_ly else None
 
                 tgids.append({
                     "tgid": tid,
@@ -320,7 +343,11 @@ def _attach_resource_breakdowns(
                     "rev": _num(rev),
                     "rev_wm1": _num(rev_wm1),
                     "rev_wow": _dp(rev, rev_wm1),
+                    "orders": int(orders) if orders else None,
+                    "orders_wow": _dp(orders, orders_wm1),
                     "share_pct": _share(rev, total_rev),
+                    "share_wow_pp": _dpp(share_now, share_wm1),
+                    "share_yoy_pp": _dpp(share_now, share_ly),
                     "rpc": _num(rpc),
                     "rpc_wow": _dp(rpc, rpc_wm1),
                     "aov": _num(aov),
@@ -335,9 +362,15 @@ def _attach_resource_breakdowns(
                     "s2c_wow_pp": _dpp(s2c, s2c_wm1),
                     "c2o_pct": _num(c2o),
                     "c2o_wow_pp": _dpp(c2o, c2o_wm1),
-                    "lt_02d": _num(100.0 * lt.get("0-2D", 0)) if lt.get("0-2D") is not None else None,
-                    "lt_37d": _num(100.0 * lt.get("3-7D", 0)) if lt.get("3-7D") is not None else None,
-                    "lt_7p": _num(100.0 * lt.get("7D+", 0)) if lt.get("7D+") is not None else None,
+                    "lt_02d": (_num(100.0 * lt["0-2D"]["pct"]) if lt.get("0-2D") else None),
+                    "lt_02d_wow": (_dpp(100.0 * lt["0-2D"]["pct"], 100.0 * lt["0-2D"]["wm1"])
+                                   if (lt.get("0-2D") and lt["0-2D"]["wm1"] is not None) else None),
+                    "lt_37d": (_num(100.0 * lt["3-7D"]["pct"]) if lt.get("3-7D") else None),
+                    "lt_37d_wow": (_dpp(100.0 * lt["3-7D"]["pct"], 100.0 * lt["3-7D"]["wm1"])
+                                   if (lt.get("3-7D") and lt["3-7D"]["wm1"] is not None) else None),
+                    "lt_7p": (_num(100.0 * lt["7D+"]["pct"]) if lt.get("7D+") else None),
+                    "lt_7p_wow": (_dpp(100.0 * lt["7D+"]["pct"], 100.0 * lt["7D+"]["wm1"])
+                                  if (lt.get("7D+") and lt["7D+"]["wm1"] is not None) else None),
                 })
         ce["tgids"] = tgids
 
@@ -373,13 +406,18 @@ def _attach_resource_breakdowns(
             total_rev = float(g["rev"].sum())
             for _, r in g.sort_values("orders", ascending=False).head(_COUNTRIES_TOP_N).iterrows():
                 od = float(r["orders"] or 0)
+                od_wm1 = float(r.get("orders_wm1") or 0)
                 rev = float(r["rev"] or 0)
+                rev_wm1 = float(r.get("rev_wm1") or 0)
                 ov = float(r["order_value"] or 0)
                 countries.append({
                     "country": r["country"],
                     "orders": _num(od),
+                    "orders_wow": _dp(od, od_wm1),
                     "order_share_pct": _share(od, total_ord),
                     "rev": _num(rev),
+                    "rev_wm1": _num(rev_wm1),
+                    "rev_wow": _dp(rev, rev_wm1),
                     "rev_share_pct": _share(rev, total_rev),
                     "aov": _num(ov / od) if od else None,
                 })
@@ -725,6 +763,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         paid_clicks = float(pw["paid_clicks"].sum())
         paid_conv = float(pw["conversions"].sum())
         conv_value_gbv = float(pw["conv_value_gbv"].sum())
+        offline_rev = float(pw["offline_revenue"].sum()) if "offline_revenue" in pw else 0.0
         paid_roi = _pct(cm1, spend + coupon, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
         paid_cvr = _pct(paid_conv, paid_clicks, gate=(0.0, config.CVR_MAX_PCT))
         # Search Impression Share (Google search only).
@@ -767,8 +806,9 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "paid_cvr_pct": paid_cvr,
             "avg_cm1": _num(cm1 / paid_conv) if paid_conv else None,
             "cpc": _num(spend / paid_clicks) if paid_clicks else None,
-            "paid_rpc": _num(rev / paid_clicks) if paid_clicks else None,
-            "paid_cm2": _num(rev - spend),
+            "paid_revenue": _num(offline_rev),
+            "paid_rpc": _num(offline_rev / paid_clicks) if paid_clicks else None,
+            "paid_cm2": _num(offline_rev - spend),
             "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
@@ -913,15 +953,24 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         ces,
         fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_tgid_leadtime(market, w0_start, w0_end),
+        fetch.ce_tgid_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
         fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-        fetch.ce_countries(market, w0_start, w0_end),
+        fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
     )
     _attach_channels_funnel(
         ces,
         fetch.ce_channels(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
     )
+    # Overall CVR (funnel: order-users ÷ LP users, all traffic) — surfaced on the
+    # drawer Overall tab from the already-fetched funnel (W0/W-1 only; no 12-wk
+    # series, so no sparkline — a weekly Mixpanel scan would blow the byte cap).
+    for ce in ces:
+        cvr = (ce.get("funnel") or {}).get("CVR")
+        wkly = ce.get("weekly") or []
+        if cvr and len(wkly) >= 2:
+            wkly[-1]["overall_cvr_pct"] = cvr.get("current")
+            wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
 
     # ---- Week-type calibration: p75 of the trailing-52-week |WoW-Δ| distribution.
     # Small markets churn more, so a fixed $-floor mislabels them (spec §4). Pull

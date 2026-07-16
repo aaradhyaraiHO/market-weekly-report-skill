@@ -430,8 +430,12 @@ def ce_tgid_funnel(
     )
 
 
-def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """TGID-grain lead-time distribution for W0."""
+def ce_tgid_leadtime(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+) -> pd.DataFrame:
+    """TGID-grain lead-time band shares for W0 + W-1 (pct within each window)."""
     sql = """
     WITH bookings AS (
         SELECT
@@ -442,28 +446,39 @@ def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.Data
                 WHEN lead_time_days BETWEEN 3 AND 7 THEN '3-7D'
                 WHEN lead_time_days > 7              THEN '7D+'
             END                                     AS band,
+            CASE
+                WHEN DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e   THEN 'w0'
+                WHEN DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e THEN 'wm1'
+            END                                     AS period,
             booking_id
         FROM {tbl}
         WHERE business_market = @market
-              AND DATE(date_created_at_et) BETWEEN @start AND @end
+              AND DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
               AND lead_time_days IS NOT NULL
               AND lead_time_days >= 0
     ),
+    filtered AS (SELECT * FROM bookings WHERE period IS NOT NULL),
     tgid_totals AS (
-        SELECT combined_entity_id, tgid, COUNT(DISTINCT booking_id) AS total
-        FROM bookings GROUP BY 1, 2
+        SELECT combined_entity_id, tgid, period, COUNT(DISTINCT booking_id) AS total
+        FROM filtered GROUP BY 1, 2, 3
     ),
     banded AS (
-        SELECT combined_entity_id, tgid, band, COUNT(DISTINCT booking_id) AS cnt
-        FROM bookings WHERE band IS NOT NULL GROUP BY 1, 2, 3
+        SELECT combined_entity_id, tgid, band, period, COUNT(DISTINCT booking_id) AS cnt
+        FROM filtered WHERE band IS NOT NULL GROUP BY 1, 2, 3, 4
     )
     SELECT b.combined_entity_id, b.tgid, b.band,
-        SAFE_DIVIDE(b.cnt, t.total) AS pct
-    FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid)
+        MAX(IF(b.period = 'w0',  SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct,
+        MAX(IF(b.period = 'wm1', SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct_wm1
+    FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid, period)
+    GROUP BY 1, 2, 3
     """.format(tbl=config.FCT_BOOKINGS)
     return query_df(
         sql, "ce_tgid_leadtime",
-        {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        },
     )
 
 
@@ -510,20 +525,31 @@ def ce_leadtime(
     )
 
 
-def ce_countries(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """W0 orders/revenue by customer country per CE, from fct_orders (actuals)."""
+def ce_countries(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+) -> pd.DataFrame:
+    """Orders/revenue by customer country per CE for W0 + W-1, from fct_orders."""
     sql = """
     SELECT
         combined_entity_id,
         card_issuing_country                AS country,
-        COUNT(DISTINCT order_id)            AS orders,
-        SUM(amount_revenue_usd)             AS rev,
-        SUM(order_value_usd)                AS order_value
+        COUNT(DISTINCT IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            order_id, NULL))                AS orders,
+        COUNT(DISTINCT IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
+            order_id, NULL))                AS orders_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            amount_revenue_usd, 0))         AS rev,
+        SUM(IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
+            amount_revenue_usd, 0))         AS rev_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
+            order_value_usd, 0))            AS order_value
 
     FROM {tbl}
 
     WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @start AND @end
+          AND DATE(created_at) BETWEEN @wm1_s AND @w0_e
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
           AND card_issuing_country IS NOT NULL
@@ -532,7 +558,11 @@ def ce_countries(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFram
     """.format(tbl=config.FCT_ORDERS)
     return query_df(
         sql, "ce_countries",
-        {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        },
     )
 
 
@@ -689,6 +719,33 @@ def ce_funnel(
             "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
             "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
         },
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Weekly overall CVR series (Mixpanel page-funnel) — for the drawer Overall tab.
+# Overall CVR = order-completed users ÷ LP users, all traffic, PMax excluded
+# (matches the CE-Health funnel definition). Weekly grain for the 12-wk trend.
+# --------------------------------------------------------------------------- #
+def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Weekly LP users + order-completed users per CE (Mixpanel, PMax excluded)."""
+    if not ce_ids:
+        return pd.DataFrame()
+    sql = """
+    SELECT
+        combined_entity_id,
+        DATE_TRUNC(event_date, WEEK(MONDAY))                        AS week,
+        COUNT(DISTINCT user_id)                                     AS lp_users,
+        COUNT(DISTINCT IF(has_order_completed, user_id, NULL))      AS order_users
+    FROM {tbl}
+    WHERE combined_entity_id IN UNNEST(@ce_ids)
+          AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
+          AND event_date BETWEEN @start AND @end
+    GROUP BY 1, 2
+    """.format(tbl=config.MIXPANEL_FUNNEL)
+    return query_df(
+        sql, "ce_weekly_funnel",
+        {"ce_ids": [str(c) for c in ce_ids], "start": config.iso(start), "end": config.iso(end)},
     )
 
 
