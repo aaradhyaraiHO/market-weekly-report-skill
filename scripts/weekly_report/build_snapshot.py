@@ -129,6 +129,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
     paid_impressions = _f(p, "paid_impressions") if paid is not None else None
     paid_clicks = _f(p, "paid_clicks") if paid is not None else None
     conv_value_gbv = _f(p, "conv_value_gbv") if paid is not None else None
+    offline_rev = _f(p, "offline_revenue") if paid is not None else None   # paid-attributed net rev (for Paid RPC)
     # Search Impression Share (Google search only): impr / eligible searches.
     sis_impr = _f(p, "sis_impr") if paid is not None else None
     sis_elig = _f(p, "sis_elig") if paid is not None else None
@@ -190,7 +191,9 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
         "cpc": _num(spend / paid_clicks) if (paid_clicks and paid is not None) else None,
         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
-        "paid_rpc": _num(revenue / paid_clicks) if (paid_clicks and revenue is not None and paid is not None) else None,
+        # Paid RPC = paid-attributed net revenue ÷ paid clicks (not total revenue).
+        "paid_revenue": _num(offline_rev),
+        "paid_rpc": _num(offline_rev / paid_clicks) if (paid_clicks and offline_rev is not None and paid is not None) else None,
         "paid_cm2": _num(revenue - spend) if (spend is not None and revenue is not None) else None,
         "revenue_ly": _num(yoy_rev) if yoy_rev else None,
         "cm1_per_conv": _num(cm1 / conversions) if (conversions and paid is not None) else None,
@@ -759,6 +762,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         paid_clicks = float(pw["paid_clicks"].sum())
         paid_conv = float(pw["conversions"].sum())
         conv_value_gbv = float(pw["conv_value_gbv"].sum())
+        offline_rev = float(pw["offline_revenue"].sum()) if "offline_revenue" in pw else 0.0
         paid_roi = _pct(cm1, spend + coupon, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
         paid_cvr = _pct(paid_conv, paid_clicks, gate=(0.0, config.CVR_MAX_PCT))
         # Search Impression Share (Google search only).
@@ -800,7 +804,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "paid_conversions": int(paid_conv),
             "paid_cvr_pct": paid_cvr,
             "cpc": _num(spend / paid_clicks) if paid_clicks else None,
-            "paid_rpc": _num(rev / paid_clicks) if paid_clicks else None,
+            "paid_revenue": _num(offline_rev),
+            "paid_rpc": _num(offline_rev / paid_clicks) if paid_clicks else None,
             "paid_cm2": _num(rev - spend),
             "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,

@@ -212,13 +212,15 @@ svg.spark{display:block}
 .dr-table th:first-child{text-align:left}
 .dr-table td{padding:6px 7px;text-align:right;font-family:var(--sans);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--rule)}
 .dr-table td:first-child{text-align:left;color:var(--ink);font-weight:600}
-.dr-table tr:last-child td{font-weight:700;background:rgba(128,0,255,.05)}
-/* RE-SOURCE composition tables have no total row — neutralise last-row emphasis */
-.dr-table.plain tr:last-child td{font-weight:normal;background:none}
+/* last-row emphasis only for tables that actually have a total row (non-plain).
+   Plain composition/TGID tables keep every row identical — no last-row override,
+   so the sticky Experience cell stays opaque (no bleed-through). */
+.dr-table:not(.plain) tr:last-child td{font-weight:700;background:rgba(128,0,255,.05)}
 /* Enriched TGID table — horizontally scrollable, compound cells */
 .tgid-scroll{overflow-x:auto;margin-top:4px;-webkit-overflow-scrolling:touch}
 .tgid-tbl{font-size:11px}
-.tgid-tbl th,.tgid-tbl td{padding:5px 6px;white-space:nowrap}
+.tgid-tbl th,.tgid-tbl td{padding:8px 10px;white-space:nowrap;vertical-align:top}
+.tgid-tbl tbody td{line-height:1.25}
 .tgid-tbl th.lft,.tgid-tbl td.lft{position:sticky;left:0;background:var(--paper);z-index:1;min-width:170px;max-width:190px;white-space:normal}
 .tgid-tbl td.lft{background:#fff}
 .tgid-tbl .cc-v{font-weight:600}
@@ -664,7 +666,7 @@ const METRIC_COLS = [
   {k:'clicks',label:'Clicks',  grp:'paid', fmt:'int',   fld:'clicks',    tip:'Paid ad clicks. Paid = Google Search + Bing only.'},
   {k:'cvr',   label:'CVR',     grp:'paid', fmt:'pct',   fld:'cvr_pct',   tip:'Paid CVR = ad conversions ÷ ad clicks. Paid = Google Search + Bing only.'},
   {k:'cpc',   label:'CPC',     grp:'paid', fmt:'cpc',   fld:'cpc',       tip:'CPC = paid spend ÷ paid clicks. Paid = Google Search + Bing only.'},
-  {k:'rpc',   label:'RPC',     grp:'paid', fmt:'cpc',   fld:'paid_rpc',  tip:'RPC = revenue ÷ paid clicks. Paid = Google Search + Bing only.'},
+  {k:'rpc',   label:'RPC',     grp:'paid', fmt:'cpc',   fld:'paid_rpc',  tip:'RPC = paid-attributed net revenue ÷ paid clicks. Paid = Google Search + Bing only.'},
   {k:'spend', label:'Spend',   grp:'paid', fmt:'money', fld:'spend',     tip:'Paid ad spend. Paid = Google Search + Bing only.'},
   {k:'cm1',   label:'CM1',     grp:'paid', fmt:'money', fld:'cm1',       tip:'Offline contribution margin (calc-CM fallback pre-Sep-2025). Paid = Google Search + Bing only.'},
   {k:'cm2',   label:'CM2',     grp:'paid', fmt:'money', fld:'paid_cm2',  tip:'CM2 = revenue − paid spend. Paid = Google Search + Bing only.'},
@@ -854,11 +856,12 @@ function rowHtml(r,topMovers,rf){
 // weekly row: r.w0 | r.w1 | lyRow(r)). Ratio metrics recompute as Σnum/Σden —
 // never an average of per-CE ratios.
 function _aggPeriod(rows, pick){
-  const a={rev:0,ord:0,clk:0,pclk:0,spd:0,cpw:0,cm1:0,gbv:0,gbvC:0,adConv:0,organic:0};
+  const a={rev:0,ord:0,clk:0,pclk:0,spd:0,cpw:0,cm1:0,gbv:0,gbvC:0,adConv:0,organic:0,prev:0};
   rows.forEach(r=>{ const w=pick(r); if(!w) return;
     a.rev+=w.revenue||0; a.ord+=w.orders||0; a.clk+=w.clicks||0; a.pclk+=w.paid_clicks||0;
     a.spd+=w.spend||0; a.cpw+=w.coupon_wallet||0; a.cm1+=w.cm1||0; a.gbv+=w.gbv||0;
-    a.gbvC+=w.gbv_completed||0; a.adConv+=w.ad_conversions||0; a.organic+=w.organic_gbv||0; });
+    a.gbvC+=w.gbv_completed||0; a.adConv+=w.ad_conversions||0; a.organic+=w.organic_gbv||0;
+    a.prev+=w.paid_revenue||0; });   // prev = paid-attributed net revenue (for RPC)
   return a;
 }
 function _metricVal(a,k){ switch(k){
@@ -866,7 +869,7 @@ function _metricVal(a,k){ switch(k){
   case 'cpc':return a.pclk?a.spd/a.pclk:null; case 'cvr':return a.clk?a.adConv/a.clk*100:null;
   case 'aov':return a.ord?a.gbv/a.ord:null; case 'tr':return a.gbvC?a.rev/a.gbvC*100:null;
   case 'cr':return a.gbv?a.gbvC/a.gbv*100:null;
-  case 'rpc':return a.pclk?a.rev/a.pclk:null;
+  case 'rpc':return a.pclk?a.prev/a.pclk:null;   // paid-attributed net revenue ÷ paid clicks
   case 'spend':return a.spd; case 'cm1':return a.cm1; case 'cm2':return a.rev-a.spd;
   case 'roi':return (a.spd+a.cpw)?a.cm1/(a.spd+a.cpw)*100:null;
   case 'paid':return a.gbvC?Math.max(0,Math.min(100,100*(1-a.organic/a.gbvC))):null;
