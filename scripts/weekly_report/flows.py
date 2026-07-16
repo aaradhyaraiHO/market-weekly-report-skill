@@ -102,6 +102,7 @@ def per_ce_structural(ces, ly_forward_rev):
 
 
 TREND_MIN_REV = 200.0       # skip CEs with W-1 < this
+WOW_DROP_FLOOR = 500.0      # a WoW drop bigger than this ($) demotes a gainer to drops
 
 
 def _seasonal_tag(delta_4w, ly_wow):
@@ -266,34 +267,19 @@ def build_header(ces, ly_forward_rev, market_weekly, w0_start: dt.date,
     routing = ("market_rca" if n80_loss >= N80_LOSS_LARGE
                else "cards" if n80_loss <= N80_LOSS_SMALL else "mixed")
 
-    # Trend movers — union of top-10-by-raw-WoW and top-10-by-4w-trend, deduped.
-    # Captures both sudden drops (raw) and sustained declines (trend).
+    # Trend movers — DROPS TAKE PRECEDENCE, GAINS MUST BE CLEAN (spec 2026-07-16).
+    # A CE is a DROP if it declines on the 4-week trend OR has a MATERIAL WoW drop
+    # (raw < -WOW_DROP_FLOOR; a noise-level dip does not demote a real gainer).
+    # A CE is a GAIN only if it is NOT drop-eligible and is up on either lens.
+    # The two sets are mutually exclusive → no CE ever appears in both lists.
     trend = per_ce_trend(ces)
-    by_raw_drop = sorted([c for c in trend if c["raw_wow"] < 0],
-                         key=lambda c: c["raw_wow"])[:10]
-    by_4w_drop = sorted([c for c in trend if c["delta_4w"] < 0],
-                        key=lambda c: c["delta_4w"])[:10]
-    seen = set()
-    trend_drops = []
-    for c in sorted(by_raw_drop + by_4w_drop,
-                    key=lambda c: min(c["raw_wow"], c["delta_4w"])):
-        if c["ce_id"] not in seen:
-            seen.add(c["ce_id"])
-            trend_drops.append(c)
-    trend_drops = trend_drops[:10]
-
-    by_raw_gain = sorted([c for c in trend if c["raw_wow"] > 0],
-                         key=lambda c: -c["raw_wow"])[:10]
-    by_4w_gain = sorted([c for c in trend if c["delta_4w"] > 0],
-                        key=lambda c: -c["delta_4w"])[:10]
-    seen = set()
-    trend_gains = []
-    for c in sorted(by_raw_gain + by_4w_gain,
-                    key=lambda c: -max(c["raw_wow"], c["delta_4w"])):
-        if c["ce_id"] not in seen:
-            seen.add(c["ce_id"])
-            trend_gains.append(c)
-    trend_gains = trend_gains[:10]
+    def _is_drop(c):
+        return c["delta_4w"] < 0 or c["raw_wow"] < -WOW_DROP_FLOOR
+    trend_drops = sorted([c for c in trend if _is_drop(c)],
+                         key=lambda c: min(c["raw_wow"], c["delta_4w"]))[:10]
+    trend_gains = sorted([c for c in trend if not _is_drop(c)
+                          and (c["delta_4w"] > 0 or c["raw_wow"] > 0)],
+                         key=lambda c: -max(c["raw_wow"], c["delta_4w"]))[:10]
 
     return {
         "raw": {"revenue_w0": round(raw_rev, 0),
