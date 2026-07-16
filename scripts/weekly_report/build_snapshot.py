@@ -194,7 +194,8 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         # Paid RPC = paid-attributed net revenue ÷ paid clicks (not total revenue).
         "paid_revenue": _num(offline_rev),
         "paid_rpc": _num(offline_rev / paid_clicks) if (paid_clicks and offline_rev is not None and paid is not None) else None,
-        "paid_cm2": _num(revenue - spend) if (spend is not None and revenue is not None) else None,
+        # Paid CM2 = paid net revenue − paid spend (paid-attributed, not total rev).
+        "paid_cm2": _num(offline_rev - spend) if (spend is not None and offline_rev is not None) else None,
         "revenue_ly": _num(yoy_rev) if yoy_rev else None,
         "cm1_per_conv": _num(cm1 / conversions) if (conversions and paid is not None) else None,
         "paid_contribution_pct": (
@@ -806,7 +807,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "cpc": _num(spend / paid_clicks) if paid_clicks else None,
             "paid_revenue": _num(offline_rev),
             "paid_rpc": _num(offline_rev / paid_clicks) if paid_clicks else None,
-            "paid_cm2": _num(rev - spend),
+            "paid_cm2": _num(offline_rev - spend),
             "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,

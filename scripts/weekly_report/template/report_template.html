@@ -669,7 +669,7 @@ const METRIC_COLS = [
   {k:'rpc',   label:'RPC',     grp:'paid', fmt:'cpc',   fld:'paid_rpc',  tip:'RPC = paid-attributed net revenue ÷ paid clicks. Paid = Google Search + Bing only.'},
   {k:'spend', label:'Spend',   grp:'paid', fmt:'money', fld:'spend',     tip:'Paid ad spend. Paid = Google Search + Bing only.'},
   {k:'cm1',   label:'CM1',     grp:'paid', fmt:'money', fld:'cm1',       tip:'Offline contribution margin (calc-CM fallback pre-Sep-2025). Paid = Google Search + Bing only.'},
-  {k:'cm2',   label:'CM2',     grp:'paid', fmt:'money', fld:'paid_cm2',  tip:'CM2 = revenue − paid spend. Paid = Google Search + Bing only.'},
+  {k:'cm2',   label:'CM2',     grp:'paid', fmt:'money', fld:'paid_cm2',  tip:'CM2 = paid net revenue − paid spend. Paid = Google Search + Bing only.'},
   {k:'roi',   label:'ROI',     grp:'paid', fmt:'pctn',  fld:'roi_pct',   tip:'ROI = CM1 ÷ (spend + coupon/wallet). Paid = Google Search + Bing only.'},
 ];
 const FIRST_PAID=(METRIC_COLS.find(m=>m.grp==='paid')||{}).k;  // divider column key
@@ -870,7 +870,7 @@ function _metricVal(a,k){ switch(k){
   case 'aov':return a.ord?a.gbv/a.ord:null; case 'tr':return a.gbvC?a.rev/a.gbvC*100:null;
   case 'cr':return a.gbv?a.gbvC/a.gbv*100:null;
   case 'rpc':return a.pclk?a.prev/a.pclk:null;   // paid-attributed net revenue ÷ paid clicks
-  case 'spend':return a.spd; case 'cm1':return a.cm1; case 'cm2':return a.rev-a.spd;
+  case 'spend':return a.spd; case 'cm1':return a.cm1; case 'cm2':return a.prev-a.spd;
   case 'roi':return (a.spd+a.cpw)?a.cm1/(a.spd+a.cpw)*100:null;
   case 'paid':return a.gbvC?Math.max(0,Math.min(100,100*(1-a.organic/a.gbvC))):null;
   default:return null; } }
