@@ -99,6 +99,9 @@ def _median(v):
     if not v: return None
     n = len(v); m = n // 2
     return v[m] if n % 2 else (v[m - 1] + v[m]) / 2
+def _mean(v):
+    v = [x for x in v if x is not None]
+    return sum(v) / len(v) if v else None
 def _cat_benchmarks(ces):
     """Median RPC / CVR per category (active CEs, >=3 per cat) — intra-market snapshot benchmark."""
     from collections import defaultdict
@@ -116,47 +119,98 @@ def _vs_cat(val, med): return round((val / med - 1) * 100) if (val and med) else
 
 
 def losing_money(ces, b1, cat_rpc):
-    """DEFEND · unified CM2-bleed table. b1 = {ce_id: movement} from bucket_b1."""
-    bleeders, recovered, suppressed, burn = [], [], [], {"count": 0, "bleed": 0.0}
+    """DEFEND · unified CM2-bleed table. b1 = {ce_id: movement} from bucket_b1.
+
+    Funded CEs (spend_4w > $1k) are classified IN ORDER:
+      FULL WASTE   — ad_conversions_4w == 0 (spend, zero paid conversions = total loss)
+      PAUSED       — spend_wk == 0 (was funded across the 4wk window, stopped this week;
+                     ROI reads null because spend is 0 → confirm the pause was intentional)
+      TRACKING GAP — roi is None with spend_wk > 0 (current-week CM1 feed gap; verify, NOT waste)
+      BLEEDER      — roi < 100 AND cm2_bleed_4w <= -$200 (material bleed; the -$200/4w floor
+                     removes near-breakeven noise rows)
+    Sub-$1k funded CEs that bleed roll up into burn_line (names carried for the hover).
+
+    Every Δ4w is vs the PRIOR 4 weeks (wk[-5:-1], current week EXCLUDED); nulls skipped —
+    consistent across roi/rpc/cpc/clicks/tr (locked 2026-07-16 review). Spend renders as the
+    Δ4w % only (no 4-week $ total — CM2 bleed already carries the dollars burned).
+    """
+    bleeders, recovered, full_waste, paused, tracking_gap = [], [], [], [], []
+    burn = {"count": 0, "bleed": 0.0, "items": []}
     for ce in ces:
         wk = ce.get("weekly") or []
-        if not _active(ce) or len(wk) < 4: continue
+        if len(wk) < 4: continue
         w0 = wk[-1]; roi = w0.get("roi_pct")
         sp4 = sum((w.get("spend") or 0) for w in wk[-4:]); spw = w0.get("spend") or 0
         series = _roi_series(wk)
-        # long-tail burn: bleeding but under the $1k gate → aggregate line
+        # long-tail burn: bleeding but under the $1k gate → aggregate line. The ≥3-active-weeks
+        # noise gate applies HERE only; for funded CEs the $1k/4wk spend gate is the activity filter
+        # (a CE that dumped >$1k in 2 weeks with 0 conversions is a real full-waste, not noise).
         if sp4 <= BLEED_SPEND4W:
-            if roi is not None and roi < BLEED_ROI and spw > 0:
+            if _active(ce) and roi is not None and roi < BLEED_ROI and spw > 0:
                 burn["count"] += 1; burn["bleed"] += spw * (roi / 100 - 1)
+                burn["items"].append((ce["ce_name"], spw * (roi / 100 - 1)))
             continue
-        if roi is None:                                    # funded, ROI unpopulated → suppressed
-            suppressed.append({"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "spend_4w": round(sp4)})
-            continue
-        if roi < BLEED_ROI:
-            w = _bleed_streak(series); dpp = (roi - (wk[-2].get("roi_pct") or roi))
+        # --- funded CE: shared 4-week aggregates + full metric bundle (all Δ4w vs prior-4) ---
+        prior = wk[-5:-1]                                  # base for every Δ4w (current excluded)
+        cm2_series = [((w.get("cm1") or 0) - (w.get("spend") or 0)) for w in wk]
+        cm2_4w = sum(cm2_series[-4:])
+        adconv4 = sum((w.get("ad_conversions") or 0) for w in wk[-4:])
+        orders4 = sum((w.get("orders") or 0) for w in wk[-4:])
+        def vsp(key, pp=False):                            # value vs prior-4 mean (nulls skipped)
+            now = w0.get(key); base = _mean([x.get(key) for x in prior])
+            if now is None or base is None: return None
+            return round(now - base) if pp else (round((now / base - 1) * 100) if base else None)
+        spend_base = _mean([x.get("spend") for x in prior])
+        rpc_hist = [x.get("rpc") for x in prior if x.get("rpc")]
+        cat = cat_rpc.get((ce.get("metadata") or {}).get("category"))
+        # one metric bundle, shared by full_waste + bleeders (so both render the same columns).
+        # CM2/wk = current (cm1 − spend) directly — same definition as the 4w sum (no roi round-trip).
+        feat = {
+            "roi": (round(roi) if roi is not None else None),
+            "roi_dpp": (round(roi - wk[-2].get("roi_pct"))
+                        if (len(wk) > 1 and roi is not None and wk[-2].get("roi_pct") is not None) else None),
+            "roi_v4": vsp("roi_pct", pp=True),
+            "cm2_bleed_wk": round((w0.get("cm1") or 0) - (w0.get("spend") or 0)),
+            "spend_wk": round(spw),
+            "spend_dvs4": (round((spw / spend_base - 1) * 100) if (spw and spend_base) else None),
+            "spend_wow": (round((spw / (wk[-2].get("spend") or 0) - 1) * 100)
+                          if (len(wk) > 1 and spw and wk[-2].get("spend")) else None),
+            "clicks": w0.get("clicks"), "clicks_v4": vsp("clicks"),
+            "rpc": w0.get("rpc"), "rpc_v4": vsp("rpc"),
+            "rpc_vs_4w": (round((w0["rpc"] / (sum(rpc_hist) / len(rpc_hist)) - 1) * 100)
+                          if (w0.get("rpc") and len(rpc_hist) >= 2) else None),
+            "cpc": w0.get("cpc"), "cpc_v4": vsp("cpc"),
+            "tr_pct": w0.get("tr_pct"), "tr_v4": vsp("tr_pct", pp=True),
+            "rpc_vs_cat": _vs_cat(w0.get("rpc"), cat),
+            "rpc_upside": (round((cat - w0["rpc"]) * (w0.get("clicks") or 0))
+                           if (w0.get("rpc") and cat and w0["rpc"] < cat) else None),
+        }
+        base_row = {"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "spend_4w": round(sp4),
+                    "cm2_bleed_4w": round(cm2_4w), "orders_4w": round(orders4), "adconv_4w": round(adconv4),
+                    "cm2_series": cm2_series[-12:], "cm2_weeks": [w.get("week") for w in wk][-12:],
+                    "tier": _tier(ce), "movement_b1": b1.get(ce["ce_id"])}
+        if adconv4 == 0:                                   # spend, zero paid conversions = FULL WASTE
+            full_waste.append({**base_row, **feat}); continue
+        if spw == 0:                                       # spend stopped this week → PAUSED
+            paused.append(base_row); continue
+        if roi is None:                                    # spending but ROI didn't compute → feed gap
+            tracking_gap.append(base_row); continue
+        if roi < BLEED_ROI and cm2_4w <= -200:             # material bleeder
+            w = _bleed_streak(series)
+            dpp = feat["roi_dpp"]
             status = "NEW" if w == 1 else ("CHRONIC" if w >= 6 else (f"{w}w"))
-            if dpp < -CLIFF_PP: status = "ESCALATING"
-            # bleed diagnosis: RPC vs own prior-4wk avg (yield decay, cliff/gradual) + CPC (cost side of ROI)
-            rpc_hist = [x.get("rpc") for x in wk[-5:-1] if x.get("rpc")]
-            rpc_vs_4w = (round((w0["rpc"] / (sum(rpc_hist)/len(rpc_hist)) - 1) * 100)
-                         if (w0.get("rpc") and len(rpc_hist) >= 2) else None)
-            bleeders.append({
-                "ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "status": status,
-                "roi": round(roi), "roi_dpp": round(dpp), "weeks": w,
-                "cm2_bleed_wk": round(spw * (roi / 100 - 1)), "spend_wk": round(spw), "spend_4w": round(sp4),
-                "clicks": w0.get("clicks"), "rpc": w0.get("rpc"), "rpc_vs_4w": rpc_vs_4w, "cpc": w0.get("cpc"),
-                "tr_pct": w0.get("tr_pct"),
-                "movement_b1": b1.get(ce["ce_id"]), "tier": _tier(ce), "yoy": w0.get("yoy_pct"),
-                "rpc_vs_cat": _vs_cat(w0.get("rpc"), cat_rpc.get((ce.get("metadata") or {}).get("category"))),
-                "rpc_upside": (round((cat_rpc[(ce.get("metadata") or {}).get("category")] - w0["rpc"]) * (w0.get("clicks") or 0))
-                              if (w0.get("rpc") and cat_rpc.get((ce.get("metadata") or {}).get("category")) and w0["rpc"] < cat_rpc[(ce.get("metadata") or {}).get("category")]) else None),
-            })
+            if dpp is not None and dpp < -CLIFF_PP: status = "ESCALATING"
+            bleeders.append({**base_row, **feat, "status": status, "weeks": w})
         elif roi >= RECOVER_ROI and _bleed_streak(series[:-1]) >= RECOVER_MIN_BLEED:
             recovered.append({"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "roi": round(roi),
                               "was_bleeding_wks": _bleed_streak(series[:-1])})
-    bleeders.sort(key=lambda r: r["cm2_bleed_wk"])       # biggest bleed first
-    return {"bleeders": bleeders, "recovered": recovered, "suppressed": suppressed,
-            "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"])}}
+    bleeders.sort(key=lambda r: r["cm2_bleed_4w"])         # worst 4-week bled first
+    full_waste.sort(key=lambda r: -r["spend_4w"])
+    paused.sort(key=lambda r: -r["spend_4w"]); tracking_gap.sort(key=lambda r: -r["spend_4w"])
+    burn_names = [n for n, _ in sorted(burn["items"], key=lambda x: x[1])]   # worst-first, all names
+    return {"bleeders": bleeders, "recovered": recovered, "full_waste": full_waste,
+            "paused": paused, "tracking_gap": tracking_gap,
+            "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
 
 
 def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
@@ -528,7 +582,8 @@ if __name__ == "__main__":
     lm = b["defend"]["losing_money"]
     print("== DEFEND · Losing Money ==")
     print(f"  bleeders {len(lm['bleeders'])} (${sum(x['cm2_bleed_wk'] for x in lm['bleeders']):,}/wk) · "
-          f"recovered {len(lm['recovered'])} · suppressed {len(lm['suppressed'])} · burn {lm['burn_line']}")
+          f"full-waste {len(lm['full_waste'])} · paused {len(lm['paused'])} · tracking-gap {len(lm['tracking_gap'])} · "
+          f"recovered {len(lm['recovered'])} · burn {lm['burn_line']['count']}")
     for r in lm["bleeders"][:5]:
         print(f"    {r['ce_name'][:24]:24s} {r['status']:11s} ROI {r['roi']:>3} · ${r['cm2_bleed_wk']:>6}/wk · clk {r['clicks']}")
     print(f"== DEFEND · Seasonality↓ {len(b['defend']['seasonality_down'])} == COMPOUND · Seasonality↑ {len(b['compound']['seasonality_up'])} ==")
