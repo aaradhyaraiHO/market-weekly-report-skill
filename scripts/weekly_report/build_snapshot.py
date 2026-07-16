@@ -262,7 +262,12 @@ def _attach_resource_breakdowns(
     lt_idx = {}
     if not tgid_lt_df.empty:
         for _, r in tgid_lt_df.iterrows():
-            lt_idx.setdefault((str(r["combined_entity_id"]), str(r["tgid"])), {})[r["band"]] = _safe(r["pct"])
+            wm1 = r.get("pct_wm1")
+            has_wm1 = wm1 is not None and not (isinstance(wm1, float) and math.isnan(wm1))
+            lt_idx.setdefault((str(r["combined_entity_id"]), str(r["tgid"])), {})[r["band"]] = {
+                "pct": _safe(r["pct"]),
+                "wm1": _safe(wm1) if has_wm1 else None,
+            }
 
     def _share(part, total):
         return _num(round(100.0 * part / total, 0)) if total else None
@@ -346,9 +351,15 @@ def _attach_resource_breakdowns(
                     "s2c_wow_pp": _dpp(s2c, s2c_wm1),
                     "c2o_pct": _num(c2o),
                     "c2o_wow_pp": _dpp(c2o, c2o_wm1),
-                    "lt_02d": _num(100.0 * lt.get("0-2D", 0)) if lt.get("0-2D") is not None else None,
-                    "lt_37d": _num(100.0 * lt.get("3-7D", 0)) if lt.get("3-7D") is not None else None,
-                    "lt_7p": _num(100.0 * lt.get("7D+", 0)) if lt.get("7D+") is not None else None,
+                    "lt_02d": (_num(100.0 * lt["0-2D"]["pct"]) if lt.get("0-2D") else None),
+                    "lt_02d_wow": (_dpp(100.0 * lt["0-2D"]["pct"], 100.0 * lt["0-2D"]["wm1"])
+                                   if (lt.get("0-2D") and lt["0-2D"]["wm1"] is not None) else None),
+                    "lt_37d": (_num(100.0 * lt["3-7D"]["pct"]) if lt.get("3-7D") else None),
+                    "lt_37d_wow": (_dpp(100.0 * lt["3-7D"]["pct"], 100.0 * lt["3-7D"]["wm1"])
+                                   if (lt.get("3-7D") and lt["3-7D"]["wm1"] is not None) else None),
+                    "lt_7p": (_num(100.0 * lt["7D+"]["pct"]) if lt.get("7D+") else None),
+                    "lt_7p_wow": (_dpp(100.0 * lt["7D+"]["pct"], 100.0 * lt["7D+"]["wm1"])
+                                  if (lt.get("7D+") and lt["7D+"]["wm1"] is not None) else None),
                 })
         ce["tgids"] = tgids
 
@@ -923,7 +934,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         ces,
         fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_tgid_leadtime(market, w0_start, w0_end),
+        fetch.ce_tgid_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
         fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
         fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
     )

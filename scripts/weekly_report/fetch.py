@@ -429,8 +429,12 @@ def ce_tgid_funnel(
     )
 
 
-def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """TGID-grain lead-time distribution for W0."""
+def ce_tgid_leadtime(
+    market: str,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+) -> pd.DataFrame:
+    """TGID-grain lead-time band shares for W0 + W-1 (pct within each window)."""
     sql = """
     WITH bookings AS (
         SELECT
@@ -441,28 +445,39 @@ def ce_tgid_leadtime(market: str, w0_start: dt.date, w0_end: dt.date) -> pd.Data
                 WHEN lead_time_days BETWEEN 3 AND 7 THEN '3-7D'
                 WHEN lead_time_days > 7              THEN '7D+'
             END                                     AS band,
+            CASE
+                WHEN DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e   THEN 'w0'
+                WHEN DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e THEN 'wm1'
+            END                                     AS period,
             booking_id
         FROM {tbl}
         WHERE business_market = @market
-              AND DATE(date_created_at_et) BETWEEN @start AND @end
+              AND DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
               AND lead_time_days IS NOT NULL
               AND lead_time_days >= 0
     ),
+    filtered AS (SELECT * FROM bookings WHERE period IS NOT NULL),
     tgid_totals AS (
-        SELECT combined_entity_id, tgid, COUNT(DISTINCT booking_id) AS total
-        FROM bookings GROUP BY 1, 2
+        SELECT combined_entity_id, tgid, period, COUNT(DISTINCT booking_id) AS total
+        FROM filtered GROUP BY 1, 2, 3
     ),
     banded AS (
-        SELECT combined_entity_id, tgid, band, COUNT(DISTINCT booking_id) AS cnt
-        FROM bookings WHERE band IS NOT NULL GROUP BY 1, 2, 3
+        SELECT combined_entity_id, tgid, band, period, COUNT(DISTINCT booking_id) AS cnt
+        FROM filtered WHERE band IS NOT NULL GROUP BY 1, 2, 3, 4
     )
     SELECT b.combined_entity_id, b.tgid, b.band,
-        SAFE_DIVIDE(b.cnt, t.total) AS pct
-    FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid)
+        MAX(IF(b.period = 'w0',  SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct,
+        MAX(IF(b.period = 'wm1', SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct_wm1
+    FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid, period)
+    GROUP BY 1, 2, 3
     """.format(tbl=config.FCT_BOOKINGS)
     return query_df(
         sql, "ce_tgid_leadtime",
-        {"market": market, "start": config.iso(w0_start), "end": config.iso(w0_end)},
+        {
+            "market": market,
+            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        },
     )
 
 

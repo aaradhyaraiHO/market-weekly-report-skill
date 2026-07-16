@@ -1523,9 +1523,9 @@ function resourceBlocks(ce){
         '<td>'+fmtPct(t.traffic_pct,0)+'</td>'+
         '<td>'+cc(fmtPct(t.s2c_pct,1), t.s2c_wow_pp, 'pp')+'</td>'+
         '<td>'+cc(fmtPct(t.c2o_pct,1), t.c2o_wow_pp, 'pp')+'</td>'+
-        '<td>'+fmtPct(t.lt_02d,0)+'</td>'+
-        '<td>'+fmtPct(t.lt_37d,0)+'</td>'+
-        '<td>'+fmtPct(t.lt_7p,0)+'</td>'+
+        '<td>'+cc(fmtPct(t.lt_02d,0), t.lt_02d_wow, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.lt_37d,0), t.lt_37d_wow, 'pp')+'</td>'+
+        '<td>'+cc(fmtPct(t.lt_7p,0), t.lt_7p_wow, 'pp')+'</td>'+
       '</tr>').join('')+
       '</tbody></table></div>'+
       '<div class="dr-cap">Value = W0 week (actuals); W-1 = prior week. Small line = WoW (W0 vs W-1); rate metrics (CR/TR/S2C/C2O) in pp. '+
