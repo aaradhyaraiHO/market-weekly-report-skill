@@ -300,16 +300,6 @@ def _attach_resource_breakdowns(
                 if rev <= 0 and rev_ly <= 0:
                     continue
 
-                # W0 + W-1 derived metrics (deltas are WoW: W0 vs W-1)
-                rpc = rev / orders if orders else None
-                rpc_wm1 = rev_wm1 / orders_wm1 if orders_wm1 else None
-                aov = gbv / orders if orders else None
-                aov_wm1 = gbv_wm1 / orders_wm1 if orders_wm1 else None
-                cr = 100.0 * gbv_c / gbv if gbv else None
-                cr_wm1 = 100.0 * gbv_c_wm1 / gbv_wm1 if gbv_wm1 else None
-                tr = 100.0 * rev / gbv_c if gbv_c else None
-                tr_wm1 = 100.0 * rev_wm1 / gbv_c_wm1 if gbv_c_wm1 else None
-
                 tid = str(r["tgid"])
                 fn = fn_idx.get((cid, tid))
                 has_fn = fn is not None
@@ -318,6 +308,23 @@ def _attach_resource_breakdowns(
                 c2o = _safe(fn.get("c2o")) * 100 if (has_fn and fn.get("c2o") is not None) else None
                 s2c_wm1 = _safe(fn.get("s2c_wm1")) * 100 if (has_fn and fn.get("s2c_wm1") is not None) else None
                 c2o_wm1 = _safe(fn.get("c2o_wm1")) * 100 if (has_fn and fn.get("c2o_wm1") is not None) else None
+
+                # W0 + W-1 derived metrics (deltas are WoW: W0 vs W-1)
+                aov = gbv / orders if orders else None
+                aov_wm1 = gbv_wm1 / orders_wm1 if orders_wm1 else None
+                cr = 100.0 * gbv_c / gbv if gbv else None
+                cr_wm1 = 100.0 * gbv_c_wm1 / gbv_wm1 if gbv_wm1 else None
+                tr = 100.0 * rev / gbv_c if gbv_c else None
+                tr_wm1 = 100.0 * rev_wm1 / gbv_c_wm1 if gbv_c_wm1 else None
+                # RPC = revenue per select-user via the driver product:
+                # S2O × AOV × CR × TR  (S2O = S2C × C2O, user-based). Ties out to
+                # the funnel + economics columns shown in the table.
+                def _rpc(s2c_, c2o_, aov_, cr_, tr_):
+                    if None in (s2c_, c2o_, aov_, cr_, tr_):
+                        return None
+                    return (s2c_ / 100.0) * (c2o_ / 100.0) * aov_ * (cr_ / 100.0) * (tr_ / 100.0)
+                rpc = _rpc(s2c, c2o, aov, cr, tr)
+                rpc_wm1 = _rpc(s2c_wm1, c2o_wm1, aov_wm1, cr_wm1, tr_wm1)
 
                 lt = lt_idx.get((cid, tid), {})
 
