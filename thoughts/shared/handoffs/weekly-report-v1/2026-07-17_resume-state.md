@@ -62,9 +62,12 @@ may-2026.html archive patched directly. `_bucketFamColor`/matrix cells: rev + Wo
 - `worktree-all-ce-view` 082bfa1 — paid-metrics→ads_campaign_stats already in main.
 
 ## OPEN THREADS / TODOs
-1. **Deploy pending**: live site still shows PRE-merge Italy/Oceania + pre-movers-fix reports. To go
-   live with everything: regenerate NA/Italy/Oceania (~12 min BQ) → publish_weekly all → vercel deploy.
-   Also ships the may-2026 toggle fix. (NA is already regenerated locally with all merges.)
+1. ✅ **DONE (2026-07-17): deployed all merges live.** Regenerated NA/Italy/Oceania on 2026-07-06 with
+   the full merged stack (movers precedence, LM redesign, PP fct_pp_tickets + Net-ROI fix, Scale-Up
+   hidden, drawer routing) → publish_weekly all → vercel deploy. Live at market-notebook.vercel.app
+   (`/weekly` matrix + may-2026 toggle). Digests: NA 10 (4 drawer-routed: Kennedy 3111/Boston Whale
+   6105/Edge NYC 4012/USH 2174), Italy 9, Oceania 8. PP rows NA 21 / Italy 32 / Oceania 7. To refresh
+   after future changes: same 3-step (regen → publish_weekly all → vercel deploy from ~/analytics).
 2. **Fan out 7 more markets**: add to config.MARKETS (france, united_kingdom, iberia, csee, east_asia,
    sea, uae — business_market strings verified) → generate → S3 digest → publish_weekly. Matrix rows +
    MARKET_META in publish_weekly already wired for all 10.
