@@ -1819,7 +1819,7 @@ function renderLevers(M){
       '<th class="num" style="cursor:help" title="Count of UNSOLD dated tickets whose expiry (expiring_at) is in the current calendar month — become dead loss if unsold by month-end.">Expiring this mo</th>'+
       '<th class="num" style="cursor:help" title="Sum of loss_liability for UNSOLD dated tickets = the at-risk $ (USD). Open-dated excluded (no expiry).">Loss-liab (dated)</th>'+
       '<th class="num" style="cursor:help" title="PP tickets sold last week (by booking_created_at) vs tickets needed per week to clear remaining dated inventory before expiry (remaining ÷ weeks-to-latest-expiry). Amber = selling below needed pace.">Run-rate last / need·wk</th>'+
-      '<th class="num" style="cursor:help" title="(trailing-4wk CM1 − dated loss-liability) ÷ trailing-4wk marketing cost. Paid ROI haircut by the PP inventory at-risk.">Net ROI</th>'+
+      '<th class="num" style="cursor:help" title="(trailing-4wk CM1 − realized inventory loss) ÷ trailing-4wk marketing cost, where realized loss = loss_liability of dated tickets expiring UNSOLD this month (not the full at-risk stock). Paid ROI haircut by the inventory actually dying this period.">Net ROI</th>'+
       '<th class="num" style="cursor:help" title="CE paid conversion rate (orders ÷ ad clicks), W0 level with week-over-week change — funnel context while PP is active.">CVR (WoW)</th>'+
       '</tr></thead><tbody>'+
       pp.map(r=>{ const strc=r.str_nt==null?'':(r.str_nt>=95?'neg':(r.str_nt<60?'amber':'pos'));
@@ -1835,7 +1835,7 @@ function renderLevers(M){
           '<td class="num">'+(r.net_roi==null?'—':r.net_roi+'%')+'</td>'+
           '<td class="num">'+(r.cvr==null?'—':((r.cvr.toFixed?r.cvr.toFixed(1):r.cvr)+'% <span class="'+sgn(r.cvr_wow)+'">'+fmtDelta(r.cvr_wow)+'</span>'))+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
-      '<div class="sub" style="margin-top:4px">Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry (amber = behind pace). Net ROI = (CM1 − dated loss-liability) ÷ cost. No verdict — reviewer decides.</div>';
+      '<div class="sub" style="margin-top:4px">Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry (amber = behind pace). Net ROI = (CM1 − realized loss) ÷ cost, where realized loss = loss on dated tickets expiring unsold this month (not the full at-risk stock). CVR/Net ROI blank = CE has no paid activity this week. No verdict — reviewer decides.</div>';
   }
 
   return '<section id="s6"><div class="sec-head"><span class="sec-num">6</span><h2>Levers visibility</h2>'+
