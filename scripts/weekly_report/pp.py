@@ -1,54 +1,73 @@
-"""PP tracking bucket — dim_pp_allotments (STR/liability) joined to the CE weekly
-funnel (CVR, CM2, orders). Metrics only, no verdict (reviewer decides).
+"""PP tracking bucket — sourced ENTIRELY from fct_pp_tickets (the per-ticket "FDT"
+truth: experience_date, expiring_at, is_sold, validity_type, loss_liability,
+booking_created_at, combined_entity_id) + the CE weekly funnel for CVR/Net-ROI.
+Metrics only, no verdict.
 
-Scope: ACTIVE inventory as of the report week — allotments that are Open AND whose
-tickets are still valid for upcoming dates (or open-dated). This is validity/status-
-based, NOT a creation-date anchor: an allotment created months ago stays in while its
-tickets are still sellable, and expired/closed ones drop out. Self-updating (relative
-to the report week's validity), so there is no manual "season start" to maintain.
+Checklist (2026-07-17), all from fct_pp_tickets ticket grain:
+  1 dated (DATE_TIME) vs open (OPEN); liability = DATED unsold only
+  2 weekly run-rate: last-wk sold (booking_created_at) vs needed/wk (remaining ÷ wks-to-expiry)
+  3 unsold tickets EXPIRING this calendar month (the real loss)
+  4 Net ROI = (CM1 − dated loss-liability) / cost
+  5 STR on current + next 2 weeks (experience_date window)
+  6/7 dropped last-upload + PP-%-of-orders
 """
 from __future__ import annotations
-import math
+import math, datetime
 import config
 from bq import query_df
 
-STALE_DAYS = 180   # Open allotment with no upload in 6+ months → flag as possibly stale
+NEAR_TERM_DAYS = 20   # current + next 2 weeks
 
 PP_SQL = """
-WITH pp AS (
-  SELECT tour_id,
-         SUM(count_uploaded_tickets) uploaded, SUM(count_sold_tickets) sold,
-         SUM(loss_liability_usd) loss_liab, MAX(DATE(latest_ticket_uploaded_at)) last_upload
-  FROM `{proj}.{ds}.dim_pp_allotments`
-  WHERE allotment_status = 'Open'
-        AND (ticket_validity_timestamp IS NULL OR DATE(ticket_validity_timestamp) >= DATE(@week))
-        AND count_uploaded_tickets > 0
-  GROUP BY 1),
-map AS (SELECT DISTINCT tour_id, combined_entity_id
-        FROM `{proj}.{ds}.dim_experience_listings` WHERE tour_id IS NOT NULL),
-cem AS (SELECT combined_entity_id, ANY_VALUE(business_market) market, ANY_VALUE(combined_entity_name) ce
+WITH t AS (
+  SELECT combined_entity_id,
+         combined_entity_name,
+         validity_type, is_sold, ticket_status,
+         DATE(experience_timestamp) exp_date,
+         DATE(expiring_at) expiry,
+         DATE(booking_created_at) booked,
+         loss_liability
+  FROM `{proj}.{ds}.fct_pp_tickets`
+  WHERE ticket_status != 'Invalid'
+        AND ( validity_type = 'OPEN'
+              OR DATE(experience_timestamp) >= DATE(@week)
+              OR DATE_TRUNC(DATE(expiring_at), MONTH) = DATE_TRUNC(DATE(@week), MONTH) )
+),
+agg AS (
+  SELECT combined_entity_id,
+    ANY_VALUE(combined_entity_name) ce,
+    COUNTIF(validity_type='DATE_TIME') dated,
+    COUNTIF(validity_type='OPEN') open_ct,
+    ROUND(SUM(IF(validity_type='DATE_TIME' AND NOT is_sold, loss_liability, 0)),0) loss_liab_dated,
+    COUNTIF(exp_date BETWEEN DATE(@week) AND DATE_ADD(DATE(@week), INTERVAL {ntd} DAY)) nt_total,
+    COUNTIF(exp_date BETWEEN DATE(@week) AND DATE_ADD(DATE(@week), INTERVAL {ntd} DAY) AND is_sold) nt_sold,
+    COUNTIF(validity_type='DATE_TIME' AND DATE_TRUNC(expiry, MONTH)=DATE_TRUNC(DATE(@week), MONTH) AND NOT is_sold) expiring_unsold,
+    COUNTIF(validity_type='DATE_TIME' AND NOT is_sold AND exp_date >= DATE(@week)) remaining_dated,
+    MAX(IF(validity_type='DATE_TIME' AND NOT is_sold, exp_date, NULL)) max_exp,
+    COUNTIF(is_sold AND booked BETWEEN DATE_SUB(DATE(@week), INTERVAL 7 DAY) AND DATE_SUB(DATE(@week), INTERVAL 1 DAY)) sold_last_wk,
+    COUNT(*) total, COUNTIF(is_sold) sold
+  FROM t GROUP BY 1
+),
+cem AS (SELECT combined_entity_id, ANY_VALUE(business_market) market
         FROM `{proj}.{ds}.dim_experiences` GROUP BY 1)
-SELECT cem.market, cem.combined_entity_id AS ce_id, cem.ce,
-       SUM(pp.uploaded) uploaded, SUM(pp.sold) sold,
-       ROUND(SUM(pp.loss_liab),0) loss_liab, MAX(pp.last_upload) last_upload
-FROM pp JOIN map USING(tour_id) JOIN cem USING(combined_entity_id)
-WHERE cem.market IN ('North America','Italy','Oceania')
-GROUP BY 1,2,3 HAVING uploaded > 0
-""".format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET)
+SELECT cem.market, a.combined_entity_id AS ce_id, a.ce,
+       a.dated, a.open_ct, a.loss_liab_dated, a.nt_total, a.nt_sold,
+       a.expiring_unsold, a.remaining_dated, a.max_exp, a.sold_last_wk, a.total, a.sold
+FROM agg a JOIN cem ON cem.combined_entity_id = a.combined_entity_id
+WHERE cem.market IN ('North America','Italy','Oceania') AND (a.dated + a.open_ct) > 0
+""".format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET, ntd=NEAR_TERM_DAYS)
 
 
 def _i(v):
     try:
-        f = float(v)
-        return 0 if math.isnan(f) else int(f)
+        f = float(v); return 0 if math.isnan(f) else int(f)
     except (TypeError, ValueError):
         return 0
 
 
 def _f(v):
     try:
-        f = float(v)
-        return 0.0 if math.isnan(f) else f
+        f = float(v); return 0.0 if math.isnan(f) else f
     except (TypeError, ValueError):
         return 0.0
 
@@ -57,61 +76,20 @@ _PP_CACHE = {}
 
 
 def pp_by_ce(week):
-    """Active PP allotments (Open + valid-for-upcoming) across NA/IT/OC as of `week`,
-    keyed by ce_id. Cached per (report week). Uses the shared bq.query_df client."""
     if week in _PP_CACHE:
         return _PP_CACHE[week]
-    df = query_df(PP_SQL, "pp_allotments", {"week": week})
+    df = query_df(PP_SQL, "pp_tickets", {"week": week})
     res = {}
     for _, r in df.iterrows():
-        lu = r["last_upload"]
-        lu = None if (lu is None or (isinstance(lu, float) and math.isnan(lu))) else str(lu)[:10]
-        res[str(r["ce_id"])] = {"market": r["market"], "ce": r["ce"],
-            "uploaded": _i(r["uploaded"]), "sold": _i(r["sold"]),
-            "loss_liab": _f(r["loss_liab"]), "last_upload": lu}
+        mx = r["max_exp"]
+        mx = None if (mx is None or (isinstance(mx, float) and math.isnan(mx))) else str(mx)[:10]
+        res[str(r["ce_id"])] = {
+            "market": r["market"], "ce": r["ce"], "dated": _i(r["dated"]), "open_ct": _i(r["open_ct"]),
+            "loss_liab_dated": _f(r["loss_liab_dated"]), "nt_total": _i(r["nt_total"]), "nt_sold": _i(r["nt_sold"]),
+            "expiring_unsold": _i(r["expiring_unsold"]), "remaining_dated": _i(r["remaining_dated"]),
+            "max_exp": mx, "sold_last_wk": _i(r["sold_last_wk"]), "total": _i(r["total"]), "sold": _i(r["sold"])}
     _PP_CACHE[week] = res
     return res
-
-
-def build_pp(snap):
-    """Report-engine entry: PP rows for THIS snapshot's market, joined to CE funnel.
-    Returns [] on any failure (guarded — never breaks the report)."""
-    import datetime
-    meta = snap.get("meta") or {}
-    market = meta.get("market")
-    try:
-        wsd = datetime.date.fromisoformat(str(meta.get("week_start"))[:10])
-    except Exception:
-        wsd = None
-    ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
-    try:
-        ppmap = pp_by_ce(meta.get("week_start"))
-    except Exception:
-        return []
-    rows = []
-    for cid, ppd in ppmap.items():
-        if ppd["market"] != market:
-            continue
-        ce = ces.get(cid)
-        if ce:
-            r = pp_row(ce, ppd)
-        else:  # PP CE below the snapshot activity threshold — still show inventory health
-            r = {"market": market, "ce": ppd["ce"], "uploaded": ppd["uploaded"], "sold": ppd["sold"],
-                 "str_pct": round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None,
-                 "loss_liab": ppd["loss_liab"], "last_upload": ppd["last_upload"],
-                 "pp_pct_orders": None, "cvr": None, "cvr_wow": None, "cm2_4w": None, "cm2_trend": None}
-        # stale flag: Open allotment with no upload in STALE_DAYS+ — likely a status-hygiene
-        # artifact (never closed), not genuinely live. Flagged, NOT dropped — reviewer verifies.
-        r["stale"] = False
-        if wsd and r.get("last_upload"):
-            try:
-                r["stale"] = (wsd - datetime.date.fromisoformat(str(r["last_upload"])[:10])).days > STALE_DAYS
-            except Exception:
-                pass
-        r["ce_id"] = cid
-        rows.append(r)
-    rows.sort(key=lambda x: -(x["uploaded"] or 0))
-    return rows
 
 
 def _sum(wk, key, a, b=None):
@@ -119,26 +97,51 @@ def _sum(wk, key, a, b=None):
     return sum((w.get(key) or 0) for w in s)
 
 
-def pp_row(ce, ppd):
-    """Attach CE-funnel growth metrics to a PP CE. Returns dict of display metrics."""
-    wk = ce.get("weekly") or []
+def pp_row(ce, ppd, week):
+    wk = (ce.get("weekly") or []) if ce else []
     w0 = wk[-1] if wk else {}
     wm1 = wk[-2] if len(wk) > 1 else {}
-    str_pct = round(ppd["sold"] / ppd["uploaded"] * 100) if ppd["uploaded"] else None
-    # materiality: PP sold (season-cumulative) vs CE orders (trailing ~12wk in the
-    # snapshot). Windows differ by design — a rough "how big is PP vs recent demand"
-    # ratio, NOT a same-period share. Labeled as such in the render.
-    ce_orders = _sum(wk, "orders", 0)
-    pp_pct_orders = round(ppd["sold"] / ce_orders * 100) if ce_orders else None
-    # CVR level + WoW
+    # near-term (current + next 2wk) STR; fall back to overall for all-open CEs
+    str_nt = (round(ppd["nt_sold"] / ppd["nt_total"] * 100) if ppd["nt_total"]
+              else (round(ppd["sold"] / ppd["total"] * 100) if ppd["total"] else None))
+    # needed/wk to clear remaining dated before expiry
+    needed_wk = None
+    if ppd["remaining_dated"] and ppd["max_exp"]:
+        try:
+            wsd = datetime.date.fromisoformat(str(week)[:10])
+            wks = max((datetime.date.fromisoformat(ppd["max_exp"]) - wsd).days / 7.0, 1.0)
+            needed_wk = round(ppd["remaining_dated"] / wks)
+        except Exception:
+            pass
+    # Net ROI = (CM1 − dated loss-liability) / cost  (trailing-4wk CM1/cost; liability = current at-risk)
+    cm1_4w = _sum(wk, "cm1", -4); cost_4w = _sum(wk, "spend", -4)
+    net_roi = round((cm1_4w - ppd["loss_liab_dated"]) / cost_4w * 100) if cost_4w else None
     cvr = w0.get("cvr_pct"); cvr_wow = ((cvr / wm1.get("cvr_pct") - 1) * 100
                                         if (cvr and wm1.get("cvr_pct")) else None)
-    # CM2 = CM1 - spend, trailing-4wk + trend vs prior-4wk
-    cm2_4w = _sum(wk, "cm1", -4) - _sum(wk, "spend", -4)
-    cm2_p4 = (_sum(wk, "cm1", -8, -4) - _sum(wk, "spend", -8, -4)) if len(wk) >= 8 else None
-    cm2_trend = ("↑" if (cm2_p4 is not None and cm2_4w > cm2_p4) else
-                 "↓" if (cm2_p4 is not None and cm2_4w < cm2_p4) else "·")
-    return {"market": ppd["market"], "ce": ppd["ce"], "uploaded": ppd["uploaded"], "sold": ppd["sold"],
-            "str_pct": str_pct, "loss_liab": ppd["loss_liab"], "last_upload": ppd["last_upload"],
-            "pp_pct_orders": pp_pct_orders, "cvr": cvr, "cvr_wow": cvr_wow,
-            "cm2_4w": cm2_4w, "cm2_trend": cm2_trend}
+    return {"market": ppd["market"], "ce": ppd["ce"], "ce_id": str(ppd.get("ce_id", "")),
+            "dated": ppd["dated"], "open_ct": ppd["open_ct"], "str_nt": str_nt,
+            "loss_liab_dated": ppd["loss_liab_dated"], "expiring_unsold": ppd["expiring_unsold"],
+            "remaining_dated": ppd["remaining_dated"], "sold_last_wk": ppd["sold_last_wk"],
+            "needed_wk": needed_wk, "net_roi": net_roi, "cvr": cvr, "cvr_wow": cvr_wow}
+
+
+def build_pp(snap):
+    """Report-engine entry: PP rows for THIS snapshot's market. Returns [] on failure."""
+    meta = snap.get("meta") or {}
+    market = meta.get("market"); week = meta.get("week_start")
+    ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
+    try:
+        ppmap = pp_by_ce(week)
+    except Exception:
+        return []
+    rows = []
+    for cid, ppd in ppmap.items():
+        if ppd["market"] != market:
+            continue
+        ppd["ce_id"] = cid
+        r = pp_row(ces.get(cid), ppd, week)
+        r["ce_id"] = cid
+        rows.append(r)
+    # rank by dated at-risk $ first, then expiring-unsold (the real loss exposure)
+    rows.sort(key=lambda x: (-(x["loss_liab_dated"] or 0), -(x["expiring_unsold"] or 0)))
+    return rows
