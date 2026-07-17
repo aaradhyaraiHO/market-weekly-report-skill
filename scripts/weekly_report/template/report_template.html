@@ -1808,27 +1808,29 @@ function renderLevers(M){
   let cBody;
   if(!pp.length){ cBody='<div class="emptystate">No active prepurchase allotments for this market.</div>'; }
   else{
-    const upl=pp.reduce((s,r)=>s+(+r.uploaded||0),0), sold=pp.reduce((s,r)=>s+(+r.sold||0),0);
-    const liab=pp.reduce((s,r)=>s+(+r.loss_liab||0),0);
-    cBody='<div class="countline" style="margin:0 0 10px"><span>PP CEs: <b>'+pp.length+'</b> · uploaded <b>'+fmtInt(upl)+
-      '</b> · sold <b>'+fmtInt(sold)+'</b> · STR <b>'+(upl?Math.round(sold/upl*100):'—')+'%</b> · loss-liab <b>'+fmtMoney(liab)+'</b></span></div>'+
+    const dated=pp.reduce((s,r)=>s+(+r.dated||0),0), openc=pp.reduce((s,r)=>s+(+r.open_ct||0),0);
+    const liab=pp.reduce((s,r)=>s+(+r.loss_liab_dated||0),0), expi=pp.reduce((s,r)=>s+(+r.expiring_unsold||0),0);
+    cBody='<div class="countline" style="margin:0 0 10px"><span>PP CEs: <b>'+pp.length+'</b> · dated <b>'+fmtInt(dated)+
+      '</b> · open <b>'+fmtInt(openc)+'</b> · dated loss-liab <b>'+fmtMoney(liab)+'</b> · unsold expiring this mo <b>'+fmtInt(expi)+'</b></span></div>'+
       '<div class="tablewrap"><table><thead><tr>'+
-      '<th class="stick">Combined Entity</th><th class="num">Uploaded</th><th class="num">Sold</th><th class="num">STR</th>'+
-      '<th class="num">Loss-liab</th><th class="num">PP %ord</th><th class="num">CVR (WoW)</th><th class="num">CM2 4wk</th><th>Last upload</th>'+
+      '<th class="stick">Combined Entity</th><th class="num">Dated / Open</th><th class="num">STR nxt 2wk</th>'+
+      '<th class="num">Expiring this mo</th><th class="num">Loss-liab (dated)</th><th class="num">Run-rate last / need·wk</th>'+
+      '<th class="num">Net ROI</th><th class="num">CVR (WoW)</th>'+
       '</tr></thead><tbody>'+
-      pp.map(r=>{ const strc=r.str_pct==null?'':(r.str_pct>=95?'neg':(r.str_pct<60?'amber':'pos'));
+      pp.map(r=>{ const strc=r.str_nt==null?'':(r.str_nt>=95?'neg':(r.str_nt<60?'amber':'pos'));
+        const pace=(r.needed_wk!=null)?(fmtInt(r.sold_last_wk)+' / '+fmtInt(r.needed_wk)):(fmtInt(r.sold_last_wk)+' / —');
+        const pacec=(r.needed_wk!=null && r.sold_last_wk < r.needed_wk)?'amber':'';
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
           '<td class="ce stick"><span class="cn">'+esc(r.ce)+'</span></td>'+
-          '<td class="num">'+fmtInt(r.uploaded)+'</td>'+
-          '<td class="num">'+fmtInt(r.sold)+'</td>'+
-          '<td class="num '+strc+'">'+(r.str_pct==null?'—':r.str_pct+'%')+'</td>'+
-          '<td class="num">'+fmtMoney(r.loss_liab)+'</td>'+
-          '<td class="num">'+(r.pp_pct_orders==null?'—':r.pp_pct_orders+'%')+'</td>'+
-          '<td class="num">'+(r.cvr==null?'—':((r.cvr.toFixed?r.cvr.toFixed(1):r.cvr)+'% <span class="'+sgn(r.cvr_wow)+'">'+fmtDelta(r.cvr_wow)+'</span>'))+'</td>'+
-          '<td class="num">'+(r.cm2_4w==null?'—':(fmtMoney(r.cm2_4w)+' '+(r.cm2_trend||'')))+'</td>'+
-          '<td class="mono">'+esc(r.last_upload)+(r.stale?' <span class="chip amber" title="Open allotment, no ticket upload in 6+ months — likely a status-hygiene artifact (never closed), verify it is genuinely live">⚠ stale?</span>':'')+'</td></tr>';
+          '<td class="num">'+fmtInt(r.dated)+' / '+fmtInt(r.open_ct)+'</td>'+
+          '<td class="num '+strc+'">'+(r.str_nt==null?'—':r.str_nt+'%')+'</td>'+
+          '<td class="num'+(r.expiring_unsold>0?' amber':'')+'">'+(r.expiring_unsold?fmtInt(r.expiring_unsold):'—')+'</td>'+
+          '<td class="num">'+fmtMoney(r.loss_liab_dated)+'</td>'+
+          '<td class="num '+pacec+'">'+pace+'</td>'+
+          '<td class="num">'+(r.net_roi==null?'—':r.net_roi+'%')+'</td>'+
+          '<td class="num">'+(r.cvr==null?'—':((r.cvr.toFixed?r.cvr.toFixed(1):r.cvr)+'% <span class="'+sgn(r.cvr_wow)+'">'+fmtDelta(r.cvr_wow)+'</span>'))+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
-      '<div class="sub" style="margin-top:4px">STR ≥95% under-bought (reorder) · &lt;60% over-bought (liability) · PP %ord = PP sold (season) vs CE orders (12wk) — rough scale, not same-period · CM2/CVR = CE funnel while PP active · ⚠ stale? = Open but no upload in 6+ months (verify not a never-closed allotment). No verdict — reviewer decides.</div>';
+      '<div class="sub" style="margin-top:4px">Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry (amber = behind pace). Net ROI = (CM1 − dated loss-liability) ÷ cost. No verdict — reviewer decides.</div>';
   }
 
   return '<section id="s6"><div class="sec-head"><span class="sec-num">6</span><h2>Levers visibility</h2>'+
