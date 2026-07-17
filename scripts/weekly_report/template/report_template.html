@@ -124,11 +124,20 @@ section{margin-top:44px}
 .lmd{font-size:10.5px;font-weight:600;margin-top:1px;white-space:nowrap;line-height:1.3}
 .lmd.gp{color:var(--green)} .lmd.gn{color:var(--red)} .lmd.mut{color:var(--ink-faint)}
 .lm-hb{font-weight:600;font-size:9px;color:var(--ink-faint);letter-spacing:0}
+thead th[title]{cursor:help}
 tr.lm-waste td{background:var(--red-bg)}
 .lm-howto{font-size:12px;color:var(--ink-soft);background:var(--paper-deep);border:1px solid var(--rule);border-radius:10px;padding:9px 14px;margin:0 0 8px;line-height:1.6}
 .lm-howto b{color:var(--ink)}
 .lm-legend{font-size:11px;color:var(--ink-faint);margin:0 0 12px}
 .lm-legend .chip{margin-right:2px}
+/* Fluctuations — highlight the root-cause driver cell */
+.fxdom{background:var(--paper-deep);border-radius:6px;padding:2px 5px;margin:-2px -3px;box-shadow:inset 2px 0 var(--ink-soft)}
+/* Losing Money — per-row action dropdown */
+.lm-act{font-family:var(--sans);font-size:11px;font-weight:600;border:1px solid var(--rule-dark);border-radius:6px;padding:3px 5px;background:#fff;color:var(--ink);cursor:pointer}
+/* Fluctuations — per-row reviewer: confirm-seasonality checkbox + roomy note */
+.fx-chk{display:flex;align-items:center;gap:6px;font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;cursor:pointer}
+.fx-chk input{cursor:pointer;width:14px;height:14px;accent-color:var(--purps)}
+.fx-note{font-family:var(--sans);font-size:11px;border:1px solid var(--rule-dark);border-radius:6px;padding:5px 7px;background:#fff;color:var(--ink);width:170px;min-height:38px;margin-top:5px;display:block;resize:vertical}
 .drv{font-weight:600;white-space:nowrap}
 #s4 tbody td{padding-top:13px;padding-bottom:13px;vertical-align:middle;font-variant-numeric:tabular-nums}
 #s4 .cn{font-weight:700}
@@ -562,6 +571,20 @@ function historyFor(ceId){
 }
 // "has a note this week" — drives the ● dot in the CE table.
 function hasComment(ceId){ const n=noteFor(ceId); return !!(n && n.note && n.note.trim()); }
+
+// Losing Money action dropdown (Pause / Scale down / Intentional) — local-only, per market+week.
+function wrActionKey(){ return 'wr_action::'+slugKey()+'::'+curWeek(); }
+function wrGetActions(){ try{ return JSON.parse(localStorage.getItem(wrActionKey())||'{}'); }catch(e){ return {}; } }
+function wrGetAction(ceId){ return wrGetActions()[String(ceId)]||''; }
+function wrSetAction(ceId,val){ const m=wrGetActions(); if(val){ m[String(ceId)]=val; } else { delete m[String(ceId)]; }
+  try{ localStorage.setItem(wrActionKey(), JSON.stringify(m)); }catch(e){} }
+
+// Fluctuations review — per-row action + free-text note (local-only, per market+week). kind ∈ act|note.
+function wrFxKey(kind){ return 'wr_fx'+kind+'::'+slugKey()+'::'+curWeek(); }
+function wrFxGet(kind){ try{ return JSON.parse(localStorage.getItem(wrFxKey(kind))||'{}'); }catch(e){ return {}; } }
+function wrFxGetOne(kind,ceId){ return wrFxGet(kind)[String(ceId)]||''; }
+function wrFxSet(kind,ceId,val){ const m=wrFxGet(kind); if(val){ m[String(ceId)]=val; } else { delete m[String(ceId)]; }
+  try{ localStorage.setItem(wrFxKey(kind), JSON.stringify(m)); }catch(e){} }
 
 function putLocal(ceId, patch){
   const slug=slugKey(); notesData[slug]=notesData[slug]||{};
@@ -1536,6 +1559,8 @@ function _bucketBlock(tag, title, sub, body){
     '<span class="sec-num" style="background:var(--ink)">'+tag+'</span><h2 style="font-size:19px">'+title+'</h2>'+
     '<span class="sub">'+sub+'</span></div>'+body+'</div>';
 }
+// "How to read" banner — same style as Losing Money, on every bucket table
+function _howto(t){ return '<div class="lm-howto"><b>How to read:</b> '+t+'</div>'; }
 function _tbl(head, bodyRows){
   return '<div class="tablewrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+bodyRows+'</tbody></table></div>';
 }
@@ -1575,10 +1600,9 @@ function renderBuckets(M){
       '<div class="fxfull" style="display:none">'+rest.map(seg).join(' · ')+'</div>'; };
   const dualSpark=id=>{ const ce=ceBy[id]||{}; const ty=(ce.weekly||[]).slice(-10).map(w=>w.revenue), ly=(ce.weekly_ly||[]).slice(-10).map(w=>w.revenue); return kmSparkline('fx_'+id, ty, ly); };
   const fluxCbar=items=>{ if(!items.length) return '';
-    const net=items.reduce((s,r)=>s+(+r.delta_rev||0),0);
-    const nv=items.filter(r=>r.verdict==='-ve').length, np=items.filter(r=>r.verdict==='+ve').length, nh=items.filter(r=>r.verdict==='hold').length;
-    const reason=[nv?nv+' −ve':'',np?np+' +ve':'',nh?nh+' hold':''].filter(Boolean).join(' · ');
-    return cbar(items.length,'Net Δ Rev wk',fmtMoneyDelta(net),sgn(net),reason); };
+    const byDrv={}; items.forEach(r=>{ const k=r.dominant||'mixed'; byDrv[k]=(byDrv[k]||0)+1; });
+    const reason='root driver: '+Object.entries(byDrv).sort((a,b)=>b[1]-a[1]).map(([k,v])=>v+' '+k).join(' · ');
+    return cbar(items.length,'Flagged',''+items.length,'','Google Search only · '+reason); };
   const cbar=(n,ml,mv,mc,reason)=>'<div class="cbar"><span class="cbar-k">Cohort ('+n+' CEs)</span>'+
     '<div class="cbar-m"><span class="cbar-l">'+ml+'</span><span class="cbar-v '+(mc||'')+'">'+mv+'</span></div>'+
     (reason?'<div class="cbar-r">'+reason+'</div>':'')+'</div>';
@@ -1609,8 +1633,23 @@ function renderBuckets(M){
     const top=ramp?'<div class="lmv" style="color:var(--amber)" title="spend +'+Math.round(wow)+'% vs last week — ramping on a bleeder">↑ '+val+'</div>':'<div class="lmv">'+val+'</div>';
     let dd=''; if(dvs!=null&&!isNaN(dvs)){ const r0=Math.round(dvs); dd=(r0===0)?'<div class="lmd mut">0%</div>':'<div class="lmd '+(dvs>0?'gn':'gp')+'">'+(dvs>0?'+':MINUS)+Math.abs(dvs).toFixed(0)+'%</div>'; }
     return top+dd; };
-  const lmCEcell=r=>'<span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+lmTier(r.tier)+seasonTag(r.ce_id);
-  const lmHead='<th class="stick">Combined Entity</th><th>Status</th><th class="num">Paid ROI <span class="lm-hb">WoW · 4w</span></th><th class="num">CM2 bleed <span class="lm-hb">/wk · 4w</span></th><th class="num">Spend <span class="lm-hb">Δ4w</span></th><th class="num">RPC <span class="lm-hb">Δ4w</span></th><th class="num">CPC <span class="lm-hb">Δ4w</span></th><th class="num">Clicks <span class="lm-hb">Δ4w</span></th><th class="num">TR% <span class="lm-hb">Δ4w</span></th><th>CM2 trend 12w</th>';
+  const lmNE=r=>{ const ne=r.new_existing; if(!ne) return ''; return ' <span class="chip '+(ne==='New'?'blue':'ghost')+'">'+ne+'</span>'; };
+  const lmCEcell=r=>'<span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+lmNE(r)+seasonTag(r.ce_id);
+  // manual per-row action (Pause / Scale down / Intentional) — persisted locally; guideline stays text-only
+  const lmAction=r=>{ const v=wrGetAction(r.ce_id); const o=(val,lbl)=>'<option value="'+val+'"'+(v===val?' selected':'')+'>'+lbl+'</option>';
+    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value)">'+
+      o('','—')+o('pause','Pause')+o('scale_down','Scale down')+o('intentional','Intentional')+'</select>'; };
+  const lmHead='<th class="stick">Combined Entity</th>'+
+    '<th title="Weeks bleeding & severity — NEW (1w) · Nw · CHRONIC (≥6w) · ESCALATING (ROI −>30pp WoW) · Recovering (CM2 bleed at least halved vs prior 3wk).">Status <span class="lm-hb">ⓘ</span></th>'+
+    '<th class="num" title="Google-Search Paid ROI. Two deltas: WoW (vs last week, acute) and 4w (vs the prior-4-week average, structural).">Paid ROI <span class="lm-hb">WoW · 4w ⓘ</span></th>'+
+    '<th class="num" title="Weekly margin bled = Google-Search CM1 − spend. /wk = this week · 4w = last-4-week total.">CM2 bleed <span class="lm-hb">/wk · 4w ⓘ</span></th>'+
+    '<th class="num" title="Google-Search spend. Δ = % vs the prior-4-week average; ↑ amber = ramped >25% WoW on a bleeder.">Spend <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Revenue per click. Δ vs the prior-4-week average.">RPC <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Cost per click (Google Search). Δ vs the prior-4-week average — up is bad.">CPC <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Clicks — neutral: volume is not good or bad on a bleeder. Δ vs the prior-4-week average.">Clicks <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Take rate (net revenue ÷ completed GBV). Δ vs the prior-4-week average.">TR% <span class="lm-hb">Δ4w</span></th>'+
+    '<th title="Weekly CM2 (CM1 − spend) over 12 weeks; dashed line = breakeven. Hover a point for its value.">CM2 trend 12w <span class="lm-hb">ⓘ</span></th>'+
+    '<th title="Your call: Pause / Scale down / Intentional. Saved locally per week.">Action</th>';
   const lmRow=(r,cls,statusCell,ceSub)=>'<tr class="cerow'+(cls?' '+cls:'')+'" data-ce="'+esc(r.ce_id)+'">'+
       '<td class="ce stick">'+lmCEcell(r)+(ceSub||'')+'</td>'+
       '<td>'+statusCell+'</td>'+
@@ -1621,9 +1660,10 @@ function renderBuckets(M){
       '<td class="num">'+lmVD(r.cpc,r.cpc_v4,{good:-1,dp:2,pre:'$'})+'</td>'+
       '<td class="num">'+lmVD(r.clicks,r.clicks_v4,{good:0})+'</td>'+
       '<td class="num">'+lmVD(r.tr_pct,r.tr_v4,{good:1,pp:true,suf:'%'})+'</td>'+
-      '<td>'+cm2Spark(r.cm2_series,r.cm2_weeks)+'</td></tr>';
-  const lmHowto='<div class="lm-howto"><b>How to read:</b> ranked worst-first by 4-week CM2 bled. <b>Full-waste</b> rows (spend, 0 conversions) are pure loss — kill first. Then a bleeder that&rsquo;s <b>Escalating</b> or <b>Chronic</b> with rising spend and RPC decaying is the scale-down priority. Rule of thumb: <b>3–4 weeks bleeding with no recovery lever → scale down within the week.</b></div>';
-  const lmLegend='<div class="lm-legend"><span class="chip red">FULL WASTE</span>spend, 0 conversions &nbsp;·&nbsp; <span class="chip blue">NEW</span>1st week &lt;100% &nbsp;·&nbsp; <span class="chip amber">2–5w</span>weeks bleeding &nbsp;·&nbsp; <span class="chip red">CHRONIC</span>≥6 weeks &nbsp;·&nbsp; <span class="chip red">ESCALATING</span>ROI dropped &gt;30pp WoW</div>';
+      '<td>'+cm2Spark(r.cm2_series,r.cm2_weeks)+'</td>'+
+      '<td>'+lmAction(r)+'</td></tr>';
+  const lmHowto='<div class="lm-howto"><b>How to read (guideline only — set the Action per row):</b> ranked worst-first by 4-week CM2 bled. <b>Full-waste</b> (spend, 0 conversions) = pure loss, pause first. For a bleeder 3–4 weeks in with no recovery: <b>New CE → ROI &lt; 30% pause</b>; <b>Existing CE → ROI &lt; 70% pause</b>; otherwise <b>scale down within the week</b>. <b>Recovering</b> = CM2 loss has at least halved vs the prior 3 weeks — hold.</div>';
+  const lmLegend='<div class="lm-legend"><span class="chip red">FULL WASTE</span>spend, 0 conversions &nbsp;·&nbsp; <span class="chip blue">New</span>/<span class="chip ghost">Existing</span> CE type (drives the ROI threshold) &nbsp;·&nbsp; <span class="chip green">Recovering</span>CM2 bleed halving &nbsp;·&nbsp; <span class="chip red">CHRONIC</span>≥6 weeks &nbsp;·&nbsp; <span class="chip red">ESCALATING</span>ROI −&gt;30pp WoW</div>';
   let lmBody;
   if(!bleeders.length && !fullWaste.length){ lmBody='<div class="emptystate">No CEs bleeding above the $1k / 4-week gate. <b>✅</b></div>'; }
   else{
@@ -1632,8 +1672,12 @@ function renderBuckets(M){
     const lmReason=[fullWaste.length?fullWaste.length+' full-waste':'',nEsc?nEsc+' escalating':'',nChr?nChr+' chronic':'',nNew?nNew+' new':''].filter(Boolean).join(' · ');
     const wasteRows=fullWaste.map(r=>lmRow(r,'lm-waste','<span class="chip red">FULL WASTE</span>',
         '<div class="idbr" style="margin-top:3px">0 paid conversions on '+fmtMoney(r.spend_4w)+' (4w) — total loss</div>')).join('');
-    const bleedRows=bleeders.map(r=>lmRow(r,'',lmStatus(r.status)+'<div class="idbr" style="margin-top:2px">'+(r.weeks||0)+'w bleeding</div>')).join('');
-    lmBody=cbar(fullWaste.length+bleeders.length,'Total CM2 bleed/wk',fmtMoneyDelta(lmTotal),'neg',lmReason)+
+    const bleedRows=bleeders.map(r=>{
+      const statusCell = r.recovering
+        ? '<span class="chip green">Recovering</span><div class="idbr" style="margin-top:2px">CM2 +'+r.cm2_improve_pct+'% vs prior 3wk</div>'
+        : lmStatus(r.status)+'<div class="idbr" style="margin-top:2px">'+(r.weeks||0)+'w bleeding</div>';
+      return lmRow(r,'',statusCell); }).join('');
+    lmBody=cbar(fullWaste.length+bleeders.length,'Total CM2 bleed/wk · Google Search only',fmtMoneyDelta(lmTotal),'neg',lmReason)+
       lmHowto+lmLegend+_tbl(lmHead, wasteRows+bleedRows);
   }
   let lmFn='';
@@ -1643,19 +1687,43 @@ function renderBuckets(M){
   if(burn.count){ const bn=esc((burn.names||[]).join(', ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+bn+'">+ '+burn.count+' sub-$1k CEs bleeding <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the individual gate <span style="color:var(--ink-faint)">(hover for names)</span></div>'; }
 
   // Fluctuations — clean value(Δ) layout, dominant driver inline (full 5 on hover), dual TY/LY spark
-  const fluxHead='<th class="stick">Combined Entity</th><th>Swing (vs 28d)</th><th class="num">Paid ROI</th><th class="num">Δ Rev wk</th><th>Δrev by factor</th><th class="num">Spend</th><th class="num">YoY</th><th>Verdict · Action</th><th>Rev &rsquo;26 v &rsquo;25</th>';
+  // RPC decomposed → CVR·AOV·Completion·Take-rate (RPC = their product). Root driver highlighted.
+  // Alert label = WoW or 3D (why it fired). 28d ROI + 28d spend always on. Clicks = context only.
+  const fxAlert=t=>'<span class="chip '+(t==='3D'?'violet':'ghost')+'" title="'+(t==='3D'?'qualified on a 3-day pattern vs 28-day baseline':'qualified week-over-week')+'">'+esc(t||'')+'</span>';
+  const fxDrv=(r,key,val,delta,o)=>{ const cell=lmVD(val,delta,o); return (r.dominant_key===key)?'<div class="fxdom">'+cell+'</div>':cell; };
+  // reviewer: a checkbox to confirm seasonality + a roomy note, persisted locally
+  const fxAction=r=>{ const c=(wrFxGetOne('act',r.ce_id)==='seasonality'), n=wrFxGetOne('note',r.ce_id);
+    return '<label class="fx-chk" onclick="event.stopPropagation()"><input type="checkbox"'+(c?' checked':'')+
+        ' onchange="wrFxSet(\'act\',\''+esc(r.ce_id)+'\',this.checked?\'seasonality\':\'\')"> confirm seasonality</label>'+
+      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxSet(\'note\',\''+esc(r.ce_id)+'\',this.value)">'+esc(n)+'</textarea>'; };
+  // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
+  const fluxHead='<th class="stick">Combined Entity</th>'+
+    '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
+    '<th class="num" title="Google-Search Paid ROI over the last 28 days. Δ = percentage-point change vs the prior 28 days.">28d ROI <span class="lm-hb">ⓘ</span></th>'+
+    '<th class="num" title="Google-Search spend over the last 28 days. Δ = % change vs the prior 28 days — shows whether it is already scaling down.">28d Spend <span class="lm-hb">ⓘ</span></th>'+
+    '<th class="num" title="Conversion rate = orders ÷ clicks. RPC = CVR × AOV × Completion × Take-rate; the four columns show which drove the RPC move. Δ follows the Alert (WoW = weekly, 3D = 3-day-vs-28-day).">CVR <span class="lm-hb">Δ ⓘ</span></th>'+
+    '<th class="num" title="Average order value = GBV ÷ orders. Δ follows the Alert.">AOV <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Completion rate = completed GBV ÷ booked GBV. Δ follows the Alert.">Completion <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Take rate = net revenue ÷ completed GBV. Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Paid clicks (Google Search) — context only, never a qualifier. Shown so a CVR/RPC drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
+    '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
+    '<th title="Your call: tick to confirm seasonality, add a note. Saved locally per week.">Action</th>';
   const fluxRows=items=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-    '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+''+tierMini(r.tier)+'</td>'+
-    '<td>'+swingCell(r.signal,r.swing_pct)+(r.window?dsub(winAbbr(r.window)):'')+'</td>'+
-    '<td class="num">'+fmtPct(r.roi,0)+dsub('2wk '+fmtPct(r.roi_2wk,0))+'</td>'+
-    '<td class="num '+sgn(r.delta_rev)+'">'+fmtMoneyDelta(r.delta_rev)+'</td>'+
-    '<td>'+drvCell(r)+'</td>'+
-    '<td class="num">'+fmtMoney(r.spend_wk)+dsub(fmtPct(r.paid_pct,0)+' paid')+'</td>'+
-    '<td class="num '+sgn(r.yoy)+'">'+fmtDelta(r.yoy,0)+'</td>'+
+    '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+
+    '<td>'+fxAlert(r.alert_type)+'</td>'+
+    '<td class="num"><div class="lmv">'+fmtPct(r.roi_4w,0)+'</div>'+(r.roi_4w_d==null?'':'<div class="lmd '+(r.roi_4w_d<0?"gn":"gp")+'">'+(r.roi_4w_d>0?"+":MINUS)+Math.abs(r.roi_4w_d)+'pp</div>')+'</td>'+
+    '<td class="num"><div class="lmv">'+fmtMoney(r.spend_4w)+'</div>'+(r.spend_4w_d==null?'':'<div class="lmd mut">'+(r.spend_4w_d>0?"+":MINUS)+Math.abs(r.spend_4w_d)+'%</div>')+'</td>'+
+    '<td class="num">'+fxDrv(r,'cvr',r.cvr,r.cvr_d,{good:1,dp:1,suf:'%'})+'</td>'+
+    '<td class="num">'+fxDrv(r,'aov',r.aov,r.aov_d,{good:1,dp:0,pre:'$'})+'</td>'+
+    '<td class="num">'+fxDrv(r,'cr',r.cr,r.cr_d,{good:1,dp:0,suf:'%'})+'</td>'+
+    '<td class="num">'+fxDrv(r,'tr',r.tr,r.tr_d,{good:1,dp:0,suf:'%'})+'</td>'+
+    '<td class="num">'+lmVD(r.clicks,r.clicks_d,{good:0})+'</td>'+
     '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
-    '<td>'+dualSpark(r.ce_id)+'</td></tr>').join('');
-  const seasDnBody=seasDn.length?(fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No CM1/RPC fluctuation ↓ signals. <b>✅</b></div>';
-  const seasUpBody=seasUp.length?(fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No CM1/RPC fluctuation ↑ signals.</div>';
+    '<td>'+fxAction(r)+'</td>'+
+    '</tr>').join('');
+  const fluxHowto=_howto('RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> (Google Search) = current scale &amp; efficiency, with a Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
+  const seasDnBody=seasDn.length?(fluxHowto+fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>';
+  const seasUpBody=seasUp.length?(fluxHowto+fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No revenue-quality spikes this week.</div>';
 
   // COMPOUND - Scale-Up — clean value(Δ) layout + cohort bar + dual spark
   let scaleBody;
@@ -1683,7 +1751,8 @@ function renderBuckets(M){
   if(!newCes.length){ newBody='<div class="emptystate">No CEs newly Pro+ or on pace to Pro.</div>'; }
   else{
     const nGrad=newCes.filter(r=>r.lane==='A_graduated').length, nPace=newCes.filter(r=>r.lane==='B_on_pace').length;
-    newBody=cbar(newCes.length,'New Pro+',nGrad,'',(nPace+' on pace to Pro'))+
+    newBody=_howto('CEs that just crossed <b>Pro+</b> for the first time in 4 quarters (graduated), or are on pace to. <b>Run-rate/mo</b> vs the Pro line and <b>Δ Rev WoW</b> show whether they&rsquo;re still climbing.')+
+      cbar(newCes.length,'New Pro+',nGrad,'',(nPace+' on pace to Pro'))+
       _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Paid ROI</th><th class="num">Δ Rev WoW</th><th class="num">Clicks</th><th class="num">RPC</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       newCes.map(r=>{ const ln=newLane[r.lane]||[r.lane,'ghost'];
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
@@ -1704,7 +1773,8 @@ function renderBuckets(M){
   if(!iters.length){ itBody='<div class="emptystate">No iteration / untapped candidates.</div>'; }
   else{
     const nIt=iters.filter(r=>r.lane==='iteration').length, nUn=iters.filter(r=>r.lane==='untapped').length, nNew=iters.filter(r=>r.new_this_week).length;
-    itBody=cbar(iters.length,'Iteration / Untapped',nIt+' / '+nUn,'',(nNew?'<b>'+nNew+' new this week</b> · ':'')+'never Pro+')+
+    itBody=_howto('Non-graduated CEs (<b>never Pro+</b>). <b>Iteration</b> = team is on it — the Reason says what&rsquo;s stuck (waiting for takeoff · needs inputs · manual check). <b>Untapped</b> = real scale, nobody working it. Clicks/CVR pooled over 4 weeks; <b>new</b> = handed over in the last 2 weeks.')+
+      cbar(iters.length,'Iteration / Untapped',nIt+' / '+nUn,'',(nNew?'<b>'+nNew+' new this week</b> · ':'')+'never Pro+')+
       _tbl('<th class="stick">Combined Entity</th><th>Reason</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Clicks 4w</th><th class="num">CVR 4w</th><th>MMP handover</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       iters.map(r=>{ const t=r.traction||{};
         const cvrCls=(r.cvr_4w!=null&&r.cvr_cat_med!=null)?(r.cvr_4w<r.cvr_cat_med?'neg':'pos'):'';
@@ -1722,9 +1792,9 @@ function renderBuckets(M){
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
     _bucketBlock('🛡️','Losing Money','Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked worst-first by 4-week CM2 bled; full-waste (spend, 0 conversions) on top.', lmBody+lmFn)+
-    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','Revenue quality dropped sharply — CM1/conv or RPC fell vs its 28-day baseline (held 3 days or WoW). Catches intra-week bleeds the weekly view hides; investigate or trim.', seasDnBody)+
+    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs its 28-day baseline (3-day pattern or WoW). RPC = CVR × AOV × Completion × Take-rate — the four columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.', seasDnBody)+
     /* Scale-Up table hidden from report (2026-07-17) — engine still computes C.scale_up */
-    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Yield spiked vs its 28-day baseline — same detector, upside. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
+    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Same decomposition, upside — RPC rose vs its 28-day baseline. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
     _bucketBlock('🌱','New CEs','Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.', newBody)+
     _bucketBlock('🌱','Iteration / Untapped','Non-graduated CEs (never Pro+). Iteration (team is on it) diagnoses why it is stuck — waiting for takeoff (low clicks) · needs inputs (CVR below category) · manual check. Untapped = real scale, nobody working it. Clicks/CVR pooled over 4 weeks; NEW = handover in the last 2 weeks.', itBody)+
     '</section>';

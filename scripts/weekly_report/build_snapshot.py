@@ -153,6 +153,15 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
             roi1 = _pct(cm1_business, gross_mktg_cost,
                         gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
 
+    # Google-Search-only paid (2026-07-17) — feeds the Losing Money + Fluctuations decision
+    # columns only (pause is a Google-Search call, not Bing). Business/funnel metrics stay total.
+    spend_g = _f(p, "spend_g") if paid is not None else None
+    cm1_g = _f(p, "cm1_g") if paid is not None else None
+    paid_clicks_g = _f(p, "paid_clicks_g") if paid is not None else None
+    roi_g = (_pct(cm1_g, spend_g, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
+             if (spend_g is not None and spend_g >= config.WEEKLY_SPEND_FLOOR) else None)
+    cpc_g = _num(spend_g / paid_clicks_g) if (paid_clicks_g and spend_g is not None) else None
+
     row = {
         "revenue": _num(revenue),
         "gbv": _num(gbv) if biz is not None else None,
@@ -190,6 +199,9 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "paid_conversions": int(conversions) if _num(conversions) is not None else None,
         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
         "cpc": _num(spend / paid_clicks) if (paid_clicks and paid is not None) else None,
+        # Google-Search-only paid (decision columns for Losing Money + Fluctuations)
+        "spend_g": _num(spend_g), "cm1_g": _num(cm1_g), "roi_g": roi_g, "cpc_g": cpc_g,
+        "paid_clicks_g": int(paid_clicks_g) if _num(paid_clicks_g) is not None else None,
         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
         # Paid RPC = paid-attributed net revenue ÷ paid clicks (not total revenue).
         "paid_revenue": _num(offline_rev),

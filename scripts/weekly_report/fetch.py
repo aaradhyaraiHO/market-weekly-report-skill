@@ -155,6 +155,17 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
         SUM(count_impressions)                                   AS paid_impressions,
         SUM(count_clicks)                                        AS paid_clicks,
         SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv,
+        -- Google-Search-only paid (2026-07-17): pause/scale decisions are Google-only, not Bing.
+        -- Feeds the Losing Money + Fluctuations 'weekly_google' money columns; the rest of the
+        -- report keeps the Google+Bing rollup above. (SEARCH filter already applied in WHERE.)
+        SUM(IF(ad_platform = 'Google Ads', sum_spend, 0))       AS spend_g,
+        SUM(IF(ad_platform = 'Google Ads', CASE
+            WHEN report_date >= '2025-09-01'
+                 AND sum_conversion_value_offline_contribution_margin > 0
+                THEN sum_conversion_value_offline_contribution_margin
+            ELSE sum_conversion_value_calculated_contribution_margin
+        END, 0))                                                AS cm1_g,
+        SUM(IF(ad_platform = 'Google Ads', count_clicks, 0))    AS paid_clicks_g,
         -- Search Impression Share — GOOGLE SEARCH ONLY. Bing's
         -- count_eligible_searches is unreliable (yields SIS > 100%), so SIS is
         -- Google-only (perf-audit canon: SUM(impr)/SUM(eligible), never
@@ -793,14 +804,18 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
 # Daily business series for the fluctuation engine  (RPC POF)
 # --------------------------------------------------------------------------- #
 def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """Daily CE business series: revenue (predicted), clicks, orders."""
+    """Daily CE business series: revenue (predicted), clicks, orders, GBV, completed GBV.
+    GBV + completed enable the 3-day-vs-28-day driver breakdown (AOV/CR/TR) in the
+    fluctuations bucket — RPC = CVR·AOV·CR·TR (2026-07-17)."""
     sql = f"""
     SELECT
         combined_entity_id,
         report_date,
-        SUM({REV})                  AS revenue,
-        SUM(count_ad_clicks)        AS clicks,
-        SUM(count_orders)           AS orders
+        SUM({REV})                            AS revenue,
+        SUM(count_ad_clicks)                  AS clicks,
+        SUM(count_orders)                     AS orders,
+        SUM(sum_order_value)                  AS gbv,
+        SUM(sum_order_value_completed)        AS gbv_completed
 
     FROM {config.CE_STATS}
 

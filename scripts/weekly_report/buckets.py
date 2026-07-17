@@ -18,6 +18,7 @@ SCALE_ROI, SCALE_MIN_OF_4 = 155.0, 3
 CLIFF_PP = 30.0
 MIN_ACTIVE = 3
 RECOVER_ROI, RECOVER_MIN_BLEED = 105.0, 2
+RECOVER_CM2_IMPROVE_PCT = 50.0   # bleed halved vs prior-3wk avg → "Recovering" (2026-07-17; tunable to 100)
 GAIN_FLOOR_ABS, GAIN_FLOOR_PCT = 500.0, 0.005
 LOW_PAID_PCT = 30.0
 SIG = {"cm1_per_conv": "CM1/conv", "rpc": "RPC", "cvr": "CVR"}
@@ -94,6 +95,10 @@ def _tier(ce):
     for w in ("Hero", "Pro", "Seed", "Longtail", "Long Tail"):
         if w.lower() in t.lower(): return "Longtail" if "long" in w.lower() else w
     return None
+def _new_existing(ce):
+    """New vs Existing (2026-07-17): metadata.new_vs_existing=='New' → New; everything else
+    (Existing / Unknown) defaults to Existing. Drives the split pause-ROI guideline."""
+    return "New" if ((ce.get("metadata") or {}).get("new_vs_existing") == "New") else "Existing"
 def _median(v):
     v = sorted(x for x in v if x is not None)
     if not v: return None
@@ -136,12 +141,16 @@ def losing_money(ces, b1, cat_rpc):
     """
     bleeders, recovered, full_waste, paused, tracking_gap = [], [], [], [], []
     burn = {"count": 0, "bleed": 0.0, "items": []}
+    # Google-Search-only decision basis (2026-07-17) when the split columns are present; falls
+    # back to the Google+Bing business metrics on pre-split (cached) snapshots.
+    has_g = any("spend_g" in (w or {}) for ce in ces for w in (ce.get("weekly") or []))
+    SPK, CMK, RK, CPK = ("spend_g", "cm1_g", "roi_g", "cpc_g") if has_g else ("spend", "cm1", "roi_pct", "cpc")
     for ce in ces:
         wk = ce.get("weekly") or []
         if len(wk) < 4: continue
-        w0 = wk[-1]; roi = w0.get("roi_pct")
-        sp4 = sum((w.get("spend") or 0) for w in wk[-4:]); spw = w0.get("spend") or 0
-        series = _roi_series(wk)
+        w0 = wk[-1]; roi = w0.get(RK)
+        sp4 = sum((w.get(SPK) or 0) for w in wk[-4:]); spw = w0.get(SPK) or 0
+        series = [w.get(RK) for w in wk]
         # long-tail burn: bleeding but under the $1k gate → aggregate line. The ≥3-active-weeks
         # noise gate applies HERE only; for funded CEs the $1k/4wk spend gate is the activity filter
         # (a CE that dumped >$1k in 2 weeks with 0 conversions is a real full-waste, not noise).
@@ -152,7 +161,7 @@ def losing_money(ces, b1, cat_rpc):
             continue
         # --- funded CE: shared 4-week aggregates + full metric bundle (all Δ4w vs prior-4) ---
         prior = wk[-5:-1]                                  # base for every Δ4w (current excluded)
-        cm2_series = [((w.get("cm1") or 0) - (w.get("spend") or 0)) for w in wk]
+        cm2_series = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
         cm2_4w = sum(cm2_series[-4:])
         adconv4 = sum((w.get("ad_conversions") or 0) for w in wk[-4:])
         orders4 = sum((w.get("orders") or 0) for w in wk[-4:])
@@ -160,35 +169,45 @@ def losing_money(ces, b1, cat_rpc):
             now = w0.get(key); base = _mean([x.get(key) for x in prior])
             if now is None or base is None: return None
             return round(now - base) if pp else (round((now / base - 1) * 100) if base else None)
-        spend_base = _mean([x.get("spend") for x in prior])
+        spend_base = _mean([x.get(SPK) for x in prior])
         rpc_hist = [x.get("rpc") for x in prior if x.get("rpc")]
         cat = cat_rpc.get((ce.get("metadata") or {}).get("category"))
         # one metric bundle, shared by full_waste + bleeders (so both render the same columns).
         # CM2/wk = current (cm1 − spend) directly — same definition as the 4w sum (no roi round-trip).
         feat = {
             "roi": (round(roi) if roi is not None else None),
-            "roi_dpp": (round(roi - wk[-2].get("roi_pct"))
-                        if (len(wk) > 1 and roi is not None and wk[-2].get("roi_pct") is not None) else None),
-            "roi_v4": vsp("roi_pct", pp=True),
-            "cm2_bleed_wk": round((w0.get("cm1") or 0) - (w0.get("spend") or 0)),
+            "roi_dpp": (round(roi - wk[-2].get(RK))
+                        if (len(wk) > 1 and roi is not None and wk[-2].get(RK) is not None) else None),
+            "roi_v4": vsp(RK, pp=True),
+            "cm2_bleed_wk": round((w0.get(CMK) or 0) - (w0.get(SPK) or 0)),
             "spend_wk": round(spw),
             "spend_dvs4": (round((spw / spend_base - 1) * 100) if (spw and spend_base) else None),
-            "spend_wow": (round((spw / (wk[-2].get("spend") or 0) - 1) * 100)
-                          if (len(wk) > 1 and spw and wk[-2].get("spend")) else None),
+            "spend_wow": (round((spw / (wk[-2].get(SPK) or 0) - 1) * 100)
+                          if (len(wk) > 1 and spw and wk[-2].get(SPK)) else None),
             "clicks": w0.get("clicks"), "clicks_v4": vsp("clicks"),
             "rpc": w0.get("rpc"), "rpc_v4": vsp("rpc"),
             "rpc_vs_4w": (round((w0["rpc"] / (sum(rpc_hist) / len(rpc_hist)) - 1) * 100)
                           if (w0.get("rpc") and len(rpc_hist) >= 2) else None),
-            "cpc": w0.get("cpc"), "cpc_v4": vsp("cpc"),
+            "cpc": w0.get(CPK), "cpc_v4": vsp(CPK),
             "tr_pct": w0.get("tr_pct"), "tr_v4": vsp("tr_pct", pp=True),
             "rpc_vs_cat": _vs_cat(w0.get("rpc"), cat),
             "rpc_upside": (round((cat - w0["rpc"]) * (w0.get("clicks") or 0))
                            if (w0.get("rpc") and cat and w0["rpc"] < cat) else None),
         }
+        # Recovering (2026-07-17): still bleeding but the weekly CM2 loss is shrinking fast vs
+        # the prior-3wk average. improve% = (now − prior3avg)/|prior3avg| → +50% = bled halved,
+        # +100% = breakeven. Only meaningful when the prior window was actually bleeding.
+        cm2_now = cm2_series[-1]
+        cm2_prior3 = cm2_series[-4:-1]
+        cm2_prior3avg = (sum(cm2_prior3) / len(cm2_prior3)) if cm2_prior3 else None
+        cm2_improve_pct = (round((cm2_now - cm2_prior3avg) / abs(cm2_prior3avg) * 100)
+                           if (cm2_prior3avg is not None and cm2_prior3avg < 0) else None)
+        recovering = (cm2_improve_pct is not None and cm2_improve_pct >= RECOVER_CM2_IMPROVE_PCT)
         base_row = {"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "spend_4w": round(sp4),
                     "cm2_bleed_4w": round(cm2_4w), "orders_4w": round(orders4), "adconv_4w": round(adconv4),
                     "cm2_series": cm2_series[-12:], "cm2_weeks": [w.get("week") for w in wk][-12:],
-                    "tier": _tier(ce), "movement_b1": b1.get(ce["ce_id"])}
+                    "tier": _tier(ce), "new_existing": _new_existing(ce), "movement_b1": b1.get(ce["ce_id"]),
+                    "cm2_improve_pct": cm2_improve_pct, "recovering": recovering}
         if adconv4 == 0:                                   # spend, zero paid conversions = FULL WASTE
             full_waste.append({**base_row, **feat}); continue
         if spw == 0:                                       # spend stopped this week → PAUSED
@@ -204,7 +223,8 @@ def losing_money(ces, b1, cat_rpc):
         elif roi >= RECOVER_ROI and _bleed_streak(series[:-1]) >= RECOVER_MIN_BLEED:
             recovered.append({"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "roi": round(roi),
                               "was_bleeding_wks": _bleed_streak(series[:-1])})
-    bleeders.sort(key=lambda r: r["cm2_bleed_4w"])         # worst 4-week bled first
+    # worst 4-week bled first; Recovering ones pushed to the bottom (2026-07-17)
+    bleeders.sort(key=lambda r: (bool(r.get("recovering")), r["cm2_bleed_4w"]))
     full_waste.sort(key=lambda r: -r["spend_4w"])
     paused.sort(key=lambda r: -r["spend_4w"]); tracking_gap.sort(key=lambda r: -r["spend_4w"])
     burn_names = [n for n, _ in sorted(burn["items"], key=lambda x: x[1])]   # worst-first, all names
@@ -214,38 +234,77 @@ def losing_money(ces, b1, cat_rpc):
 
 
 def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
-    """One Fluctuations table (CM1/conv·RPC·CVR), direction+ROI-gate → +ve/−ve/hold. Existing only."""
+    """Revenue-quality drops — RPC decomposed into its four multiplicative drivers so the
+    reader sees WHICH one moved, not the composite. Qualifiers unchanged (upstream in
+    alerts.py: WoW or 3-day daily); this only reshapes the display (2026-07-17 spec).
+
+      RPC = CVR × AOV × CR × TR   (exact identity, with CVR = orders/clicks)
+
+    Per row we surface: the four drivers (value + WoW %Δ, `dominant` = the one explaining the
+    move), always-on 28-day spend + pooled 28-day ROI, and clicks as CONTEXT only (traffic is
+    never a qualifier — Jul-17). alert_type labels why it fired: WoW vs 3D.
+
+    WoW rows use weekly WoW %Δ; 3D rows use 3-day-vs-28-day %Δ (from alerts.py drivers_3d,
+    matching the alert's own window). On pre-split cached snapshots (no drivers_3d) 3D rows
+    degrade to the weekly WoW path. CVR is orders/clicks (exact decomposition).
+    """
     ce_by = {c["ce_id"]: c for c in ces}
+    # 28d ROI + spend are the pause/scale decision metrics → Google-Search only where the split
+    # columns exist (2026-07-17); business fallback on pre-split snapshots. Funnel drivers stay
+    # total-business (the CVR = orders/clicks decomposition uses business clicks).
+    has_g = any("spend_g" in (w or {}) for c in ces for w in (c.get("weekly") or []))
+    SPK, CMK = ("spend_g", "cm1_g") if has_g else ("spend", "cm1")
+    def pctchg(now, prev):
+        return round((now / prev - 1) * 100) if (now is not None and prev) else None
+    def cvr_ord(w):                                        # orders/clicks (%) — the exact-decomposition CVR
+        o, c = w.get("orders"), w.get("clicks")
+        return (100.0 * o / c) if (o is not None and c) else None
+    LBL = {"cvr": "CVR", "aov": "AOV", "cr": "Completion", "tr": "Take rate"}
     out = []
     for r in fluctuations:
         ce = ce_by.get(r["ce_id"])
-        if not ce or not _active(ce): continue           # existing CEs only (Aditya)
-        wk = ce.get("weekly") or []; roi = (wk[-1].get("roi_pct") if wk else None) or 0
-        rpc = wk[-1].get("rpc") if wk else None; rpc_wm1 = wk[-2].get("rpc") if len(wk)>=2 else None
-        rpc_wow = round((rpc/rpc_wm1-1)*100) if (rpc and rpc_wm1) else None
-        # Δrevenue driver: top factor of the WoW revenue swing (traffic × CVR × AOV × CR × TR),
-        # direction-aligned (offsetting factors are a flag, not the reason). $ = revenue impact.
-        shap = ce.get("shapley_wow") or {}
+        if not ce or not _active(ce): continue            # existing CEs only
+        wk = ce.get("weekly") or []
+        w0 = wk[-1] if wk else {}
+        wm1 = wk[-2] if len(wk) >= 2 else {}
         d = r.get("direction")
-        delta_rev = shap.get("net_delta")
-        allf = {k: shap.get(k) for k in ("traffic", "cvr", "aov", "cr", "tr") if shap.get(k) is not None}
-        same = {k: v for k, v in allf.items() if v != 0 and (v < 0) == (d == "down")}
-        pool = same or allf
-        dk = max(pool, key=lambda k: abs(pool[k])) if pool else None
-        lbl = {"traffic": "Traffic", "cvr": "CVR", "aov": "AOV", "cr": "CR", "tr": "TR"}
-        def _m(x): return ("$%.1fk" % (abs(x)/1000)) if abs(x) >= 1000 else ("$%d" % abs(x))
-        delta_rev_driver = (("↓ " if pool[dk] < 0 else "↑ ") + lbl[dk] + " " + _m(pool[dk])) if dk else None
-        # full signed decomposition of the WoW revenue swing — one $ per factor, sorted by
-        # magnitude; renderer bolds `dominant` (the direction-aligned lead driver above).
-        factor_deltas = sorted(({"label": lbl[k], "usd": round(v)} for k, v in allf.items()),
-                               key=lambda x: -abs(x["usd"]))
-        dominant = lbl[dk] if dk else None
-        w0d = wk[-1] if wk else {}
-        r2 = [w.get("roi_pct") for w in wk[-2:] if w.get("roi_pct") is not None]
-        verdict = ("+ve" if (d == "up" and roi > SEAS_UP) else "-ve" if (d == "down" and roi < SEAS_DN) else "hold")
-        pc = wk[-1].get("paid_contribution_pct") if wk else None
+        # always-on context: 28-day spend (Σ) + pooled 28-day ROI (Σcm1/Σspend), Google-search basis,
+        # each with a Δ vs the prior 28 days (is it already scaling down / eroding?)
+        last4, prev4 = wk[-4:], wk[-8:-4]
+        spend_4w = sum((w.get(SPK) or 0) for w in last4)
+        cm1_4w = sum((w.get(CMK) or 0) for w in last4)
+        roi_4w = round(100 * cm1_4w / spend_4w) if spend_4w else None
+        spend_4w_prev = sum((w.get(SPK) or 0) for w in prev4)
+        cm1_4w_prev = sum((w.get(CMK) or 0) for w in prev4)
+        roi_4w_prev = (100 * cm1_4w_prev / spend_4w_prev) if spend_4w_prev else None
+        spend_4w_d = round((spend_4w / spend_4w_prev - 1) * 100) if spend_4w_prev else None
+        roi_4w_d = round(roi_4w - roi_4w_prev) if (roi_4w is not None and roi_4w_prev is not None) else None
+        alert_type = "3D" if r.get("window") == "sustained_3d" else "WoW"
+        d3 = r.get("drivers_3d") if alert_type == "3D" else None
+        vals = {}
+        if d3:
+            # 3-day alert → 3-day value vs 28-day baseline (matches the alert's own window)
+            for k, aspct in (("cvr", True), ("aov", False), ("cr", True), ("tr", True)):
+                v3 = (d3.get(k) or {}).get("v3")
+                vals[k] = (round(v3 * 100, 2) if (v3 is not None and aspct) else (round(v3, 2) if v3 is not None else None))
+                vals[k + "_d"] = (d3.get(k) or {}).get("pct")
+        else:
+            # WoW alert → weekly value + WoW %Δ (all four exact from weekly data)
+            mets = {"cvr": (cvr_ord(w0), cvr_ord(wm1)), "aov": (w0.get("aov"), wm1.get("aov")),
+                    "cr": (w0.get("cr_pct"), wm1.get("cr_pct")), "tr": (w0.get("tr_pct"), wm1.get("tr_pct"))}
+            for k, (now, prev) in mets.items():
+                vals[k] = round(now, 2) if now is not None else None
+                vals[k + "_d"] = pctchg(now, prev)
+        # dominant = the driver whose move best explains the alert direction
+        moves = {k: vals[k + "_d"] for k in ("cvr", "aov", "cr", "tr") if vals.get(k + "_d") is not None}
+        aligned = {k: v for k, v in moves.items() if v != 0 and (v < 0) == (d == "down")}
+        pool = aligned or moves
+        dom = max(pool, key=lambda k: abs(pool[k])) if pool else None
+        pc = w0.get("paid_contribution_pct")
         cause = r.get("cause_tag")
-        # (b) innocence-cascade-aware recommendation: unexplained down = investigate, not an auto-cut
+        roi_now = (w0.get("roi_pct") or 0)
+        verdict = ("+ve" if (d == "up" and roi_now > SEAS_UP) else "-ve" if (d == "down" and roi_now < SEAS_DN) else "hold")
+        # innocence-cascade-aware recommendation (unchanged): unexplained down = investigate
         if pc is not None and pc < LOW_PAID_PCT:      rec = "review — low paid"
         elif cause == "input-induced":                rec = "verify (bid change)"
         elif cause == "supply-linked":                rec = "route Ops (supply)"
@@ -253,18 +312,16 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
         elif verdict == "-ve":                        rec = "investigate" if cause == "unexplained" else "-15%/7d"
         else:                                         rec = "verify/hold"
         out.append({
-            "ce_id": r["ce_id"], "ce_name": r["ce_name"], "signal": SIG.get(r.get("signal"), r.get("signal")),
+            "ce_id": r["ce_id"], "ce_name": r["ce_name"],
             "direction": d, "group": ("Compound" if d == "up" else "Defend"),
-            "swing_pct": r.get("magnitude_pct"), "window": r.get("window"),
-            "roi": round(roi) if roi else None, "roi_2wk": round(sum(r2)/len(r2)) if r2 else None,
-            "rpc": rpc, "rpc_wow": rpc_wow, "delta_rev": delta_rev, "delta_rev_driver": delta_rev_driver,
-            "factor_deltas": factor_deltas, "dominant": dominant,
-            "cvr_pct": w0d.get("cvr_pct"), "cr_pct": w0d.get("cr_pct"), "aov": w0d.get("aov"), "tr_pct": w0d.get("tr_pct"),
-            "spend_wk": round(w0d.get("spend")) if w0d.get("spend") is not None else None,
-            "verdict": verdict, "cause": r.get("cause_tag"), "paid_pct": pc, "recommendation": rec,
-            "tier": _tier(ce), "yoy": w0d.get("yoy_pct"),
-            "rpc_vs_cat": _vs_cat(rpc, cat_rpc.get((ce.get("metadata") or {}).get("category"))),
-            "cvr_vs_cat": _vs_cat(w0d.get("cvr_pct"), cat_cvr.get((ce.get("metadata") or {}).get("category"))),
+            "alert_type": alert_type, "swing_pct": r.get("magnitude_pct"),
+            "roi_4w": roi_4w, "spend_4w": round(spend_4w) if spend_4w else None,
+            "roi_4w_d": roi_4w_d, "spend_4w_d": spend_4w_d,
+            "cvr": vals["cvr"], "cvr_d": vals["cvr_d"], "aov": vals["aov"], "aov_d": vals["aov_d"],
+            "cr": vals["cr"], "cr_d": vals["cr_d"], "tr": vals["tr"], "tr_d": vals["tr_d"],
+            "clicks": w0.get("clicks"), "clicks_d": pctchg(w0.get("clicks"), wm1.get("clicks")),
+            "dominant": LBL.get(dom), "dominant_key": dom,
+            "verdict": verdict, "cause": cause, "paid_pct": pc, "recommendation": rec,
         })
     out.sort(key=lambda r: -abs(r.get("swing_pct") or 0))
     return out

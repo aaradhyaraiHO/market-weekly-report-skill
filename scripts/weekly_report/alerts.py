@@ -284,6 +284,43 @@ def _swing_driver(shap: dict | None) -> dict | None:
     }
 
 
+def _driver_windows(df: pd.DataFrame, ce_id: str, week_days: list[dt.date]) -> dict | None:
+    """3-day (most recent) vs 28-day-baseline %Δ for each RPC driver, from the daily business
+    frame (orders/clicks/gbv/gbv_completed/revenue). RPC = CVR·AOV·CR·TR — this powers the
+    3-day-alert breakdown in the fluctuations table (2026-07-17). {metric:{v3,base,pct}}."""
+    d = df[df["combined_entity_id"].astype(str) == str(ce_id)].copy()
+    if d.empty:
+        return None
+    d = d.set_index("report_date").sort_index()
+    idx = pd.date_range(d.index.min(), d.index.max(), freq="D").date
+    d = d.reindex(idx)
+    for c in ("orders", "clicks", "gbv", "gbv_completed", "revenue"):
+        if c in d:
+            d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
+    ratios = {
+        "cvr": d["orders"] / d["clicks"].replace(0, np.nan),
+        "aov": d["gbv"] / d["orders"].replace(0, np.nan),
+        "cr":  d["gbv_completed"] / d["gbv"].replace(0, np.nan),
+        "tr":  d["revenue"] / d["gbv_completed"].replace(0, np.nan),
+    }
+    present = set(d.index)
+    days = [x for x in week_days if x in present]
+    if not days:
+        return None
+    last = max(days)
+    def _win(s, lo, hi):
+        vals = [s.loc[x] for x in d.index if lo <= x <= hi and pd.notna(s.loc[x])]
+        return (sum(vals) / len(vals)) if vals else None
+    out = {}
+    for k, s in ratios.items():
+        v3 = _win(s, last - dt.timedelta(days=2), last)                    # last 3 days
+        base = _win(s, last - dt.timedelta(days=31), last - dt.timedelta(days=4))  # 28d baseline, excl last 3
+        out[k] = {"v3": None if v3 is None else round(float(v3), 4),
+                  "base": None if base is None else round(float(base), 4),
+                  "pct": (round((v3 / base - 1) * 100) if (v3 is not None and base) else None)}
+    return out
+
+
 def _daily_spark(df: pd.DataFrame, ce_id: str, num: str, den: str, days: int = 35) -> list:
     """Last `days` of a daily ratio (e.g. CM1/conv) for the B2 sparkline. None on
     zero-denominator days (null = gap, never zero — monthly-v3 convention)."""
@@ -419,6 +456,8 @@ def build_bucket1(
             "window": window,
             "cause_tag": _cause_tag(ce_id, res["direction"]),
             "swing_driver": _swing_driver(shapley_by_ce.get(ce_id)),
+            # 3-day-vs-28-day RPC-driver breakdown (CVR·AOV·CR·TR) for the fluctuations table
+            "drivers_3d": _driver_windows(ce_daily_business, ce_id, week_days),
             "evidence": ev,
             "paid_contribution_pct": paid_contrib.get(ce_id),
             "spend_wk": _spend(ce_id),
