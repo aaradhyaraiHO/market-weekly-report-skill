@@ -68,17 +68,26 @@ the producer auto-loads into §2 Market Review:
    ```
    {group:'risk'|'win'|'ctx', ce, tag, tag_kind:'risk'|'win'|'watch'|'ctx',
     channel, date, so_what, body, metric, metric_kind:'red'|'green'|'amber'|'purps',
-    link}   # link = REAL Slack permalink, canonical form: .../archives/{CH}/p{ts_nodot}?thread_ts={ts}&cid={CH}
+    link,   # link = REAL Slack permalink, canonical form: .../archives/{CH}/p{ts_nodot}?thread_ts={ts}&cid={CH}
+    scope:'market'|'ce', ce_id}   # routing — see below; scope defaults to 'market' if omitted
    ```
+   **Routing (`scope` / `ce_id`):** a card either belongs to the market at large or to one specific CE.
+   - `scope:'ce'` — the item is about a specific CE (names its TGID/supplier/campaign). Set `ce_id`
+     to that CE's `combined_entity_id` — it **must exactly match** a `ces[].ce_id` in the snapshot
+     (grep the snapshot if unsure; a wrong `ce_id` silently orphans the card). These render inside
+     that CE's **drawer** under a "Slack context" section, not in §2.
+   - `scope:'market'` (or omitted) — market-wide signal (portfolio strategy, competitive landscape,
+     market-wide bug). Leave `ce_id` null. These render in the **§2** grouped digest.
    Get the real message `ts` from a detailed channel read or `slack_search_public` (never fabricate a
-   permalink). Then re-run `render.py` on the cached snapshot so §2 shows the grouped briefing.
+   permalink). Then re-run `render.py` on the cached snapshot so §2 + the drawers show the cards.
 4. **Rules:** verify specifics match (same TGID/supplier/time horizon) before tying a Slack item to a
    data signal; near-term (0-2D) ≠ long-term availability; permalink timestamp must fall inside the
    report week; no editorializing; no extra parens around links.
 
 ### S4 · QA + deliver
-Open the HTML. Spot-check: **§1** week-type verdict + top movers; **§2** the Slack-signal cards
-resolve to the right threads; **§4** Defend/Compound/Lifecycle bucket membership; **§6** prepurchase.
+Open the HTML. Spot-check: **§1** week-type verdict + top movers; **§2** the market-scoped Slack
+cards resolve to the right threads, and any `scope:'ce'` cards land in their CE's drawer (open one
+to confirm the "Slack context" section); **§4** Defend/Compound/Lifecycle bucket membership; **§6** prepurchase.
 For non-NA markets sanity-check headline W0 revenue vs Omni. Report the HTML path.
 
 ## What the report contains

@@ -1104,6 +1104,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         "no_bid_campaigns": no_bid,
         "seasonality_adjustments": seasonality or [],
         "levers": levers,
+        "market_review_context": [],   # populated by S3 Slack digest (sidecar loader below)
         "transitions": transitions,   # SCHEMA ADDITION: Phase-2 forward-compat
         "_diagnostics": diag,
     }

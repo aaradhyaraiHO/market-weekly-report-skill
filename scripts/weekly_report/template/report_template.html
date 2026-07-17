@@ -873,6 +873,40 @@ function saveMarketReview(text){
 }
 let mrTimer=null;
 
+/* ---------- Slack signal card row (shared by §2 grouped digest + CE drawer) ----------
+   Cards live in M.market_review_context. scope==='ce' + ce_id → routed into that CE's
+   drawer; everything else stays in the §2 grouped digest. Same visual language both places. */
+const _SLK_CG={risk:'var(--red)',win:'var(--green)',ctx:'var(--purps)'};
+const _SLK_TC={risk:'red',win:'green',watch:'amber',ctx:'violet'};   // -> report .chip classes
+const _SLK_MC={red:'var(--red)',green:'var(--green)',amber:'var(--amber)',purps:'var(--purps)'};
+function slackCardRow(c,first){ const mc=_SLK_MC[c.metric_kind]||'var(--ink-soft)', chip=_SLK_TC[c.tag_kind||c.group]||'violet';
+  return '<div style="display:flex;gap:14px;padding:11px 16px;'+(first?'':'border-top:1px solid var(--rule)')+'">'+
+    '<div style="flex:1;min-width:0">'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+        (c.link
+          ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink);text-decoration:none">'+esc(c.ce||'')+' <span style="color:var(--purps);font-weight:800">↗</span></a>'
+          : '<span style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink)">'+esc(c.ce||'')+'</span>')+
+        (c.tag?'<span class="chip '+chip+'">'+esc(c.tag)+'</span>':'')+
+        (c.link
+          ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap;text-decoration:none">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</a>'
+          : '<span style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</span>')+
+      '</div>'+
+      (c.so_what?'<div style="font-family:var(--sans);font-weight:600;font-size:12.5px;line-height:1.4;color:var(--ink);margin-top:4px">'+esc(c.so_what)+'</div>':'')+
+      (c.body?'<div style="font-family:var(--sans);font-size:12px;line-height:1.45;color:var(--ink-soft);margin-top:2px">'+esc(c.body)+'</div>':'')+
+    '</div>'+
+    (c.metric?'<div style="flex:none;align-self:center;text-align:right;min-width:92px;display:flex;align-items:center;justify-content:flex-end;gap:7px">'+
+      '<span style="width:6px;height:6px;border-radius:50%;background:'+(_SLK_CG[c.group]||'var(--purps)')+';flex:none"></span>'+
+      '<span style="font-family:var(--sans);font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums;color:'+mc+';white-space:nowrap">'+esc(c.metric)+'</span></div>':'')+
+  '</div>'; }
+// CE-scoped Slack cards → rendered inside that CE's drawer, between resource blocks and Notes.
+function ceSlackContext(ceId){
+  const cards=(MARKETS[mi].market_review_context||[]).filter(c=>c.scope==='ce' && c.ce_id===ceId);
+  if(!cards.length) return '';
+  return '<div class="dr-sec-t">Slack context · '+cards.length+' item'+(cards.length>1?'s':'')+'</div>'+
+    '<div style="background:var(--card);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:6px">'+
+      cards.map((c,i)=>slackCardRow(c,i===0)).join('')+'</div>';
+}
+
 function renderFollowup(M){
   const rows = M.followup||[];
   let fuBody;
@@ -893,32 +927,13 @@ function renderFollowup(M){
   const mr = getMarketReview();
   const mrText = mr && mr.text ? mr.text : '';
   const mrWhen = mr && mr.updated ? 'saved '+new Date(mr.updated).toLocaleString() : 'not saved yet';
-  const ctx = M.market_review_context||[];
+  // §2 shows market-scoped cards only; scope==='ce' cards route into their CE drawer (see ceSlackContext).
+  const ctx = (M.market_review_context||[]).filter(c=>c.scope!=='ce');
   // grouped Slack-signal design: Risk / Tailwind / Context sections, each a card of rows.
   // Uses the report's own tokens (var(--red/green/purps/amber)) + .chip classes for consistency.
-  const CG={risk:'var(--red)',win:'var(--green)',ctx:'var(--purps)'};
-  const TC={risk:'red',win:'green',watch:'amber',ctx:'violet'};   // -> report .chip classes
-  const MC={red:'var(--red)',green:'var(--green)',amber:'var(--amber)',purps:'var(--purps)'};
+  const CG=_SLK_CG;
   const GDEF=[{k:'risk',t:'Risks & watch-outs'},{k:'win',t:'Tailwinds & momentum'},{k:'ctx',t:'Market & ops context'}];
-  const mrow=(c,first)=>{ const mc=MC[c.metric_kind]||'var(--ink-soft)', chip=TC[c.tag_kind||c.group]||'violet';
-    return '<div style="display:flex;gap:14px;padding:11px 16px;'+(first?'':'border-top:1px solid var(--rule)')+'">'+
-      '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-          (c.link
-            ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink);text-decoration:none">'+esc(c.ce||'')+' <span style="color:var(--purps);font-weight:800">↗</span></a>'
-            : '<span style="font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink)">'+esc(c.ce||'')+'</span>')+
-          (c.tag?'<span class="chip '+chip+'">'+esc(c.tag)+'</span>':'')+
-          (c.link
-            ? '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap;text-decoration:none">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</a>'
-            : '<span style="font-family:var(--sans);font-weight:600;font-size:10px;color:var(--ink-faint);margin-left:auto;white-space:nowrap">'+esc(c.channel||'')+(c.date?' · '+esc(c.date):'')+'</span>')+
-        '</div>'+
-        (c.so_what?'<div style="font-family:var(--sans);font-weight:600;font-size:12.5px;line-height:1.4;color:var(--ink);margin-top:4px">'+esc(c.so_what)+'</div>':'')+
-        (c.body?'<div style="font-family:var(--sans);font-size:12px;line-height:1.45;color:var(--ink-soft);margin-top:2px">'+esc(c.body)+'</div>':'')+
-      '</div>'+
-      (c.metric?'<div style="flex:none;align-self:center;text-align:right;min-width:92px;display:flex;align-items:center;justify-content:flex-end;gap:7px">'+
-        '<span style="width:6px;height:6px;border-radius:50%;background:'+(CG[c.group]||'var(--purps)')+';flex:none"></span>'+
-        '<span style="font-family:var(--sans);font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums;color:'+mc+';white-space:nowrap">'+esc(c.metric)+'</span></div>':'')+
-    '</div>'; };
+  const mrow=slackCardRow;   // shared row renderer (also used by the CE drawer)
   const mrgroup=(g)=>{ const items=ctx.filter(c=>c.group===g.k); if(!items.length) return '';
     return '<div style="margin-bottom:16px">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
@@ -954,7 +969,7 @@ function renderFollowup(M){
   const fuCnt = rows.length ? '<span class="cnt">('+rows.length+')</span>' : '';
   const mrHas = mrText ? ' · ●' : '';
   // collapsed-state summary: counts so the reader knows what's inside without expanding
-  const nSig = (M.market_review_context||[]).length;
+  const nSig = ctx.length;   // §2-visible (market-scoped) signals; CE-scoped ones live in drawers
   const summary = [rows.length+' flagged CE'+(rows.length===1?'':'s'),
     nSig?nSig+' Slack signal'+(nSig===1?'':'s'):null,
     mrText?'note saved':null].filter(Boolean).join(' · ');
@@ -2311,7 +2326,7 @@ function openDrawer(ceId){
       '<div style="font-family:var(--sans);font-size:13px;color:var(--ink-soft);margin-top:2px">'+
         '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
         '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
-      kmBlock + shapBlock + resourceBlocks(ce) +
+      kmBlock + shapBlock + resourceBlocks(ce) + ceSlackContext(ce.ce_id) +
       '<div class="dr-sec-t"><span>Notes</span><span id="syncBadge" class="sync-badge"></span></div>'+
       '<div class="gm-note-card">'+
         '<div class="gm-note-head">'+
