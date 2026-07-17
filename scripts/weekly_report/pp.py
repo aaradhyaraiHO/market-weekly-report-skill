@@ -42,6 +42,7 @@ agg AS (
     COUNTIF(exp_date BETWEEN DATE(@week) AND DATE_ADD(DATE(@week), INTERVAL {ntd} DAY)) nt_total,
     COUNTIF(exp_date BETWEEN DATE(@week) AND DATE_ADD(DATE(@week), INTERVAL {ntd} DAY) AND is_sold) nt_sold,
     COUNTIF(validity_type='DATE_TIME' AND DATE_TRUNC(expiry, MONTH)=DATE_TRUNC(DATE(@week), MONTH) AND NOT is_sold) expiring_unsold,
+    ROUND(SUM(IF(validity_type='DATE_TIME' AND DATE_TRUNC(expiry, MONTH)=DATE_TRUNC(DATE(@week), MONTH) AND NOT is_sold, loss_liability, 0)),0) expiring_loss,
     COUNTIF(validity_type='DATE_TIME' AND NOT is_sold AND exp_date >= DATE(@week)) remaining_dated,
     MAX(IF(validity_type='DATE_TIME' AND NOT is_sold, exp_date, NULL)) max_exp,
     COUNTIF(is_sold AND booked BETWEEN DATE_SUB(DATE(@week), INTERVAL 7 DAY) AND DATE_SUB(DATE(@week), INTERVAL 1 DAY)) sold_last_wk,
@@ -52,7 +53,7 @@ cem AS (SELECT combined_entity_id, ANY_VALUE(business_market) market
         FROM `{proj}.{ds}.dim_experiences` GROUP BY 1)
 SELECT cem.market, a.combined_entity_id AS ce_id, a.ce,
        a.dated, a.open_ct, a.loss_liab_dated, a.nt_total, a.nt_sold,
-       a.expiring_unsold, a.remaining_dated, a.max_exp, a.sold_last_wk, a.total, a.sold
+       a.expiring_unsold, a.expiring_loss, a.remaining_dated, a.max_exp, a.sold_last_wk, a.total, a.sold
 FROM agg a JOIN cem ON cem.combined_entity_id = a.combined_entity_id
 WHERE cem.market IN ('North America','Italy','Oceania') AND (a.dated + a.open_ct) > 0
 """.format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET, ntd=NEAR_TERM_DAYS)
@@ -86,7 +87,8 @@ def pp_by_ce(week):
         res[str(r["ce_id"])] = {
             "market": r["market"], "ce": r["ce"], "dated": _i(r["dated"]), "open_ct": _i(r["open_ct"]),
             "loss_liab_dated": _f(r["loss_liab_dated"]), "nt_total": _i(r["nt_total"]), "nt_sold": _i(r["nt_sold"]),
-            "expiring_unsold": _i(r["expiring_unsold"]), "remaining_dated": _i(r["remaining_dated"]),
+            "expiring_unsold": _i(r["expiring_unsold"]), "expiring_loss": _f(r["expiring_loss"]),
+            "remaining_dated": _i(r["remaining_dated"]),
             "max_exp": mx, "sold_last_wk": _i(r["sold_last_wk"]), "total": _i(r["total"]), "sold": _i(r["sold"])}
     _PP_CACHE[week] = res
     return res
@@ -113,9 +115,11 @@ def pp_row(ce, ppd, week):
             needed_wk = round(ppd["remaining_dated"] / wks)
         except Exception:
             pass
-    # Net ROI = (CM1 − dated loss-liability) / cost  (trailing-4wk CM1/cost; liability = current at-risk)
+    # Net ROI = (CM1 − REALIZED inventory loss) / cost. Realized loss = loss_liability of
+    # tickets EXPIRING unsold this period (dimensionally a periodic cost), NOT the full
+    # at-risk stock (which would dwarf a 4-wk CM1 flow and produce nonsense negatives).
     cm1_4w = _sum(wk, "cm1", -4); cost_4w = _sum(wk, "spend", -4)
-    net_roi = round((cm1_4w - ppd["loss_liab_dated"]) / cost_4w * 100) if cost_4w else None
+    net_roi = round((cm1_4w - ppd["expiring_loss"]) / cost_4w * 100) if cost_4w else None
     cvr = w0.get("cvr_pct"); cvr_wow = ((cvr / wm1.get("cvr_pct") - 1) * 100
                                         if (cvr and wm1.get("cvr_pct")) else None)
     return {"market": ppd["market"], "ce": ppd["ce"], "ce_id": str(ppd.get("ce_id", "")),
