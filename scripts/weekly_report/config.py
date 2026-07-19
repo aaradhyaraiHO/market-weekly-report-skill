@@ -84,7 +84,7 @@ POF = dict(
     # swing persists, not just spikes. Calibrated to the NA reference — at 0.15
     # a one-off up-day (e.g. Disneyland 2026-07-02) leaks in; 0.20 reproduces
     # exactly the 5 reference alerts and drops all single-day noise.
-    persistence_smoothed_dev=0.20,
+    persistence_smoothed_dev=0.25,   # 3-day persistence must hold >25% (2026-07-19; was 0.20 — tighten)
     cv_max=0.50,                   # coefficient of variation <= 0.50
     min_conv_per_day=10,           # >= 10 conversions/day
     min_clicks_35d=500,            # >= 500 clicks / trailing 35d

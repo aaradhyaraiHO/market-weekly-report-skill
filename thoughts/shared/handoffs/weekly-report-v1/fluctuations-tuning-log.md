@@ -30,3 +30,30 @@ NA 2026-07-06 · fluctuations: cvr=10 rpc=6 cm1=8 · down=15
 | Cruises - Chicago | rpc | sustained_3d | 38.8 |  |
 | Alcatraz Tours | rpc | sustained_3d | 64.9 |  |
 | LEGOLAND New York | rpc | sustained_3d | 78.4 |  |
+
+## Step 2 — 3-day persistence 20% → 25%
+NA 2026-07-06 · fluctuations: cvr=10 rpc=6 cm1=6 · down=15
+| CE | signal | alert | mag% |
+|---|---|---|---|
+| Disneyland Resort California | cm1_per_conv | sustained_3d | -41.2 |
+| World of Coca-Cola | cm1_per_conv | sustained_3d | 41.9 |
+| High Roller Observation Whee | cm1_per_conv | sustained_3d | 74.9 |
+| Kennedy Space Center | cm1_per_conv | sustained_3d | 93.4 |
+| Cruises - San Francisco | cm1_per_conv | sustained_3d | 105.5 |
+| Canada's Wonderland Tickets | cm1_per_conv | sustained_3d | 122.6 |
+| Six Flags Fiesta Texas Ticke | cvr | wow | -50.4 |
+| Statue of Liberty | cvr | wow | -47.2 |
+| Star of Honolulu | cvr | wow | -42.2 |
+| New England Aquarium | cvr | wow | -41.9 |
+| Kings Island Tickets | cvr | wow | -39.4 |
+| Discovery Cove Orlando | cvr | wow | -39.3 |
+| Seattle Whale Watching Tours | cvr | wow | -36.7 |
+| LEGOLAND Florida | cvr | wow | -36.1 |
+| Six Flags: Magic Mountain | cvr | wow | -33.8 |
+| Museum of Modern Art (MoMA) | cvr | wow | -31.6 |
+| Steamboat Natchez Tours | rpc | sustained_3d | -49.8 |
+| Niagara Falls (Canada) Tours | rpc | sustained_3d | -41.0 |
+| Boston Whale Watching Cruise | rpc | sustained_3d | -38.3 |
+| Las Vegas Shows | rpc | sustained_3d | -23.1 |
+| Alcatraz Tours | rpc | sustained_3d | 64.9 |
+| LEGOLAND New York | rpc | sustained_3d | 78.4 |
