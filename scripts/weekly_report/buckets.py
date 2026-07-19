@@ -256,10 +256,7 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
     SPK, CMK = ("spend_g", "cm1_g") if has_g else ("spend", "cm1")
     def pctchg(now, prev):
         return round((now / prev - 1) * 100) if (now is not None and prev) else None
-    def cvr_ord(w):                                        # orders/clicks (%) — the exact-decomposition CVR
-        o, c = w.get("orders"), w.get("clicks")
-        return (100.0 * o / c) if (o is not None and c) else None
-    LBL = {"cvr": "CVR", "aov": "AOV", "cr": "Completion", "tr": "Take rate"}
+    LBL = {"cvr": "CVR", "aov": "AOV", "tr": "Take rate"}   # paid RPC = CVR × AOV × Take-rate
     out = []
     for r in fluctuations:
         ce = ce_by.get(r["ce_id"])
@@ -280,23 +277,15 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
         spend_4w_d = round((spend_4w / spend_4w_prev - 1) * 100) if spend_4w_prev else None
         roi_4w_d = round(roi_4w - roi_4w_prev) if (roi_4w is not None and roi_4w_prev is not None) else None
         alert_type = "3D" if r.get("window") == "sustained_3d" else "WoW"
-        d3 = r.get("drivers_3d") if alert_type == "3D" else None
+        # paid Google-Search drivers (pooled, reconcile to paid RPC): 3D→3-day-vs-28d, WoW→week-vs-week
+        drv = (r.get("drivers") or {}).get("3d" if alert_type == "3D" else "wow") or {}
         vals = {}
-        if d3:
-            # 3-day alert → 3-day value vs 28-day baseline (matches the alert's own window)
-            for k, aspct in (("cvr", True), ("aov", False), ("cr", True), ("tr", True)):
-                v3 = (d3.get(k) or {}).get("v3")
-                vals[k] = (round(v3 * 100, 2) if (v3 is not None and aspct) else (round(v3, 2) if v3 is not None else None))
-                vals[k + "_d"] = (d3.get(k) or {}).get("pct")
-        else:
-            # WoW alert → weekly value + WoW %Δ (all four exact from weekly data)
-            mets = {"cvr": (cvr_ord(w0), cvr_ord(wm1)), "aov": (w0.get("aov"), wm1.get("aov")),
-                    "cr": (w0.get("cr_pct"), wm1.get("cr_pct")), "tr": (w0.get("tr_pct"), wm1.get("tr_pct"))}
-            for k, (now, prev) in mets.items():
-                vals[k] = round(now, 2) if now is not None else None
-                vals[k + "_d"] = pctchg(now, prev)
+        for k, aspct in (("cvr", True), ("aov", False), ("tr", True)):  # CVR/TR as %, AOV as $
+            v = (drv.get(k) or {}).get("v")
+            vals[k] = (round(v * 100, 2) if (v is not None and aspct) else (round(v, 2) if v is not None else None))
+            vals[k + "_d"] = (drv.get(k) or {}).get("pct")
         # dominant = the driver whose move best explains the alert direction
-        moves = {k: vals[k + "_d"] for k in ("cvr", "aov", "cr", "tr") if vals.get(k + "_d") is not None}
+        moves = {k: vals[k + "_d"] for k in ("cvr", "aov", "tr") if vals.get(k + "_d") is not None}
         aligned = {k: v for k, v in moves.items() if v != 0 and (v < 0) == (d == "down")}
         pool = aligned or moves
         dom = max(pool, key=lambda k: abs(pool[k])) if pool else None
@@ -318,8 +307,9 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
             "roi_4w": roi_4w, "spend_4w": round(spend_4w) if spend_4w else None,
             "roi_4w_d": roi_4w_d, "spend_4w_d": spend_4w_d,
             "cvr": vals["cvr"], "cvr_d": vals["cvr_d"], "aov": vals["aov"], "aov_d": vals["aov_d"],
-            "cr": vals["cr"], "cr_d": vals["cr_d"], "tr": vals["tr"], "tr_d": vals["tr_d"],
-            "clicks": w0.get("clicks"), "clicks_d": pctchg(w0.get("clicks"), wm1.get("clicks")),
+            "tr": vals["tr"], "tr_d": vals["tr_d"],
+            "clicks": w0.get("paid_clicks_g", w0.get("clicks")),
+            "clicks_d": pctchg(w0.get("paid_clicks_g", w0.get("clicks")), wm1.get("paid_clicks_g", wm1.get("clicks"))),
             "dominant": LBL.get(dom), "dominant_key": dom,
             "verdict": verdict, "cause": cause, "paid_pct": pc, "recommendation": rec,
         })

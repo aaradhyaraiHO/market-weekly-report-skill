@@ -201,22 +201,24 @@ def bid_changes(troas: pd.DataFrame, w0_start: dt.date) -> dict[str, dict]:
 # --------------------------------------------------------------------------- #
 # CVR WoW drop signal (weekly)
 # --------------------------------------------------------------------------- #
-def cvr_drops(ce_weekly: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, dict]:
-    """CEs whose paid CVR fell > 30% WoW with >= 300 clicks in W0."""
+def cvr_drops(ce_paid: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, dict]:
+    """CEs whose GOOGLE-SEARCH PAID CVR fell > 30% WoW with >= 300 Google-search clicks in W0.
+    CVR = Google-Search paid conversions ÷ Google-Search paid clicks (2026-07-17: decisions are
+    Google-Search only; ad-conversions incl. Bing / business orders are the wrong basis)."""
     out: dict[str, dict] = {}
-    w0_rows = ce_weekly[ce_weekly["week"] == w0].set_index("combined_entity_id")
-    wm1_rows = ce_weekly[ce_weekly["week"] == wm1].set_index("combined_entity_id")
+    w0_rows = ce_paid[ce_paid["week"] == w0].set_index("combined_entity_id")
+    wm1_rows = ce_paid[ce_paid["week"] == wm1].set_index("combined_entity_id")
     for ce_id, r in w0_rows.iterrows():
-        clicks0 = float(r.get("clicks") or 0)
+        clicks0 = float(r.get("paid_clicks_g") or 0)
         if clicks0 < config.CVR_MIN_CLICKS_WK:
             continue
-        conv0 = float(r.get("ad_conversions") or 0)
+        conv0 = float(r.get("conversions_g") or 0)
         cvr0 = conv0 / clicks0 if clicks0 else np.nan
         if ce_id not in wm1_rows.index:
             continue
         rp = wm1_rows.loc[ce_id]
-        clicks1 = float(rp.get("clicks") or 0)
-        conv1 = float(rp.get("ad_conversions") or 0)
+        clicks1 = float(rp.get("paid_clicks_g") or 0)
+        conv1 = float(rp.get("conversions_g") or 0)
         cvr1 = conv1 / clicks1 if clicks1 else np.nan
         if not (cvr1 and cvr1 > 0) or pd.isna(cvr0):
             continue
@@ -231,26 +233,23 @@ def cvr_drops(ce_weekly: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, d
     return out
 
 
-def cvr_gray_zone(ce_weekly: pd.DataFrame, w0: dt.date, wm1: dt.date) -> int:
-    """
-    B2 gray-zone (P2.3): CEs whose CVR WoW drop landed just short of the 30%
-    trigger — within GRAY_ZONE_PP percentage points below it (the Immersive
-    −24.9% near-miss case). Same >= 300-click floor as cvr_drops.
-    """
+def cvr_gray_zone(ce_paid: pd.DataFrame, w0: dt.date, wm1: dt.date) -> int:
+    """Near-miss CVR WoW drops (within GRAY_ZONE_PP of the 30% trigger). Google-Search paid CVR,
+    same >= 300 Google-search-click floor as cvr_drops."""
     lo = config.CVR_WOW_DROP_THRESHOLD - config.GRAY_ZONE_PP / 100.0
     hi = config.CVR_WOW_DROP_THRESHOLD
     n = 0
-    w0_rows = ce_weekly[ce_weekly["week"] == w0].set_index("combined_entity_id")
-    wm1_rows = ce_weekly[ce_weekly["week"] == wm1].set_index("combined_entity_id")
+    w0_rows = ce_paid[ce_paid["week"] == w0].set_index("combined_entity_id")
+    wm1_rows = ce_paid[ce_paid["week"] == wm1].set_index("combined_entity_id")
     for ce_id, r in w0_rows.iterrows():
-        clicks0 = float(r.get("clicks") or 0)
+        clicks0 = float(r.get("paid_clicks_g") or 0)
         if clicks0 < config.CVR_MIN_CLICKS_WK or ce_id not in wm1_rows.index:
             continue
-        conv0 = float(r.get("ad_conversions") or 0)
+        conv0 = float(r.get("conversions_g") or 0)
         cvr0 = conv0 / clicks0 if clicks0 else np.nan
         rp = wm1_rows.loc[ce_id]
-        clicks1 = float(rp.get("clicks") or 0)
-        conv1 = float(rp.get("ad_conversions") or 0)
+        clicks1 = float(rp.get("paid_clicks_g") or 0)
+        conv1 = float(rp.get("conversions_g") or 0)
         cvr1 = conv1 / clicks1 if clicks1 else np.nan
         if not (cvr1 and cvr1 > 0) or pd.isna(cvr0):
             continue
@@ -285,40 +284,45 @@ def _swing_driver(shap: dict | None) -> dict | None:
 
 
 def _driver_windows(df: pd.DataFrame, ce_id: str, week_days: list[dt.date]) -> dict | None:
-    """3-day (most recent) vs 28-day-baseline %Δ for each RPC driver, from the daily business
-    frame (orders/clicks/gbv/gbv_completed/revenue). RPC = CVR·AOV·CR·TR — this powers the
-    3-day-alert breakdown in the fluctuations table (2026-07-17). {metric:{v3,base,pct}}."""
+    """Paid GOOGLE-SEARCH RPC drivers, POOLED (Σ/Σ) so they reconcile to paid RPC exactly:
+        RPC = CVR × AOV × Take-rate   (CVR=conv/clicks · AOV=gbv/conv · TR=rev/gbv)
+    Completion is dropped — not sane on paid attribution (completed/booked > 100%). Returns
+    {'wow': {...}, '3d': {...}}: WoW = W0 week vs prior week; 3D = last 3 days vs 28-day baseline
+    (excl last 3). Each metric → {v, pct}. (2026-07-19: all paid Google-Search.)"""
     d = df[df["combined_entity_id"].astype(str) == str(ce_id)].copy()
     if d.empty:
         return None
     d = d.set_index("report_date").sort_index()
     idx = pd.date_range(d.index.min(), d.index.max(), freq="D").date
     d = d.reindex(idx)
-    for c in ("orders", "clicks", "gbv", "gbv_completed", "revenue"):
+    for c in ("revenue", "gbv", "clicks", "conversions"):
         if c in d:
             d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
-    ratios = {
-        "cvr": d["orders"] / d["clicks"].replace(0, np.nan),
-        "aov": d["gbv"] / d["orders"].replace(0, np.nan),
-        "cr":  d["gbv_completed"] / d["gbv"].replace(0, np.nan),
-        "tr":  d["revenue"] / d["gbv_completed"].replace(0, np.nan),
-    }
     present = set(d.index)
     days = [x for x in week_days if x in present]
     if not days:
         return None
     last = max(days)
-    def _win(s, lo, hi):
-        vals = [s.loc[x] for x in d.index if lo <= x <= hi and pd.notna(s.loc[x])]
-        return (sum(vals) / len(vals)) if vals else None
-    out = {}
-    for k, s in ratios.items():
-        v3 = _win(s, last - dt.timedelta(days=2), last)                    # last 3 days
-        base = _win(s, last - dt.timedelta(days=31), last - dt.timedelta(days=4))  # 28d baseline, excl last 3
-        out[k] = {"v3": None if v3 is None else round(float(v3), 4),
-                  "base": None if base is None else round(float(base), 4),
-                  "pct": (round((v3 / base - 1) * 100) if (v3 is not None and base) else None)}
-    return out
+    def _sum(col, lo, hi):
+        return float(d[col][[(lo <= x <= hi) for x in d.index]].sum()) if col in d else 0.0
+    def _drivers(lo, hi):
+        clk, conv = _sum("clicks", lo, hi), _sum("conversions", lo, hi)
+        gbv, rev = _sum("gbv", lo, hi), _sum("revenue", lo, hi)
+        return {"cvr": (conv / clk) if clk else None,
+                "aov": (gbv / conv) if conv else None,
+                "tr":  (rev / gbv) if gbv else None}
+    def _pack(now, prev):
+        out = {}
+        for k in ("cvr", "aov", "tr"):
+            n, p = now.get(k), prev.get(k)
+            out[k] = {"v": None if n is None else round(n, 4),
+                      "pct": (round((n / p - 1) * 100) if (n is not None and p) else None)}
+        return out
+    wow = _pack(_drivers(last - dt.timedelta(days=6), last),
+                _drivers(last - dt.timedelta(days=13), last - dt.timedelta(days=7)))
+    d3 = _pack(_drivers(last - dt.timedelta(days=2), last),
+               _drivers(last - dt.timedelta(days=31), last - dt.timedelta(days=4)))
+    return {"wow": wow, "3d": d3}
 
 
 def _daily_spark(df: pd.DataFrame, ce_id: str, num: str, den: str, days: int = 35) -> list:
@@ -338,6 +342,7 @@ def build_bucket1(
     *,
     ce_daily_ads: pd.DataFrame,
     ce_daily_business: pd.DataFrame,
+    ce_daily_paid_google: pd.DataFrame | None = None,
     ce_weekly: pd.DataFrame,
     ce_weekly_paid: pd.DataFrame,
     names: dict[str, str],
@@ -368,15 +373,17 @@ def build_bucket1(
         else:
             cm1_alerts[ce_id] = res
 
-    # RPC engine over the business daily series.
-    rpc_ids = sorted(set(ce_daily_business["combined_entity_id"].dropna().astype(str)))
+    # RPC engine — Google-Search PAID daily series (paid revenue ÷ paid clicks), not total
+    # business revenue: an RPC drop should be a Google-Search paid problem (2026-07-17).
+    rpc_src = ce_daily_paid_google if ce_daily_paid_google is not None else ce_daily_business
+    rpc_ids = sorted(set(rpc_src["combined_entity_id"].dropna().astype(str)))
     for ce_id in rpc_ids:
-        res = _ratio_alert(ce_daily_business, ce_id, "revenue", "clicks", "orders", week_days)
+        res = _ratio_alert(rpc_src, ce_id, "revenue", "clicks", "conversions", week_days)
         if res and not res.get("cv_excluded"):
             rpc_alerts[ce_id] = res
 
-    cvr_alerts = cvr_drops(ce_weekly, w0_start, wm1_start)
-    cvr_gray = cvr_gray_zone(ce_weekly, w0_start, wm1_start)
+    cvr_alerts = cvr_drops(ce_weekly_paid, w0_start, wm1_start)     # Google-Search paid CVR
+    cvr_gray = cvr_gray_zone(ce_weekly_paid, w0_start, wm1_start)
     bid = bid_changes(troas, w0_start)
 
     # Weekly W0 spend/revenue lookups.
@@ -456,8 +463,9 @@ def build_bucket1(
             "window": window,
             "cause_tag": _cause_tag(ce_id, res["direction"]),
             "swing_driver": _swing_driver(shapley_by_ce.get(ce_id)),
-            # 3-day-vs-28-day RPC-driver breakdown (CVR·AOV·CR·TR) for the fluctuations table
-            "drivers_3d": _driver_windows(ce_daily_business, ce_id, week_days),
+            # paid Google-Search RPC-driver breakdown (CVR·AOV·Take-rate), WoW + 3D windows
+            "drivers": (_driver_windows(ce_daily_paid_google, ce_id, week_days)
+                        if ce_daily_paid_google is not None else None),
             "evidence": ev,
             "paid_contribution_pct": paid_contrib.get(ce_id),
             "spend_wk": _spend(ce_id),

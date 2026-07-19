@@ -1,0 +1,32 @@
+# Fluctuations tuning log (NA 2026-07-06)
+
+_Checkpoints to compare each threshold/logic change._
+
+## Step 1 — paid Google-Search decomposition (CVR×AOV×TR)
+NA 2026-07-06 · fluctuations: cvr=10 rpc=6 cm1=8 · down=15
+| CE | signal | alert | mag% | dominant |
+|---|---|---|---|---|
+| Disneyland Resort California | cm1_per_conv | sustained_3d | -41.2 | CVR |
+| Steamboat Natchez Tours | cm1_per_conv | sustained_3d | -31.9 | CVR |
+| World of Coca-Cola | cm1_per_conv | sustained_3d | 41.9 |  |
+| Hawaii Luaus | cm1_per_conv | sdlw | 73.6 |  |
+| High Roller Observation Whee | cm1_per_conv | sustained_3d | 74.9 |  |
+| Kennedy Space Center | cm1_per_conv | sustained_3d | 93.4 |  |
+| Cruises - San Francisco | cm1_per_conv | sustained_3d | 105.5 |  |
+| Canada's Wonderland Tickets | cm1_per_conv | sustained_3d | 122.6 |  |
+| Six Flags Fiesta Texas Ticke | cvr | wow | -50.4 | CVR |
+| Statue of Liberty | cvr | wow | -47.2 | CVR |
+| Star of Honolulu | cvr | wow | -42.2 | CVR |
+| New England Aquarium | cvr | wow | -41.9 | CVR |
+| Kings Island Tickets | cvr | wow | -39.4 | CVR |
+| Discovery Cove Orlando | cvr | wow | -39.3 | CVR |
+| Seattle Whale Watching Tours | cvr | wow | -36.7 | CVR |
+| LEGOLAND Florida | cvr | wow | -36.1 | CVR |
+| Six Flags: Magic Mountain | cvr | wow | -33.8 | CVR |
+| Museum of Modern Art (MoMA) | cvr | wow | -31.6 | CVR |
+| Niagara Falls (Canada) Tours | rpc | sustained_3d | -41.0 | AOV |
+| Boston Whale Watching Cruise | rpc | sustained_3d | -38.3 | CVR |
+| Las Vegas Shows | rpc | sustained_3d | -23.1 | AOV |
+| Cruises - Chicago | rpc | sustained_3d | 38.8 |  |
+| Alcatraz Tours | rpc | sustained_3d | 64.9 |  |
+| LEGOLAND New York | rpc | sustained_3d | 78.4 |  |

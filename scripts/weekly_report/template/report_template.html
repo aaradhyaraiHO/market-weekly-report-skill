@@ -1701,11 +1701,10 @@ function renderBuckets(M){
     '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
     '<th class="num" title="Google-Search Paid ROI over the last 28 days. Δ = percentage-point change vs the prior 28 days.">28d ROI <span class="lm-hb">ⓘ</span></th>'+
     '<th class="num" title="Google-Search spend over the last 28 days. Δ = % change vs the prior 28 days — shows whether it is already scaling down.">28d Spend <span class="lm-hb">ⓘ</span></th>'+
-    '<th class="num" title="Conversion rate = orders ÷ clicks. RPC = CVR × AOV × Completion × Take-rate; the four columns show which drove the RPC move. Δ follows the Alert (WoW = weekly, 3D = 3-day-vs-28-day).">CVR <span class="lm-hb">Δ ⓘ</span></th>'+
-    '<th class="num" title="Average order value = GBV ÷ orders. Δ follows the Alert.">AOV <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Completion rate = completed GBV ÷ booked GBV. Δ follows the Alert.">Completion <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Take rate = net revenue ÷ completed GBV. Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Paid clicks (Google Search) — context only, never a qualifier. Shown so a CVR/RPC drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Paid CVR = Google-Search paid conversions ÷ paid clicks. Paid RPC = CVR × AOV × Take-rate; the columns show which drove the move. Δ follows the Alert (WoW = weekly, 3D = 3-day-vs-28-day).">CVR <span class="lm-hb">Δ ⓘ</span></th>'+
+    '<th class="num" title="Paid AOV = Google-Search gross bookings ÷ paid conversions. Δ follows the Alert.">AOV <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Take rate = net revenue ÷ gross bookings (Google-Search paid). Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
+    '<th class="num" title="Paid Google-Search clicks — context only, never a qualifier. Shown so a CVR drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
     '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
     '<th title="Your call: tick to confirm seasonality, add a note. Saved locally per week.">Action</th>';
   const fluxRows=items=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
@@ -1715,13 +1714,12 @@ function renderBuckets(M){
     '<td class="num"><div class="lmv">'+fmtMoney(r.spend_4w)+'</div>'+(r.spend_4w_d==null?'':'<div class="lmd mut">'+(r.spend_4w_d>0?"+":MINUS)+Math.abs(r.spend_4w_d)+'%</div>')+'</td>'+
     '<td class="num">'+fxDrv(r,'cvr',r.cvr,r.cvr_d,{good:1,dp:1,suf:'%'})+'</td>'+
     '<td class="num">'+fxDrv(r,'aov',r.aov,r.aov_d,{good:1,dp:0,pre:'$'})+'</td>'+
-    '<td class="num">'+fxDrv(r,'cr',r.cr,r.cr_d,{good:1,dp:0,suf:'%'})+'</td>'+
     '<td class="num">'+fxDrv(r,'tr',r.tr,r.tr_d,{good:1,dp:0,suf:'%'})+'</td>'+
     '<td class="num">'+lmVD(r.clicks,r.clicks_d,{good:0})+'</td>'+
     '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
     '<td>'+fxAction(r)+'</td>'+
     '</tr>').join('');
-  const fluxHowto=_howto('RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> (Google Search) = current scale &amp; efficiency, with a Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
+  const fluxHowto=_howto('All <b>paid Google-Search</b>. Paid RPC (revenue/click) = <b>CVR × AOV × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> = current scale &amp; efficiency, Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
   const seasDnBody=seasDn.length?(fluxHowto+fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>';
   const seasUpBody=seasUp.length?(fluxHowto+fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No revenue-quality spikes this week.</div>';
 
@@ -1792,7 +1790,7 @@ function renderBuckets(M){
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
     _bucketBlock('🛡️','Losing Money','Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked worst-first by 4-week CM2 bled; full-waste (spend, 0 conversions) on top.', lmBody+lmFn)+
-    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs its 28-day baseline (3-day pattern or WoW). RPC = CVR × AOV × Completion × Take-rate — the four columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.', seasDnBody)+
+    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.', seasDnBody)+
     /* Scale-Up table hidden from report (2026-07-17) — engine still computes C.scale_up */
     _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Same decomposition, upside — RPC rose vs its 28-day baseline. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
     _bucketBlock('🌱','New CEs','Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.', newBody)+

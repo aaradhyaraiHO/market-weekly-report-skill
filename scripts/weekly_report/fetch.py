@@ -166,6 +166,12 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
             ELSE sum_conversion_value_calculated_contribution_margin
         END, 0))                                                AS cm1_g,
         SUM(IF(ad_platform = 'Google Ads', count_clicks, 0))    AS paid_clicks_g,
+        SUM(IF(ad_platform = 'Google Ads', CASE
+            WHEN report_date >= '2025-09-01'
+                 AND count_conversions_offline_contribution_margin > 0
+                THEN count_conversions_offline_contribution_margin
+            ELSE count_conversions_online
+        END, 0))                                                AS conversions_g,
         -- Search Impression Share — GOOGLE SEARCH ONLY. Bing's
         -- count_eligible_searches is unreliable (yields SIS > 100%), so SIS is
         -- Google-only (perf-audit canon: SUM(impr)/SUM(eligible), never
@@ -826,6 +832,39 @@ def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.
     """
     return query_df(
         sql, "ce_daily_business",
+        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
+    )
+
+
+def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+    """Daily GOOGLE-SEARCH paid series for the RPC fluctuation signal (2026-07-17): paid-attributed
+    net revenue ÷ paid clicks — so an RPC drop is a Google-Search paid problem, not Bing / organic.
+    revenue = sum_conversion_value_offline_revenue; conversions = paid conversions (for the volume gate)."""
+    sql = f"""
+    SELECT
+        campaign_target_combined_entity_id                        AS combined_entity_id,
+        report_date,
+        SUM(sum_conversion_value_offline_revenue)                 AS revenue,
+        SUM(sum_conversion_value_offline_gross_bookings)          AS gbv,
+        SUM(count_clicks)                                         AS clicks,
+        SUM(CASE
+            WHEN report_date >= '2025-09-01'
+                 AND count_conversions_offline_contribution_margin > 0
+                THEN count_conversions_offline_contribution_margin
+            ELSE count_conversions_online
+        END)                                                      AS conversions
+
+    FROM {config.ADS_STATS}
+
+    WHERE campaign_target_business_market = @market
+          AND report_date BETWEEN @start AND @end
+          AND ad_platform = 'Google Ads'
+          AND campaign_advertising_channel_type = 'SEARCH'
+
+    GROUP BY 1, 2
+    """
+    return query_df(
+        sql, "ce_daily_paid_google",
         {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
     )
 
