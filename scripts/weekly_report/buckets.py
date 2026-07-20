@@ -14,6 +14,10 @@ from __future__ import annotations
 # ---- locked constants ----
 BLEED_ROI, BLEED_SPEND4W = 100.0, 1000.0
 SEAS_UP, SEAS_DN = 140.0, 120.0
+# Fluctuations multi-metric gate (2026-07-20) — cap output to the ~5-6 real opportunities.
+# A driver is "red" if its adverse move ≥ FX_RED_FLOOR. One red → needs FX_SINGLE_MIN
+# (CVR uses FX_CVR_MIN, WoW only). ≥2 red → collective paid-RPC drop ≥ FX_COLLECTIVE_MIN.
+FX_RED_FLOOR, FX_SINGLE_MIN, FX_CVR_MIN, FX_COLLECTIVE_MIN = 15.0, 25.0, 30.0, 20.0
 SCALE_ROI, SCALE_MIN_OF_4 = 155.0, 3
 CLIFF_PP = 30.0
 MIN_ACTIVE = 3
@@ -256,7 +260,7 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
     SPK, CMK = ("spend_g", "cm1_g") if has_g else ("spend", "cm1")
     def pctchg(now, prev):
         return round((now / prev - 1) * 100) if (now is not None and prev) else None
-    LBL = {"cvr": "CVR", "aov": "AOV", "tr": "Take rate"}   # paid RPC = CVR × AOV × Take-rate
+    LBL = {"cvr": "CVR", "aov": "AOV", "cr": "Completion", "tr": "Take rate"}   # paid RPC = CVR×AOV×CR×TR
     out = []
     for r in fluctuations:
         ce = ce_by.get(r["ce_id"])
@@ -280,15 +284,38 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
         # paid Google-Search drivers (pooled, reconcile to paid RPC): 3D→3-day-vs-28d, WoW→week-vs-week
         drv = (r.get("drivers") or {}).get("3d" if alert_type == "3D" else "wow") or {}
         vals = {}
-        for k, aspct in (("cvr", True), ("aov", False), ("tr", True)):  # CVR/TR as %, AOV as $
+        for k, aspct in (("cvr", True), ("aov", False), ("cr", True), ("tr", True)):  # CVR/CR/TR as %, AOV as $
             v = (drv.get(k) or {}).get("v")
             vals[k] = (round(v * 100, 2) if (v is not None and aspct) else (round(v, 2) if v is not None else None))
             vals[k + "_d"] = (drv.get(k) or {}).get("pct")
         # dominant = the driver whose move best explains the alert direction
-        moves = {k: vals[k + "_d"] for k in ("cvr", "aov", "tr") if vals.get(k + "_d") is not None}
+        moves = {k: vals[k + "_d"] for k in ("cvr", "aov", "cr", "tr") if vals.get(k + "_d") is not None}
         aligned = {k: v for k, v in moves.items() if v != 0 and (v < 0) == (d == "down")}
         pool = aligned or moves
         dom = max(pool, key=lambda k: abs(pool[k])) if pool else None
+        # --- Step-3 multi-metric gate (2026-07-20): tighten down-swings to the real opportunities.
+        # CVR uses its WoW move only; AOV/CR/TR use the alert window. One red → ≥25% (CVR ≥30%);
+        # ≥2 red → the compounded paid-RPC drop must clear 20%. CM1/conv is exempt (separate signal).
+        if d == "down" and r.get("signal") in ("rpc", "cvr"):
+            wowd = (r.get("drivers") or {}).get("wow") or {}
+            def _mv(k):                                    # adverse %move; CVR = WoW, others = alert window
+                src = wowd if k == "cvr" else drv
+                return (src.get(k) or {}).get("pct")
+            reds = {k: _mv(k) for k in ("cvr", "aov", "cr", "tr")
+                    if (_mv(k) is not None and _mv(k) <= -FX_RED_FLOOR)}
+            if not reds:
+                continue
+            if len(reds) == 1:
+                k = next(iter(reds))
+                if abs(reds[k]) < (FX_CVR_MIN if k == "cvr" else FX_SINGLE_MIN):
+                    continue
+            else:                                          # ≥2 red → compounded RPC drop
+                prod = 1.0
+                for k in ("cvr", "aov", "cr", "tr"):
+                    p = _mv(k)
+                    if p is not None: prod *= (1 + p / 100.0)
+                if (prod - 1) * 100 > -FX_COLLECTIVE_MIN:
+                    continue
         pc = w0.get("paid_contribution_pct")
         cause = r.get("cause_tag")
         roi_now = (w0.get("roi_pct") or 0)
@@ -307,7 +334,7 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
             "roi_4w": roi_4w, "spend_4w": round(spend_4w) if spend_4w else None,
             "roi_4w_d": roi_4w_d, "spend_4w_d": spend_4w_d,
             "cvr": vals["cvr"], "cvr_d": vals["cvr_d"], "aov": vals["aov"], "aov_d": vals["aov_d"],
-            "tr": vals["tr"], "tr_d": vals["tr_d"],
+            "cr": vals["cr"], "cr_d": vals["cr_d"], "tr": vals["tr"], "tr_d": vals["tr_d"],
             "clicks": w0.get("paid_clicks_g", w0.get("clicks")),
             "clicks_d": pctchg(w0.get("paid_clicks_g", w0.get("clicks")), wm1.get("paid_clicks_g", wm1.get("clicks"))),
             "dominant": LBL.get(dom), "dominant_key": dom,

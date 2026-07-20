@@ -869,6 +869,37 @@ def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> 
     )
 
 
+def ce_daily_orders_google(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+    """Daily GOOGLE-SEARCH paid ORDER funnel from fct_orders (2026-07-20): order-grounded
+    booked / completed / net-revenue so the paid decomposition can separate Completion from
+    Take-rate (the ad-attribution table can't — completed/booked >100%). ad_network filter =
+    Google Search; valid_to IS NULL dedups to the current SCD2 version (1 row/order). Paired
+    with ce_daily_paid_google clicks → CVR=orders/clicks · AOV=booked/orders · CR=completed/booked
+    · TR=revenue/completed, reconciling to paid RPC = revenue/clicks."""
+    sql = f"""
+    SELECT
+        combined_entity_id,
+        DATE(created_at)                            AS report_date,
+        COUNT(DISTINCT order_id)                    AS orders,
+        SUM(order_value_usd)                        AS booked,
+        SUM(order_value_completed_usd)              AS completed,
+        SUM(amount_revenue_usd)                     AS revenue
+
+    FROM {config.FCT_ORDERS}
+
+    WHERE business_market = @market
+          AND DATE(created_at) BETWEEN @start AND @end
+          AND ad_network = 'Google: Search'
+          AND valid_to_timestamp IS NULL
+
+    GROUP BY 1, 2
+    """
+    return query_df(
+        sql, "ce_daily_orders_google",
+        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # tROAS history for the bid-change innocence check
 # --------------------------------------------------------------------------- #

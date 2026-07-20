@@ -676,7 +676,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     daily_start = w0_start - dt.timedelta(days=40)
     d_ads = fetch.ce_daily_ads(market, daily_start, w0_end)
     d_biz = fetch.ce_daily_business(market, daily_start, w0_end)
-    d_paid_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)   # Google-Search paid RPC
+    d_paid_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)   # Google-Search paid RPC (ads clicks/rev)
+    d_orders_g = fetch.ce_daily_orders_google(market, daily_start, w0_end)  # Google-Search order funnel (fct)
     troas = fetch.troas_history(market, w0_start - dt.timedelta(days=config.TROAS_LOOKBACK_DAYS), w0_end)
 
     for df in (biz, paid, ly, d_ads, d_biz):
@@ -1022,6 +1023,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         ce_daily_ads=d_ads,
         ce_daily_business=d_biz,
         ce_daily_paid_google=d_paid_g,
+        ce_daily_orders_google=d_orders_g,
         ce_weekly=biz,
         ce_weekly_paid=paid,
         names=names,

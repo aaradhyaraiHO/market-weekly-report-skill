@@ -283,37 +283,45 @@ def _swing_driver(shap: dict | None) -> dict | None:
     }
 
 
-def _driver_windows(df: pd.DataFrame, ce_id: str, week_days: list[dt.date]) -> dict | None:
+def _driver_windows(orders_df: pd.DataFrame, clicks_df: pd.DataFrame,
+                    ce_id: str, week_days: list[dt.date]) -> dict | None:
     """Paid GOOGLE-SEARCH RPC drivers, POOLED (Σ/Σ) so they reconcile to paid RPC exactly:
-        RPC = CVR × AOV × Take-rate   (CVR=conv/clicks · AOV=gbv/conv · TR=rev/gbv)
-    Completion is dropped — not sane on paid attribution (completed/booked > 100%). Returns
-    {'wow': {...}, '3d': {...}}: WoW = W0 week vs prior week; 3D = last 3 days vs 28-day baseline
-    (excl last 3). Each metric → {v, pct}. (2026-07-19: all paid Google-Search.)"""
-    d = df[df["combined_entity_id"].astype(str) == str(ce_id)].copy()
-    if d.empty:
+        RPC = CVR × AOV × CR × TR
+        CVR = orders/clicks · AOV = booked/orders · CR = completed/booked · TR = revenue/completed
+    Order funnel (orders/booked/completed/revenue) from fct_orders (Google:Search); clicks from
+    the ads table (Google Search). Order-grounded, so Completion is a real, sane metric (2026-07-20).
+    Returns {'wow':{...}, '3d':{...}}: WoW = W0 week vs prior week; 3D = last 3 days vs 28-day
+    baseline (excl last 3). Each metric → {v, pct}."""
+    o = orders_df[orders_df["combined_entity_id"].astype(str) == str(ce_id)].copy() if orders_df is not None else None
+    c = clicks_df[clicks_df["combined_entity_id"].astype(str) == str(ce_id)].copy() if clicks_df is not None else None
+    if o is None or o.empty:
         return None
-    d = d.set_index("report_date").sort_index()
-    idx = pd.date_range(d.index.min(), d.index.max(), freq="D").date
-    d = d.reindex(idx)
-    for c in ("revenue", "gbv", "clicks", "conversions"):
-        if c in d:
-            d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0)
-    present = set(d.index)
-    days = [x for x in week_days if x in present]
+    o = o.set_index("report_date").sort_index()
+    clk_by = {}
+    if c is not None and not c.empty:
+        c = c.set_index("report_date").sort_index()
+        clk_by = {d: float(v) for d, v in pd.to_numeric(c["clicks"], errors="coerce").fillna(0.0).items()}
+    for col in ("orders", "booked", "completed", "revenue"):
+        if col in o:
+            o[col] = pd.to_numeric(o[col], errors="coerce").fillna(0.0)
+    days = [x for x in week_days if x in set(o.index) or x in clk_by]
     if not days:
         return None
     last = max(days)
-    def _sum(col, lo, hi):
-        return float(d[col][[(lo <= x <= hi) for x in d.index]].sum()) if col in d else 0.0
+    def _osum(col, lo, hi):
+        return float(o[col][[(lo <= x <= hi) for x in o.index]].sum()) if col in o else 0.0
+    def _clk(lo, hi):
+        return float(sum(v for dd, v in clk_by.items() if lo <= dd <= hi))
     def _drivers(lo, hi):
-        clk, conv = _sum("clicks", lo, hi), _sum("conversions", lo, hi)
-        gbv, rev = _sum("gbv", lo, hi), _sum("revenue", lo, hi)
-        return {"cvr": (conv / clk) if clk else None,
-                "aov": (gbv / conv) if conv else None,
-                "tr":  (rev / gbv) if gbv else None}
+        clk = _clk(lo, hi); orders = _osum("orders", lo, hi)
+        booked = _osum("booked", lo, hi); completed = _osum("completed", lo, hi); rev = _osum("revenue", lo, hi)
+        return {"cvr": (orders / clk) if clk else None,
+                "aov": (booked / orders) if orders else None,
+                "cr":  (completed / booked) if booked else None,
+                "tr":  (rev / completed) if completed else None}
     def _pack(now, prev):
         out = {}
-        for k in ("cvr", "aov", "tr"):
+        for k in ("cvr", "aov", "cr", "tr"):
             n, p = now.get(k), prev.get(k)
             out[k] = {"v": None if n is None else round(n, 4),
                       "pct": (round((n / p - 1) * 100) if (n is not None and p) else None)}
@@ -343,6 +351,7 @@ def build_bucket1(
     ce_daily_ads: pd.DataFrame,
     ce_daily_business: pd.DataFrame,
     ce_daily_paid_google: pd.DataFrame | None = None,
+    ce_daily_orders_google: pd.DataFrame | None = None,
     ce_weekly: pd.DataFrame,
     ce_weekly_paid: pd.DataFrame,
     names: dict[str, str],
@@ -463,9 +472,10 @@ def build_bucket1(
             "window": window,
             "cause_tag": _cause_tag(ce_id, res["direction"]),
             "swing_driver": _swing_driver(shapley_by_ce.get(ce_id)),
-            # paid Google-Search RPC-driver breakdown (CVR·AOV·Take-rate), WoW + 3D windows
-            "drivers": (_driver_windows(ce_daily_paid_google, ce_id, week_days)
-                        if ce_daily_paid_google is not None else None),
+            # paid Google-Search RPC-driver breakdown (CVR·AOV·CR·TR), WoW + 3D windows —
+            # order funnel from fct_orders, clicks from the ads table
+            "drivers": (_driver_windows(ce_daily_orders_google, ce_daily_paid_google, ce_id, week_days)
+                        if ce_daily_orders_google is not None else None),
             "evidence": ev,
             "paid_contribution_pct": paid_contrib.get(ce_id),
             "spend_wk": _spend(ce_id),

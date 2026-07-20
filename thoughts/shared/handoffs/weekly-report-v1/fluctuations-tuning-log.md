@@ -57,3 +57,15 @@ NA 2026-07-06 · fluctuations: cvr=10 rpc=6 cm1=6 · down=15
 | Las Vegas Shows | rpc | sustained_3d | -23.1 |
 | Alcatraz Tours | rpc | sustained_3d | 64.9 |
 | LEGOLAND New York | rpc | sustained_3d | 78.4 |
+
+## Step 3 — fct_orders 4-driver + multi-metric gate
+NA 2026-07-06 · down-swings after gate = 7 (was 15). Decomposition = CVR×AOV×Completion×Take-rate, all Google-Search paid, orders from fct_orders. Gate: 1 red→≥25% (CVR≥30) · ≥2 red→collective RPC≤−20% · red-floor 15% · CM1/conv exempt.
+| CE | alert | dominant | CVRΔ | AOVΔ | CRΔ | TRΔ |
+|---|---|---|---|---|---|---|
+| Discovery Cove Orlando | WoW | AOV | -23 | -33 | -3 | 4 |
+| Disneyland Resort Californ | 3D | CVR | -23 | 8 | 1 | -2 |
+| Kings Island Tickets | WoW | Take rate | -27 | -21 | 0 | -30 |
+| LEGOLAND Florida | WoW | CVR | -40 | 15 | 0 | -2 |
+| Six Flags Fiesta Texas Tic | WoW | CVR | -50 | 6 | 0 | -9 |
+| Star of Honolulu | WoW | CVR | -41 | -26 | 26 | 6 |
+| Statue of Liberty | WoW | CVR | -40 | 5 | -4 | 15 |
