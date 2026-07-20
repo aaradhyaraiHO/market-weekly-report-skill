@@ -10,9 +10,19 @@ to owners. Two principles run throughout:
 
 - **Monthly = state, Weekly = change.** The weekly report is tuned to catch *movement* (a swing
   this week), while still flagging chronic *states* (a CE bleeding for a month).
-- **All paid-marketing signals are scoped to paid Google Search only.** Revenue-per-click and its
-  drivers, the margin signal, and the ROI/spend columns all use paid Google-Search data — this is
-  a campaign-action report, not a full-funnel analysis.
+- **All paid-marketing signals are scoped to paid Google Search only**, sourced from
+  `ads_campaign_stats` — the same source as the Omni dashboards. Revenue-per-click and its drivers
+  (CVR·AOV·Completion·Take-rate), the margin signal, and the ROI/spend columns all use paid
+  Google-Search data. This is a campaign-action report, not a full-funnel analysis.
+- **Data-maturity handling.** The report is generated for the just-completed week, but paid
+  attribution (orders / revenue / completion) takes ~3 days to settle. So the **Fluctuations bucket
+  compares the *matured portion* of the report week against the same days a week earlier** (volume
+  floors pro-rated), while §1 headlines — on business predicted revenue, which settles instantly —
+  stay on the full report week. The 28-day ROI/spend context uses the last fully-matured week.
+- **Attribution caveat (read before acting).** Because paid signals use *Google Ads attribution*,
+  they occasionally diverge from order-truth — Google can credit fewer/more conversions than
+  actually occurred. A flagged down-swing is Google's attributed movement, not always a real
+  order decline. Cross-check a surprising flag against actual orders before cutting spend.
 
 A CE must be **active** to be considered: revenue or spend in at least 3 of the last 4 weeks.
 

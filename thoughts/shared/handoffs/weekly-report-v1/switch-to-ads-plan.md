@@ -1,5 +1,10 @@
 # Switch plan — Fluctuations metrics + qualifiers → ads_campaign_stats
 
+> **✅ SHIPPED (2026-07-20, commit 175f397).** Implemented as planned, plus the matured-window
+> maturity handling. See tuning-log Step 6 + cross-market-validation. CR/TR resolved via the
+> `attributed_value` pair (all-ads, reconciles). Decision: **accepted ads** (canonical Omni source);
+> attribution caveat documented in the sign-off spec.
+
 _Reverses the Step-4 fct_orders unification. Motivation: single-source, fresher data, and the
 canonical Omni definitions live on ads. Corrects the earlier "ads can't do completion" finding —
 CR is sane when paired as `attributed_value_completed ÷ attributed_value` (not ÷ gross_bookings)._
