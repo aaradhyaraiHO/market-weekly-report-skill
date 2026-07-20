@@ -169,13 +169,24 @@ def _monday(d: dt.date) -> dt.date:
 
 def latest_complete_week(today: dt.date | None = None) -> dt.date:
     """
-    Monday (week_start) of the most recent fully-complete week whose Sunday end
-    is at least MATURITY_DAYS in the past.
+    Monday (week_start) of the most recent COMPLETE week — i.e. the week that just
+    ended (its Sunday has passed). No maturity pushback: the report is generated for
+    the just-completed week. Data maturity is handled per-bucket where it matters
+    (the Fluctuations bucket runs on the matured portion; see build_snapshot). §1
+    headlines use business predicted revenue, which settles immediately.
     """
     today = today or dt.date.today()
-    # Monday of the week that just ended before today's week.
+    return _monday(today) - dt.timedelta(days=7)
+
+
+def latest_matured_week(today: dt.date | None = None) -> dt.date:
+    """
+    Monday of the most recent week whose Sunday end is >= MATURITY_DAYS in the past.
+    Used by the Fluctuations bucket for its 28-day ROI/spend context anchor and its
+    all-unsettled fallback — the paid-attribution windows that must be fully settled.
+    """
+    today = today or dt.date.today()
     candidate = _monday(today) - dt.timedelta(days=7)
-    # Push back until the Sunday end is >= MATURITY_DAYS matured.
     while (today - (candidate + dt.timedelta(days=6))).days < MATURITY_DAYS:
         candidate -= dt.timedelta(days=7)
     return candidate

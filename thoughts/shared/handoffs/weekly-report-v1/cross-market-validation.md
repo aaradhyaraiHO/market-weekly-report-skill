@@ -65,3 +65,28 @@ rows are unusual enough to sanity-check in the live report.
 NA/OC had 0. Expected behavior — the gate removes statistically unreliable CM1 baselines.
 
 **Verdict: Step-5 logic validated across all 3 pilot markets. Ship-ready pending Slack sign-off.**
+
+---
+
+## Round 2 — ads source + matured-window (2026-07-20, commit 175f397)
+
+Default run (report week = just-ended **2026-07-13→07-19**; §4 matured window **07-13→07-17, 5d** vs
+07-06→07-10, pro-rated floors). All-ads source. Assertions pass on all 3 (reconciliation, direction,
+floors, no immature-day leakage).
+
+| Market | §4 window | down | up |
+|---|---|---|---|
+| North America | 07-13→07-17 (5d) | 7 | 3 |
+| Italy | 07-13→07-17 (5d) | **14** ⚠ | 2 |
+| Oceania | 07-13→07-17 (5d) | 6 | 3 |
+
+**⚠ Italy = 14 down-swings** — >2× the ~5-6 target. Not a correctness issue (all reconcile), but worth
+a tuning look. Likely drivers: (a) the 5-day matured window is thinner/noisier on driver ratios,
+especially with pro-rated floors (~214 clicks / 7 orders) letting smaller CEs through; (b) ads
+attribution on a smaller market; (c) genuinely a rough IT week (many −40%+ CVR drops: Palazzo Vecchio,
+Matterhorn, Jungfraujoch…). **Recommend:** eyeball the IT §4 list before sign-off; if it's window-noise
+rather than real, the dial is either the pro-rated floor multiplier or a min-absolute floor on the
+partial window. NA/OC are on-target, so this is IT-specific, not a systemic over-fire.
+
+**Attribution caveat (all markets):** flags are Google-attributed movement; cross-check surprising
+ones against actual orders before acting (see New England Aquarium in the sign-off spec).

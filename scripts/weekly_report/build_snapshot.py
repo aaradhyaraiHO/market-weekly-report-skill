@@ -676,13 +676,11 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     daily_start = w0_start - dt.timedelta(days=40)
     d_ads = fetch.ce_daily_ads(market, daily_start, w0_end)
     d_biz = fetch.ce_daily_business(market, daily_start, w0_end)
-    d_paid_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)   # Google-Search ads (for clicks)
-    d_orders_g = fetch.ce_daily_orders_google(market, daily_start, w0_end)  # Google-Search order funnel (fct)
-    # Unified Google-Search funnel: fct orders/booked/completed/revenue + ads clicks (2026-07-20).
-    # One source for the RPC + CVR qualifiers, the driver decomposition, and the Step-3 gate.
-    d_funnel_g = d_orders_g.merge(d_paid_g[["combined_entity_id", "report_date", "clicks"]],
-                                  on=["combined_entity_id", "report_date"], how="outer")
-    for _c in ("orders", "booked", "completed", "revenue", "clicks"):
+    # Single-source Google-Search funnel from ads_campaign_stats (2026-07-20 switch): orders/booked/
+    # attr_value/attr_completed/revenue/clicks — feeds the RPC + CVR qualifiers, the driver
+    # decomposition (CVR·AOV·CR·TR), and the Step-3 gate. No fct_orders join.
+    d_funnel_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)
+    for _c in ("orders", "booked", "attr_value", "attr_completed", "revenue", "clicks"):
         d_funnel_g[_c] = pd.to_numeric(d_funnel_g[_c], errors="coerce").fillna(0.0)
     troas = fetch.troas_history(market, w0_start - dt.timedelta(days=config.TROAS_LOOKBACK_DAYS), w0_end)
 
@@ -1024,7 +1022,27 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
                 ce_ids, w0_start - dt.timedelta(days=28), w0_start, w0_end
             )
 
-    week_days = [w0_start + dt.timedelta(days=i) for i in range(7)]
+    # Fluctuations MATURITY LAG (2026-07-20): the CM1/RPC bucket runs on paid Google-Search
+    # attribution, which matures ~3 days (offline conversions/revenue land late). The rest of the
+    # report is generated for the just-completed week (business revenue matures instantly), but this
+    # bucket must NOT read its qualifiers/drivers off an unsettled week. So it uses the latest
+    # FULLY-MATURED week: flux_w0 = min(report W0, latest_complete_week). No-op when the report week
+    # is already matured; lags one week when the report is on a fresh (not-yet-settled) week.
+    today = dt.date.today()
+    mat_cutoff = min(w0_end, today - dt.timedelta(days=config.MATURITY_DAYS))
+    if mat_cutoff < w0_start:                 # whole report week unsettled → fall back to last full matured week
+        fallback = config.latest_matured_week(today)
+        flux_w0_start, mat_cutoff = fallback, fallback + dt.timedelta(days=6)
+    else:
+        flux_w0_start = w0_start
+    flux_week_days = [flux_w0_start + dt.timedelta(days=i)
+                      for i in range((mat_cutoff - flux_w0_start).days + 1)]
+    flux_n_days = len(flux_week_days)
+    flux_partial = mat_cutoff < (flux_w0_start + dt.timedelta(days=6))
+    flux_context_week = config.latest_matured_week(today)   # 28d ROI/spend context anchor (fully settled)
+    if flux_partial:
+        print(f"  [fluctuations] matured window {flux_w0_start}..{mat_cutoff} "
+              f"({flux_n_days}d; report-week tail unsettled) vs same span prior week")
     bucket1, diag = alerts.build_bucket1(
         ce_daily_ads=d_ads,
         ce_daily_business=d_biz,
@@ -1034,9 +1052,10 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         names=names,
         paid_contrib=paid_contrib_w0,
         troas=troas,
-        w0_start=w0_start,
-        wm1_start=wm1_start,
-        week_days=week_days,
+        w0_start=flux_w0_start,
+        wm1_start=flux_w0_start - dt.timedelta(days=7),
+        week_days=flux_week_days,
+        w0_end=mat_cutoff,
         availability_fetcher=avail_fetcher,
         shapley_by_ce={c["ce_id"]: c.get("shapley_wow") for c in ces},
     )
@@ -1102,6 +1121,16 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "market_slug": market_slug,   # render keys market-switcher tabs on this
             "week_start": config.iso(w0_start),
             "week_end": config.iso(w0_end),
+            # Fluctuations bucket analyzes the MATURED PORTION of the report week (paid attribution
+            # lags ~3d) vs the same span a week earlier; 28d ROI/spend context uses the last full
+            # matured week. fluctuation_partial=True means the report-week tail was excluded.
+            "fluctuation_window_start": config.iso(flux_w0_start),
+            "fluctuation_window_end": config.iso(mat_cutoff),
+            "fluctuation_compare_start": config.iso(flux_w0_start - dt.timedelta(days=7)),
+            "fluctuation_compare_end": config.iso(mat_cutoff - dt.timedelta(days=7)),
+            "fluctuation_context_week": config.iso(flux_context_week),
+            "fluctuation_days": flux_n_days,
+            "fluctuation_partial": flux_partial,
             "weeks": [config.iso(w) for w in weeks],
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "schema_version": config.SCHEMA_VERSION,

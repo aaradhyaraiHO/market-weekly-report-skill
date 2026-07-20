@@ -136,3 +136,28 @@ if abs((res["value_now"] - res["baseline"]) * conv_wk) < config.CM1_MIN_SWING_WK
 | Hawaii Luaus | cvr | WoW | CVR | -34 |
 
 Qualifier counts: cm1=5 · rpc-daily=8 · cvr-wow=3 · wow-collective=5 (3 overlap upstream) · cv-excluded=0 · gray-zone=2.
+
+## Step 6 — source → ads_campaign_stats + matured-window maturity (2026-07-20)
+Two coupled changes (commit 175f397):
+
+**Source switch (reverses Step 4).** The whole RPC decomposition + qualifiers now come single-source
+from `ads_campaign_stats` (canonical Omni defs), not fct_orders:
+`CVR=orders/clicks · AOV=booked/orders · CR=attr_completed/attr_value · TR=rev/(booked·CR)` →
+reconciles to RPC=rev/clicks. The Step-4 "ads completion >100%" was a denominator bug (paired
+`sum_attributed_value_completed` against `gross_bookings`, two attribution bases); the
+`attributed_value` PAIR is sane (~94% market, matches fct's ~93%). Excludes `account_name='Things To
+Do'`. **Attribution caveat:** ads = Google credit assignment, which can invert order-truth — e.g.
+New England Aquarium (matured week 07-06→12): ads-CVR −37% while actual fct orders +17%. Accepted
+(ads is the canonical Omni source), documented in the sign-off spec.
+
+**Maturity window.** The bucket no longer lags a full week. It analyzes the **matured portion** of the
+report week `[w0, last day ≥3d old]` vs the **same span a week earlier**, with volume floors
+**pro-rated** to the span (`×n_days/7`). §1 headlines stay on the full report week (business predicted
+revenue settles instantly). 28d ROI/spend context uses the last full matured week. No-op on fully-
+matured weeks. `latest_complete_week()` now returns the just-ended week; `latest_matured_week()` feeds
+§4's settled context.
+
+NA examples (today 2026-07-20):
+- default / `--week 2026-07-13` → report 07-13→07-19, §4 window **07-13→07-17 (5d)** vs 07-06→07-10.
+  down=7 current-week movers (Cruises-SF AOV −53 · 360 Chicago CVR −52 · One World Obs −50 · …).
+- `--week 2026-07-06` (matured) → §4 full 7d window, partial=False, down=8 (unchanged path).

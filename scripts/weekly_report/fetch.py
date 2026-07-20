@@ -797,6 +797,7 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
           AND report_date BETWEEN @start AND @end
           AND ad_platform = 'Google Ads'
           AND campaign_advertising_channel_type = 'SEARCH'
+          AND (account_name != 'Things To Do' OR account_name IS NULL)
 
     GROUP BY 1, 3
     """
@@ -837,22 +838,27 @@ def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.
 
 
 def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """Daily GOOGLE-SEARCH paid series for the RPC fluctuation signal (2026-07-17): paid-attributed
-    net revenue ÷ paid clicks — so an RPC drop is a Google-Search paid problem, not Bing / organic.
-    revenue = sum_conversion_value_offline_revenue; conversions = paid conversions (for the volume gate)."""
+    """Daily GOOGLE-SEARCH paid FUNNEL — single-source from ads_campaign_stats (2026-07-20 switch).
+    Carries every field the RPC decomposition needs so the funnel no longer joins fct_orders:
+        orders   = count_attributed_orders
+        booked   = sum_conversion_value_offline_gross_bookings
+        attr_value / attr_completed = sum_attributed_value / sum_attributed_value_completed
+        revenue  = sum_conversion_value_offline_revenue
+        clicks   = count_clicks
+    Canonical Omni decomposition (reconciles to paid RPC = revenue/clicks):
+        CVR = orders/clicks · AOV = booked/orders · CR = attr_completed/attr_value · TR = rev/(booked*CR)
+    CR uses the attributed_value PAIR (same attribution base) → sane ≤100%, unlike completed/booked.
+    Excludes the 'Things To Do' account (matches the canonical Omni query)."""
     sql = f"""
     SELECT
         campaign_target_combined_entity_id                        AS combined_entity_id,
         report_date,
+        SUM(count_attributed_orders)                              AS orders,
+        SUM(sum_conversion_value_offline_gross_bookings)          AS booked,
+        SUM(sum_attributed_value)                                 AS attr_value,
+        SUM(sum_attributed_value_completed)                       AS attr_completed,
         SUM(sum_conversion_value_offline_revenue)                 AS revenue,
-        SUM(sum_conversion_value_offline_gross_bookings)          AS gbv,
-        SUM(count_clicks)                                         AS clicks,
-        SUM(CASE
-            WHEN report_date >= '2025-09-01'
-                 AND count_conversions_offline_contribution_margin > 0
-                THEN count_conversions_offline_contribution_margin
-            ELSE count_conversions_online
-        END)                                                      AS conversions
+        SUM(count_clicks)                                         AS clicks
 
     FROM {config.ADS_STATS}
 
@@ -860,6 +866,7 @@ def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> 
           AND report_date BETWEEN @start AND @end
           AND ad_platform = 'Google Ads'
           AND campaign_advertising_channel_type = 'SEARCH'
+          AND (account_name != 'Things To Do' OR account_name IS NULL)
 
     GROUP BY 1, 2
     """
