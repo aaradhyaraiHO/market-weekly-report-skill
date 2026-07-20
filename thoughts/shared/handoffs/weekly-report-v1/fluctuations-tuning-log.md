@@ -79,3 +79,23 @@ Change in coverage: +Hawaii Luaus (fct-CVR drop the ads qualifier missed — fal
   - Six Flags Fiesta Texas Tickets (WoW, CVR)
   - Star of Honolulu (WoW, CVR)
   - Statue of Liberty (WoW, CVR)
+
+## Step 5 — weekly collective-impact qualifier + weekly floors + Google-only CM1
+NA 2026-07-06 · down-swings = 6 · up-swings = 8. Four changes, each checkpoint-validated (qualifier sets diffed vs live BQ after every edit):
+1. **wow_driver_alerts** (new 4th qualifier): the Step-3 single/multi red gate evaluated on WoW funnel drivers for EVERY active CE — closes the Kings-Island gap (weekly collective drops no longer gatekept by 3-day daily persistence). Emitted as rpc/wow, deduped after CM1 → RPC-daily → CVR-WoW. Down-only, and only when net WoW-RPC is actually negative (a lone red offset by positive drivers = mix shift; caught Cruises-SF at RPC +332% pre-fix).
+2. **MIN_ORDERS_WK = 10** on all weekly paths (cvr_drops, cvr_gray_zone, wow_driver_alerts), BOTH weeks — weekly analog of the daily min_conv_per_day=10. Kills Six Flags Fiesta Texas (5 orders W0) + LEGOLAND Florida (9 orders W0).
+3. **CM1/conv → Google-Search only** (dropped Bing from ce_daily_ads — last Google+Bing signal). ⚠ Shifts the 2026-06-29 reference: CM1 gate now reproduces 4/5 CEs (Arte Museum NY's swing was partly Bing) — re-baseline validate_na.
+4. **Daily engine: short-term trigger direction must match baseline dev** (SDLW/7d-WoW same sign as the 28d deviation). Zero behavioral change on 07-06 AND 06-29 — theoretical-hole closure only.
+
+Decision (Jul-20): **CM1/conv stays exempt from the Step-3 driver gate** — it's a margin-per-conversion signal the four RPC drivers don't decompose; on NA it contributes exactly 1 real down-swing (Disneyland). Known dial if CM1 rows ever bloat: tighten its own POF gates (min_conv_per_day / magnitude), not the driver gate.
+
+| CE | signal | alert | dominant | mag% |
+|---|---|---|---|---|
+| Kings Island Tickets | rpc (collective) | WoW | Take rate | -59 |
+| Discovery Cove Orlando | rpc (collective) | WoW | AOV | -48 |
+| Star of Honolulu | cvr | WoW | CVR | -41 |
+| Statue of Liberty | cvr | WoW | CVR | -40 |
+| Disneyland Resort California | cm1_per_conv | 3D | CVR | -39 |
+| Hawaii Luaus | cvr | WoW | CVR | -34 |
+
+Qualifier counts: cm1=5 · rpc-daily=8 · cvr-wow=3 · wow-collective=5 (3 overlap upstream) · cv-excluded=0 · gray-zone=2.
