@@ -119,8 +119,13 @@ def _ratio_alert(
             and (sm_dev > 0) == (dev > 0)   # smoothed swing in the same direction
 
         dev_ok = abs(dev) >= cfg["baseline_dev_threshold"]
-        short_ok = (pd.notna(sdlw) and abs(sdlw) >= cfg["sdlw_threshold"]) or (
+        # Short-term trigger must move the SAME WAY as the baseline deviation — a +20%
+        # baseline dev "confirmed" by a -25% SDLW is two contradictory signals, not one
+        # alert (2026-07-20; mirrors the smoothed-persistence direction check).
+        short_ok = (pd.notna(sdlw) and abs(sdlw) >= cfg["sdlw_threshold"]
+                    and (sdlw > 0) == (dev > 0)) or (
             pd.notna(roll_wow) and abs(roll_wow) >= cfg["roll7_wow_threshold"]
+            and (roll_wow > 0) == (dev > 0)
         )
 
         qualifies = dev_ok and short_ok and conv_ok and clicks_ok and persist_ok
