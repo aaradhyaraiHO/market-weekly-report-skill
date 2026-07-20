@@ -28,7 +28,7 @@ import os
 # --------------------------------------------------------------------------- #
 BQ_PROJECT = "headout-analytics"
 BQ_DATASET = "analytics_reporting"
-MAX_BYTES_BILLED = 40 * 1024 ** 3  # 40 GB cap per query (analytics-skill hygiene)
+MAX_BYTES_BILLED = 80 * 1024 ** 3  # 80 GB cap per query (SEA/CSEE-sized markets exceeded the old 40 GB; analytics-skill hygiene)
 
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
 ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.ads_campaign_stats`"
@@ -45,6 +45,14 @@ MARKETS = {
     "north_america": "North America",
     "italy": "Italy",
     "oceania": "Oceania",
+    # fan-out (2026-07-20) — business_market strings verified against combined_entity_stats
+    "france": "France",
+    "united_kingdom": "United Kingdom",
+    "iberia": "Iberia",
+    "csee": "CSEE",
+    "east_asia": "East Asia",
+    "sea": "South East Asia",
+    "uae": "United Arab Emirates",
 }
 
 # --------------------------------------------------------------------------- #
