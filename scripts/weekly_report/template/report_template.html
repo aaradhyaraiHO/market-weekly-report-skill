@@ -1021,8 +1021,9 @@ function renderFollowup(M){
   const mr = getMarketReview();
   const mrText = mr && mr.text ? mr.text : '';
   const mrWhen = mr && mr.updated ? 'saved '+new Date(mr.updated).toLocaleString() : 'not saved yet';
-  // §2 shows market-scoped cards only; scope==='ce' cards route into their CE drawer (see ceSlackContext).
-  const ctx = (M.market_review_context||[]).filter(c=>c.scope!=='ce');
+  // §2 shows the FULL digest — every card (market-scoped + CE-scoped) grouped by Risk/Tailwind/Context.
+  // CE-scoped cards ALSO route into their CE drawer (see ceSlackContext) — §2 is the single place to read all signal.
+  const ctx = (M.market_review_context||[]);
   // grouped Slack-signal design: Risk / Tailwind / Context sections, each a card of rows.
   // Uses the report's own tokens (var(--red/green/purps/amber)) + .chip classes for consistency.
   const CG=_SLK_CG;
