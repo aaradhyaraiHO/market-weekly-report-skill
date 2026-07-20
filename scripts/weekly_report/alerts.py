@@ -213,7 +213,8 @@ def _cvr_week_agg(funnel: pd.DataFrame, w0: dt.date, wm1: dt.date):
 
 def cvr_drops(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, dict]:
     """CEs whose GOOGLE-SEARCH CVR (orders ÷ clicks, order-grounded from fct_orders) fell > 30%
-    WoW with >= 300 Google-search clicks in W0 (2026-07-20 — matches the fct decomposition/gate)."""
+    WoW with >= 300 Google-search clicks AND >= 10 orders in both weeks (2026-07-20 —
+    matches the fct decomposition/gate; the orders floor mirrors the daily min_conv_per_day)."""
     out: dict[str, dict] = {}
     if ce_funnel is None or ce_funnel.empty:
         return out
@@ -221,6 +222,8 @@ def cvr_drops(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, d
     for ce_id, r in a.iterrows():
         clicks0 = float(r["clicks"])
         if clicks0 < config.CVR_MIN_CLICKS_WK or ce_id not in b.index:
+            continue
+        if float(r["orders"]) < config.MIN_ORDERS_WK or float(b.loc[ce_id, "orders"]) < config.MIN_ORDERS_WK:
             continue
         cvr0 = r["orders"] / clicks0 if clicks0 else np.nan
         clicks1 = float(b.loc[ce_id, "clicks"])
@@ -246,6 +249,8 @@ def cvr_gray_zone(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> int:
         clicks0 = float(r["clicks"])
         if clicks0 < config.CVR_MIN_CLICKS_WK or ce_id not in b.index:
             continue
+        if float(r["orders"]) < config.MIN_ORDERS_WK or float(b.loc[ce_id, "orders"]) < config.MIN_ORDERS_WK:
+            continue
         cvr0 = r["orders"] / clicks0 if clicks0 else np.nan
         clicks1 = float(b.loc[ce_id, "clicks"])
         cvr1 = b.loc[ce_id, "orders"] / clicks1 if clicks1 else np.nan
@@ -255,6 +260,103 @@ def cvr_gray_zone(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> int:
         if lo <= drop < hi:
             n += 1
     return n
+
+
+# --------------------------------------------------------------------------- #
+# Weekly driver-based collective-impact qualifier (Jul-19 model)
+# --------------------------------------------------------------------------- #
+from buckets import FX_RED_FLOOR, FX_SINGLE_MIN, FX_CVR_MIN, FX_COLLECTIVE_MIN
+
+
+def wow_driver_alerts(
+    funnel: pd.DataFrame, w0_start: dt.date,
+) -> dict[str, dict]:
+    """Weekly collective-impact qualifier: evaluates the Step-3 single/multi gate
+    on WoW drivers for EVERY active CE, so a Kings-Island-type weekly collective
+    drop qualifies directly — no daily 3-day persistence required.
+
+    Returns {ce_id: {direction, magnitude_pct, wow_drivers}} for qualifying CEs.
+    Only surfaces down-swings (the "collective impact" concept is about drops).
+    Minimum floors: ≥300 clicks in W0 (same as CVR WoW) + ≥10 orders in BOTH weeks
+    (the weekly analog of the daily engine's min_conv_per_day — ratios off <10
+    orders on either side are noise).
+    """
+    if funnel is None or funnel.empty:
+        return {}
+    df = funnel.copy()
+    df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
+    w0_end = w0_start + dt.timedelta(days=6)
+    wm1_start = w0_start - dt.timedelta(days=7)
+    wm1_end = w0_start - dt.timedelta(days=1)
+
+    def _agg(lo, hi):
+        m = df[[(lo <= d <= hi) for d in df["report_date"]]]
+        g = m.groupby(m["combined_entity_id"].astype(str)).agg(
+            orders=("orders", "sum"), clicks=("clicks", "sum"),
+            booked=("booked", "sum"), completed=("completed", "sum"),
+            revenue=("revenue", "sum"),
+        )
+        return g
+
+    w0 = _agg(w0_start, w0_end)
+    wm1 = _agg(wm1_start, wm1_end)
+    out: dict[str, dict] = {}
+
+    for ce_id in w0.index:
+        if ce_id not in wm1.index:
+            continue
+        r0, r1 = w0.loc[ce_id], wm1.loc[ce_id]
+        if float(r0["clicks"]) < config.CVR_MIN_CLICKS_WK:
+            continue
+        if float(r0["orders"]) < config.MIN_ORDERS_WK or float(r1["orders"]) < config.MIN_ORDERS_WK:
+            continue
+
+        def _drv(r):
+            clk, o, b, c, rev = (float(r[k]) for k in ("clicks", "orders", "booked", "completed", "revenue"))
+            return {"cvr": o / clk if clk else None,
+                    "aov": b / o if o else None,
+                    "cr": c / b if b else None,
+                    "tr": rev / c if c else None}
+
+        now, prev = _drv(r0), _drv(r1)
+        moves = {}
+        for k in ("cvr", "aov", "cr", "tr"):
+            n, p = now.get(k), prev.get(k)
+            moves[k] = round((n / p - 1) * 100) if (n is not None and p) else None
+
+        reds = {k: v for k, v in moves.items() if v is not None and v <= -FX_RED_FLOOR}
+        if not reds:
+            continue
+        if len(reds) == 1:
+            k = next(iter(reds))
+            if abs(reds[k]) < (FX_CVR_MIN if k == "cvr" else FX_SINGLE_MIN):
+                continue
+        else:
+            prod = 1.0
+            for k in ("cvr", "aov", "cr", "tr"):
+                p = moves.get(k)
+                if p is not None:
+                    prod *= (1 + p / 100.0)
+            if (prod - 1) * 100 > -FX_COLLECTIVE_MIN:
+                continue
+
+        rpc0 = float(r0["revenue"]) / float(r0["clicks"]) if float(r0["clicks"]) else 0
+        rpc1 = float(r1["revenue"]) / float(r1["clicks"]) if float(r1["clicks"]) else 0
+        mag = round((rpc0 / rpc1 - 1) * 100) if rpc1 else None
+        # Direction check: red driver(s) can be fully offset by positive drivers (mix shift,
+        # net RPC UP) — only a real net WoW RPC decline is a down-swing opportunity.
+        if mag is None or mag >= 0:
+            continue
+
+        out[str(ce_id)] = {
+            "direction": "down",
+            "magnitude_pct": mag,
+            "wow_drivers": moves,
+            "rpc_now": round(rpc0, 2) if rpc0 else None,
+            "rpc_prev": round(rpc1, 2) if rpc1 else None,
+        }
+
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -381,6 +483,9 @@ def build_bucket1(
 
     cvr_alerts = cvr_drops(ce_daily_funnel_google, w0_start, wm1_start)     # Google-Search orders CVR
     cvr_gray = cvr_gray_zone(ce_daily_funnel_google, w0_start, wm1_start)
+    # Weekly collective-impact qualifier (Jul-19 model): driver-based WoW gate for every active CE,
+    # so weekly multi-driver drops (e.g. Kings Island) qualify without daily 3-day persistence.
+    wow_alerts = wow_driver_alerts(ce_daily_funnel_google, w0_start)
     bid = bid_changes(troas, w0_start)
 
     # Weekly W0 spend/revenue lookups.
@@ -388,7 +493,7 @@ def build_bucket1(
     biz_w0 = ce_weekly[ce_weekly["week"] == w0_start].set_index("combined_entity_id")
 
     # Availability enrichment for the union of flagged CEs.
-    flagged = set(cm1_alerts) | set(rpc_alerts) | set(cvr_alerts)
+    flagged = set(cm1_alerts) | set(rpc_alerts) | set(cvr_alerts) | set(wow_alerts)
     avail_map: dict[str, dict] = {}
     if availability_fetcher and flagged:
         av = availability_fetcher(sorted(flagged))
@@ -492,6 +597,20 @@ def build_bucket1(
             "cv": None,
         }
         _emit(ce_id, "cvr", synth, "wow", {"clicks_wk": res["clicks_wk"]})
+    for ce_id, res in wow_alerts.items():
+        if ce_id in cm1_alerts or ce_id in rpc_alerts or ce_id in cvr_alerts:
+            continue
+        synth = {
+            "direction": "down",
+            "magnitude_pct": res["magnitude_pct"],
+            "value_now": res.get("rpc_now"),
+            "baseline": res.get("rpc_prev"),
+            "sdlw_pct": None,
+            "wow_pct": res["magnitude_pct"],
+            "persistence_days": None,
+            "cv": None,
+        }
+        _emit(ce_id, "rpc", synth, "wow", {"wow_drivers": res["wow_drivers"]})
 
     # Sort: down-swings first (risk), then by |magnitude| desc.
     rows.sort(key=lambda r: (r["direction"] != "down", -abs(r["magnitude_pct"] or 0)))
@@ -502,6 +621,7 @@ def build_bucket1(
         "cm1_conv_directions": {names.get(c, c): cm1_alerts[c]["direction"] for c in cm1_alerts},
         "rpc_alert_count": len(rpc_alerts),
         "cvr_alert_count": len(cvr_alerts),
+        "wow_driver_alert_count": len(wow_alerts),
         "cv_excluded_count": len(cv_excluded),
         "cv_excluded_ces": sorted(names.get(c, c) for c in cv_excluded),
         "cvr_gray_zone_count": cvr_gray,   # P2.3: near-miss CVR drops (just short of 30%)

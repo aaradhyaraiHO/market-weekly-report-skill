@@ -95,6 +95,9 @@ POF = dict(
 # --------------------------------------------------------------------------- #
 CVR_WOW_DROP_THRESHOLD = 0.30   # CVR drop > 30% WoW
 CVR_MIN_CLICKS_WK = 300         # >= 300 clicks/wk floor
+MIN_ORDERS_WK = 10              # >= 10 orders in BOTH weeks for the weekly (WoW) paths —
+                                # the weekly analog of the daily engine's min_conv_per_day=10;
+                                # a ratio off <10 orders on either side is noise (2026-07-20)
 
 # --------------------------------------------------------------------------- #
 # Gray-zone (P2.3) — near-miss band around bucket triggers
