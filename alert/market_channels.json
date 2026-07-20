@@ -1,0 +1,13 @@
+{
+  "_note": "market_slug → Slack channel ID. NA/Italy verified real; others on the test channel until resolved + bot invited.",
+  "_test_channel": "C0B6U94PGJ0",
+  "_verified": {
+    "north_america": "#mkt-usa (CNSHDD2H1)",
+    "italy": "#mkt-italy-switzerland-malta (C045L2WQ79P)"
+  },
+  "markets": {
+    "north_america": "CNSHDD2H1",
+    "italy": "C045L2WQ79P",
+    "oceania": "C0B6U94PGJ0"
+  }
+}

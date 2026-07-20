@@ -90,6 +90,32 @@ cards resolve to the right threads, and any `scope:'ce'` cards land in their CE'
 to confirm the "Slack context" section); **§4** Defend/Compound/Lifecycle bucket membership; **§6** prepurchase.
 For non-NA markets sanity-check headline W0 revenue vs Omni. Report the HTML path.
 
+### S5 · Slack revenue alert (dry-run → USER posts)
+Turn the report into a per-market Slack alert with the `alert/` bundle. Two top-level messages:
+**MSG 1** = summary (headline + 6 WoW metrics + Top-5 drops/gains) with threads for the 3 §4 tables
+(Losing Money · RPC Fluctuations ↓ · ↑, read from the report JSON); **MSG 2** = movers with a per-CE
+**BigQuery, user-based** revenue diagnosis thread (matches Omni — exactly like the monthly alert).
+Run the 3-step flow **per market** (loop the slugs present in the report):
+
+```bash
+cd <repo>/alert
+# 1) summary + 3 tables from the report JSON (stdlib only) — prints RCA_CE_IDS / WEEK, also in payload._rca
+python3 weekly_alert.py --file <weekly-report.html> --market-slug <slug> --out payload.json
+# 2) per-CE user-based RCA blocks (BigQuery; needs ADC on headout-analytics)
+python3 weekly_rca_helper.py --ce-ids "<RCA_CE_IDS>" --week-start <s> --week-end <e> --out rca_blocks.json
+# 3) render — DRY-RUN first (no token needed), then hand the USER the live command
+python3 post_message.py --payload payload.json --rca-blocks rca_blocks.json --dry-run
+```
+
+- **Losing Money table sources `buckets_final.defend.losing_money`** (the §4 bucket, Google-only) —
+  NOT the legacy `bucket_b1` block — so the alert matches the report.
+- Channel from `alert/market_channels.json[markets][<slug>]` (NA/Italy verified real; others on the
+  test channel `C0B6U94PGJ0` until resolved + bot invited).
+- **Never auto-send.** Live posts need `REVENUE_ALERT_SLACK_TOKEN` (xoxb, ask the alert owner —
+  intentionally not in the bundle) and are handed to the user:
+  `! post_message.py --payload payload.json --rca-blocks rca_blocks.json --channel <REAL id>`
+- See `alert/README.md` for the full spec + a one-hook loop-all-markets wrapper.
+
 ## What the report contains
 - **§1 Market headlines** — revenue verdict + dual-clock (raw vs LY-seasonal) header; **top movers**
   ranked by the bigger of 4-wk-trend / raw-WoW, each with a lens label + a seasonal tag
