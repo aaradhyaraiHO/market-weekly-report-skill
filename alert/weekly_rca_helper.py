@@ -55,7 +55,7 @@ OMNI_DASHBOARD_URL = "https://headout.omniapp.co/dashboards/5368ab53"
 
 # Cap every query at 10 GB (analytics-skill requirement) and label it so it's
 # identifiable in BQ audit logs / the billing dashboard.
-MAX_BYTES_BILLED = 40 * 1024 ** 3   # ~10-22GB actual for ~10 CEs (Italy's larger CE set hit the old 20GB cap); headroom for popular CEs/LY windows
+MAX_BYTES_BILLED = 80 * 1024 ** 3   # 80GB — large markets (SEA) exceeded 40GB on ~10-CE RCA
 JOB_LABELS = {"source": "analytics_skill", "alert": "weekly_wow_rca"}
 
 # Thick, unmistakable separator between stacked CE replies in a bucket thread.
