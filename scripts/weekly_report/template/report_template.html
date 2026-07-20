@@ -49,11 +49,18 @@ body{
 .tab.active{background:var(--purps);color:#fff;border-color:var(--purps);font-weight:700;box-shadow:0 4px 14px rgba(128,0,255,.28)}
 .tab .trev{opacity:.85;margin-left:9px;font-size:12px;font-weight:600}
 
-section{margin-top:44px}
+section{margin-top:44px;scroll-margin-top:52px}
 .sec-head{display:flex;align-items:baseline;gap:13px;border-bottom:1.5px solid var(--rule-dark);padding-bottom:8px;margin-bottom:17px}
 .sec-num{font-family:var(--sans);font-size:12px;font-weight:700;color:#fff;background:var(--purps);padding:3px 10px;border-radius:7px;letter-spacing:.02em}
 .sec-head h2{font-family:var(--disp);font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink-head)}
 .sec-head .sub{font-family:var(--sans);font-size:11.5px;font-weight:500;color:var(--ink-faint);margin-left:auto;text-align:right}
+/* jumplinks nav — slides in on scroll */
+.jumpnav{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--rule);padding:7px 32px;display:flex;gap:5px;flex-wrap:nowrap;align-items:center;justify-content:center;transform:translateY(-100%);opacity:0;transition:transform .25s ease,opacity .2s ease;pointer-events:none}
+.jumpnav.visible{transform:translateY(0);opacity:1;pointer-events:auto}
+.jumpnav a{font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:4px 11px;border-radius:999px;border:1px solid var(--rule-dark);background:#fff;color:var(--ink-soft);text-decoration:none;white-space:nowrap;transition:all .12s}
+.jumpnav a:hover{color:var(--purps);border-color:var(--purps)}
+.jumpnav a.active{background:var(--purps);color:#fff;border-color:var(--purps)}
+.jumpnav .sep{width:1px;height:14px;background:var(--rule-dark);margin:0 1px;flex-shrink:0}
 /* collapsible section (§2) — explicit Show/Hide button, collapsed by default */
 .sec-btn{font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.02em;margin-left:14px;padding:6px 15px;
   border-radius:999px;border:1.5px solid var(--purps);background:var(--purps);color:#fff;cursor:pointer;white-space:nowrap;
@@ -128,6 +135,25 @@ thead th[title]{cursor:help}
 tr.lm-waste td{background:var(--red-bg)}
 .lm-howto{font-size:12px;color:var(--ink-soft);background:var(--paper-deep);border:1px solid var(--rule);border-radius:10px;padding:9px 14px;margin:0 0 8px;line-height:1.6}
 .lm-howto b{color:var(--ink)}
+/* bucket collapsible */
+.bkt-wrap{margin-top:36px;scroll-margin-top:52px}
+.bkt-head{display:flex;align-items:center;gap:10px;border:0;padding-bottom:6px;border-bottom:1.5px solid var(--rule-dark);margin-bottom:0;cursor:pointer;user-select:none}
+.bkt-head:hover h2{color:var(--purps)}
+.bkt-icon{font-size:16px;flex-shrink:0}
+.bkt-head h2{font-family:var(--disp);font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--ink-head);margin:0}
+.bkt-head .bkt-stat{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--purps);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+.bkt-head .bkt-val{font-family:var(--disp);font-size:15px;font-weight:800;color:var(--ink);margin-left:4px;text-transform:none;letter-spacing:0}
+.bkt-head .bkt-sub{font-family:var(--sans);font-size:11.5px;font-weight:500;color:var(--ink-faint);white-space:nowrap}
+.bkt-head .bkt-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.bkt-head .bkt-caret{font-size:11px;color:var(--purps);transition:transform .2s;display:inline-block}
+.bkt-collapsed .bkt-caret{transform:rotate(-90deg)}
+.bkt-collapsed .bkt-body{display:none}
+.bkt-collapsed .bkt-head{border-bottom-style:dashed;margin-bottom:0}
+.bkt-body{padding-top:10px}
+.bkt-head .bkt-info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--paper-deep);border:1px solid var(--rule-dark);color:var(--ink-faint);font-size:10px;font-weight:700;cursor:help;flex-shrink:0}
+.bkt-tooltip{position:relative;display:inline-block}
+.bkt-tooltip .bkt-tip{visibility:hidden;opacity:0;position:absolute;z-index:60;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:380px;font-family:var(--sans);font-size:11.5px;font-weight:500;line-height:1.55;color:var(--ink);background:#fff;border:1px solid var(--rule-dark);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow-lg);transition:opacity .15s;pointer-events:none}
+.bkt-tooltip:hover .bkt-tip{visibility:visible;opacity:1}
 .lm-legend{font-size:11px;color:var(--ink-faint);margin:0 0 12px}
 .lm-legend .chip{margin-right:2px}
 /* Fluctuations — highlight the root-cause driver cell */
@@ -572,19 +598,64 @@ function historyFor(ceId){
 // "has a note this week" — drives the ● dot in the CE table.
 function hasComment(ceId){ const n=noteFor(ceId); return !!(n && n.note && n.note.trim()); }
 
-// Losing Money action dropdown (Pause / Scale down / Intentional) — local-only, per market+week.
-function wrActionKey(){ return 'wr_action::'+slugKey()+'::'+curWeek(); }
-function wrGetActions(){ try{ return JSON.parse(localStorage.getItem(wrActionKey())||'{}'); }catch(e){ return {}; } }
-function wrGetAction(ceId){ return wrGetActions()[String(ceId)]||''; }
-function wrSetAction(ceId,val){ const m=wrGetActions(); if(val){ m[String(ceId)]=val; } else { delete m[String(ceId)]; }
-  try{ localStorage.setItem(wrActionKey(), JSON.stringify(m)); }catch(e){} }
-
-// Fluctuations review — per-row action + free-text note (local-only, per market+week). kind ∈ act|note.
-function wrFxKey(kind){ return 'wr_fx'+kind+'::'+slugKey()+'::'+curWeek(); }
-function wrFxGet(kind){ try{ return JSON.parse(localStorage.getItem(wrFxKey(kind))||'{}'); }catch(e){ return {}; } }
-function wrFxGetOne(kind,ceId){ return wrFxGet(kind)[String(ceId)]||''; }
-function wrFxSet(kind,ceId,val){ const m=wrFxGet(kind); if(val){ m[String(ceId)]=val; } else { delete m[String(ceId)]; }
-  try{ localStorage.setItem(wrFxKey(kind), JSON.stringify(m)); }catch(e){} }
+// ── Bucket actions (per-CE-per-week-per-bucket, localStorage cache + Sheet sync) ──
+// actionsData[slug][bucket::ceId] = {checkbox, note, status, owner, updated}
+let actionsData = {};
+function actionCacheKey(){ return 'wr_actions::'+slugKey()+'::'+curWeek(); }
+function loadActionCache(){ try{ actionsData[slugKey()]=JSON.parse(localStorage.getItem(actionCacheKey())||'{}'); }catch(e){ actionsData[slugKey()]={}; } }
+function saveActionCache(){ try{ localStorage.setItem(actionCacheKey(), JSON.stringify(actionsData[slugKey()]||{})); }catch(e){} }
+function actionK(bucket,ceId){ return bucket+'::'+String(ceId); }
+function getAction(bucket,ceId){ return (actionsData[slugKey()]||{})[actionK(bucket,ceId)]||{}; }
+function putAction(bucket,ceId,patch){
+  const s=slugKey(); actionsData[s]=actionsData[s]||{};
+  actionsData[s][actionK(bucket,ceId)]=Object.assign(actionsData[s][actionK(bucket,ceId)]||{},patch,{updated:new Date().toISOString()});
+  saveActionCache();
+}
+function actionEmpty(a){ return !a.checkbox && !a.status && !(a.note&&a.note.trim()); }
+function saveAction(ceId,bucket,patch){
+  const cur=getAction(bucket,ceId);
+  const merged=Object.assign({},cur,patch,{owner:patch.owner||getAuthor(),updated:new Date().toISOString()});
+  if(actionEmpty(merged)){
+    const s=slugKey(); if(actionsData[s]) delete actionsData[s][actionK(bucket,ceId)];
+    saveActionCache();
+    if(!SYNC_OK) return Promise.resolve();
+    const dp=new URLSearchParams({action:'action_delete',market_slug:MARKETS[mi].meta.market_slug,
+      ce_id:String(ceId),week_start:curWeek(),bucket:bucket});
+    return fetch(NOTES_URL+'?'+dp.toString(),{redirect:'follow'}).then(r=>r.json()).catch(()=>{});
+  }
+  putAction(bucket,ceId,merged);
+  if(!SYNC_OK) return Promise.resolve();
+  const params=new URLSearchParams({
+    action:'action_upsert',market_slug:MARKETS[mi].meta.market_slug,
+    ce_id:String(ceId),week_start:curWeek(),bucket:bucket,
+    checkbox:merged.checkbox?'true':'',note:merged.note||'',
+    status:merged.status||'',owner:merged.owner||getAuthor()
+  });
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'}).then(r=>r.json()).catch(()=>{});
+}
+function actionSyncPull(){
+  loadActionCache();
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi];
+  return fetch(NOTES_URL+'?action=action_list&market='+encodeURIComponent(M.meta.market_slug)+'&week='+encodeURIComponent(curWeek()),{redirect:'follow'})
+    .then(r=>r.json())
+    .then(data=>{
+      const s=M.meta.market_slug; actionsData[s]={};
+      (data.actions||[]).forEach(a=>{
+        if(!a.ce_id||!a.bucket) return;
+        actionsData[s][actionK(a.bucket,a.ce_id)]={
+          checkbox:a.checkbox==='true',note:a.note||'',status:a.status||'',
+          owner:a.owner||'',updated:a.updated||''
+        };
+      });
+      saveActionCache();
+    })
+    .catch(()=>{});
+}
+function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
+function wrSetAction(ceId,val){ saveAction(ceId,'losing_money',{status:val}); }
+function wrFxChk(bucket,ceId,checked){ saveAction(ceId,bucket,{checkbox:checked}); }
+function wrFxNote(bucket,ceId,val){ saveAction(ceId,bucket,{note:val}); }
 
 function putLocal(ceId, patch){
   const slug=slugKey(); notesData[slug]=notesData[slug]||{};
@@ -1554,19 +1625,35 @@ function _causeChip(t){
   const c = t==='unexplained' ? 'red' : t==='input-induced' ? 'ghost' : t==='supply-linked' ? 'amber' : 'green';
   return '<span class="chip '+c+'">'+esc(t)+'</span>';
 }
-function _bucketBlock(tag, title, sub, body){
-  return '<div style="margin-top:20px"><div class="sec-head" style="border:0">'+
-    '<span class="sec-num" style="background:var(--ink)">'+tag+'</span><h2 style="font-size:19px">'+title+'</h2>'+
-    '<span class="sub">'+sub+'</span></div>'+body+'</div>';
+let _bktIdCnt={};
+function _bucketBlock(tag, title, shortSub, body, opts){
+  opts=opts||{};
+  let slug=title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+$/,'');
+  _bktIdCnt[slug]=(_bktIdCnt[slug]||0)+1;
+  const id='bkt-'+slug+(_bktIdCnt[slug]>1?'-'+(_bktIdCnt[slug]-1):'');
+  const statHtml=opts.stat?'<span class="bkt-stat">'+opts.stat+'</span>':'';
+  const valHtml=opts.val?'<span class="bkt-val">'+opts.val+'</span>':'';
+  const subHtml=opts.detail?'<span class="bkt-sub">'+opts.detail+'</span>':'';
+  const tipHtml=opts.fullSub?'<span class="bkt-tooltip"><span class="bkt-info">?</span><span class="bkt-tip">'+opts.fullSub+'</span></span>':'';
+  const cls=opts.collapsed?'bkt-wrap bkt-collapsed':'bkt-wrap';
+  return '<div class="'+cls+'" id="'+id+'">'+
+    '<div class="bkt-head" onclick="this.parentElement.classList.toggle(\'bkt-collapsed\')">'+
+    '<span class="bkt-icon">'+tag+'</span><h2>'+title+'</h2>'+tipHtml+
+    '<div class="bkt-right">'+statHtml+valHtml+subHtml+'<span class="bkt-caret">▾</span></div></div>'+
+    '<div class="bkt-body">'+body+'</div></div>';
 }
-// "How to read" banner — same style as Losing Money, on every bucket table
 function _howto(t){ return '<div class="lm-howto"><b>How to read:</b> '+t+'</div>'; }
+function _driverSummary(items){
+  const ct={};items.forEach(r=>{const k=r.dominant_key||'other';ct[k]=(ct[k]||0)+1;});
+  return Object.entries(ct).sort((a,b)=>b[1]-a[1]).map(([k,n])=>n+' '+k.replace(/_/g,' ')).join(' · ');
+}
 function _tbl(head, bodyRows){
   return '<div class="tablewrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+bodyRows+'</tbody></table></div>';
 }
 
 // SECTION 4 — Diagnostic buckets (B1 ROI/CM2 · B2 CM1/Conv · B3 Losing Ground · B4 Scale)
 function renderBuckets(M){
+  _bktIdCnt={};
   const BF=M.buckets_final||{};
   const D=BF.defend||{}, C=BF.compound||{}, L=BF.lifecycle||{};
   const LM=D.losing_money||{}, bleeders=LM.bleeders||[], recovered=LM.recovered||[], fullWaste=LM.full_waste||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{};
@@ -1649,7 +1736,7 @@ function renderBuckets(M){
     '<th class="num" title="Clicks — neutral: volume is not good or bad on a bleeder. Δ vs the prior-4-week average.">Clicks <span class="lm-hb">Δ4w</span></th>'+
     '<th class="num" title="Take rate (net revenue ÷ completed GBV). Δ vs the prior-4-week average.">TR% <span class="lm-hb">Δ4w</span></th>'+
     '<th title="Weekly CM2 (CM1 − spend) over 12 weeks; dashed line = breakeven. Hover a point for its value.">CM2 trend 12w <span class="lm-hb">ⓘ</span></th>'+
-    '<th title="Your call: Pause / Scale down / Intentional. Saved locally per week.">Action</th>';
+    '<th title="Your call: Pause / Scale down / Intentional. Saved per week.">Action</th>';
   const lmRow=(r,cls,statusCell,ceSub)=>'<tr class="cerow'+(cls?' '+cls:'')+'" data-ce="'+esc(r.ce_id)+'">'+
       '<td class="ce stick">'+lmCEcell(r)+(ceSub||'')+'</td>'+
       '<td>'+statusCell+'</td>'+
@@ -1677,8 +1764,7 @@ function renderBuckets(M){
         ? '<span class="chip green">Recovering</span><div class="idbr" style="margin-top:2px">CM2 +'+r.cm2_improve_pct+'% vs prior 3wk</div>'
         : lmStatus(r.status)+'<div class="idbr" style="margin-top:2px">'+(r.weeks||0)+'w bleeding</div>';
       return lmRow(r,'',statusCell); }).join('');
-    lmBody=cbar(fullWaste.length+bleeders.length,'Total CM2 bleed/wk · Google Search only',fmtMoneyDelta(lmTotal),'neg',lmReason)+
-      lmHowto+lmLegend+_tbl(lmHead, wasteRows+bleedRows);
+    lmBody=lmHowto+lmLegend+_tbl(lmHead, wasteRows+bleedRows);
   }
   let lmFn='';
   if(recovered.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--green)"><b>✅ '+recovered.length+' recovered:</b> '+recovered.map(r=>esc(r.ce_name)+' ('+fmtPct(r.roi,0)+', was bleeding '+r.was_bleeding_wks+'w)').join(' · ')+'</div>'; }
@@ -1691,11 +1777,10 @@ function renderBuckets(M){
   // Alert label = WoW or 3D (why it fired). 28d ROI + 28d spend always on. Clicks = context only.
   const fxAlert=t=>'<span class="chip '+(t==='3D'?'violet':'ghost')+'" title="'+(t==='3D'?'qualified on a 3-day pattern vs 28-day baseline':'qualified week-over-week')+'">'+esc(t||'')+'</span>';
   const fxDrv=(r,key,val,delta,o)=>{ const cell=lmVD(val,delta,o); return (r.dominant_key===key)?'<div class="fxdom">'+cell+'</div>':cell; };
-  // reviewer: a checkbox to confirm seasonality + a roomy note, persisted locally
-  const fxAction=r=>{ const c=(wrFxGetOne('act',r.ce_id)==='seasonality'), n=wrFxGetOne('note',r.ce_id);
+  const fxAction=(r,bucket)=>{ bucket=bucket||'flux_down'; const a=getAction(bucket,r.ce_id), c=!!a.checkbox, n=a.note||'';
     return '<label class="fx-chk" onclick="event.stopPropagation()"><input type="checkbox"'+(c?' checked':'')+
-        ' onchange="wrFxSet(\'act\',\''+esc(r.ce_id)+'\',this.checked?\'seasonality\':\'\')"> confirm seasonality</label>'+
-      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxSet(\'note\',\''+esc(r.ce_id)+'\',this.value)">'+esc(n)+'</textarea>'; };
+        ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked)"> confirm seasonality</label>'+
+      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value)">'+esc(n)+'</textarea>'; };
   // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
   const fluxHead='<th class="stick">Combined Entity</th>'+
     '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
@@ -1707,8 +1792,8 @@ function renderBuckets(M){
     '<th class="num" title="Take rate = net revenue ÷ completed GBV (Google-Search orders, from fct_orders). Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
     '<th class="num" title="Paid Google-Search clicks — context only, never a qualifier. Shown so a CVR drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
     '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
-    '<th title="Your call: tick to confirm seasonality, add a note. Saved locally per week.">Action</th>';
-  const fluxRows=items=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+    '<th title="Your call: tick to confirm seasonality, add a note. Saved per week.">Action</th>';
+  const fluxRows=(items,bucket)=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
     '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+
     '<td>'+fxAlert(r.alert_type)+'</td>'+
     '<td class="num"><div class="lmv">'+fmtPct(r.roi_4w,0)+'</div>'+(r.roi_4w_d==null?'':'<div class="lmd '+(r.roi_4w_d<0?"gn":"gp")+'">'+(r.roi_4w_d>0?"+":MINUS)+Math.abs(r.roi_4w_d)+'pp</div>')+'</td>'+
@@ -1719,19 +1804,18 @@ function renderBuckets(M){
     '<td class="num">'+fxDrv(r,'tr',r.tr,r.tr_d,{good:1,dp:0,suf:'%'})+'</td>'+
     '<td class="num">'+lmVD(r.clicks,r.clicks_d,{good:0})+'</td>'+
     '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
-    '<td>'+fxAction(r)+'</td>'+
+    '<td>'+fxAction(r,bucket)+'</td>'+
     '</tr>').join('');
   const fluxHowto=_howto('All <b>paid Google-Search</b> (orders from fct_orders). Paid RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> = current scale &amp; efficiency, Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
-  const seasDnBody=seasDn.length?(fluxHowto+fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>';
-  const seasUpBody=seasUp.length?(fluxHowto+fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No revenue-quality spikes this week.</div>';
+  const seasDnBody=seasDn.length?(fluxHowto+_tbl(fluxHead,fluxRows(seasDn,'flux_down'))):'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>';
+  const seasUpBody=seasUp.length?(fluxHowto+_tbl(fluxHead,fluxRows(seasUp,'flux_up'))):'<div class="emptystate">No revenue-quality spikes this week.</div>';
 
   // COMPOUND - Scale-Up — clean value(Δ) layout + cohort bar + dual spark
   let scaleBody;
   if(!scale.length){ scaleBody='<div class="emptystate">No CEs clearing ROI ≥155% (≥3-of-4 wk).</div>'; }
   else{
     const scTotal=scale.reduce((s,r)=>s+(+r.est_incremental_wk||0),0), nSeas=scale.filter(r=>r.seasonality_flag).length;
-    scaleBody=cbar(scale.length,'Est incremental/wk',fmtMoneyDelta(scTotal),'pos',(nSeas?nSeas+' seasonality-flagged':'all structural'))+
-      _tbl('<th class="stick">Combined Entity</th><th class="num">Paid ROI 4w</th><th class="num">vs tROAS</th><th class="num">Est +/wk</th><th class="num">Spend 4w</th><th>RPC</th><th class="num">CVR</th><th>Rev &rsquo;26 v &rsquo;25</th>',
+    scaleBody=_tbl('<th class="stick">Combined Entity</th><th class="num">Paid ROI 4w</th><th class="num">vs tROAS</th><th class="num">Est +/wk</th><th class="num">Spend 4w</th><th>RPC</th><th class="num">CVR</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       scale.map(r=>{ const flag=r.seasonality_flag?' '+chip('green','seas↑'):'';
         const rvc=(r.rpc_vs_cat!=null)?dsub(fmtDelta(r.rpc_vs_cat,0)+' cat'):'';
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
@@ -1752,7 +1836,6 @@ function renderBuckets(M){
   else{
     const nGrad=newCes.filter(r=>r.lane==='A_graduated').length, nPace=newCes.filter(r=>r.lane==='B_on_pace').length;
     newBody=_howto('CEs that just crossed <b>Pro+</b> for the first time in 4 quarters (graduated), or are on pace to. <b>Run-rate/mo</b> vs the Pro line and <b>Δ Rev WoW</b> show whether they&rsquo;re still climbing.')+
-      cbar(newCes.length,'New Pro+',nGrad,'',(nPace+' on pace to Pro'))+
       _tbl('<th class="stick">Combined Entity</th><th>Lane</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Paid ROI</th><th class="num">Δ Rev WoW</th><th class="num">Clicks</th><th class="num">RPC</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       newCes.map(r=>{ const ln=newLane[r.lane]||[r.lane,'ghost'];
         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
@@ -1774,7 +1857,6 @@ function renderBuckets(M){
   else{
     const nIt=iters.filter(r=>r.lane==='iteration').length, nUn=iters.filter(r=>r.lane==='untapped').length, nNew=iters.filter(r=>r.new_this_week).length;
     itBody=_howto('Non-graduated CEs (<b>never Pro+</b>). <b>Iteration</b> = team is on it — the Reason says what&rsquo;s stuck (waiting for takeoff · needs inputs · manual check). <b>Untapped</b> = real scale, nobody working it. Clicks/CVR pooled over 4 weeks; <b>new</b> = handed over in the last 2 weeks.')+
-      cbar(iters.length,'Iteration / Untapped',nIt+' / '+nUn,'',(nNew?'<b>'+nNew+' new this week</b> · ':'')+'never Pro+')+
       _tbl('<th class="stick">Combined Entity</th><th>Reason</th><th>Band</th><th class="num" title="Months since the CE first paid Google-Ads click (earliest report_date with clicks over 0, Google Ads only). NOT the Headout launch/creation date — understates age for CEs that ran on Bing or grew organically first.">Mo since launch ⓘ</th><th class="num">Run-rate/mo</th><th class="num">Clicks 4w</th><th class="num">CVR 4w</th><th>MMP handover</th><th>Rev &rsquo;26 v &rsquo;25</th>',
       iters.map(r=>{ const t=r.traction||{};
         const cvrCls=(r.cvr_4w!=null&&r.cvr_cat_med!=null)?(r.cvr_4w<r.cvr_cat_med?'neg':'pos'):'';
@@ -1789,14 +1871,32 @@ function renderBuckets(M){
           '<td>'+dualSpark(r.ce_id)+'</td></tr>'; }).join(''));
   }
 
+  // bucket header stats
+  const lmCount=fullWaste.length+bleeders.length;
+  const lmBleed=bleeders.concat(fullWaste).reduce((s,r)=>s+(+r.cm2_bleed_wk||0),0);
+  const sdCount=seasDn.length, suCount=seasUp.length;
+  const sdDrivers=_driverSummary(seasDn), suDrivers=_driverSummary(seasUp);
+  const nGradH=newCes.filter(r=>r.lane==='A_graduated').length, nPaceH=newCes.filter(r=>r.lane==='B_on_pace').length;
+  const nItH=iters.filter(r=>r.lane==='iteration').length, nUnH=iters.filter(r=>r.lane==='untapped').length;
+
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
-    _bucketBlock('🛡️','Losing Money','Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked worst-first by 4-week CM2 bled; full-waste (spend, 0 conversions) on top.', lmBody+lmFn)+
-    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.', seasDnBody)+
+    _bucketBlock('🛡️','Losing Money','ROI &lt; 100% on &gt; $1k spend (4wk), ranked worst-first.', lmBody+lmFn, {
+      stat:lmCount+' CEs', val:fmtMoneyDelta(lmBleed)+'/wk',
+      fullSub:'Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked worst-first by 4-week CM2 bled; full-waste (spend, 0 conversions) on top.'})+
+    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs 28-day baseline. Google Search only.', seasDnBody, {
+      stat:sdCount+' flagged', detail:sdDrivers?('root driver: '+sdDrivers):'',
+      fullSub:'RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+
     /* Scale-Up table hidden from report (2026-07-17) — engine still computes C.scale_up */
-    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Same decomposition, upside — RPC rose vs its 28-day baseline. Verify it is real (not a one-off), then lean spend in.', seasUpBody)+
-    _bucketBlock('🌱','New CEs','Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.', newBody)+
-    _bucketBlock('🌱','Iteration / Untapped','Non-graduated CEs (never Pro+). Iteration (team is on it) diagnoses why it is stuck — waiting for takeoff (low clicks) · needs inputs (CVR below category) · manual check. Untapped = real scale, nobody working it. Clicks/CVR pooled over 4 weeks; NEW = handover in the last 2 weeks.', itBody)+
+    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','RPC rose vs 28-day baseline. Verify real, then lean in.', seasUpBody, {
+      stat:suCount+' flagged', detail:suDrivers?('root driver: '+suDrivers):'',
+      fullSub:'Same decomposition, upside — RPC rose vs its 28-day baseline. Verify it is real (not a one-off), then lean spend in.'})+
+    _bucketBlock('🌱','New CEs','Just crossed Pro+ or on pace to. Tomorrow’s Heroes.', newBody, {
+      stat:newCes.length+' CEs', detail:nGradH+' graduated · '+nPaceH+' on pace',
+      fullSub:'Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.'})+
+    _bucketBlock('🌱','Iteration / Untapped','Non-graduated CEs (never Pro+). Stuck or unworked.', itBody, {
+      stat:iters.length+' CEs', detail:nItH+' iteration · '+nUnH+' untapped', collapsed:true,
+      fullSub:'Non-graduated CEs (never Pro+). Iteration (team is on it) diagnoses why it is stuck — waiting for takeoff (low clicks) · needs inputs (CVR below category) · manual check. Untapped = real scale, nobody working it.'})+
     '</section>';
 }
 
@@ -1906,7 +2006,8 @@ function renderLevers(M){
           '<td class="num">'+(r.net_roi==null?'—':r.net_roi+'%')+'</td>'+
           '<td class="num">'+(r.cvr==null?'—':((r.cvr.toFixed?r.cvr.toFixed(1):r.cvr)+'% <span class="'+sgn(r.cvr_wow)+'">'+fmtDelta(r.cvr_wow)+'</span>'))+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
-      '<div class="sub" style="margin-top:4px">Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry (amber = behind pace). Net ROI = (CM1 − realized loss) ÷ cost, where realized loss = loss on dated tickets expiring unsold this month (not the full at-risk stock). CVR/Net ROI blank = CE has no paid activity this week. No verdict — reviewer decides.</div>';
+      '<details style="margin-top:6px"><summary style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-faint);cursor:pointer">Source &amp; definitions ▸</summary>'+
+      '<div class="sub" style="margin-top:4px">Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry (amber = behind pace). Net ROI = (CM1 − realized loss) ÷ cost, where realized loss = loss on dated tickets expiring unsold this month (not the full at-risk stock). CVR/Net ROI blank = CE has no paid activity this week. No verdict — reviewer decides.</div></details>';
   }
 
   return '<section id="s6"><div class="sec-head"><span class="sec-num">6</span><h2>Levers visibility</h2>'+
@@ -2591,10 +2692,22 @@ function renderMeta(){
     'CM1 = offline contribution margin · ROI = CM1/spend · YoY weekday-aligned (−364d) · data ≥3 days matured. '+
     'Nulls render “—” (organic CEs have no paid ROI/CVR), never 0. Comments persist locally per market×CE.';
 }
+function renderJumpnav(){
+  const links=[
+    ['#s1','Headlines'],['#s2','Digest'],['#s3','All CEs'],
+    ['#s4','Buckets','sep'],
+    ['#bkt-losing-money','Losing $'],['#bkt-cm1-rpc-fluctuations','Flux ↓'],
+    ['#bkt-cm1-rpc-fluctuations-1','Flux ↑'],['#bkt-new-ces','New'],['#bkt-iteration-untapped','Iter/Untap'],
+    ['#s5','Seasonality','sep'],['#s6','Levers']
+  ];
+  return '<nav class="jumpnav" id="jumpnav">'+links.map(l=>
+    (l[2]==='sep'?'<span class="sep"></span>':'')+
+    '<a href="'+l[0]+'">'+l[1]+'</a>').join('')+'</nav>';
+}
 function renderApp(){
   const M=MARKETS[mi];
   document.getElementById('app').innerHTML=
-    renderHead(M)+renderFollowup(M)+renderAllCE(M)+renderBuckets(M)+renderSeasonality(M)+renderLevers(M);
+    renderJumpnav()+renderHead(M)+renderFollowup(M)+renderAllCE(M)+renderBuckets(M)+renderSeasonality(M)+renderLevers(M);
   paintCETable();
   renderViewChips();       // (1) saved views bar
   refreshGroupList();      // (2) custom-group builder list
@@ -2606,6 +2719,7 @@ function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   state.rule=lsGet('rule','');   // restore last-used highlight rule for this market
   renderTabs(); renderMeta(); renderApp(); window.scrollTo(0,0);
   syncPull();   // load this market's notes (cache first, then sheet)
+  actionSyncPull();
 }
 
 // delegated events
@@ -2726,10 +2840,35 @@ document.getElementById('app').addEventListener('change',e=>{
   }
 });
 
+// jumpnav — appear on scroll past masthead, highlight active section
+function wireJumpnav(){
+  const nav=document.getElementById('jumpnav'); if(!nav) return;
+  const mast=document.querySelector('.masthead');
+  if(mast){
+    const showObs=new IntersectionObserver(([en])=>{
+      nav.classList.toggle('visible',!en.isIntersecting);
+    },{threshold:0});
+    showObs.observe(mast);
+  }
+  const links=[...nav.querySelectorAll('a')];
+  const targets=links.map(a=>{const id=a.getAttribute('href').slice(1);return document.getElementById(id);}).filter(Boolean);
+  if(!targets.length) return;
+  const io=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const a=links.find(l=>l.getAttribute('href')==='#'+en.target.id);
+      if(a){if(en.isIntersecting)a.classList.add('active');else a.classList.remove('active');}
+    });
+  },{rootMargin:'-48px 0px -70% 0px',threshold:0});
+  targets.forEach(t=>io.observe(t));
+}
+
 // boot
 state.rule=lsGet('rule','');   // restore last-used highlight rule for the first market
+loadActionCache();
 renderTabs(); renderMeta(); renderApp();
+wireJumpnav();
 syncPull();
+actionSyncPull();
 </script>
 </body>
 </html>
