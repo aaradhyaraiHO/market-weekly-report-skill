@@ -1002,10 +1002,10 @@ function ceSlackContext(ceId){
 }
 
 function renderFollowup(M){
-  const rows = M.followup||[];
+  const rows = []; // follow-up disabled until GM notes wiring (next week)
   let fuBody;
   if(!rows.length){
-    fuBody='<div class="emptystate">Nothing flagged last week to follow up on. <b>Clean slate ✅</b></div>';
+    fuBody='<div class="emptystate">Follow-up will be wired from next week &mdash; tracking flags from your GM notes and prior-week actions.</div>';
   } else {
     fuBody='<div class="tablewrap"><table><thead><tr>'+
       '<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>'+
