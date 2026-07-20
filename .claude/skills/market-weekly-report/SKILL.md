@@ -33,6 +33,18 @@ Pipeline: `scripts/weekly_report/weekly_market_report.py` (orchestrator) → `bu
 
 ## Workflow
 
+**Full run (all markets), end-to-end** — the sequence proven for the weekly go-live:
+1. **S2** `weekly_market_report.py all --week <W>` — builds + renders every market in `config.MARKETS`.
+2. **S3** fan out **one digest agent per market** (parallel) to curate its Slack sidecar **and** return
+   the market team; then re-run `build_snapshot.py` per market (loads the sidecar) + `render.py`.
+3. **S4** QA a couple of reports.
+4. **S4.5** `publish_weekly all --week <W>` → stage the Ledger matrix; then the USER runs `vercel deploy`.
+5. **S5** loop the alert per market (`weekly_alert → weekly_rca_helper → post_message`), dry-run → post.
+
+S3 (curation) and S5 (post) are the only non-deterministic / human-gated steps; everything else is a
+plain script. Big markets (CSEE/SEA) can exceed BQ byte caps — `config.MAX_BYTES_BILLED` (build) and
+`weekly_rca_helper.MAX_BYTES_BILLED` (RCA) are both 80 GB.
+
 ### S1 · Resolve market(s) + week
 Slug or `all`. Omitted week → `config.latest_complete_week()` (most recent complete week whose
 Sunday end is ≥3 days matured). A non-Monday date → the Monday of that ISO week.
@@ -90,6 +102,19 @@ cards resolve to the right threads, and any `scope:'ce'` cards land in their CE'
 to confirm the "Slack context" section); **§4** Defend/Compound/Lifecycle bucket membership; **§6** prepurchase.
 For non-NA markets sanity-check headline W0 revenue vs Omni. Report the HTML path.
 
+### S4.5 · Publish + deploy the Ledger
+Stage the trailing-6-week matrix into the Vercel Ledger, then go live:
+```bash
+cd <repo>/scripts/weekly_report && python3 publish_weekly.py all --week <W>   # → ~/analytics/market-notebook-v2/
+```
+This rewrites `weekly.html` + `weekly-report-{slug}.html` + `weekly_state.json`, rolling the current
+column to `<W>` (local files only — nothing live yet). Then the **USER** deploys (interactive auth):
+```bash
+! vercel deploy --prod --cwd market-notebook-v2   # from ~/analytics
+```
+Do this **before** S5 so the alert's "→ weekly report" link resolves to the just-published week (else
+the ping is for `<W>` but the linked report shows the previous week). Live at `market-notebook.vercel.app/weekly`.
+
 ### S5 · Slack revenue alert (dry-run → USER posts)
 Turn the report into a per-market Slack alert with the `alert/` bundle. Two top-level messages:
 **MSG 1** = summary (headline + 6 WoW metrics + Top-5 drops/gains) with threads for the 3 §4 tables
@@ -109,8 +134,14 @@ python3 post_message.py --payload payload.json --rca-blocks rca_blocks.json --dr
 
 - **Losing Money table sources `buckets_final.defend.losing_money`** (the §4 bucket, Google-only) —
   NOT the legacy `bucket_b1` block — so the alert matches the report.
-- Channel from `alert/market_channels.json[markets][<slug>]` (NA/Italy verified real; others on the
-  test channel `C0B6U94PGJ0` until resolved + bot invited).
+- **Market greeting:** MSG1 opens `Hello team @<market> <flag>` (`weekly_alert.MARKET_TEAM`), mirroring
+  the monthly alert. ⚠ `@handle` text in a Block Kit block is **cosmetic** (does not notify); a real
+  team notification needs a `<!subteam^ID>` mention, which needs `usergroups:read` on the token —
+  run `resolve_market_usergroups.py` once that scope is added, then swap `MARKET_TEAM` to subteam IDs.
+- **Editing a posted alert never notifies** — `update_posts_weekly.py` edits parents + bucket threads
+  in place (no re-ping); to notify on a change, repost or add a thread reply.
+- Channel from `alert/market_channels.json[markets][<slug>]` — all 10 real channels set + bot is a
+  member (east_asia/sea/uae point at #mkt-japan/#mkt-singapore/#mkt-mena, narrower than the full market).
 - **Never auto-send.** Live posts need `REVENUE_ALERT_SLACK_TOKEN` (xoxb, ask the alert owner —
   intentionally not in the bundle) and are handed to the user:
   `! post_message.py --payload payload.json --rca-blocks rca_blocks.json --channel <REAL id>`
