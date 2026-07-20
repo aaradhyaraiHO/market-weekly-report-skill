@@ -39,16 +39,24 @@ different lenses on the same CE — a CE can appear in both because they answer 
 
 ### DEFEND — protect revenue at risk
 
-**1. Losing Money** (chronic state — 4-week loss). Funded CEs (>$1,000 paid spend over 4 weeks),
-classified first-match-wins:
-- **Full waste** — spend but zero paid conversions in 4 weeks (pure loss).
-- **Paused** — was funded across the window, spend stopped this week (confirm intentional).
-- **Tracking gap** — spending but ROI didn't compute (data-feed gap, verify — not waste).
-- **Bleeder** — ROI < 100% and net 4-week margin loss ≥ $200. Sub-tagged New / Chronic (6+ wks) /
-  Escalating (ROI cliffed >30pts).
-- **Recovering** — still bleeding but the weekly loss has at least halved vs the prior 3 weeks
-  (sorted to the bottom).
+**1. Losing Money** (chronic state — 4-week loss). Funded CEs (>$1,000 paid spend over 4 weeks) that
+aren't earning it back. Each gets one **Status** (the table's Status column), checked first-match-wins
+— the Status tells you *why* it's flagged and *what to do*:
+
+- **Full waste** — spent money but got *zero* paid conversions in 4 weeks. Total loss. → Pause first.
+- **Paused** — was funded across the window, but spend is $0 *this week*. ROI reads blank (no spend to
+  divide by). It's already stopped. → Confirm the pause was intentional.
+- **Tracking gap** — *is* spending this week, but ROI wouldn't compute (current-week margin data didn't
+  populate). A data-feed issue, *not* waste — the CE may be fine. → Verify tracking before acting.
+- **Bleeder** — the core case: ROI < 100% and a material 4-week loss (≥ $200). Severity sub-tag:
+  *New* (1st week) · *"3w/4w…"* (weeks bleeding) · *Chronic* (≥6 weeks) · *Escalating* (ROI just fell
+  >30 points week-over-week — getting worse fast). → Pause or scale down (guideline below).
+- **Recovering** — still bleeding, but the weekly loss has *at least halved* vs the prior 3 weeks.
+  Climbing out. → Hold, don't cut. (Sorted to the bottom.)
 - Small bleeders (<$1k spend) roll into a single summary line.
+
+*Action guideline for a bleeder 3–4 weeks in with no recovery:* New CE → pause if ROI <30%; Existing CE
+→ pause if ROI <70%; otherwise scale down within the week.
 
 **2. Fluctuations ↓** (this-week revenue-quality drop). A CE qualifies via **any** detector, then
 must clear the gate:
