@@ -119,19 +119,27 @@ TROAS_FALLBACK_PCT = 135.0      # spend-weighted tROAS fallback where none set
 # --------------------------------------------------------------------------- #
 # NA validation references  (master plan; revenue on ACTUALS basis)
 # --------------------------------------------------------------------------- #
+# Re-baselined 2026-07-20 for the GOOGLE-ONLY CM1/conv scope decision (Jul-19).
+# Original plan reference was 5 CEs on the Google+Bing basis. Arte Museum NY was
+# a borderline alert (CM1/conv ~30 vs a ~20% baseline deviation); its value is
+# nearly identical Google-only (30.4) vs blended (29.7) — Bing is only 7 of 92
+# conversions — but removing Bing from its 28d baseline pushes the deviation just
+# under the ≥20% gate. Correct reclassification under the narrower paid-Google
+# scope, not a masked regression. Gated fields (cm1 alerts, cv_excluded) are now
+# Google-only truth; no_bid/revenue below stay as the original Google+Bing-era
+# plan anchors (informational — validate_na does not gate on them).
 VALIDATION_NA = {
     "week_start": "2026-06-29",
-    "market_revenue_actuals": 615432,   # sum_revenue basis (plan reference)
-    "no_bid_campaigns": 57,
-    "no_bid_spend": 21705,
-    "cm1_conv_alerts": [
+    "market_revenue_actuals": 615432,   # sum_revenue basis (plan reference, informational)
+    "no_bid_campaigns": 57,             # original plan anchor (informational, not gated)
+    "no_bid_spend": 21705,              # original plan anchor (informational, not gated)
+    "cm1_conv_alerts": [                # GOOGLE-ONLY basis (2026-07-20 re-baseline)
         "High Roller",
         "Edge NYC",
         "Universal Studios Hollywood",
         "American Museum of Natural History",
-        "Arte Museum New York",
     ],
-    "cm1_conv_alert_count": 5,
+    "cm1_conv_alert_count": 4,
     "cv_excluded": 0,
 }
 
