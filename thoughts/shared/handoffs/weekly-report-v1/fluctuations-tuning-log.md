@@ -104,14 +104,27 @@ different gate — coherent, not asymmetric-by-accident.
 
 **The one real (latent) gap — materiality, NOT the driver gate.** CM1's POF gate checks *statistical*
 abnormality + *volume*, but has **no $-materiality floor** — so the theoretical risk is a
-statistically-real-but-financially-trivial CM1 alert. Not biting today: the single CM1 down-row is
-**Disneyland — CM1/conv $50→$31/conv, 6-day persistent, $5.9K/wk spend** — large, sustained, expensive
-(textbook margin erosion, correctly surfaced).
+statistically-real-but-financially-trivial CM1 alert. **Quantified on NA (margin-$ at stake =
+|ΔCM1/conv| × conv/wk):** Kennedy Space Center +$27.5K · High Roller +$4.1K · Cruises-SF +$2.7K ·
+Disneyland −$2.7K · Canada's Wonderland +$2.0K. **Smallest = ~$2K/wk — none trivial.** That's not luck:
+the **volume gate does the materiality work implicitly** (≥10 conv/day ≈ 70+/wk × NA's healthy $22–136
+CM1/conv baselines floors the $-swing at a couple thousand a week).
 
-**Correct future dial if CM1 rows ever bloat:** add a **margin-materiality floor to CM1's OWN engine**
-(min CM1-$ swing or min spend/wk) — the margin-world analog of what the collective-impact check does for
-RPC. Do **not** force CM1 through the RPC driver gate. Documented-only for now (no code) — no evidence
-it's needed, and an unused threshold is complexity the report hasn't earned.
+**When the gap actually bites:** a **high-volume + low-margin** CE — e.g. 70 conv/wk at $10 CM1/conv
+swinging 40% = a statistically-real alert worth only ~$280/wk (conv-count gate passes it, materiality
+doesn't). Absent on NA; possible in another market/week.
+
+**Trigger to add the floor (precise, not "someday"):** the first time ANY market surfaces a CM1 alert
+below ~$500/wk margin swing. Until then it's documented-only — a floor that drops nothing is pure
+downside (miscalibration silently kills real alerts). Drop-in when needed — a **$-swing floor, not a
+spend floor** (the thing at risk is margin dollars), on CM1's OWN engine, NOT the RPC driver gate:
+```python
+# config.py
+CM1_MIN_SWING_WK = 500.0   # min |ΔCM1/conv × conv_wk| — margin-$ materiality floor
+# alerts.py, in the cm1_alerts loop:
+if abs((res["value_now"] - res["baseline"]) * conv_wk) < config.CM1_MIN_SWING_WK:
+    continue
+```
 
 | CE | signal | alert | dominant | mag% |
 |---|---|---|---|---|
