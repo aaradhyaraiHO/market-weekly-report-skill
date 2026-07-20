@@ -237,7 +237,7 @@ def losing_money(ces, b1, cat_rpc):
             "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
 
 
-def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
+def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
     """Revenue-quality drops — RPC decomposed into its four multiplicative drivers so the
     reader sees WHICH one moved, not the composite. Qualifiers unchanged (upstream in
     alerts.py: WoW or 3-day daily); this only reshapes the display (2026-07-17 spec).
@@ -266,6 +266,11 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr):
         ce = ce_by.get(r["ce_id"])
         if not ce or not _active(ce): continue            # existing CEs only
         wk = ce.get("weekly") or []
+        # Maturity lag: analyze the bucket on the matured week — drop any weekly entries after
+        # flux_w0 so w0/wm1 and the 28d windows end on settled data (2026-07-20). No-op when
+        # flux_w0 == report week (nothing to drop).
+        if flux_w0:
+            wk = [w for w in wk if (w.get("week") or "") <= flux_w0]
         w0 = wk[-1] if wk else {}
         wm1 = wk[-2] if len(wk) >= 2 else {}
         d = r.get("direction")
@@ -634,7 +639,11 @@ def build_buckets(snap):
     fl = _rows(snap.get("bucket1_fluctuations"))
     mw = snap.get("market_summary", {}).get("weekly", [])
     cat_rpc, cat_cvr = _cat_benchmarks(ces)
-    seas = seasonality(fl, ces, cat_rpc, cat_cvr)
+    # Fluctuations drivers/qualifiers run on the matured PORTION of the report week (upstream in
+    # alerts.py). The 28d ROI/spend CONTEXT columns here use the last full matured week so they
+    # aren't contaminated by the unsettled current week (2026-07-20).
+    flux_ctx = (snap.get("meta") or {}).get("fluctuation_context_week")
+    seas = seasonality(fl, ces, cat_rpc, cat_cvr, flux_w0=flux_ctx)
     mmp = _mmp_map(snap)
     prior_pp = _prior_proplus_map(snap)
     launch = _launch_map(snap)

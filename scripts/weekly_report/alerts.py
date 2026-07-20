@@ -206,29 +206,42 @@ def bid_changes(troas: pd.DataFrame, w0_start: dt.date) -> dict[str, dict]:
 # --------------------------------------------------------------------------- #
 # CVR WoW drop signal (weekly)
 # --------------------------------------------------------------------------- #
-def _cvr_week_agg(funnel: pd.DataFrame, w0: dt.date, wm1: dt.date):
-    """Per-CE Google-Search CVR = Σorders ÷ Σclicks over W0 and W-1 weeks, from the funnel."""
+def _mat_floors(n_days: int) -> tuple[float, float]:
+    """Volume floors pro-rated to a partial (matured) window of n_days (2026-07-20). The 300-clicks
+    / 10-orders floors were calibrated for a full 7-day week; on a matured-partial window we scale
+    them by n_days/7 so sensitivity is preserved rather than stealth-tightened."""
+    f = max(1, n_days) / 7.0
+    return config.CVR_MIN_CLICKS_WK * f, config.MIN_ORDERS_WK * f
+
+
+def _cvr_week_agg(funnel: pd.DataFrame, w0: dt.date, wm1: dt.date, w0_end: dt.date):
+    """Per-CE Google-Search CVR = Σorders ÷ Σclicks over the matured W0 span [w0, w0_end] and the
+    same-length prior span [wm1, w0_end−7], from the funnel. w0_end is the last MATURED day of the
+    report week (may be < the Sunday) — so both spans cover the same weekdays (2026-07-20)."""
     df = funnel.copy()
     df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
     def agg(lo, hi):
         m = df[[(lo <= d <= hi) for d in df["report_date"]]]
         return m.groupby(m["combined_entity_id"].astype(str))[["orders", "clicks"]].sum()
-    return agg(w0, w0 + dt.timedelta(days=6)), agg(wm1, wm1 + dt.timedelta(days=6))
+    wm1_end = w0_end - dt.timedelta(days=7)
+    return agg(w0, w0_end), agg(wm1, wm1_end)
 
 
-def cvr_drops(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, dict]:
-    """CEs whose GOOGLE-SEARCH CVR (orders ÷ clicks, order-grounded from fct_orders) fell > 30%
-    WoW with >= 300 Google-search clicks AND >= 10 orders in both weeks (2026-07-20 —
-    matches the fct decomposition/gate; the orders floor mirrors the daily min_conv_per_day)."""
+def cvr_drops(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date, w0_end: dt.date) -> dict[str, dict]:
+    """CEs whose GOOGLE-SEARCH CVR (orders ÷ clicks) fell > 30% over the matured span [w0, w0_end]
+    vs the same-length prior span, with clicks/orders above the PRO-RATED floors in both spans
+    (2026-07-20 — matured-partial-week comparison; floors scaled to the window length)."""
     out: dict[str, dict] = {}
     if ce_funnel is None or ce_funnel.empty:
         return out
-    a, b = _cvr_week_agg(ce_funnel, w0, wm1)
+    n_days = (w0_end - w0).days + 1
+    clk_floor, ord_floor = _mat_floors(n_days)
+    a, b = _cvr_week_agg(ce_funnel, w0, wm1, w0_end)
     for ce_id, r in a.iterrows():
         clicks0 = float(r["clicks"])
-        if clicks0 < config.CVR_MIN_CLICKS_WK or ce_id not in b.index:
+        if clicks0 < clk_floor or ce_id not in b.index:
             continue
-        if float(r["orders"]) < config.MIN_ORDERS_WK or float(b.loc[ce_id, "orders"]) < config.MIN_ORDERS_WK:
+        if float(r["orders"]) < ord_floor or float(b.loc[ce_id, "orders"]) < ord_floor:
             continue
         cvr0 = r["orders"] / clicks0 if clicks0 else np.nan
         clicks1 = float(b.loc[ce_id, "clicks"])
@@ -242,19 +255,21 @@ def cvr_drops(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> dict[str, d
     return out
 
 
-def cvr_gray_zone(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date) -> int:
+def cvr_gray_zone(ce_funnel: pd.DataFrame, w0: dt.date, wm1: dt.date, w0_end: dt.date) -> int:
     """Near-miss Google-Search CVR WoW drops (within GRAY_ZONE_PP of the 30% trigger)."""
     if ce_funnel is None or ce_funnel.empty:
         return 0
     lo = config.CVR_WOW_DROP_THRESHOLD - config.GRAY_ZONE_PP / 100.0
     hi = config.CVR_WOW_DROP_THRESHOLD
     n = 0
-    a, b = _cvr_week_agg(ce_funnel, w0, wm1)
+    n_days = (w0_end - w0).days + 1
+    clk_floor, ord_floor = _mat_floors(n_days)
+    a, b = _cvr_week_agg(ce_funnel, w0, wm1, w0_end)
     for ce_id, r in a.iterrows():
         clicks0 = float(r["clicks"])
-        if clicks0 < config.CVR_MIN_CLICKS_WK or ce_id not in b.index:
+        if clicks0 < clk_floor or ce_id not in b.index:
             continue
-        if float(r["orders"]) < config.MIN_ORDERS_WK or float(b.loc[ce_id, "orders"]) < config.MIN_ORDERS_WK:
+        if float(r["orders"]) < ord_floor or float(b.loc[ce_id, "orders"]) < ord_floor:
             continue
         cvr0 = r["orders"] / clicks0 if clicks0 else np.nan
         clicks1 = float(b.loc[ce_id, "clicks"])
@@ -274,32 +289,32 @@ from buckets import FX_RED_FLOOR, FX_SINGLE_MIN, FX_CVR_MIN, FX_COLLECTIVE_MIN
 
 
 def wow_driver_alerts(
-    funnel: pd.DataFrame, w0_start: dt.date,
+    funnel: pd.DataFrame, w0_start: dt.date, w0_end: dt.date,
 ) -> dict[str, dict]:
     """Weekly collective-impact qualifier: evaluates the Step-3 single/multi gate
     on WoW drivers for EVERY active CE, so a Kings-Island-type weekly collective
     drop qualifies directly — no daily 3-day persistence required.
 
+    Runs on the MATURED span [w0_start, w0_end] vs the same-length prior span (2026-07-20).
     Returns {ce_id: {direction, magnitude_pct, wow_drivers}} for qualifying CEs.
     Only surfaces down-swings (the "collective impact" concept is about drops).
-    Minimum floors: ≥300 clicks in W0 (same as CVR WoW) + ≥10 orders in BOTH weeks
-    (the weekly analog of the daily engine's min_conv_per_day — ratios off <10
-    orders on either side are noise).
+    Floors are PRO-RATED to the span length: ≥300 clicks in W0 + ≥10 orders both spans, ×(n_days/7).
     """
     if funnel is None or funnel.empty:
         return {}
     df = funnel.copy()
     df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
-    w0_end = w0_start + dt.timedelta(days=6)
     wm1_start = w0_start - dt.timedelta(days=7)
-    wm1_end = w0_start - dt.timedelta(days=1)
+    wm1_end = w0_end - dt.timedelta(days=7)
+    n_days = (w0_end - w0_start).days + 1
+    clk_floor, ord_floor = _mat_floors(n_days)
 
     def _agg(lo, hi):
         m = df[[(lo <= d <= hi) for d in df["report_date"]]]
         g = m.groupby(m["combined_entity_id"].astype(str)).agg(
             orders=("orders", "sum"), clicks=("clicks", "sum"),
-            booked=("booked", "sum"), completed=("completed", "sum"),
-            revenue=("revenue", "sum"),
+            booked=("booked", "sum"), attr_value=("attr_value", "sum"),
+            attr_completed=("attr_completed", "sum"), revenue=("revenue", "sum"),
         )
         return g
 
@@ -311,17 +326,20 @@ def wow_driver_alerts(
         if ce_id not in wm1.index:
             continue
         r0, r1 = w0.loc[ce_id], wm1.loc[ce_id]
-        if float(r0["clicks"]) < config.CVR_MIN_CLICKS_WK:
+        if float(r0["clicks"]) < clk_floor:
             continue
-        if float(r0["orders"]) < config.MIN_ORDERS_WK or float(r1["orders"]) < config.MIN_ORDERS_WK:
+        if float(r0["orders"]) < ord_floor or float(r1["orders"]) < ord_floor:
             continue
 
         def _drv(r):
-            clk, o, b, c, rev = (float(r[k]) for k in ("clicks", "orders", "booked", "completed", "revenue"))
+            # Canonical ads decomposition: CR = attr_completed/attr_value, TR = rev/(booked*CR).
+            clk, o, b = (float(r[k]) for k in ("clicks", "orders", "booked"))
+            av, avc, rev = (float(r[k]) for k in ("attr_value", "attr_completed", "revenue"))
+            cr = avc / av if av else None
             return {"cvr": o / clk if clk else None,
                     "aov": b / o if o else None,
-                    "cr": c / b if b else None,
-                    "tr": rev / c if c else None}
+                    "cr": cr,
+                    "tr": rev / (b * cr) if (b and cr) else None}
 
         now, prev = _drv(r0), _drv(r1)
         moves = {}
@@ -388,18 +406,19 @@ def _swing_driver(shap: dict | None) -> dict | None:
     }
 
 
-def _driver_windows(funnel_df: pd.DataFrame, ce_id: str, week_days: list[dt.date]) -> dict | None:
+def _driver_windows(funnel_df: pd.DataFrame, ce_id: str, week_days: list[dt.date],
+                    w0_start: dt.date, w0_end: dt.date) -> dict | None:
     """Paid GOOGLE-SEARCH RPC drivers, POOLED (Σ/Σ) so they reconcile to paid RPC exactly:
-        RPC = CVR × AOV × CR × TR
-        CVR = orders/clicks · AOV = booked/orders · CR = completed/booked · TR = revenue/completed
-    Single unified Google-Search funnel frame: fct orders/booked/completed/revenue + ads clicks
-    (2026-07-20). Order-grounded, so Completion is real & sane. Returns {'wow':{...}, '3d':{...}}:
-    WoW = W0 week vs prior week; 3D = last 3 days vs 28-day baseline (excl last 3). Each → {v, pct}."""
+        RPC = CVR × AOV × CR × TR   (ads: CVR=orders/clicks · AOV=booked/orders ·
+        CR=attr_completed/attr_value · TR=rev/(booked·CR))
+    Returns {'wow':{...}, '3d':{...}}: WoW = the MATURED span [w0_start, w0_end] vs the same-length
+    prior span [w0_start−7, w0_end−7]; 3D = last 3 matured days vs 28-day baseline. Each → {v, pct}.
+    The WoW span matches the qualifiers exactly (matured-partial-week, 2026-07-20)."""
     o = funnel_df[funnel_df["combined_entity_id"].astype(str) == str(ce_id)].copy() if funnel_df is not None else None
     if o is None or o.empty:
         return None
     o = o.set_index("report_date").sort_index()
-    for col in ("orders", "booked", "completed", "revenue", "clicks"):
+    for col in ("orders", "booked", "attr_value", "attr_completed", "revenue", "clicks"):
         if col in o:
             o[col] = pd.to_numeric(o[col], errors="coerce").fillna(0.0)
     days = [x for x in week_days if x in set(o.index)]
@@ -409,12 +428,19 @@ def _driver_windows(funnel_df: pd.DataFrame, ce_id: str, week_days: list[dt.date
     def _osum(col, lo, hi):
         return float(o[col][[(lo <= x <= hi) for x in o.index]].sum()) if col in o else 0.0
     def _drivers(lo, hi):
+        # Canonical Omni decomposition, all ads_campaign_stats (2026-07-20):
+        #   CVR = orders/clicks · AOV = booked/orders · CR = attr_completed/attr_value
+        #   TR  = rev/(booked*CR)   → product reconciles to paid RPC = rev/clicks (CR base cancels).
+        # CR uses the attributed_value PAIR (same base) so it stays ≤100%, unlike completed/booked.
         clk = _osum("clicks", lo, hi); orders = _osum("orders", lo, hi)
-        booked = _osum("booked", lo, hi); completed = _osum("completed", lo, hi); rev = _osum("revenue", lo, hi)
+        booked = _osum("booked", lo, hi)
+        av = _osum("attr_value", lo, hi); avc = _osum("attr_completed", lo, hi)
+        rev = _osum("revenue", lo, hi)
+        cr = (avc / av) if av else None
         return {"cvr": (orders / clk) if clk else None,
                 "aov": (booked / orders) if orders else None,
-                "cr":  (completed / booked) if booked else None,
-                "tr":  (rev / completed) if completed else None}
+                "cr":  cr,
+                "tr":  (rev / (booked * cr)) if (booked and cr) else None}
     def _pack(now, prev):
         out = {}
         for k in ("cvr", "aov", "cr", "tr"):
@@ -422,8 +448,10 @@ def _driver_windows(funnel_df: pd.DataFrame, ce_id: str, week_days: list[dt.date
             out[k] = {"v": None if n is None else round(n, 4),
                       "pct": (round((n / p - 1) * 100) if (n is not None and p) else None)}
         return out
-    wow = _pack(_drivers(last - dt.timedelta(days=6), last),
-                _drivers(last - dt.timedelta(days=13), last - dt.timedelta(days=7)))
+    # WoW = matured span vs same-length prior span (matches the qualifiers exactly).
+    wow = _pack(_drivers(w0_start, w0_end),
+                _drivers(w0_start - dt.timedelta(days=7), w0_end - dt.timedelta(days=7)))
+    # 3D = last 3 matured days vs 28-day baseline (excl last 3), anchored at the last matured day.
     d3 = _pack(_drivers(last - dt.timedelta(days=2), last),
                _drivers(last - dt.timedelta(days=31), last - dt.timedelta(days=4)))
     return {"wow": wow, "3d": d3}
@@ -455,13 +483,20 @@ def build_bucket1(
     w0_start: dt.date,
     wm1_start: dt.date,
     week_days: list[dt.date],
+    w0_end: dt.date | None = None,
     availability_fetcher=None,
     shapley_by_ce: dict | None = None,
 ) -> tuple[list[dict], dict]:
     """
     Returns (bucket1_rows, diagnostics). diagnostics carries the CM1/conv alert
     CE names + cv_excluded count for validation.
+
+    w0_end is the last MATURED day of the report week (paid attribution matures ~3 days). The WoW
+    qualifiers + driver windows run on [w0_start, w0_end] vs the same-length prior span; volume
+    floors are pro-rated to that length. Defaults to the full Sunday when not supplied.
     """
+    if w0_end is None:
+        w0_end = w0_start + dt.timedelta(days=6)
     ce_ids = sorted(set(ce_daily_ads["combined_entity_id"].dropna().astype(str)))
 
     cm1_alerts: dict[str, dict] = {}
@@ -486,11 +521,11 @@ def build_bucket1(
         if res and not res.get("cv_excluded"):
             rpc_alerts[ce_id] = res
 
-    cvr_alerts = cvr_drops(ce_daily_funnel_google, w0_start, wm1_start)     # Google-Search orders CVR
-    cvr_gray = cvr_gray_zone(ce_daily_funnel_google, w0_start, wm1_start)
+    cvr_alerts = cvr_drops(ce_daily_funnel_google, w0_start, wm1_start, w0_end)   # matured-span CVR
+    cvr_gray = cvr_gray_zone(ce_daily_funnel_google, w0_start, wm1_start, w0_end)
     # Weekly collective-impact qualifier (Jul-19 model): driver-based WoW gate for every active CE,
     # so weekly multi-driver drops (e.g. Kings Island) qualify without daily 3-day persistence.
-    wow_alerts = wow_driver_alerts(ce_daily_funnel_google, w0_start)
+    wow_alerts = wow_driver_alerts(ce_daily_funnel_google, w0_start, w0_end)
     bid = bid_changes(troas, w0_start)
 
     # Weekly W0 spend/revenue lookups.
@@ -571,7 +606,7 @@ def build_bucket1(
             "cause_tag": _cause_tag(ce_id, res["direction"]),
             "swing_driver": _swing_driver(shapley_by_ce.get(ce_id)),
             # paid Google-Search RPC-driver breakdown (CVR·AOV·CR·TR), WoW + 3D, from the funnel
-            "drivers": (_driver_windows(ce_daily_funnel_google, ce_id, week_days)
+            "drivers": (_driver_windows(ce_daily_funnel_google, ce_id, week_days, w0_start, w0_end)
                         if ce_daily_funnel_google is not None else None),
             "evidence": ev,
             "paid_contribution_pct": paid_contrib.get(ce_id),

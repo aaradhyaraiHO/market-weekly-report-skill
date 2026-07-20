@@ -1722,8 +1722,21 @@ function renderBuckets(M){
     '<td>'+fxAction(r)+'</td>'+
     '</tr>').join('');
   const fluxHowto=_howto('All <b>paid Google-Search</b> (orders from fct_orders). Paid RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> = current scale &amp; efficiency, Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
-  const seasDnBody=seasDn.length?(fluxHowto+fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>';
-  const seasUpBody=seasUp.length?(fluxHowto+fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):'<div class="emptystate">No revenue-quality spikes this week.</div>';
+  // Maturity-lag banner — this bucket runs on the last FULLY-MATURED week (paid Google-Search
+  // attribution matures ~3 days), which lags the report week when the latter isn't settled yet.
+  const _mt=(M.meta||{});
+  const fluxLagNote = _mt.fluctuation_partial
+    ? '<div class="lm-howto" style="background:#fff7ed;border-color:#fed7aa"><b>⏳ Matured-window comparison.</b> '
+      + 'The report covers <b>'+esc(_mt.week_start)+' → '+esc(_mt.week_end)+'</b>, but paid Google-Search '
+      + 'attribution (orders / revenue / completion) takes ~3 days to settle. So this bucket compares the '
+      + 'settled part of the week — <b>'+esc(_mt.fluctuation_window_start)+' → '+esc(_mt.fluctuation_window_end)
+      + '</b> ('+esc(_mt.fluctuation_days)+'d) — against the same days a week earlier (<b>'
+      + esc(_mt.fluctuation_compare_start)+' → '+esc(_mt.fluctuation_compare_end)+'</b>). The unsettled tail is '
+      + 'excluded and volume floors are pro-rated. 28-day ROI/Spend context uses the last full matured week. '
+      + 'Headlines (§1) use business revenue and stay on the full report week.</div>'
+    : '<div class="sub" style="color:var(--ink-faint);margin:0 0 8px">Paid fluctuations · week of <b>'+esc(_mt.fluctuation_window_start||_mt.week_start)+'</b> (fully matured)</div>';
+  const seasDnBody=seasDn.length?(fluxLagNote+fluxHowto+fluxCbar(seasDn)+_tbl(fluxHead,fluxRows(seasDn))):(fluxLagNote+'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>');
+  const seasUpBody=seasUp.length?(fluxLagNote+fluxHowto+fluxCbar(seasUp)+_tbl(fluxHead,fluxRows(seasUp))):(fluxLagNote+'<div class="emptystate">No revenue-quality spikes this week.</div>');
 
   // COMPOUND - Scale-Up — clean value(Δ) layout + cohort bar + dual spark
   let scaleBody;
