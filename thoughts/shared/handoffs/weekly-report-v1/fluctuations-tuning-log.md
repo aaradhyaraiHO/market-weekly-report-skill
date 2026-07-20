@@ -69,3 +69,13 @@ NA 2026-07-06 · down-swings after gate = 7 (was 15). Decomposition = CVR×AOV×
 | Six Flags Fiesta Texas Tic | WoW | CVR | -50 | 6 | 0 | -9 |
 | Star of Honolulu | WoW | CVR | -41 | -26 | 26 | 6 |
 | Statue of Liberty | WoW | CVR | -40 | 5 | -4 | 15 |
+
+## Step 4 — unify RPC + CVR qualifiers onto fct_orders
+NA 2026-07-06 · down-swings = 6 (was 7 with ads-qualifier + fct-gate). Qualifier + gate + decomposition all on one Google-Search funnel (fct orders + ads clicks).
+Change in coverage: +Hawaii Luaus (fct-CVR drop the ads qualifier missed — false-negative closed); −Discovery Cove, −Kings Island (see handoff note: daily RPC engine gatekeeps WoW-collective drops).
+  - Disneyland Resort California (3D, CVR)
+  - Hawaii Luaus (WoW, CVR)
+  - LEGOLAND Florida (WoW, CVR)
+  - Six Flags Fiesta Texas Tickets (WoW, CVR)
+  - Star of Honolulu (WoW, CVR)
+  - Statue of Liberty (WoW, CVR)

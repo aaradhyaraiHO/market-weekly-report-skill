@@ -676,8 +676,14 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     daily_start = w0_start - dt.timedelta(days=40)
     d_ads = fetch.ce_daily_ads(market, daily_start, w0_end)
     d_biz = fetch.ce_daily_business(market, daily_start, w0_end)
-    d_paid_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)   # Google-Search paid RPC (ads clicks/rev)
+    d_paid_g = fetch.ce_daily_paid_google(market, daily_start, w0_end)   # Google-Search ads (for clicks)
     d_orders_g = fetch.ce_daily_orders_google(market, daily_start, w0_end)  # Google-Search order funnel (fct)
+    # Unified Google-Search funnel: fct orders/booked/completed/revenue + ads clicks (2026-07-20).
+    # One source for the RPC + CVR qualifiers, the driver decomposition, and the Step-3 gate.
+    d_funnel_g = d_orders_g.merge(d_paid_g[["combined_entity_id", "report_date", "clicks"]],
+                                  on=["combined_entity_id", "report_date"], how="outer")
+    for _c in ("orders", "booked", "completed", "revenue", "clicks"):
+        d_funnel_g[_c] = pd.to_numeric(d_funnel_g[_c], errors="coerce").fillna(0.0)
     troas = fetch.troas_history(market, w0_start - dt.timedelta(days=config.TROAS_LOOKBACK_DAYS), w0_end)
 
     for df in (biz, paid, ly, d_ads, d_biz):
@@ -1022,8 +1028,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     bucket1, diag = alerts.build_bucket1(
         ce_daily_ads=d_ads,
         ce_daily_business=d_biz,
-        ce_daily_paid_google=d_paid_g,
-        ce_daily_orders_google=d_orders_g,
+        ce_daily_funnel_google=d_funnel_g,
         ce_weekly=biz,
         ce_weekly_paid=paid,
         names=names,
