@@ -26,6 +26,7 @@ def _fetch_no_bid_campaigns(
         ANY_VALUE(campaign_target_combined_entity_id)                AS combined_entity_id,
         ANY_VALUE(campaign_target_combined_entity_name)              AS combined_entity_name,
         ANY_VALUE(current_campaign_bidding_strategy)                 AS bidding_strategy,
+        ANY_VALUE(current_bidding_strategy_name)                     AS portfolio_name,
         SUM(sum_spend)                                               AS spend,
         SUM(count_clicks)                                            AS clicks,
         SUM(sum_conversion_value_offline_contribution_margin)        AS cm1
@@ -93,6 +94,7 @@ def build_no_bid(market_slug: str, w0_start: dt.date) -> dict:
             "ce_id": str(r["combined_entity_id"]),
             "ce_name": r["combined_entity_name"] or str(r["combined_entity_id"]),
             "bidding_strategy": r["bidding_strategy"],
+            "portfolio_name": r.get("portfolio_name"),
             "spend_wk": round(spend, 2),
             "roi_pct": _roi_pct(cm1, spend),
             "clicks_wk": int(r["clicks"] or 0),

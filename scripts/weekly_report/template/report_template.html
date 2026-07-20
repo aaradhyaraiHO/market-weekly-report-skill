@@ -1860,12 +1860,13 @@ function renderLevers(M){
       '<b>'+(t.count!=null?t.count:'—')+'</b> campaigns · <b>'+fmtMoney(t.spend_total)+'</b>/wk</span></div>'+
     (nbRows.length?
       '<div class="tablewrap"><table><thead><tr>'+
-      '<th class="stick">Campaign</th><th>Combined Entity</th><th>Strategy</th><th class="num">Spend wk</th><th class="num">ROI</th><th class="num">Clicks wk</th><th>New?</th>'+
+      '<th class="stick">Campaign</th><th>Combined Entity</th><th>Strategy</th><th>Type</th><th class="num">Spend wk</th><th class="num">ROI</th><th class="num">Clicks wk</th><th>New?</th>'+
       '</tr></thead><tbody>'+
       nbRows.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
         '<td class="ce stick"><span class="cn">'+esc(r.campaign_name)+'</span></td>'+
         '<td>'+esc(r.ce_name)+'</td>'+
         '<td class="mono">'+esc(r.bidding_strategy)+'</td>'+
+        '<td>'+(r.portfolio_name?'<span class="chip violet" title="'+esc(r.portfolio_name)+'">Portfolio</span>':'<span class="chip">Individual</span>')+'</td>'+
         '<td class="num">'+fmtMoney(r.spend_wk)+'</td>'+
         '<td class="num">'+fmtPct(r.roi_pct,0)+'</td>'+
         '<td class="num">'+fmtInt(r.clicks_wk)+'</td>'+
