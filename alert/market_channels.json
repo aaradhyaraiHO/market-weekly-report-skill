@@ -1,5 +1,5 @@
 {
-  "_note": "market_slug → Slack channel ID. NA/Italy verified real; others on the test channel until resolved + bot invited.",
+  "_note": "market_slug → Slack channel ID. Pulled from the monthly skill's channel-map.md. NA + Italy name-verified; others pulled from the monthly map (verify the channel matches the weekly market boundary + invite the bot before the first live post). Multi-channel markets use the primary; alternates listed in _alternates.",
   "_test_channel": "C0B6U94PGJ0",
   "_verified": {
     "north_america": "#mkt-usa (CNSHDD2H1)",
@@ -8,6 +8,20 @@
   "markets": {
     "north_america": "CNSHDD2H1",
     "italy": "C045L2WQ79P",
-    "oceania": "C0B6U94PGJ0"
-  }
+    "oceania": "CHKRLFDPU",
+    "france": "CH64TEB71",
+    "united_kingdom": "CKTFHT4AF",
+    "iberia": "CH2LRMJF2",
+    "csee": "CSQ10TALA",
+    "east_asia": "CQD6220VB",
+    "sea": "C5WFYN82H",
+    "uae": "C046622L80Z"
+  },
+  "_alternates": {
+    "oceania": ["C039TMH0GEP", "C097DVBLHGS"],
+    "east_asia": ["C01C4NPLYN6", "C01CARUM1CL", "C0809DN93DH (CN/TW)"],
+    "sea": ["C03R4UJ4DHC", "C01CHADFPAM (MLY/IND/VN)"],
+    "uae": ["gcc shares C046622L80Z"]
+  },
+  "_unverified": "oceania/france/uk/iberia/csee/east_asia/sea/uae pulled from monthly channel-map.md — verify channel↔market + bot membership before first live post."
 }
