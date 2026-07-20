@@ -148,25 +148,22 @@ def mover_bullet(r, side):
 # =============================================================================
 # SUMMARY (MSG 1 top-level)
 # =============================================================================
-# Market GM / perf-team tags — real <@U…> user mentions (notify) sourced from each
-# channel's routine posts (daily Omni low-TR cc's / most-active market owners),
-# 2026-07-20. <@U…> in a section block IS a real notification (unlike @handle text).
-MARKET_GM_TAGS = {
-    "north_america":  ["U03UCV5H2BX", "U07U5B1SX9D", "U043STEG7RQ"],   # Royan, Asfan, Parinita
-    "italy":          ["U033TD0PAER", "U04GXNXH9LM"],
-    "oceania":        ["U0813SU2RV2"],                                  # Anukriti (Growth-Oceania)
-    "france":         ["U05K8QRKA02", "U06PSKRQEE9", "U0ASTLMBDHD"],    # Dhananjay, Chloe, Rimen
-    "united_kingdom": ["U0979THK5MZ", "U05CQSHUTME", "U078S7GLV2N"],    # Sanjana, Maddie, Gokul
-    "iberia":         ["U03BUBCBC67", "U040ZBWMQR1", "U047FAACMA4"],    # Diego (GM), Aditya, Diksha
-    "csee":           ["U02GETW10LS", "U033W1SGR5G", "U048NQG1Q91"],    # Abhijeet, Ayush, Shruti
-    "east_asia":      ["U07H104DULW", "U06843EUYES"],                   # Sudhanshu (GM), Saurabh
-    "sea":            ["U08ARAZ2FF1", "U03LBT33VB6"],                   # Siddhi (GM), Jatin
-    "uae":            ["U02RTSTJCGN", "U05K5SKUUCE"],                   # Rawia (GM), Girish
-}
-MARKET_FLAG = {
-    "north_america": "🇺🇸", "italy": "🇮🇹", "oceania": "🇦🇺", "france": "🇫🇷",
-    "united_kingdom": "🇬🇧", "iberia": "🇪🇸", "csee": "🌍", "east_asia": "🇯🇵",
-    "sea": "🇸🇬", "uae": "🇦🇪",
+# Market team tag — mirrors the MONTHLY alert: a "Hello team @<market> <flag>" greeting
+# addressed to the market team. NOTE: @handle text inside a Block Kit block does NOT create
+# a real Slack notification (only <!subteam^ID> does, which needs usergroups:read to resolve).
+# So this is a cosmetic team greeting, exactly like the monthly pings. Handles + flags match
+# market-monthly-review/alert/payload-*.json.
+MARKET_TEAM = {
+    "north_america":  ("@growth-north-america", "🌎"),
+    "italy":          ("@it", "🇮🇹"),
+    "oceania":        ("@oceania", "🇦🇺🇳🇿"),
+    "france":         ("@fr", "🇫🇷"),
+    "united_kingdom": ("@uk", "🇬🇧"),
+    "iberia":         ("@iberia", "🇪🇸🇵🇹"),
+    "csee":           ("@csee", "🌍"),
+    "east_asia":      ("@east-asia", "🇯🇵🇰🇷🇭🇰"),
+    "sea":            ("@sea", "🇸🇬🇹🇭"),
+    "uae":            ("@uae", "🇦🇪"),
 }
 
 def build_summary_blocks(mk, report_url):
@@ -174,9 +171,8 @@ def build_summary_blocks(mk, report_url):
     market = meta["market"]
     slug = meta.get("market_slug", "")
     wk = f"{meta['week_start']} → {meta['week_end']}"
-    tags = MARKET_GM_TAGS.get(slug, [])
-    flag = MARKET_FLAG.get(slug, "")
-    greet = ("👋 Hi " + " ".join(f"<@{u}>" for u in tags) + f"  {flag}\n\n") if tags else ""
+    handle, flag = MARKET_TEAM.get(slug, ("", ""))
+    greet = (f"Hello team {handle}  {flag}\n\n") if handle else ""
 
     def kmline(idx, label, key, money=False, pctval=False):
         d = km.get(key, {})
