@@ -87,7 +87,31 @@ NA 2026-07-06 · down-swings = 6 · up-swings = 8. Four changes, each checkpoint
 3. **CM1/conv → Google-Search only** (dropped Bing from ce_daily_ads — last Google+Bing signal). ⚠ Shifts the 2026-06-29 reference: CM1 gate now reproduces 4/5 CEs (Arte Museum NY's swing was partly Bing) — re-baseline validate_na.
 4. **Daily engine: short-term trigger direction must match baseline dev** (SDLW/7d-WoW same sign as the 28d deviation). Zero behavioral change on 07-06 AND 06-29 — theoretical-hole closure only.
 
-Decision (Jul-20): **CM1/conv stays exempt from the Step-3 driver gate** — it's a margin-per-conversion signal the four RPC drivers don't decompose; on NA it contributes exactly 1 real down-swing (Disneyland). Known dial if CM1 rows ever bloat: tighten its own POF gates (min_conv_per_day / magnitude), not the driver gate.
+### Design decision (Jul-20) — CM1/conv stays exempt from the Step-3 driver gate. **Permanent, not provisional.**
+
+**Why it's structurally correct (category mismatch, not convenience).** The Step-3 gate asks "is this
+RPC move real + material across its four drivers?" — and those drivers are `RPC = CVR × AOV × CR × TR`,
+a decomposition of **revenue-per-click**. CM1/conv is **margin-per-conversion** — a different quantity
+the four RPC drivers do not multiply out to. Running CM1 through the driver gate isn't stricter QA; it
+asks a question the math can't answer (a genuine margin collapse can have all four RPC drivers flat, and
+vice-versa). CM1/conv is deliberately a *separate* signal because it catches a failure mode RPC
+structurally misses: **margin erosion at stable revenue** (discounting / cost-creep — volume and
+revenue-per-click hold, but each order earns less).
+
+**It is not ungated.** CM1/conv has its own appropriate gate — the daily POF engine (≥20% baseline dev,
+≥25% short-term, CV≤0.5, ≥10 conv/day, ≥500 clicks/35d, 3-day persistence ≥25%). Different signal,
+different gate — coherent, not asymmetric-by-accident.
+
+**The one real (latent) gap — materiality, NOT the driver gate.** CM1's POF gate checks *statistical*
+abnormality + *volume*, but has **no $-materiality floor** — so the theoretical risk is a
+statistically-real-but-financially-trivial CM1 alert. Not biting today: the single CM1 down-row is
+**Disneyland — CM1/conv $50→$31/conv, 6-day persistent, $5.9K/wk spend** — large, sustained, expensive
+(textbook margin erosion, correctly surfaced).
+
+**Correct future dial if CM1 rows ever bloat:** add a **margin-materiality floor to CM1's OWN engine**
+(min CM1-$ swing or min spend/wk) — the margin-world analog of what the collective-impact check does for
+RPC. Do **not** force CM1 through the RPC driver gate. Documented-only for now (no code) — no evidence
+it's needed, and an unused threshold is complexity the report hasn't earned.
 
 | CE | signal | alert | dominant | mag% |
 |---|---|---|---|---|
