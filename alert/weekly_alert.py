@@ -198,9 +198,15 @@ def build_summary_blocks(mk, report_url):
 # =============================================================================
 # THREE TABLES (MSG 1 thread replies)
 # =============================================================================
-def report_ctx(report_url, extra=""):
-    return {"type": "context", "elements": [{"type": "mrkdwn",
-            "text": (extra + "  ·  " if extra else "") + f"🔎 Find further information and actions → <{report_url}|weekly report>"}]}
+def report_ctx(report_url, extra="", action=False):
+    # Prominent section (not muted context) so the report link stands out.
+    lines = []
+    if action:
+        lines.append("👉 *Action needed:* review each CE and set a status + note in the report's bucket section.")
+    if extra:
+        lines.append(extra)
+    lines.append(f"📊 *<{report_url}|Open the weekly report →>*")
+    return {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}}
 
 # These 3 tables are built from Google Ads data only — called out above each table.
 GOOGLE_ADS_ONLY = {"type": "context", "elements": [{"type": "mrkdwn",
@@ -230,7 +236,7 @@ def table_losing(mk, report_url):
         {"type": "header", "text": {"type": "plain_text", "text": f"🔴 Losing Money · {len(ordered)} CEs", "emoji": True}},
         GOOGLE_ADS_ONLY,
         {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body, caps=TABLE_CAPS(len(hdr)))}},
-        report_ctx(report_url),
+        report_ctx(report_url, action=True),
     ]
 
 # RPC fluctuation rows filtered by direction ("down" or "up")
@@ -254,7 +260,7 @@ def table_fluct(mk, report_url, direction):
         {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} {title} · {len(rows)} CEs", "emoji": True}},
         GOOGLE_ADS_ONLY,
         {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body, caps=TABLE_CAPS(len(hdr)))}},
-        report_ctx(report_url, extra),
+        report_ctx(report_url, extra, action=True),
     ]
 
 
