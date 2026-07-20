@@ -33,17 +33,20 @@ Pipeline: `scripts/weekly_report/weekly_market_report.py` (orchestrator) → `bu
 
 ## Workflow
 
-**Full run (all markets), end-to-end** — the sequence proven for the weekly go-live:
-1. **S2** `weekly_market_report.py all --week <W>` — builds + renders every market in `config.MARKETS`.
-2. **S3** fan out **one digest agent per market** (parallel) to curate its Slack sidecar **and** return
-   the market team; then re-run `build_snapshot.py` per market (loads the sidecar) + `render.py`.
-3. **S4** QA a couple of reports.
-4. **S4.5** `publish_weekly all --week <W>` → stage the Ledger matrix; then the USER runs `vercel deploy`.
-5. **S5** loop the alert per market (`weekly_alert → weekly_rca_helper → post_message`), dry-run → post.
-
-S3 (curation) and S5 (post) are the only non-deterministic / human-gated steps; everything else is a
-plain script. Big markets (CSEE/SEA) can exceed BQ byte caps — `config.MAX_BYTES_BILLED` (build) and
-`weekly_rca_helper.MAX_BYTES_BILLED` (RCA) are both 80 GB.
+**Full run (all markets), end-to-end** — driven by `run_weekly.py`, which chains the deterministic
+glue and stops at the two human/agent gates. Three stages:
+```bash
+cd <repo>/scripts/weekly_report
+python3 run_weekly.py all --week <W> --stage report    # S2 build+render; lists markets needing a digest
+#   ← S3: fan out one digest agent per market → writes .cache/…/slack_context_{slug}_{week}.json
+python3 run_weekly.py all --week <W> --stage publish    # reload digests + re-render + publish_weekly (stages Ledger)
+#   ← USER: ! vercel deploy --prod --cwd market-notebook-v2   (from ~/analytics)
+python3 run_weekly.py all --week <W> --stage alert      # S5 dry-run per market; add --post to go live
+```
+Each stage prints the exact next action. **S3 (curation) and S5 (post) are the only non-deterministic /
+human-gated steps** — S3 needs agents, the deploy + live post are human-gated; everything else is a plain
+script. Big markets (CSEE/SEA) can exceed BQ byte caps — `config.MAX_BYTES_BILLED` (build) and
+`weekly_rca_helper.MAX_BYTES_BILLED` (RCA) are both 80 GB. The stages below (S1–S5) document each piece.
 
 ### S1 · Resolve market(s) + week
 Slug or `all`. Omitted week → `config.latest_complete_week()` (most recent complete week whose
