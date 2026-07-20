@@ -770,7 +770,7 @@ def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.Data
 # Daily paid series for the fluctuation engine  (CM1/conv POF)
 # --------------------------------------------------------------------------- #
 def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """Daily CE paid series: CM1, CM1 conversions, clicks, spend (Google Search + Bing)."""
+    """Daily CE paid series: CM1, CM1 conversions, clicks, spend (Google Search only)."""
     sql = f"""
     SELECT
         campaign_target_combined_entity_id                        AS combined_entity_id,
@@ -795,7 +795,7 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
 
     WHERE campaign_target_business_market = @market
           AND report_date BETWEEN @start AND @end
-          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
+          AND ad_platform = 'Google Ads'
           AND campaign_advertising_channel_type = 'SEARCH'
 
     GROUP BY 1, 3
