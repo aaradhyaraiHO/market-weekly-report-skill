@@ -830,6 +830,9 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
             "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
+            # raw components so build_global can aggregate SIS% + paid-contribution% exactly
+            # (sum-then-divide) instead of revenue-weighting the per-market ratios.
+            "sis_impr": _num(sis_impr), "sis_elig": _num(sis_elig), "organic_gbv": _num(organic),
         })
 
     # Headlines + top movers by raw WoW revenue delta.

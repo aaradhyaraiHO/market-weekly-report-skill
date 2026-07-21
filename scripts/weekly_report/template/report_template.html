@@ -922,6 +922,21 @@ function renderHead(M){
   const disagree = (wh && wh.clocks_disagree) ? '<div class="sub" style="margin-top:6px;color:var(--amber)">⚠ clocks disagree — raw & structural point opposite ways</div>' : '';
 
 
+  // Headout aggregate only: per-market breakdown of the portfolio total + each market's share of the WoW move.
+  const mb = M.market_breakdown;
+  const mbHtml = (mb && mb.length) ?
+    '<div style="margin-top:18px"><div class="dr-sec-t">Market breakdown · '+mb.length+' markets · share of the Headout WoW move</div>'+
+    '<div class="tablewrap"><table><thead><tr>'+
+      '<th class="stick">Market</th><th class="num">Revenue W0</th><th class="num">WoW</th><th class="num">YoY</th><th class="num">ROI</th><th class="num">Δ Rev wk</th><th class="num">% of move</th>'+
+    '</tr></thead><tbody>'+
+    mb.map(r=>'<tr class="cerow"><td class="ce stick"><span class="cn">'+esc(r.market)+'</span></td>'+
+      '<td class="num">'+fmtMoney(r.revenue_w0)+'</td>'+
+      '<td class="num '+sgn(r.wow_pct)+'">'+fmtDelta(r.wow_pct)+'</td>'+
+      '<td class="num '+sgn(r.yoy_pct)+'">'+fmtDelta(r.yoy_pct)+'</td>'+
+      '<td class="num">'+fmtPct(r.roi_pct,0)+'</td>'+
+      '<td class="num '+sgn(r.delta_abs)+'">'+fmtMoneyDelta(r.delta_abs)+'</td>'+
+      '<td class="num">'+fmtDelta(r.contrib_pct,0)+'</td></tr>').join('')+
+    '</tbody></table></div></div>' : '';
   return ''+
   '<section id="s1"><div class="sec-head"><span class="sec-num">1</span><h2>Market headlines</h2>'+
     '<span class="sub">week of '+esc(M.meta.week_start)+' · raw vs structural (LY seasonality)</span></div>'+
@@ -944,7 +959,7 @@ function renderHead(M){
     '<div class="card movers"><h3>Top gains <span class="n">· '+moverSub+'</span></h3>'+
       (gains||'<div class="emptystate">No gains this week</div>')+
       moverNote+'</div>'+
-  '</div></section>';
+  '</div>'+mbHtml+'</section>';
 }
 
 /* =====================================================================
@@ -1045,7 +1060,18 @@ function renderFollowup(M){
       '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--red)"></span>Risk / watch-out</span>'+
       '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--green)"></span>Tailwind / momentum</span>'+
       '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:var(--purps)"></span>Market / ops context</span></div></div>';
-  const ctxHtml = ctx.length ? legend + GDEF.map(mrgroup).join('') : '';
+  // Headout aggregate: cards carry a `market` tag → group §2 by market (risk→win→ctx within each).
+  const _gord={risk:0,win:1,ctx:2};
+  const mrmarket=(mkt)=>{ const items=ctx.filter(c=>c.market===mkt).sort((a,b)=>(_gord[a.group]??3)-(_gord[b.group]??3)); if(!items.length) return '';
+    return '<div style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
+        '<span style="font-family:var(--sans);font-weight:800;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--purps)">'+esc(mkt)+'</span>'+
+        '<span style="font-family:var(--sans);font-weight:600;font-size:10.5px;color:var(--ink-faint)">'+items.length+' signal'+(items.length>1?'s':'')+'</span>'+
+        '<span style="flex:1;height:1px;background:var(--rule)"></span></div>'+
+      '<div style="background:var(--card);border:1px solid var(--rule);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)">'+
+        items.map((c,i)=>mrow(c,i===0)).join('')+'</div></div>'; };
+  const _mkts=[...new Set(ctx.map(c=>c.market).filter(Boolean))];
+  const ctxHtml = ctx.length ? (legend + (_mkts.length ? _mkts.map(mrmarket).join('') : GDEF.map(mrgroup).join(''))) : '';
 
   const mrBody = '<div class="mr-panel" style="max-width:940px">'+
     '<div class="mr-prompt">Weekly market review for <b>'+esc(M.meta.market)+'</b> · w/c '+esc(M.meta.week_start)+
@@ -1159,6 +1185,10 @@ const GROUP_DIMS = [
   {v:'__bucket', label:'⚑ Diagnostic bucket (B1)'},
   {v:'__mygrp', label:'★ My groups'},
 ];
+// Headout aggregate (multi-market): expose Market as a filter chip + group-by option.
+function _isHeadout(M){ return !!(M && M.meta && (M.meta.market_slug==='headout' || (M.meta.n_markets||0)>1)); }
+function _filterDims(M){ return _isHeadout(M) ? [{key:'market', label:'Market'}].concat(FILTER_DIMS) : FILTER_DIMS; }
+function _groupDims(M){ return _isHeadout(M) ? [GROUP_DIMS[0], {v:'market', label:'Market'}].concat(GROUP_DIMS.slice(1)) : GROUP_DIMS; }
 
 function distinct(rows, key){
   const s=new Set(); rows.forEach(r=>{ const v=r.ce.metadata[key]; if(v!=null) s.add(v); });
@@ -1189,7 +1219,7 @@ function renderAllCE(M){
   const topMovers={}; byAbs.slice(0,10).forEach(r=>{ topMovers[r.ce.ce_id]= r.dwk>=0?'up':'down'; });
 
   // control bar
-  const fdimHtml = FILTER_DIMS.map(dim=>{
+  const fdimHtml = _filterDims(M).map(dim=>{
     const vals=distinct(rows,dim.key);
     if(!vals.length) return '';
     const chips=vals.map(v=>{
@@ -1212,7 +1242,7 @@ function renderAllCE(M){
   const activeMeta=Object.keys(state.filters).filter(k=>k!=='__bkt' && (state.filters[k]||[]).length).length;
   const metaOpen=state.filtersOpen || activeMeta>0;
 
-  const groupOpts = GROUP_DIMS.map(o=>'<option value="'+o.v+'"'+(state.group===o.v?' selected':'')+'>'+o.label+'</option>').join('');
+  const groupOpts = _groupDims(M).map(o=>'<option value="'+o.v+'"'+(state.group===o.v?' selected':'')+'>'+o.label+'</option>').join('');
 
   // --- (1) saved views bar ---
   const viewsBar =
@@ -1252,8 +1282,11 @@ function renderAllCE(M){
       '<span class="glist" id="grpList"></span>'+
     '</div>';
 
+  const capNote = (M.meta && M.meta.ce_cap) ?
+    '<div class="lm-howto" style="background:#fff7ed;border-color:#fed7aa"><b>ℹ️ Capped view:</b> showing the <b>top '+M.meta.ce_cap.cap+' CEs by W0 revenue</b> plus <b>every CE flagged in a bucket, top mover, prepurchase, or Slack card</b> ('+M.meta.ce_cap.shown.toLocaleString()+' of '+M.meta.ce_cap.total.toLocaleString()+' total). The long revenue tail is omitted here — it lives in each market’s own report.</div>' : '';
   return '<section id="s3"><div class="sec-head"><span class="sec-num">3</span><h2>All-CE view</h2>'+
     '<span class="sub">every CE × 12 wks · sort · filter · group · star · save views · click a row for the deep dive</span></div>'+
+    capNote+
     '<div class="howto"><b>How to use:</b> '+
       '<b>Click a row</b> → CE deep dive drawer. '+
       '<b>↗</b> next to a name → open that CE in Omni. '+
@@ -1727,7 +1760,11 @@ function renderBuckets(M){
   const lmAction=r=>{ const v=wrGetAction(r.ce_id); const o=(val,lbl)=>'<option value="'+val+'"'+(v===val?' selected':'')+'>'+lbl+'</option>';
     return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value)">'+
       o('','—')+o('pause','Pause')+o('scale_down','Scale down')+o('intentional','Intentional')+'</select>'; };
-  const lmHead='<th class="stick">Combined Entity</th>'+
+  // Headout aggregate: bucket rows carry a `market` tag → add a Market column.
+  const showMkt=_isHeadout(M);
+  const mktTh=showMkt?'<th>Market</th>':'';
+  const mktTd=r=>showMkt?'<td><span class="chip ghost" style="font-size:9.5px">'+esc(r.market||'—')+'</span></td>':'';
+  const lmHead='<th class="stick">Combined Entity</th>'+mktTh+
     '<th title="Weeks bleeding & severity — NEW (1w) · Nw · CHRONIC (≥6w) · ESCALATING (ROI −>30pp WoW) · Recovering (CM2 bleed at least halved vs prior 3wk).">Status <span class="lm-hb">ⓘ</span></th>'+
     '<th class="num" title="Google-Search Paid ROI. Two deltas: WoW (vs last week, acute) and 4w (vs the prior-4-week average, structural).">Paid ROI <span class="lm-hb">WoW · 4w ⓘ</span></th>'+
     '<th class="num" title="Weekly margin bled = Google-Search CM1 − spend. /wk = this week · 4w = last-4-week total.">CM2 bleed <span class="lm-hb">/wk · 4w ⓘ</span></th>'+
@@ -1739,7 +1776,7 @@ function renderBuckets(M){
     '<th title="Weekly CM2 (CM1 − spend) over 12 weeks; dashed line = breakeven. Hover a point for its value.">CM2 trend 12w <span class="lm-hb">ⓘ</span></th>'+
     '<th title="Your call: Pause / Scale down / Intentional. Saved per week.">Action</th>';
   const lmRow=(r,cls,statusCell,ceSub)=>'<tr class="cerow'+(cls?' '+cls:'')+'" data-ce="'+esc(r.ce_id)+'">'+
-      '<td class="ce stick">'+lmCEcell(r)+(ceSub||'')+'</td>'+
+      '<td class="ce stick">'+lmCEcell(r)+(ceSub||'')+'</td>'+mktTd(r)+
       '<td>'+statusCell+'</td>'+
       '<td class="num">'+lmRoi(r.roi,r.roi_dpp,r.roi_v4)+'</td>'+
       '<td class="num">'+lmCm2(r.cm2_bleed_wk,r.cm2_bleed_4w)+'</td>'+
@@ -1783,7 +1820,7 @@ function renderBuckets(M){
         ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked)"> confirm seasonality</label>'+
       '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value)">'+esc(n)+'</textarea>'; };
   // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
-  const fluxHead='<th class="stick">Combined Entity</th>'+
+  const fluxHead='<th class="stick">Combined Entity</th>'+mktTh+
     '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
     '<th class="num" title="Google-Search Paid ROI over the last 28 days. Δ = percentage-point change vs the prior 28 days.">28d ROI <span class="lm-hb">ⓘ</span></th>'+
     '<th class="num" title="Google-Search spend over the last 28 days. Δ = % change vs the prior 28 days — shows whether it is already scaling down.">28d Spend <span class="lm-hb">ⓘ</span></th>'+
@@ -1795,7 +1832,7 @@ function renderBuckets(M){
     '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
     '<th title="Your call: tick to confirm seasonality, add a note. Saved per week.">Action</th>';
   const fluxRows=(items,bucket)=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
-    '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+
+    '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+mktTd(r)+
     '<td>'+fxAlert(r.alert_type)+'</td>'+
     '<td class="num"><div class="lmv">'+fmtPct(r.roi_4w,0)+'</div>'+(r.roi_4w_d==null?'':'<div class="lmd '+(r.roi_4w_d<0?"gn":"gp")+'">'+(r.roi_4w_d>0?"+":MINUS)+Math.abs(r.roi_4w_d)+'pp</div>')+'</td>'+
     '<td class="num"><div class="lmv">'+fmtMoney(r.spend_4w)+'</div>'+(r.spend_4w_d==null?'':'<div class="lmd mut">'+(r.spend_4w_d>0?"+":MINUS)+Math.abs(r.spend_4w_d)+'%</div>')+'</td>'+
