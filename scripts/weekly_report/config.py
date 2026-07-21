@@ -45,6 +45,7 @@ MARKETS = {
     "north_america": "North America",
     "italy": "Italy",
     "oceania": "Oceania",
+    "uae": "United Arab Emirates",
 }
 
 # --------------------------------------------------------------------------- #
