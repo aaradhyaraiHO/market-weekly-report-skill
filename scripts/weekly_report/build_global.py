@@ -126,16 +126,39 @@ def _merge_weekly(series_list):
     return rows
 
 
-def _pool(markets, path):
-    """Concatenate a list-valued field across markets (path like 'buckets_final.defend.seasonality_down')."""
+def _pool(markets, path, tag_market=False):
+    """Concatenate a list-valued field across markets (path like 'buckets_final.defend.seasonality_down').
+    tag_market=True adds a `market` field to each row (for the §4 Market column)."""
     out = []
     for m in markets.values():
+        mkt = m.get("meta", {}).get("market")
         node = m
         for seg in path.split("."):
             node = (node or {}).get(seg) if isinstance(node, dict) else None
         if isinstance(node, list):
-            out.extend(node)
+            for r in node:
+                if tag_market and isinstance(r, dict):
+                    r = dict(r); r["market"] = mkt
+                out.append(r)
     return out
+
+
+def _market_breakdown(markets):
+    """Per-market §1 rollup: rev/WoW/YoY/ROI + each market's share of the Headout WoW move."""
+    rows = []
+    total_delta = 0.0
+    for slug, m in markets.items():
+        hl = m["market_summary"]["headlines"]
+        delta = (hl.get("key_metrics", {}).get("revenue", {}) or {}).get("delta_abs") or 0.0
+        total_delta += delta
+        rows.append({"slug": slug, "market": m["meta"]["market"],
+                     "revenue_w0": hl.get("revenue_w0"), "wow_pct": hl.get("wow_pct"),
+                     "yoy_pct": hl.get("yoy_pct"), "roi_pct": hl.get("roi_w0_pct"),
+                     "delta_abs": _num(delta)})
+    for r in rows:
+        r["contrib_pct"] = _num(100.0 * r["delta_abs"] / total_delta) if total_delta else None
+    rows.sort(key=lambda r: -(r["revenue_w0"] or 0))
+    return rows
 
 
 def build_global(week: str) -> dict:
@@ -143,10 +166,15 @@ def build_global(week: str) -> dict:
     slugs = list(markets.keys())
     print(f"  merging {len(slugs)} markets: {', '.join(slugs)}")
 
-    # ---- ces: union ----
+    # ---- ces: union, tagging each with its market (for §3 filter / group-by) ----
     ces = []
     for m in markets.values():
-        ces.extend(m.get("ces") or [])
+        mkt = m.get("meta", {}).get("market")
+        for c in (m.get("ces") or []):
+            md = c.setdefault("metadata", {})
+            if isinstance(md, dict):
+                md["market"] = mkt
+            ces.append(c)
 
     # ---- market_summary: sum weekly + weekly_ly ----
     weekly = _merge_weekly([m["market_summary"]["weekly"] for m in markets.values()])
@@ -201,28 +229,29 @@ def build_global(week: str) -> dict:
     }
 
     # ---- pooled buckets / lists ----
+    P = lambda path: _pool(markets, path, tag_market=True)   # bucket rows tagged with market for §4 column
     bf = {
         "defend": {
             "losing_money": {
-                "bleeders": sorted(_pool(markets, "buckets_final.defend.losing_money.bleeders"),
+                "bleeders": sorted(P("buckets_final.defend.losing_money.bleeders"),
                                    key=lambda r: (bool(r.get("recovering")), r.get("cm2_bleed_4w") or 0)),
-                "full_waste": _pool(markets, "buckets_final.defend.losing_money.full_waste"),
-                "recovered": _pool(markets, "buckets_final.defend.losing_money.recovered"),
-                "paused": _pool(markets, "buckets_final.defend.losing_money.paused"),
-                "tracking_gap": _pool(markets, "buckets_final.defend.losing_money.tracking_gap"),
+                "full_waste": P("buckets_final.defend.losing_money.full_waste"),
+                "recovered": P("buckets_final.defend.losing_money.recovered"),
+                "paused": P("buckets_final.defend.losing_money.paused"),
+                "tracking_gap": P("buckets_final.defend.losing_money.tracking_gap"),
                 "burn_line": _sum_burn(markets),
             },
-            "seasonality_down": sorted(_pool(markets, "buckets_final.defend.seasonality_down"),
+            "seasonality_down": sorted(P("buckets_final.defend.seasonality_down"),
                                        key=lambda r: (r.get("swing_pct") or 0)),
         },
         "compound": {
-            "seasonality_up": sorted(_pool(markets, "buckets_final.compound.seasonality_up"),
+            "seasonality_up": sorted(P("buckets_final.compound.seasonality_up"),
                                      key=lambda r: -(r.get("swing_pct") or 0)),
-            "scale_up": _pool(markets, "buckets_final.compound.scale_up"),
+            "scale_up": P("buckets_final.compound.scale_up"),
         },
         "lifecycle": {
-            "new_ces": _pool(markets, "buckets_final.lifecycle.new_ces"),
-            "iteration": _pool(markets, "buckets_final.lifecycle.iteration"),
+            "new_ces": P("buckets_final.lifecycle.new_ces"),
+            "iteration": P("buckets_final.lifecycle.iteration"),
         },
     }
 
@@ -260,6 +289,7 @@ def build_global(week: str) -> dict:
 
     snap = {
         "meta": meta0,
+        "market_breakdown": _market_breakdown(markets),
         "market_summary": {"weekly": weekly, "weekly_ly": weekly_ly, "headlines": headlines},
         "ces": ces_capped,
         "followup": followup,
