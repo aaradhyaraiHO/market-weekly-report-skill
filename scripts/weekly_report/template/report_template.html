@@ -1224,7 +1224,7 @@ function renderAllCE(M){
 
   const controls =
     '<div class="controls">'+
-      '<div class="search"><label>Search CE / city / category</label>'+
+      '<div class="search"><label>Search CE name / ID / city / category</label>'+
         '<input type="text" id="ceSearch" placeholder="type to filter…" value="'+esc(state.search)+'"></div>'+
       '<div class="ctl-group"><label>Group by (subtotals)</label><select id="ceGroup">'+groupOpts+'</select></div>'+
       '<div><label>&nbsp;</label><button class="btn" id="collapseGroups"'+(state.group?'':' disabled style="opacity:.45;cursor:default"')+'>'+(state.group?collapseBtnLabel():'▸ Collapse groups')+'</button></div>'+
@@ -1276,7 +1276,7 @@ function passesFilters(r){
   if(state.search){
     const q=state.search.toLowerCase();
     const md=r.ce.metadata;
-    const hay=(r.ce.ce_name+' '+(md.city||'')+' '+(md.category||'')+' '+(md.subcategory||'')).toLowerCase();
+    const hay=(r.ce.ce_name+' '+r.ce.ce_id+' '+(md.city||'')+' '+(md.category||'')+' '+(md.subcategory||'')).toLowerCase();
     if(hay.indexOf(q)<0) return false;
   }
   const bsel=state.filters.__bkt;
