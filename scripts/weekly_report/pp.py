@@ -55,8 +55,9 @@ SELECT cem.market, a.combined_entity_id AS ce_id, a.ce,
        a.dated, a.open_ct, a.loss_liab_dated, a.nt_total, a.nt_sold,
        a.expiring_unsold, a.expiring_loss, a.remaining_dated, a.max_exp, a.sold_last_wk, a.total, a.sold
 FROM agg a JOIN cem ON cem.combined_entity_id = a.combined_entity_id
-WHERE cem.market IN ('North America','Italy','Oceania') AND (a.dated + a.open_ct) > 0
-""".format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET, ntd=NEAR_TERM_DAYS)
+WHERE cem.market IN ({markets}) AND (a.dated + a.open_ct) > 0
+""".format(proj=config.BQ_PROJECT, ds=config.BQ_DATASET, ntd=NEAR_TERM_DAYS,
+           markets=", ".join("'" + m.replace("'", "\\'") + "'" for m in config.MARKETS.values()))
 
 
 def _i(v):
