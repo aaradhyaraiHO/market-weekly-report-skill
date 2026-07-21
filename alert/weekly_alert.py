@@ -266,23 +266,32 @@ FLUCT_META = {
     "down": ("🔻", "RPC Fluctuations Down"),
     "up":   ("🔺", "RPC Fluctuations Up"),
 }
+# Source the report's actual §4 Fluctuations buckets (buckets_final), NOT the raw
+# bucket1_fluctuations list — so the alert's CE set matches the report/Ledger exactly.
+# Report §4 ↓ = defend.seasonality_down · ↑ = compound.seasonality_up (processed + matured-window).
+FLUCT_SRC = {"down": ("defend", "seasonality_down"), "up": ("compound", "seasonality_up")}
+_DRV_DELTA = {"cvr": "cvr_d", "aov": "aov_d", "cr": "cr_d", "tr": "tr_d"}
+
 def fluct_rows(mk, direction):
-    return [r for r in mk["bucket1_fluctuations"] if r.get("direction") == direction]
+    fam, key = FLUCT_SRC[direction]
+    return (mk.get("buckets_final") or {}).get(fam, {}).get(key, []) or []
 
 def table_fluct(mk, report_url, direction):
     emoji, title = FLUCT_META[direction]
-    rows = fluct_rows(mk, direction)
-    shown = sorted(rows, key=lambda r: -abs(r.get("magnitude_pct") or 0))[:15]
-    hdr = ["CE ID", "CE", "Signal", "Mag%", "Cause", "Swing driver", "Rev/wk"]
-    body = [[r.get("ce_id"), r.get("ce_name"), r.get("signal"), fmt_pct(r.get("magnitude_pct"),0),
-             r.get("cause_tag"), (r.get("swing_driver") or {}).get("label"),
-             fmt_money(r.get("revenue_wk"))] for r in shown]
-    extra = f"… {len(rows)-len(shown)} more" if len(rows) > len(shown) else ""
+    rows = fluct_rows(mk, direction)              # engine order — matches the report §4 rows
+    def driver(r):
+        dk = _DRV_DELTA.get(r.get("dominant_key"))
+        d = fmt_pct(r.get(dk), 0) if dk and r.get(dk) is not None else ""
+        return f"{r.get('dominant', '')} {d}".strip()
+    hdr = ["CE ID", "CE", "Alert", "Swing%", "Root driver", "28d ROI", "Read"]
+    body = [[r.get("ce_id"), r.get("ce_name"), r.get("alert_type"),
+             fmt_pct(r.get("swing_pct"), 0), driver(r),
+             fmt_plain_pct(r.get("roi_4w"), 0), r.get("verdict", "—")] for r in rows[:20]]
     return [
         {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} {title} · {len(rows)} CEs", "emoji": True}},
         GOOGLE_ADS_ONLY,
         {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body, caps=TABLE_CAPS(len(hdr)))}},
-        report_ctx(report_url, extra, action=True),
+        report_ctx(report_url, action=True),
     ]
 
 
