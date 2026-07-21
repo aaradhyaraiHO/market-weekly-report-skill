@@ -40,8 +40,10 @@ ADDITIVE = [
     "cm1_business", "gross_marketing_cost", "paid_impressions", "paid_clicks",
     "paid_conv_value", "paid_conversions", "paid_revenue", "paid_cm2",
 ]
-# ratio fields with no clean numerator/denominator in the weekly row → revenue-weighted
-WEIGHTED = ["tr_pct", "cr_pct", "paid_sis_pct", "paid_contribution_pct"]
+# TR% and CR% are exact: reconstruct gbv_completed = gbv × cr%/100 per market, then
+# CR% = Σgbv_completed/Σgbv · TR% = Σrevenue/Σgbv_completed (canon).
+# SIS% / paid_contribution% have no raw numerator/denominator in the weekly row → revenue-weighted.
+WEIGHTED = ["paid_sis_pct", "paid_contribution_pct"]
 
 
 def _load(week):
@@ -70,13 +72,18 @@ def _merge_weekly(series_list):
         for w in series:
             wk = w["week"]
             if wk not in by_week:
-                by_week[wk] = {"week": wk, "_rev_wt": 0.0, "_wsum": {k: 0.0 for k in WEIGHTED}}
+                by_week[wk] = {"week": wk, "_rev_wt": 0.0, "_gbv_completed": 0.0,
+                               "_wsum": {k: 0.0 for k in WEIGHTED}}
                 order.append(wk)
             acc = by_week[wk]
             for f in ADDITIVE:
                 v = w.get(f)
                 if v is not None:
                     acc[f] = acc.get(f, 0.0) + v
+            # reconstruct gbv_completed from gbv × cr% (market weekly carries both, not gbv_completed)
+            gbv, cr = w.get("gbv"), w.get("cr_pct")
+            if gbv is not None and cr is not None:
+                acc["_gbv_completed"] += gbv * cr / 100.0
             rev = w.get("revenue") or 0.0
             acc["_rev_wt"] += rev
             for f in WEIGHTED:
@@ -87,10 +94,14 @@ def _merge_weekly(series_list):
     for wk in sorted(order):
         a = by_week[wk]
         rev_wt = a.pop("_rev_wt") or 0.0
+        gc = a.pop("_gbv_completed") or 0.0
         wsum = a.pop("_wsum")
         def r(x, y, scale=100.0):
             return _num(scale * a[x] / a[y]) if a.get(y) else None
         a["aov"] = _num(a["gbv"] / a["orders"]) if a.get("orders") else None
+        # exact take-rate + completion from summed components
+        a["cr_pct"] = _num(100.0 * gc / a["gbv"]) if a.get("gbv") else None
+        a["tr_pct"] = _num(100.0 * a["revenue"] / gc) if gc else None
         a["roi_pct"] = r("cm1", "spend")
         a["roi1_pct"] = r("cm1_business", "gross_marketing_cost")
         a["cvr_pct"] = r("paid_conversions", "paid_clicks")
@@ -162,9 +173,11 @@ def build_global(week: str) -> dict:
             km["yoy_pct"] = w0_row.get("yoy_pct")
         key_metrics[key] = km
 
-    large_threshold = None   # global size-floor fallback in build_header
-    week_header = flows.build_header(ces, {}, weekly, dt.date.fromisoformat(week),
-                                     large_threshold=large_threshold)
+    week_header = flows.build_header(ces, {}, weekly, dt.date.fromisoformat(week), large_threshold=None)
+    # Replace build_header's structural (which degrades to raw when LY-forward is absent) with an
+    # AGGREGATE, portfolio-blended structural clock — one trailing LY WoW ratio ΣLY(W0)/ΣLY(W-1),
+    # no per-CE forward week, no new query.
+    _apply_aggregate_structural(week_header, ces, weekly_ly, w0, w0_row.get("revenue") or 0.0)
     headlines = {
         "revenue_w0": w0_row.get("revenue"),
         "wow_pct": key_metrics["revenue"]["delta_pct"],
@@ -204,26 +217,102 @@ def build_global(week: str) -> dict:
         },
     }
 
+    followup = _pool(markets, "followup")
+    fluct = _pool(markets, "bucket1_fluctuations")
+    pp = _pool(markets, "prepurchase")
+    review = _pool(markets, "market_review_context")
+
+    # ---- §3 CE cap: keep all actionable CEs (buckets/movers/PP/followup/ce-digest) + top-N by W0 revenue.
+    # Movers + structural already ran on the FULL set above, so only the browse table is trimmed; every
+    # referenced CE stays so its drawer opens.
+    CAP = 300
+    def _ids(rows):
+        return {str(r.get("ce_id")) for r in rows if r.get("ce_id") is not None}
+    lm = bf["defend"]["losing_money"]
+    ref = set()
+    for k in ("bleeders", "full_waste", "recovered", "paused", "tracking_gap"):
+        ref |= _ids(lm[k])
+    ref |= _ids(bf["defend"]["seasonality_down"]) | _ids(bf["compound"]["seasonality_up"])
+    ref |= _ids(bf["compound"]["scale_up"]) | _ids(bf["lifecycle"]["new_ces"]) | _ids(bf["lifecycle"]["iteration"])
+    ref |= _ids(week_header["trend"]["top_gainers"]) | _ids(week_header["trend"]["top_droppers"])
+    ref |= _ids(fluct) | _ids(pp) | _ids(followup)
+    ref |= {str(c.get("ce_id")) for c in review if c.get("scope") == "ce" and c.get("ce_id")}
+    ranked = sorted(ces, key=lambda c: -((c.get("weekly") or [{}])[-1].get("revenue") or 0))
+    keep = ref | {str(c["ce_id"]) for c in ranked[:CAP]}
+    n_full = len(ces)
+    ces_capped = [c for c in ces if str(c["ce_id"]) in keep]
+
     meta0 = dict(next(iter(markets.values()))["meta"])
     meta0.update({"market": "Headout (all markets)", "market_slug": "headout",
-                  "n_markets": len(slugs), "markets_included": slugs})
+                  "n_markets": len(slugs), "markets_included": slugs,
+                  "ce_cap": {"shown": len(ces_capped), "total": n_full, "cap": CAP,
+                             "note": f"All-CE view: top {CAP} by revenue + all flagged / mover / PP CEs "
+                                     f"({len(ces_capped)} of {n_full})"}})
 
     snap = {
         "meta": meta0,
         "market_summary": {"weekly": weekly, "weekly_ly": weekly_ly, "headlines": headlines},
-        "ces": ces,
-        "followup": _pool(markets, "followup"),
-        "bucket1_fluctuations": _pool(markets, "bucket1_fluctuations"),
+        "ces": ces_capped,
+        "followup": followup,
+        "bucket1_fluctuations": fluct,
         "buckets_final": bf,
-        "prepurchase": _pool(markets, "prepurchase"),
+        "prepurchase": pp,
         "no_bid_campaigns": _merge_no_bid(markets),
         "seasonality_adjustments": _pool(markets, "seasonality_adjustments"),
         "levers": _pool(markets, "levers"),
         "transitions": _pool(markets, "transitions"),
-        "market_review_context": _pool(markets, "market_review_context"),
-        "_diagnostics": {"aggregate_of": slugs, "n_ces": len(ces)},
+        "market_review_context": review,
+        "_diagnostics": {"aggregate_of": slugs, "n_ces_full": n_full, "n_ces_shown": len(ces_capped)},
     }
     return snap
+
+
+def _apply_aggregate_structural(week_header, ces, weekly_ly, w0_iso, raw_rev):
+    """Portfolio-level structural clock: expected W0 = W-1 × R, R = ΣLY(W0)/ΣLY(W-1)
+    (trailing LY WoW ratio from the summed LY series — no forward week). Applies R
+    uniformly to every CE, so gains/losses/N80 stay a real decomposition but on a
+    blended-seasonality basis. Overrides week_header structural + week_type + dual label."""
+    ly_weeks = [w["week"] for w in weekly_ly]
+    R = None
+    if w0_iso in ly_weeks:
+        i = ly_weeks.index(w0_iso)
+        if i > 0:
+            ly0, lym1 = weekly_ly[i].get("revenue"), weekly_ly[i - 1].get("revenue")
+            if ly0 and lym1:
+                R = ly0 / lym1
+    gvals, lvals = [], []
+    for ce in ces:
+        wk = ce.get("weekly") or []
+        if len(wk) < 2:
+            continue
+        w0r, wm1r = wk[-1].get("revenue"), wk[-2].get("revenue")
+        if w0r is None or wm1r is None:
+            continue
+        expected = wm1r * (R - 1.0) if R is not None else 0.0
+        struct = (w0r - wm1r) - expected
+        (gvals if struct >= 0 else lvals).append(abs(struct))
+    G, L = sum(gvals), sum(lvals)
+    week_header["structural"] = {
+        "gains_usd": round(G), "losses_usd": round(L), "net_usd": round(G - L),
+        "n80_gain": flows._n80(sorted(gvals, reverse=True)),
+        "n80_loss": flows._n80(sorted(lvals, reverse=True)),
+        "ly_ratio": round(R, 4) if R else None,
+        "basis": "aggregate trailing LY ratio (portfolio-blended)",
+    }
+    floor = max(500.0, 0.005 * raw_rev)
+    net = G - L
+    week_header["week_type"] = (
+        (f"Both large — gains beat by ${net:,.0f}" if net >= 0 else f"Both large — losses beat by ${-net:,.0f}")
+        if (G > floor and L > floor) else
+        "Mostly gains" if (G > L and G > floor) else
+        "Mostly loss" if (L > G and L > floor) else "Mostly stable")
+    raw_wow = week_header["raw"].get("wow_pct")
+    if raw_wow is not None:
+        week_header["dual_clock_label"] = (
+            "BEATING SEASONALITY" if (net >= 0 and raw_wow < 0) else
+            "UNDER-RAMPING vs LY seasonality" if (net < 0 and raw_wow >= 0) else
+            week_header["week_type"])
+        week_header["clocks_disagree"] = ((raw_wow >= 0) != (net >= 0))
 
 
 def _sum_burn(markets):
