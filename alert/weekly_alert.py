@@ -269,6 +269,15 @@ FLUCT_META = {
 # Source the report's actual §4 Fluctuations buckets (buckets_final), NOT the raw
 # bucket1_fluctuations list — so the alert's CE set matches the report/Ledger exactly.
 # Report §4 ↓ = defend.seasonality_down · ↑ = compound.seasonality_up (processed + matured-window).
+# Vercel report filename = publish_weekly's ledger slug (NOT the config slug). Must match
+# scripts/weekly_report/publish_weekly.py:MARKET_META or the "→ weekly report" link 404s.
+LEDGER_SLUG = {
+    "north_america": "north-america", "italy": "italy", "oceania": "oceania",
+    "france": "france", "united_kingdom": "united-kingdom", "iberia": "iberia",
+    "csee": "csee", "uae": "united-arab-emirates",
+    "east_asia": "east-asia-jpn-sk-hk", "sea": "sea-sin-tha",
+}
+
 FLUCT_SRC = {"down": ("defend", "seasonality_down"), "up": ("compound", "seasonality_up")}
 _DRV_DELTA = {"cvr": "cvr_d", "aov": "aov_d", "cr": "cr_d", "tr": "tr_d"}
 
@@ -342,7 +351,7 @@ def main():
 
     mk = load_market(Path(args.file).expanduser(), args.market_slug, args.market_index)
     slug = mk["meta"]["market_slug"]
-    report_url = args.report_url or f"https://market-notebook.vercel.app/weekly-report-{slug.replace('_','-')}"
+    report_url = args.report_url or f"https://market-notebook.vercel.app/weekly-report-{LEDGER_SLUG.get(slug, slug.replace('_','-'))}"
 
     summary = build_summary_blocks(mk, report_url)
     t_los = table_losing(mk, report_url)
