@@ -72,6 +72,17 @@ def _json_safe(obj):
 # --------------------------------------------------------------------------- #
 def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
     """Per-market revenue/WoW/YoY/ROI + each market's share of the global WoW move."""
+
+    def _f(v):
+        """NaN/None-safe float. A SUM() over an all-NULL CE-week yields NaN, which
+        is truthy — `float(nan) or 0` leaks it, poisoning the market accumulator
+        (denom→NaN, `nan >= floor`→False, ROI silently nulls for the whole market)."""
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return 0.0
+        return 0.0 if np.isnan(v) else v
+
     by_mkt = {}
     for ce in ces:
         mkt = ce.get("metadata", {}).get("market", "Unknown")
@@ -83,14 +94,14 @@ def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
         ly_val = ly_rev.get((ce["ce_id"], w0_start), 0.0)
         p_w0 = paid_idx.get((ce["ce_id"], w0_start))
         if b_w0 is not None:
-            by_mkt[mkt]["w0"] += float(b_w0.get("revenue") or 0)
+            by_mkt[mkt]["w0"] += _f(b_w0.get("revenue"))
         if b_wm1 is not None:
-            by_mkt[mkt]["wm1"] += float(b_wm1.get("revenue") or 0)
-        by_mkt[mkt]["ly"] += float(ly_val or 0)
+            by_mkt[mkt]["wm1"] += _f(b_wm1.get("revenue"))
+        by_mkt[mkt]["ly"] += _f(ly_val)
         if p_w0 is not None:
-            by_mkt[mkt]["spend_w0"] += float(p_w0.get("spend") or 0)
-            by_mkt[mkt]["cw_w0"] += float(p_w0.get("coupon_wallet") or 0)
-            by_mkt[mkt]["cm1_w0"] += float(p_w0.get("cm1") or 0)
+            by_mkt[mkt]["spend_w0"] += _f(p_w0.get("spend"))
+            by_mkt[mkt]["cw_w0"] += _f(p_w0.get("coupon_wallet"))
+            by_mkt[mkt]["cm1_w0"] += _f(p_w0.get("cm1"))
 
     rows = []
     total_delta = 0.0
