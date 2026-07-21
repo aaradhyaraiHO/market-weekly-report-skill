@@ -39,6 +39,8 @@ ADDITIVE = [
     "revenue", "gbv", "orders", "clicks", "cm2", "spend", "cm1",
     "cm1_business", "gross_marketing_cost", "paid_impressions", "paid_clicks",
     "paid_conv_value", "paid_conversions", "paid_revenue", "paid_cm2",
+    # raw SIS / organic components (present after a producer rebuild) → exact SIS% + contribution%
+    "sis_impr", "sis_elig", "organic_gbv",
 ]
 # TR% and CR% are exact: reconstruct gbv_completed = gbv × cr%/100 per market, then
 # CR% = Σgbv_completed/Σgbv · TR% = Σrevenue/Σgbv_completed (canon).
@@ -111,8 +113,15 @@ def _merge_weekly(series_list):
         a["paid_ctr_pct"] = r("paid_clicks", "paid_impressions")
         a["avg_cm1"] = _num(a["cm1"] / a["paid_conversions"]) if a.get("paid_conversions") else None
         a["cm1_per_conv"] = a["avg_cm1"]
-        for f in WEIGHTED:               # revenue-weighted average across markets
+        for f in WEIGHTED:               # revenue-weighted average (fallback)
             a[f] = _num(wsum[f] / rev_wt) if rev_wt else None
+        # exact overrides when the raw components are present (post producer-rebuild)
+        if a.get("sis_elig"):
+            a["paid_sis_pct"] = _num(min(100.0, 100.0 * a["sis_impr"] / a["sis_elig"]))
+        if gc and a.get("organic_gbv") is not None:
+            a["paid_contribution_pct"] = _num(max(0.0, min(100.0, 100.0 * (1 - a["organic_gbv"] / gc))))
+        for k in ("sis_impr", "sis_elig", "organic_gbv"):   # drop raw helpers from the emitted row
+            a.pop(k, None)
         rows.append(a)
     return rows
 
@@ -187,7 +196,7 @@ def build_global(week: str) -> dict:
         "key_metrics": key_metrics,
         "top_gainers": week_header["trend"]["top_gainers"],
         "top_drops": week_header["trend"]["top_droppers"],
-        "shapley_wow": {},          # market-level Shapley not aggregated (per-CE lives in drawers)
+        "shapley_wow": _agg_shapley(markets),   # sum each $ factor across markets (additive)
         "week_header": week_header,
     }
 
@@ -220,7 +229,7 @@ def build_global(week: str) -> dict:
     followup = _pool(markets, "followup")
     fluct = _pool(markets, "bucket1_fluctuations")
     pp = _pool(markets, "prepurchase")
-    review = _pool(markets, "market_review_context")
+    review = _review_cards(markets)   # tagged with source market for §2 grouping
 
     # ---- §3 CE cap: keep all actionable CEs (buckets/movers/PP/followup/ce-digest) + top-N by W0 revenue.
     # Movers + structural already ran on the FULL set above, so only the browse table is trimmed; every
@@ -313,6 +322,41 @@ def _apply_aggregate_structural(week_header, ces, weekly_ly, w0_iso, raw_rev):
             "UNDER-RAMPING vs LY seasonality" if (net < 0 and raw_wow >= 0) else
             week_header["week_type"])
         week_header["clocks_disagree"] = ((raw_wow >= 0) != (net >= 0))
+
+
+def _agg_shapley(markets):
+    """Sum the WoW-Shapley $ factors across markets (each is an additive $ contribution)."""
+    facs = ["traffic", "cvr", "aov", "cr", "tr", "total", "net_delta"]
+    agg = {f: 0.0 for f in facs}
+    labels = None
+    any_found = False
+    for m in markets.values():
+        sw = (m.get("market_summary") or {}).get("headlines", {}).get("shapley_wow") or {}
+        if not sw:
+            continue
+        any_found = True
+        labels = labels or sw.get("labels")
+        for f in facs:
+            if sw.get(f) is not None:
+                agg[f] += sw[f]
+    if not any_found:
+        return {}
+    out = {f: _num(agg[f]) for f in facs}
+    out["labels"] = labels or {"traffic": "Traffic", "cvr": "CVR", "aov": "AOV", "cr": "Completion", "tr": "Take rate"}
+    out["reconstructs"] = True
+    return out
+
+
+def _review_cards(markets):
+    """Pool §2 Slack cards, tagging each with its source market so §2 can group by market."""
+    out = []
+    for m in markets.values():
+        mkt = m.get("meta", {}).get("market", "?")
+        for c in (m.get("market_review_context") or []):
+            c = dict(c)
+            c["market"] = mkt
+            out.append(c)
+    return out
 
 
 def _sum_burn(markets):
