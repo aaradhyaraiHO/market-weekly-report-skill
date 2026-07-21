@@ -50,6 +50,23 @@ from build_snapshot import (
 CACHE = HERE.parent.parent / ".cache" / "weekly_report"
 
 
+def _json_safe(obj):
+    """Recursively replace NaN/Inf floats with None so json.dumps never emits the
+    bare NaN/Infinity literals that browser JSON.parse rejects (blank report).
+    Also unwraps numpy scalars. Defensive net over the whole snapshot — cheaper
+    than auditing every producer for one stray un-_num'd value."""
+    import math
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, np.generic):
+        obj = obj.item()
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    return obj
+
+
 # --------------------------------------------------------------------------- #
 # Market breakdown — per-market §1 rollup from CE-level data
 # --------------------------------------------------------------------------- #
@@ -647,7 +664,7 @@ def build_global(week: str) -> dict:
         except Exception as e:
             print(f"  [slack] sidecar load skipped ({e!r})")
 
-    return snapshot
+    return _json_safe(snapshot)
 
 
 def main():

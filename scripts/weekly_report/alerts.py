@@ -461,10 +461,20 @@ def _daily_spark(df: pd.DataFrame, ce_id: str, num: str, den: str, days: int = 3
     """Last `days` of a daily ratio (e.g. CM1/conv) for the B2 sparkline. None on
     zero-denominator days (null = gap, never zero — monthly-v3 convention)."""
     sub = df[df["combined_entity_id"].astype(str) == ce_id].sort_values("report_date").tail(days)
+
+    def _f(v):
+        """NaN/None-safe float: a SUM() over an all-NULL day yields NaN, which is
+        truthy — `float(nan) or 0` leaks the NaN into the JSON and breaks JSON.parse."""
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return 0.0
+        return 0.0 if np.isnan(v) else v
+
     out = []
     for _, r in sub.iterrows():
-        d = float(r.get(den) or 0)
-        out.append(round(float(r.get(num) or 0) / d, 4) if d else None)
+        d = _f(r.get(den))
+        out.append(round(_f(r.get(num)) / d, 4) if d else None)
     return out
 
 
