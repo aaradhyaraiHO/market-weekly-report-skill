@@ -24,12 +24,17 @@ Pipeline: `scripts/weekly_report/weekly_market_report.py` (orchestrator) → `bu
 ## Usage
 
 ```
-/market-weekly-report <market|all> [<week-Monday>]
+/market-weekly-report <market|all|headout> [<week-Monday>]
 ```
 - `/market-weekly-report north_america` — latest complete matured week
 - `/market-weekly-report all 2026-07-06` — all pilot markets for that week, one tabbed HTML
-- Markets (config.MARKETS): `north_america`, `italy`, `oceania`. Expansion to the full 10 live
-  markets is planned (see the fan-out plan); this skill runs whatever is in `config.MARKETS`.
+- `/market-weekly-report headout 2026-07-06` — **true-global Headout rollup** (all ~69
+  `business_market` values, not a sum of the 10 pilots). Own build path (`build_global.py`):
+  queries BQ with NO market filter, so the headline is exact ($3.26M for 07-13, vs the merge-of-10's
+  17.5%-undercounted $2.69M). Adds a §1 per-market breakdown, a Market column/filter/group-by, and
+  bounds the expensive Mixpanel RE-SOURCE drawers to the surfaced-CE set only.
+- Markets (config.MARKETS): the 10 live pilot markets. `headout` is separate — it does not read
+  `config.MARKETS`, it queries every market in the warehouse.
 
 ## Workflow
 

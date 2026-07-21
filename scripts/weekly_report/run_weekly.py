@@ -54,8 +54,10 @@ def run(cmd, cwd=None, check=True):
 def slugs_for(target):
     if target == "all":
         return list(config.MARKETS.keys())
+    if target == "headout":
+        return ["headout"]
     if target not in config.MARKETS:
-        sys.exit(f"unknown market '{target}'. Known: {', '.join(config.MARKETS)}")
+        sys.exit(f"unknown market '{target}'. Known: {', '.join(config.MARKETS)}, headout")
     return [target]
 
 
@@ -93,7 +95,10 @@ def stage_publish(slugs, week):
     print(f"\n═══ S3-reload + S4.5 · rebuild (load digests) + publish ═══")
     for s in slugs:
         if sidecar_path(s, week).exists():
-            run(["python3", "build_snapshot.py", "--market", s, "--week", week], cwd=HERE)
+            if s == "headout":
+                run(["python3", "build_global.py", "--week", week], cwd=HERE)
+            else:
+                run(["python3", "build_snapshot.py", "--market", s, "--week", week], cwd=HERE)
         else:
             print(f"  ⚠ {s}: no sidecar — rendering without a digest")
         snap = CACHE / f"snapshot_{s}_{week}.json"

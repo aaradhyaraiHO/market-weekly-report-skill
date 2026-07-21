@@ -26,6 +26,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import build_global
 import build_snapshot
 import config
 
@@ -37,18 +38,21 @@ def _to_date(s: str) -> dt.date:
 
 
 def _resolve_targets(market_arg: str) -> list[str]:
-    """'all' -> every pilot market (config order); else the single slug."""
+    """'all' -> every pilot market (config order); 'headout' -> true-global
+    aggregate (all ~69 business_markets, its own build path); else the slug."""
     if market_arg == "all":
         return list(config.MARKETS)
+    if market_arg == "headout":
+        return ["headout"]
     if market_arg not in config.MARKETS:
         sys.exit(f"Unknown market '{market_arg}'. Choose from: "
-                 f"{', '.join(config.MARKETS)} | all")
+                 f"{', '.join(config.MARKETS)} | all | headout")
     return [market_arg]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Weekly Market Report V1 orchestrator")
-    ap.add_argument("market", help="market slug or 'all' "
+    ap.add_argument("market", help="market slug, 'all', or 'headout' (true-global) "
                     f"({', '.join(config.MARKETS)})")
     ap.add_argument("--week", help="W0 Monday (YYYY-MM-DD); "
                     "default = latest complete matured week")
@@ -65,6 +69,12 @@ def main() -> None:
     # ---- build + write a snapshot per market (reuse build_snapshot helpers) ----
     snapshot_paths: list[Path] = []
     for slug in targets:
+        if slug == "headout":
+            # true-global aggregate: its own build path (no market filter)
+            snap = build_global.build_global(config.iso(w0))
+            path = build_snapshot._write(snap, "headout", w0)
+            snapshot_paths.append(path)
+            continue
         snap = build_snapshot.build_market(slug, w0)
         path = build_snapshot._write(snap, slug, w0)
         snapshot_paths.append(path)

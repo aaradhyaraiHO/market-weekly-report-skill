@@ -1,23 +1,16 @@
 #!/usr/bin/env python3
-"""build_global — Headout-level (all-market aggregate) weekly snapshot.
+"""build_global — true-global Headout weekly snapshot.
 
-MERGE, not re-query: loads the per-market snapshots already in .cache for a week
-and rolls them into one "Headout" snapshot with the SAME contract, so render.py +
-the template work unchanged. No new BigQuery.
+Queries BigQuery directly with NO market filter — all ~69 business_market values
+included. Phase 1 uses CE_STATS + ADS_STATS (~21 MB each). RE-SOURCE drawers
+(fct_orders/fct_bookings/Mixpanel) are deferred to Phase 3 and bounded to the
+surfaced CE set.
 
-Aggregation:
-  • ces            — union of all markets' CEs (a CE belongs to one market)
-  • market_summary — weekly/weekly_ly summed per week (additive fields), derived
-                     metrics recomputed from the sums; ratio metrics that have no
-                     clean sum (tr/cr/sis/ctr/contrib) are revenue-weighted
-  • headlines      — key_metrics rebuilt from summed W0/W-1; movers + week_header
-                     recomputed globally via flows (structural clock degrades to
-                     raw WoW — LY-forward per CE isn't in the trailing snapshot)
-  • buckets/PP/etc — pooled (concatenated), worst-first re-sorts preserved
+Output: .cache/weekly_report/snapshot_headout_{week}.json
 
 Usage:
-  python3 build_global.py --week 2026-07-13 [--out <path>]
-  then: python3 render.py .cache/weekly_report/snapshot_headout_<week>.json
+    python3 build_global.py --week 2026-07-13 [--out <path>]
+    then: python3 render.py .cache/weekly_report/snapshot_headout_<week>.json
 """
 from __future__ import annotations
 
@@ -27,388 +20,634 @@ import json
 from pathlib import Path
 import sys
 
+import numpy as np
+import pandas as pd
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import config          # noqa: E402
-import flows           # noqa: E402
+
+import alerts
+import bucket_b1
+import bucket_b3
+import bucket_b4
+import config
+import fetch
+import flows
+import shapley
+from build_snapshot import (
+    _apply_cascade,
+    _attach_channels_funnel,
+    _attach_resource_breakdowns,
+    _ce_levels,
+    _enrich_b1_sparklines,
+    _enrich_b3_sparklines,
+    _enrich_b4_sparklines,
+    _num,
+    _pct,
+    _weekly_metrics,
+)
 
 CACHE = HERE.parent.parent / ".cache" / "weekly_report"
 
-# weekly fields that sum straight across markets
-ADDITIVE = [
-    "revenue", "gbv", "orders", "clicks", "cm2", "spend", "cm1",
-    "cm1_business", "gross_marketing_cost", "paid_impressions", "paid_clicks",
-    "paid_conv_value", "paid_conversions", "paid_revenue", "paid_cm2",
-    # raw SIS / organic components (present after a producer rebuild) → exact SIS% + contribution%
-    "sis_impr", "sis_elig", "organic_gbv",
-]
-# TR% and CR% are exact: reconstruct gbv_completed = gbv × cr%/100 per market, then
-# CR% = Σgbv_completed/Σgbv · TR% = Σrevenue/Σgbv_completed (canon).
-# SIS% / paid_contribution% have no raw numerator/denominator in the weekly row → revenue-weighted.
-WEIGHTED = ["paid_sis_pct", "paid_contribution_pct"]
 
+# --------------------------------------------------------------------------- #
+# Market breakdown — per-market §1 rollup from CE-level data
+# --------------------------------------------------------------------------- #
+def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
+    """Per-market revenue/WoW/YoY/ROI + each market's share of the global WoW move."""
+    by_mkt = {}
+    for ce in ces:
+        mkt = ce.get("metadata", {}).get("market", "Unknown")
+        if mkt not in by_mkt:
+            by_mkt[mkt] = {"w0": 0.0, "wm1": 0.0, "ly": 0.0,
+                           "spend_w0": 0.0, "cw_w0": 0.0, "cm1_w0": 0.0}
+        b_w0 = biz_idx.get((ce["ce_id"], w0_start))
+        b_wm1 = biz_idx.get((ce["ce_id"], wm1_start))
+        ly_val = ly_rev.get((ce["ce_id"], w0_start), 0.0)
+        p_w0 = paid_idx.get((ce["ce_id"], w0_start))
+        if b_w0 is not None:
+            by_mkt[mkt]["w0"] += float(b_w0.get("revenue") or 0)
+        if b_wm1 is not None:
+            by_mkt[mkt]["wm1"] += float(b_wm1.get("revenue") or 0)
+        by_mkt[mkt]["ly"] += float(ly_val or 0)
+        if p_w0 is not None:
+            by_mkt[mkt]["spend_w0"] += float(p_w0.get("spend") or 0)
+            by_mkt[mkt]["cw_w0"] += float(p_w0.get("coupon_wallet") or 0)
+            by_mkt[mkt]["cm1_w0"] += float(p_w0.get("cm1") or 0)
 
-def _load(week):
-    out = {}
-    for slug in config.MARKETS:
-        p = CACHE / f"snapshot_{slug}_{week}.json"
-        if not p.exists():
-            print(f"  ! missing {p.name} — skipping {slug}")
-            continue
-        d = json.loads(p.read_text())
-        out[slug] = d.get("markets", [d])[0]
-    if not out:
-        sys.exit(f"no snapshots found for week {week} in {CACHE}")
-    return out
-
-
-def _num(v):
-    return round(v, 4) if isinstance(v, float) else v
-
-
-def _merge_weekly(series_list):
-    """Sum a list of market_weekly arrays by week; recompute derived metrics."""
-    by_week = {}
-    order = []
-    for series in series_list:
-        for w in series:
-            wk = w["week"]
-            if wk not in by_week:
-                by_week[wk] = {"week": wk, "_rev_wt": 0.0, "_gbv_completed": 0.0,
-                               "_wsum": {k: 0.0 for k in WEIGHTED}}
-                order.append(wk)
-            acc = by_week[wk]
-            for f in ADDITIVE:
-                v = w.get(f)
-                if v is not None:
-                    acc[f] = acc.get(f, 0.0) + v
-            # reconstruct gbv_completed from gbv × cr% (market weekly carries both, not gbv_completed)
-            gbv, cr = w.get("gbv"), w.get("cr_pct")
-            if gbv is not None and cr is not None:
-                acc["_gbv_completed"] += gbv * cr / 100.0
-            rev = w.get("revenue") or 0.0
-            acc["_rev_wt"] += rev
-            for f in WEIGHTED:
-                v = w.get(f)
-                if v is not None:
-                    acc["_wsum"][f] += v * rev
-    rows = []
-    for wk in sorted(order):
-        a = by_week[wk]
-        rev_wt = a.pop("_rev_wt") or 0.0
-        gc = a.pop("_gbv_completed") or 0.0
-        wsum = a.pop("_wsum")
-        def r(x, y, scale=100.0):
-            return _num(scale * a[x] / a[y]) if a.get(y) else None
-        a["aov"] = _num(a["gbv"] / a["orders"]) if a.get("orders") else None
-        # exact take-rate + completion from summed components
-        a["cr_pct"] = _num(100.0 * gc / a["gbv"]) if a.get("gbv") else None
-        a["tr_pct"] = _num(100.0 * a["revenue"] / gc) if gc else None
-        a["roi_pct"] = r("cm1", "spend")
-        a["roi1_pct"] = r("cm1_business", "gross_marketing_cost")
-        a["cvr_pct"] = r("paid_conversions", "paid_clicks")
-        a["paid_cvr_pct"] = a["cvr_pct"]
-        a["cpc"] = _num(a["spend"] / a["paid_clicks"]) if a.get("paid_clicks") else None
-        a["paid_rpc"] = _num(a["paid_revenue"] / a["paid_clicks"]) if a.get("paid_clicks") else None
-        a["paid_ctr_pct"] = r("paid_clicks", "paid_impressions")
-        a["avg_cm1"] = _num(a["cm1"] / a["paid_conversions"]) if a.get("paid_conversions") else None
-        a["cm1_per_conv"] = a["avg_cm1"]
-        for f in WEIGHTED:               # revenue-weighted average (fallback)
-            a[f] = _num(wsum[f] / rev_wt) if rev_wt else None
-        # exact overrides when the raw components are present (post producer-rebuild)
-        if a.get("sis_elig"):
-            a["paid_sis_pct"] = _num(min(100.0, 100.0 * a["sis_impr"] / a["sis_elig"]))
-        if gc and a.get("organic_gbv") is not None:
-            a["paid_contribution_pct"] = _num(max(0.0, min(100.0, 100.0 * (1 - a["organic_gbv"] / gc))))
-        for k in ("sis_impr", "sis_elig", "organic_gbv"):   # drop raw helpers from the emitted row
-            a.pop(k, None)
-        rows.append(a)
-    return rows
-
-
-def _pool(markets, path, tag_market=False):
-    """Concatenate a list-valued field across markets (path like 'buckets_final.defend.seasonality_down').
-    tag_market=True adds a `market` field to each row (for the §4 Market column)."""
-    out = []
-    for m in markets.values():
-        mkt = m.get("meta", {}).get("market")
-        node = m
-        for seg in path.split("."):
-            node = (node or {}).get(seg) if isinstance(node, dict) else None
-        if isinstance(node, list):
-            for r in node:
-                if tag_market and isinstance(r, dict):
-                    r = dict(r); r["market"] = mkt
-                out.append(r)
-    return out
-
-
-def _market_breakdown(markets):
-    """Per-market §1 rollup: rev/WoW/YoY/ROI + each market's share of the Headout WoW move."""
     rows = []
     total_delta = 0.0
-    for slug, m in markets.items():
-        hl = m["market_summary"]["headlines"]
-        delta = (hl.get("key_metrics", {}).get("revenue", {}) or {}).get("delta_abs") or 0.0
+    for mkt, v in by_mkt.items():
+        delta = v["w0"] - v["wm1"]
         total_delta += delta
-        rows.append({"slug": slug, "market": m["meta"]["market"],
-                     "revenue_w0": hl.get("revenue_w0"), "wow_pct": hl.get("wow_pct"),
-                     "yoy_pct": hl.get("yoy_pct"), "roi_pct": hl.get("roi_w0_pct"),
-                     "delta_abs": _num(delta)})
+        denom = v["spend_w0"] + v["cw_w0"]
+        roi = _pct(v["cm1_w0"], denom, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT)) if denom >= config.WEEKLY_SPEND_FLOOR else None
+        rows.append({
+            "market": mkt,
+            "revenue_w0": _num(v["w0"]),
+            "wow_pct": _num(100.0 * (v["w0"] / v["wm1"] - 1)) if v["wm1"] else None,
+            "yoy_pct": _num(100.0 * (v["w0"] / v["ly"] - 1)) if v["ly"] else None,
+            "roi_pct": roi,
+            "delta_abs": _num(delta),
+        })
     for r in rows:
         r["contrib_pct"] = _num(100.0 * r["delta_abs"] / total_delta) if total_delta else None
     rows.sort(key=lambda r: -(r["revenue_w0"] or 0))
     return rows
 
 
+# --------------------------------------------------------------------------- #
+# Main build
+# --------------------------------------------------------------------------- #
 def build_global(week: str) -> dict:
-    markets = _load(week)
-    slugs = list(markets.keys())
-    print(f"  merging {len(slugs)} markets: {', '.join(slugs)}")
+    """True-global Headout snapshot: queries BQ globally (no market filter)."""
+    w0_start = dt.date.fromisoformat(week)
+    w0_end = w0_start + dt.timedelta(days=6)
+    wm1_start = w0_start - dt.timedelta(days=7)
+    weeks = config.week_starts(w0_start, config.WEEKS_BACK)
+    start = weeks[0]
+    print(f"\n=== Headout (global) | W0 {w0_start} ({start}..{w0_end}) ===")
 
-    # ---- ces: union, tagging each with its market (for §3 filter / group-by) ----
+    # ---- 1. Fetch: global queries (no market filter) ----
+    print("  fetching ce_weekly_business (global)...")
+    biz = fetch.ce_weekly_business(None, start, w0_end)
+    print(f"    {len(biz)} rows")
+
+    print("  fetching ce_weekly_ads (global)...")
+    paid = fetch.ce_weekly_ads(None, start, w0_end)
+    print(f"    {len(paid)} rows")
+
+    print("  fetching ce_metadata (global)...")
+    meta_df = fetch.ce_metadata(None, start, w0_end)
+    n_markets = meta_df["market"].nunique() if "market" in meta_df.columns else 0
+    print(f"    {len(meta_df)} CEs across {n_markets} markets")
+
+    # LY (weekday-aligned -364d + 28d forward for structural / B3 sparklines)
+    ly_start = start - dt.timedelta(days=config.YOY_LAG_DAYS)
+    ly_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS) + dt.timedelta(days=28)
+    print("  fetching LY business (global)...")
+    ly = fetch.ce_weekly_business(None, ly_start, ly_end)
+    ly["aligned_week"] = pd.to_datetime(ly["week"]).dt.date.map(
+        lambda d: d + dt.timedelta(days=config.YOY_LAG_DAYS)
+    )
+    ly_rev = ly.groupby(["combined_entity_id", "aligned_week"])["revenue"].sum().to_dict()
+    print(f"    {len(ly)} rows")
+
+    # Daily series for the fluctuation engine (CE_STATS + ADS_STATS only — cheap)
+    daily_start = w0_start - dt.timedelta(days=40)
+    print("  fetching daily series (global)...")
+    d_ads = fetch.ce_daily_ads(None, daily_start, w0_end)
+    d_biz = fetch.ce_daily_business(None, daily_start, w0_end)
+    d_funnel_g = fetch.ce_daily_paid_google(None, daily_start, w0_end)
+    for _c in ("orders", "booked", "attr_value", "attr_completed", "revenue", "clicks"):
+        if _c in d_funnel_g.columns:
+            d_funnel_g[_c] = pd.to_numeric(d_funnel_g[_c], errors="coerce").fillna(0.0)
+    troas = fetch.troas_history(
+        None, w0_start - dt.timedelta(days=config.TROAS_LOOKBACK_DAYS), w0_end
+    )
+    print(f"    daily_ads={len(d_ads)}, daily_biz={len(d_biz)}, "
+          f"daily_funnel_g={len(d_funnel_g)}, troas={len(troas)}")
+
+    # ---- Type coercions (same as build_snapshot) ----
+    for df in (biz, paid, ly, d_ads, d_biz):
+        if "week" in df.columns:
+            df["week"] = pd.to_datetime(df["week"]).dt.date
+    for df in (d_ads, d_biz, d_funnel_g, troas):
+        if not df.empty and "report_date" in df.columns:
+            df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
+    for df in (biz, paid, meta_df, d_ads, d_biz, d_funnel_g, troas):
+        if "combined_entity_id" in df.columns:
+            df["combined_entity_id"] = df["combined_entity_id"].astype(str)
+
+    names = dict(zip(biz["combined_entity_id"], biz["combined_entity_name"]))
+    names.update(dict(zip(meta_df["combined_entity_id"], meta_df["combined_entity_name"])))
+    names = {k: (v if (v is not None and str(v).strip()) else k) for k, v in names.items()}
+
+    # ---- 2. Per-CE assembly ----
+    biz_idx = {(r["combined_entity_id"], r["week"]): r for _, r in biz.iterrows()}
+    paid_idx = {(r["combined_entity_id"], r["week"]): r for _, r in paid.iterrows()}
+    meta_idx = {r["combined_entity_id"]: r for _, r in meta_df.iterrows()}
+
+    all_ce_ids = sorted(set(biz["combined_entity_id"]) | set(paid["combined_entity_id"]))
+    print(f"  assembling {len(all_ce_ids)} CEs...")
+
     ces = []
-    for m in markets.values():
-        mkt = m.get("meta", {}).get("market")
-        for c in (m.get("ces") or []):
-            md = c.setdefault("metadata", {})
-            if isinstance(md, dict):
-                md["market"] = mkt
-            ces.append(c)
-
-    # ---- market_summary: sum weekly + weekly_ly ----
-    weekly = _merge_weekly([m["market_summary"]["weekly"] for m in markets.values()])
-    weekly_ly = _merge_weekly([m["market_summary"].get("weekly_ly") or [] for m in markets.values()])
-    ly_by_week = {w["week"]: w for w in weekly_ly}
-    # per-week YoY on the summed series (weekday-aligned LY lives in weekly_ly by week key offset)
-    for w in weekly:
-        ly = ly_by_week.get(w["week"])
-        w["yoy_pct"] = _num(100.0 * (w["revenue"] / ly["revenue"] - 1)) if (ly and ly.get("revenue")) else None
-
-    w0 = config.iso(dt.date.fromisoformat(week))
-    weeks_sorted = [w["week"] for w in weekly]
-    w0_row = next(w for w in weekly if w["week"] == w0)
-    wm1_iso = weeks_sorted[weeks_sorted.index(w0) - 1] if weeks_sorted.index(w0) > 0 else None
-    wm1_row = next((w for w in weekly if w["week"] == wm1_iso), None)
-
-    # ---- headlines: key_metrics from summed W0/W-1 ----
-    KEY_METRIC_SPEC = [
-        ("revenue", "Revenue", "revenue"), ("gbv", "GBV", "gbv"), ("orders", "Orders", "orders"),
-        ("aov", "AOV", "aov"), ("cr_pct", "CR%", "cr_pct"), ("tr_pct", "TR%", "tr_pct"),
-        ("paid_clicks", "Paid Clicks", "paid_clicks"), ("paid_cvr", "Paid CVR", "paid_cvr_pct"),
-        ("paid_conv_value", "Paid Conv Value", "paid_conv_value"), ("avg_cm1", "Avg CM1", "avg_cm1"),
-        ("paid_roi", "Paid RoI", "roi_pct"), ("roi1", "ROI 1", "roi1_pct"),
-    ]
-    key_metrics = {}
-    for key, label, field in KEY_METRIC_SPEC:
-        w0v, wm1v = w0_row.get(field), (wm1_row.get(field) if wm1_row else None)
-        da = _num(w0v - wm1v) if (w0v is not None and wm1v is not None) else None
-        dp = _num(100.0 * (w0v / wm1v - 1)) if (w0v is not None and wm1v not in (None, 0)) else None
-        km = {"w0": w0v, "wm1": wm1v, "delta_abs": da, "delta_pct": dp,
-              "label": label, "field": field, "has_ly": True, "ly_field": field}
-        if key == "revenue":
-            km["yoy_pct"] = w0_row.get("yoy_pct")
-        key_metrics[key] = km
-
-    week_header = flows.build_header(ces, {}, weekly, dt.date.fromisoformat(week), large_threshold=None)
-    # Replace build_header's structural (which degrades to raw when LY-forward is absent) with an
-    # AGGREGATE, portfolio-blended structural clock — one trailing LY WoW ratio ΣLY(W0)/ΣLY(W-1),
-    # no per-CE forward week, no new query.
-    _apply_aggregate_structural(week_header, ces, weekly_ly, w0, w0_row.get("revenue") or 0.0)
-    headlines = {
-        "revenue_w0": w0_row.get("revenue"),
-        "wow_pct": key_metrics["revenue"]["delta_pct"],
-        "yoy_pct": w0_row.get("yoy_pct"),
-        "roi_w0_pct": w0_row.get("roi_pct"),
-        "roi1_w0_pct": w0_row.get("roi1_pct"),
-        "key_metrics": key_metrics,
-        "top_gainers": week_header["trend"]["top_gainers"],
-        "top_drops": week_header["trend"]["top_droppers"],
-        "shapley_wow": _agg_shapley(markets),   # sum each $ factor across markets (additive)
-        "week_header": week_header,
-    }
-
-    # ---- pooled buckets / lists ----
-    P = lambda path: _pool(markets, path, tag_market=True)   # bucket rows tagged with market for §4 column
-    bf = {
-        "defend": {
-            "losing_money": {
-                "bleeders": sorted(P("buckets_final.defend.losing_money.bleeders"),
-                                   key=lambda r: (bool(r.get("recovering")), r.get("cm2_bleed_4w") or 0)),
-                "full_waste": P("buckets_final.defend.losing_money.full_waste"),
-                "recovered": P("buckets_final.defend.losing_money.recovered"),
-                "paused": P("buckets_final.defend.losing_money.paused"),
-                "tracking_gap": P("buckets_final.defend.losing_money.tracking_gap"),
-                "burn_line": _sum_burn(markets),
+    paid_contrib_w0 = {}
+    for ce_id in all_ce_ids:
+        weekly = []
+        for wk in weeks:
+            b = biz_idx.get((ce_id, wk))
+            p = paid_idx.get((ce_id, wk))
+            yoy = ly_rev.get((ce_id, wk))
+            row = _weekly_metrics(
+                b if b is not None else None,
+                p if p is not None else None,
+                yoy_rev=yoy,
+            )
+            row["week"] = config.iso(wk)
+            weekly.append(row)
+            if wk == w0_start and row["paid_contribution_pct"] is not None:
+                paid_contrib_w0[ce_id] = row["paid_contribution_pct"]
+        md = meta_idx.get(ce_id, {})
+        ces.append({
+            "ce_id": ce_id,
+            "ce_name": names.get(ce_id, ce_id),
+            "metadata": {
+                "category": md.get("category"),
+                "subcategory": md.get("subcategory"),
+                "city": md.get("city"),
+                "management_type": md.get("management_type"),
+                "evolution": md.get("evolution"),
+                "new_vs_existing": md.get("new_vs_existing"),
+                "tier": md.get("tier"),
+                "market": md.get("market", "Unknown"),
             },
-            "seasonality_down": sorted(P("buckets_final.defend.seasonality_down"),
-                                       key=lambda r: (r.get("swing_pct") or 0)),
-        },
-        "compound": {
-            "seasonality_up": sorted(P("buckets_final.compound.seasonality_up"),
-                                     key=lambda r: -(r.get("swing_pct") or 0)),
-            "scale_up": P("buckets_final.compound.scale_up"),
-        },
-        "lifecycle": {
-            "new_ces": P("buckets_final.lifecycle.new_ces"),
-            "iteration": P("buckets_final.lifecycle.iteration"),
-        },
+            "weekly": weekly,
+            "shapley_wow": shapley.wow_revenue_shapley(
+                _ce_levels(weekly[-1]), _ce_levels(weekly[-2])
+            ) if len(weekly) >= 2 else None,
+        })
+
+    # ---- 3. Market summary (global aggregate) ----
+    market_weekly = []
+    mkt_levels = {}
+    for wk in weeks:
+        bw = biz[biz["week"] == wk]
+        pw = paid[paid["week"] == wk]
+        rev = float(bw["revenue"].sum())
+        orders = float(bw["orders"].sum())
+        clicks = float(bw["clicks"].sum())
+        ad_conv = float(bw["ad_conversions"].sum())
+        gbv = float(bw["gbv"].sum())
+        gbv_comp = float(bw["gbv_completed"].sum())
+        organic = float(bw["organic_gbv"].sum())
+        spend = float(pw["spend"].sum())
+        coupon = float(pw["coupon_wallet"].sum())
+        cm1 = float(pw["cm1"].sum())
+
+        cm1_business = (
+            rev
+            + float(bw["co_marketing_commission"].sum())
+            + float(bw["insider_commission"].sum())
+            - float(bw["direct_costs"].sum())
+        )
+        gross_mktg_cost = (
+            float(bw["ad_spend_total"].sum())
+            + float(bw["coupon_discount"].sum())
+            + float(bw["wallet_credits"].sum())
+            + float(bw["affiliate_commission"].sum())
+            + float(bw["creator_collab_costs"].sum())
+            + float(bw["creator_collab_coupon_costs"].sum())
+        )
+        roi1 = _pct(cm1_business, gross_mktg_cost,
+                     gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
+
+        paid_impressions = float(pw["paid_impressions"].sum()) if "paid_impressions" in pw else 0
+        paid_clicks = float(pw["paid_clicks"].sum())
+        paid_conv = float(pw["conversions"].sum())
+        conv_value_gbv = float(pw["conv_value_gbv"].sum())
+        offline_rev = float(pw["offline_revenue"].sum()) if "offline_revenue" in pw else 0.0
+        paid_roi = _pct(cm1, spend + coupon, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
+        paid_cvr = _pct(paid_conv, paid_clicks, gate=(0.0, config.CVR_MAX_PCT))
+        sis_impr = float(pw["sis_impr"].sum()) if "sis_impr" in pw else 0
+        sis_elig = float(pw["sis_elig"].sum()) if "sis_elig" in pw else 0
+
+        mkt_levels[wk] = {
+            "clicks": clicks, "orders": orders, "gbv": gbv,
+            "gbv_completed": gbv_comp, "revenue": rev,
+        }
+
+        ly_wk = float(sum(v for (c, aw), v in ly_rev.items() if aw == wk))
+        ad_spend_all = float(bw["ad_spend_total"].sum())
+        market_weekly.append({
+            "week": config.iso(wk),
+            "revenue": _num(rev),
+            "gbv": _num(gbv),
+            "orders": int(orders),
+            "clicks": int(clicks),
+            "cm2": _num(rev - ad_spend_all),
+            "spend": _num(spend),
+            "cm1": _num(cm1),
+            "roi_pct": paid_roi,
+            "cvr_pct": _pct(ad_conv, clicks, gate=(0.0, config.CVR_MAX_PCT)),
+            "aov": _num(gbv / orders) if orders else None,
+            "tr_pct": _pct(rev, gbv_comp),
+            "cr_pct": _pct(gbv_comp, gbv),
+            "cm1_business": _num(cm1_business),
+            "gross_marketing_cost": _num(gross_mktg_cost),
+            "roi1_pct": roi1,
+            "paid_impressions": int(paid_impressions),
+            "paid_clicks": int(paid_clicks),
+            "paid_ctr_pct": _pct(paid_clicks, paid_impressions),
+            "paid_sis_pct": _pct(sis_impr, sis_elig, gate=(0.0, 100.0)),
+            "paid_conv_value": _num(conv_value_gbv),
+            "paid_conversions": int(paid_conv),
+            "paid_cvr_pct": paid_cvr,
+            "avg_cm1": _num(cm1 / paid_conv) if paid_conv else None,
+            "cpc": _num(spend / paid_clicks) if paid_clicks else None,
+            "paid_revenue": _num(offline_rev),
+            "paid_rpc": _num(offline_rev / paid_clicks) if paid_clicks else None,
+            "paid_cm2": _num(offline_rev - spend),
+            "cm1_per_conv": _num(cm1 / paid_conv) if paid_conv else None,
+            "paid_contribution_pct": _num(max(0.0, min(100.0, 100.0 * (1 - organic / gbv_comp)))) if gbv_comp else None,
+            "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
+            "sis_impr": _num(sis_impr), "sis_elig": _num(sis_elig), "organic_gbv": _num(organic),
+        })
+
+    # ---- 4. Headlines ----
+    def _ce_rev(ce_id, wk):
+        r = biz_idx.get((ce_id, wk))
+        return float(r["revenue"]) if r is not None else 0.0
+
+    movers = []
+    for ce_id in all_ce_ids:
+        delta = _ce_rev(ce_id, w0_start) - _ce_rev(ce_id, wm1_start)
+        movers.append({"ce_id": ce_id, "ce_name": names.get(ce_id, ce_id), "delta_wow": _num(delta)})
+    movers.sort(key=lambda m: (m["delta_wow"] or 0), reverse=True)
+    gainers = [m for m in movers if (m["delta_wow"] or 0) > 0][:5]
+    drops = [m for m in movers if (m["delta_wow"] or 0) < 0][-5:][::-1]
+
+    w0_row = next(w for w in market_weekly if w["week"] == config.iso(w0_start))
+    wm1_row = next((w for w in market_weekly if w["week"] == config.iso(wm1_start)), None)
+
+    KEY_METRIC_SPEC = [
+        ("revenue", "Revenue", "revenue", "revenue"),
+        ("gbv", "GBV", "gbv", "gbv"),
+        ("orders", "Orders", "orders", "orders"),
+        ("aov", "AOV", "aov", "aov"),
+        ("cr_pct", "CR%", "cr_pct", "cr_pct"),
+        ("tr_pct", "TR%", "tr_pct", "tr_pct"),
+        ("paid_clicks", "Paid Clicks", "paid_clicks", "paid_clicks"),
+        ("paid_cvr", "Paid CVR", "paid_cvr_pct", "paid_cvr_pct"),
+        ("paid_conv_value", "Paid Conv Value", "paid_conv_value", "paid_conv_value"),
+        ("avg_cm1", "Avg CM1", "avg_cm1", "avg_cm1"),
+        ("paid_roi", "Paid RoI", "roi_pct", "roi_pct"),
+        ("roi1", "ROI 1", "roi1_pct", "roi1_pct"),
+    ]
+
+    key_metrics = {}
+    for key, label, field, ly_field in KEY_METRIC_SPEC:
+        w0v = w0_row.get(field)
+        wm1v = wm1_row.get(field) if wm1_row else None
+        delta_abs = _num(w0v - wm1v) if (w0v is not None and wm1v is not None) else None
+        delta_pct = _num(100.0 * (w0v / wm1v - 1)) if (w0v is not None and wm1v not in (None, 0)) else None
+        block = {
+            "w0": w0v, "wm1": wm1v,
+            "delta_abs": delta_abs, "delta_pct": delta_pct,
+            "label": label, "field": field,
+            "has_ly": ly_field is not None, "ly_field": ly_field,
+        }
+        if key == "revenue":
+            block["yoy_pct"] = w0_row.get("yoy_pct")
+        key_metrics[key] = block
+
+    headlines = {
+        "revenue_w0": w0_row["revenue"],
+        "wow_pct": _num(100.0 * (w0_row["revenue"] / wm1_row["revenue"] - 1))
+        if (wm1_row and wm1_row["revenue"]) else None,
+        "yoy_pct": w0_row["yoy_pct"],
+        "roi_w0_pct": w0_row["roi_pct"],
+        "roi1_w0_pct": w0_row["roi1_pct"],
+        "key_metrics": key_metrics,
+        "top_gainers": gainers,
+        "top_drops": drops,
     }
 
-    followup = _pool(markets, "followup")
-    fluct = _pool(markets, "bucket1_fluctuations")
-    pp = _pool(markets, "prepurchase")
-    review = _review_cards(markets)   # tagged with source market for §2 grouping
+    headlines["shapley_wow"] = shapley.wow_revenue_shapley(
+        mkt_levels.get(w0_start, {}), mkt_levels.get(wm1_start, {})
+    )
 
-    # ---- §3 CE cap: keep all actionable CEs (buckets/movers/PP/followup/ce-digest) + top-N by W0 revenue.
-    # Movers + structural already ran on the FULL set above, so only the browse table is trimmed; every
-    # referenced CE stays so its drawer opens.
+    # ---- 5. LY weekly series (global) ----
+    print("  fetching LY ads (global)...")
+    paid_ly = fetch.ce_weekly_ads(None, ly_start, ly_end)
+    if not paid_ly.empty:
+        paid_ly["week"] = pd.to_datetime(paid_ly["week"]).dt.date
+        paid_ly["aligned_week"] = paid_ly["week"].map(
+            lambda d: d + dt.timedelta(days=config.YOY_LAG_DAYS)
+        )
+        paid_ly["combined_entity_id"] = paid_ly["combined_entity_id"].astype(str)
+
+    ly_biz_idx = {(r["combined_entity_id"], r["aligned_week"]): r
+                  for _, r in ly.iterrows()}
+    ly_paid_idx = ({(r["combined_entity_id"], r["aligned_week"]): r
+                    for _, r in paid_ly.iterrows()} if not paid_ly.empty else {})
+
+    ly_biz_cols = [c for c in ly.columns
+                   if c not in ("combined_entity_id", "combined_entity_name", "week", "aligned_week")]
+    ly_mkt_biz = ly.groupby("aligned_week")[ly_biz_cols].sum()
+    ly_mkt_paid = (paid_ly.groupby("aligned_week")[[c for c in paid_ly.columns
+                   if c not in ("combined_entity_id", "week", "aligned_week")]].sum()
+                   if not paid_ly.empty else pd.DataFrame())
+
+    weekly_ly = []
+    for wk in weeks:
+        b = ly_mkt_biz.loc[wk] if wk in ly_mkt_biz.index else None
+        p = ly_mkt_paid.loc[wk] if (not ly_mkt_paid.empty and wk in ly_mkt_paid.index) else None
+        row = _weekly_metrics(b, p)
+        row["week"] = config.iso(wk)
+        weekly_ly.append(row)
+
+    for ce in ces:
+        cid = ce["ce_id"]
+        wly = []
+        for wk in weeks:
+            b = ly_biz_idx.get((cid, wk))
+            p = ly_paid_idx.get((cid, wk))
+            row = _weekly_metrics(
+                b if b is not None else None,
+                p if p is not None else None,
+            )
+            row["week"] = config.iso(wk)
+            wly.append(row)
+        ce["weekly_ly"] = wly
+
+    # ---- 6. Week-type calibration (global trailing 52w) ----
+    large_threshold = None
+    hist_start = w0_start - dt.timedelta(weeks=52)
+    print("  fetching market_weekly_revenue (global, 52w)...")
+    mkt_hist = fetch.market_weekly_revenue(None, hist_start, w0_end)
+    if not mkt_hist.empty:
+        if "market" in mkt_hist.columns:
+            mkt_hist = mkt_hist.groupby("week", as_index=False)["revenue"].sum()
+        mkt_hist = mkt_hist.sort_values("week")
+        wow_deltas = mkt_hist["revenue"].astype(float).diff().abs().dropna()
+        if len(wow_deltas) >= 20:
+            large_threshold = float(np.percentile(wow_deltas, 75))
+            print(f"  week-type calibration: p75 of {len(wow_deltas)} WoW deltas = ${large_threshold:,.0f}")
+
+    # ---- 7. Week header: structural flows / week-type / dual-clock ----
+    w0_fwd = w0_start + dt.timedelta(days=7)
+    ly_forward_rev = {c["ce_id"]: ly_rev.get((c["ce_id"], w0_fwd)) for c in ces}
+    headlines["week_header"] = flows.build_header(
+        ces, ly_forward_rev, market_weekly, w0_start, large_threshold=large_threshold
+    )
+
+    # ---- 8. Fluctuation engine + buckets ----
+    today = dt.date.today()
+    mat_cutoff = min(w0_end, today - dt.timedelta(days=config.MATURITY_DAYS))
+    if mat_cutoff < w0_start:
+        fallback = config.latest_matured_week(today)
+        flux_w0_start, mat_cutoff = fallback, fallback + dt.timedelta(days=6)
+    else:
+        flux_w0_start = w0_start
+    flux_week_days = [flux_w0_start + dt.timedelta(days=i)
+                      for i in range((mat_cutoff - flux_w0_start).days + 1)]
+    flux_n_days = len(flux_week_days)
+    flux_partial = mat_cutoff < (flux_w0_start + dt.timedelta(days=6))
+    flux_context_week = config.latest_matured_week(today)
+
+    print("  running fluctuation engine (global)...")
+    bucket1, diag = alerts.build_bucket1(
+        ce_daily_ads=d_ads,
+        ce_daily_business=d_biz,
+        ce_daily_funnel_google=d_funnel_g,
+        ce_weekly=biz,
+        ce_weekly_paid=paid,
+        names=names,
+        paid_contrib=paid_contrib_w0,
+        troas=troas,
+        w0_start=flux_w0_start,
+        wm1_start=flux_w0_start - dt.timedelta(days=7),
+        week_days=flux_week_days,
+        w0_end=mat_cutoff,
+        availability_fetcher=None,
+        shapley_by_ce={c["ce_id"]: c.get("shapley_wow") for c in ces},
+    )
+
+    # Transitions + B1/B3/B4
+    transitions = []
+    for ce in ces:
+        hist = []
+        streak = 0
+        for w in ce["weekly"]:
+            roi = w["roi_pct"]
+            below = roi is not None and roi < 100.0
+            if below:
+                streak += 1
+            elif roi is not None:
+                streak = 0
+            hist.append({"week": w["week"], "roi_pct": roi, "below_100": below})
+        if any(h["roi_pct"] is not None for h in hist):
+            transitions.append({
+                "ce_id": ce["ce_id"],
+                "ce_name": ce["ce_name"],
+                "weekly": hist,
+                "current_streak_weeks_below_100": streak,
+            })
+
+    streak_by_ce = {t["ce_id"]: t["current_streak_weeks_below_100"] for t in transitions}
+    b1_result = bucket_b1.build_bucket_b1(ces, streak_by_ce, troas, w0_start, w0_end)
+    b1_rows = b1_result["rows"]
+    b1_standing = b1_result["standing_count"]
+
+    b3_rows = bucket_b3.build_bucket_b3(ces)
+
+    _struct = flows.per_ce_structural(ces, ly_forward_rev)
+    struct_by_ce = {c["ce_id"]: c["struct"] for c in _struct}
+    up_swing_ids = {r["ce_id"] for r in bucket1 if r.get("direction") == "up"}
+    b4_rows = bucket_b4.build_bucket_b4(ces, struct_by_ce, up_swing_ids, market_weekly)
+
+    ce_by_id = {c["ce_id"]: c for c in ces}
+    _enrich_b1_sparklines(b1_rows, ce_by_id)
+    _enrich_b3_sparklines(b3_rows, ce_by_id, ly_rev, w0_start)
+    _enrich_b4_sparklines(b4_rows, ce_by_id)
+
+    cascade_summary = _apply_cascade({"B1": b1_rows, "B2": bucket1, "B3": b3_rows, "B4": b4_rows})
+
+    # ---- 9. Market breakdown ----
+    breakdown = _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start)
+    print(f"  market breakdown: {len(breakdown)} markets")
+
+    # ---- 10. CE cap (keep all referenced + top-N by revenue) ----
     CAP = 300
+
     def _ids(rows):
         return {str(r.get("ce_id")) for r in rows if r.get("ce_id") is not None}
-    lm = bf["defend"]["losing_money"]
+
     ref = set()
-    for k in ("bleeders", "full_waste", "recovered", "paused", "tracking_gap"):
-        ref |= _ids(lm[k])
-    ref |= _ids(bf["defend"]["seasonality_down"]) | _ids(bf["compound"]["seasonality_up"])
-    ref |= _ids(bf["compound"]["scale_up"]) | _ids(bf["lifecycle"]["new_ces"]) | _ids(bf["lifecycle"]["iteration"])
-    ref |= _ids(week_header["trend"]["top_gainers"]) | _ids(week_header["trend"]["top_droppers"])
-    ref |= _ids(fluct) | _ids(pp) | _ids(followup)
-    ref |= {str(c.get("ce_id")) for c in review if c.get("scope") == "ce" and c.get("ce_id")}
+    ref |= _ids(b1_rows) | _ids(bucket1) | _ids(b3_rows) | _ids(b4_rows)
+    ref |= _ids(headlines["week_header"]["trend"]["top_gainers"])
+    ref |= _ids(headlines["week_header"]["trend"]["top_droppers"])
     ranked = sorted(ces, key=lambda c: -((c.get("weekly") or [{}])[-1].get("revenue") or 0))
     keep = ref | {str(c["ce_id"]) for c in ranked[:CAP]}
     n_full = len(ces)
     ces_capped = [c for c in ces if str(c["ce_id"]) in keep]
 
-    meta0 = dict(next(iter(markets.values()))["meta"])
-    meta0.update({"market": "Headout (all markets)", "market_slug": "headout",
-                  "n_markets": len(slugs), "markets_included": slugs,
-                  "ce_cap": {"shown": len(ces_capped), "total": n_full, "cap": CAP,
-                             "note": f"All-CE view: top {CAP} by revenue + all flagged / mover / PP CEs "
-                                     f"({len(ces_capped)} of {n_full})"}})
+    # ---- 11. RE-SOURCE drawers for surfaced CEs ----
+    # fct_orders + fct_bookings run globally (~500 MB total, cheap).
+    # Mixpanel queries are CE-filtered (surfaced IDs only, ~42 GB each — within 80 GB cap).
+    wm1_end = w0_start - dt.timedelta(days=1)
+    ly_w0_start = w0_start - dt.timedelta(days=config.YOY_LAG_DAYS)
+    ly_w0_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
+    surfaced_ids = [c["ce_id"] for c in ces_capped]
 
-    snap = {
-        "meta": meta0,
-        "market_breakdown": _market_breakdown(markets),
-        "market_summary": {"weekly": weekly, "weekly_ly": weekly_ly, "headlines": headlines},
+    print(f"  fetching RE-SOURCE drawers for {len(surfaced_ids)} surfaced CEs...")
+    print("    tgids (fct_orders, global)...")
+    tgids_df = fetch.ce_tgids(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+    print("    tgid_funnel (Mixpanel, CE-filtered)...")
+    tgid_funnel_df = fetch.ce_tgid_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+    print("    tgid_leadtime (fct_bookings, global)...")
+    tgid_lt_df = fetch.ce_tgid_leadtime(None, w0_start, w0_end, wm1_start, wm1_end)
+    print("    leadtime (fct_bookings, global)...")
+    lead_df = fetch.ce_leadtime(None, w0_start, w0_end, wm1_start, wm1_end)
+    print("    countries (fct_orders, global)...")
+    ctry_df = fetch.ce_countries(None, w0_start, w0_end, wm1_start, wm1_end)
+    print("    channels (fct_orders, global)...")
+    chan_df = fetch.ce_channels(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+    print("    funnel (Mixpanel, CE-filtered)...")
+    funnel_df = fetch.ce_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+
+    _attach_resource_breakdowns(ces_capped, tgids_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
+    _attach_channels_funnel(ces_capped, chan_df, funnel_df)
+
+    # Overall CVR from funnel data (same as build_snapshot)
+    for ce in ces_capped:
+        cvr = (ce.get("funnel") or {}).get("CVR")
+        wkly = ce.get("weekly") or []
+        if cvr and len(wkly) >= 2:
+            wkly[-1]["overall_cvr_pct"] = cvr.get("current")
+            wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
+    print("    drawers attached.")
+
+    # ---- 12. Assemble snapshot ----
+    meta = {
+        "market": "Headout (all markets)",
+        "market_slug": "headout",
+        "n_markets": n_markets,
+        "week_start": config.iso(w0_start),
+        "week_end": config.iso(w0_end),
+        "fluctuation_window_start": config.iso(flux_w0_start),
+        "fluctuation_window_end": config.iso(mat_cutoff),
+        "fluctuation_compare_start": config.iso(flux_w0_start - dt.timedelta(days=7)),
+        "fluctuation_compare_end": config.iso(mat_cutoff - dt.timedelta(days=7)),
+        "fluctuation_context_week": config.iso(flux_context_week),
+        "fluctuation_days": flux_n_days,
+        "fluctuation_partial": flux_partial,
+        "weeks": [config.iso(w) for w in weeks],
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "schema_version": config.SCHEMA_VERSION,
+        "revenue_basis": "sum_revenue_predicted",
+        "metric_reference": "analytics-skill (business.md / marketing.md)",
+        "ce_cap": {
+            "shown": len(ces_capped), "total": n_full, "cap": CAP,
+            "note": f"All-CE view: top {CAP} by revenue + all flagged / mover CEs "
+                    f"({len(ces_capped)} of {n_full})",
+        },
+    }
+
+    snapshot = {
+        "meta": meta,
+        "market_breakdown": breakdown,
+        "market_summary": {"weekly": market_weekly, "weekly_ly": weekly_ly, "headlines": headlines},
         "ces": ces_capped,
-        "followup": followup,
-        "bucket1_fluctuations": fluct,
-        "buckets_final": bf,
-        "prepurchase": pp,
-        "no_bid_campaigns": _merge_no_bid(markets),
-        "seasonality_adjustments": _pool(markets, "seasonality_adjustments"),
-        "levers": _pool(markets, "levers"),
-        "transitions": _pool(markets, "transitions"),
-        "market_review_context": review,
-        "_diagnostics": {"aggregate_of": slugs, "n_ces_full": n_full, "n_ces_shown": len(ces_capped)},
+        "followup": [],
+        "bucket1_fluctuations": bucket1,
+        "bucket_b1": {
+            "rows": b1_rows,
+            "standing_count": b1_standing,
+            "zero_spend_exits": b1_result["zero_spend_exits"],
+            "burn_line": b1_result["burn_line"],
+            "gray_zone": b1_result["gray_zone"],
+        },
+        "bucket_b3": {"rows": b3_rows},
+        "bucket_b4": {"rows": b4_rows},
+        "bucket_cascade": cascade_summary,
+        "no_bid_campaigns": {"totals": {"count": 0, "spend_total": 0}, "rows": []},
+        "seasonality_adjustments": [],
+        "levers": [],
+        "market_review_context": [],
+        "transitions": transitions,
+        "_diagnostics": diag,
     }
-    return snap
 
+    # buckets_final (Defend/Compound/Lifecycle reorganization)
+    import buckets
+    snapshot["buckets_final"] = buckets.build_buckets(snapshot)
 
-def _apply_aggregate_structural(week_header, ces, weekly_ly, w0_iso, raw_rev):
-    """Portfolio-level structural clock: expected W0 = W-1 × R, R = ΣLY(W0)/ΣLY(W-1)
-    (trailing LY WoW ratio from the summed LY series — no forward week). Applies R
-    uniformly to every CE, so gains/losses/N80 stay a real decomposition but on a
-    blended-seasonality basis. Overrides week_header structural + week_type + dual label."""
-    ly_weeks = [w["week"] for w in weekly_ly]
-    R = None
-    if w0_iso in ly_weeks:
-        i = ly_weeks.index(w0_iso)
-        if i > 0:
-            ly0, lym1 = weekly_ly[i].get("revenue"), weekly_ly[i - 1].get("revenue")
-            if ly0 and lym1:
-                R = ly0 / lym1
-    gvals, lvals = [], []
-    for ce in ces:
-        wk = ce.get("weekly") or []
-        if len(wk) < 2:
-            continue
-        w0r, wm1r = wk[-1].get("revenue"), wk[-2].get("revenue")
-        if w0r is None or wm1r is None:
-            continue
-        expected = wm1r * (R - 1.0) if R is not None else 0.0
-        struct = (w0r - wm1r) - expected
-        (gvals if struct >= 0 else lvals).append(abs(struct))
-    G, L = sum(gvals), sum(lvals)
-    week_header["structural"] = {
-        "gains_usd": round(G), "losses_usd": round(L), "net_usd": round(G - L),
-        "n80_gain": flows._n80(sorted(gvals, reverse=True)),
-        "n80_loss": flows._n80(sorted(lvals, reverse=True)),
-        "ly_ratio": round(R, 4) if R else None,
-        "basis": "aggregate trailing LY ratio (portfolio-blended)",
-    }
-    floor = max(500.0, 0.005 * raw_rev)
-    net = G - L
-    week_header["week_type"] = (
-        (f"Both large — gains beat by ${net:,.0f}" if net >= 0 else f"Both large — losses beat by ${-net:,.0f}")
-        if (G > floor and L > floor) else
-        "Mostly gains" if (G > L and G > floor) else
-        "Mostly loss" if (L > G and L > floor) else "Mostly stable")
-    raw_wow = week_header["raw"].get("wow_pct")
-    if raw_wow is not None:
-        week_header["dual_clock_label"] = (
-            "BEATING SEASONALITY" if (net >= 0 and raw_wow < 0) else
-            "UNDER-RAMPING vs LY seasonality" if (net < 0 and raw_wow >= 0) else
-            week_header["week_type"])
-        week_header["clocks_disagree"] = ((raw_wow >= 0) != (net >= 0))
+    # PP tracking (optional — may fail if dim_pp_allotments unavailable globally)
+    try:
+        import pp
+        snapshot["prepurchase"] = pp.build_pp(snapshot)
+    except Exception as e:
+        print(f"  [pp] skipped: {e}")
+        snapshot["prepurchase"] = []
 
+    # Seasonality tags (optional)
+    try:
+        import seasonality_llm
+        n = seasonality_llm.attach(snapshot)
+        print(f"  seasonality tags attached: {n}")
+    except Exception as e:
+        print(f"  seasonality_llm.attach skipped ({e!r})")
 
-def _agg_shapley(markets):
-    """Sum the WoW-Shapley $ factors across markets (each is an additive $ contribution)."""
-    facs = ["traffic", "cvr", "aov", "cr", "tr", "total", "net_delta"]
-    agg = {f: 0.0 for f in facs}
-    labels = None
-    any_found = False
-    for m in markets.values():
-        sw = (m.get("market_summary") or {}).get("headlines", {}).get("shapley_wow") or {}
-        if not sw:
-            continue
-        any_found = True
-        labels = labels or sw.get("labels")
-        for f in facs:
-            if sw.get(f) is not None:
-                agg[f] += sw[f]
-    if not any_found:
-        return {}
-    out = {f: _num(agg[f]) for f in facs}
-    out["labels"] = labels or {"traffic": "Traffic", "cvr": "CVR", "aov": "AOV", "cr": "Completion", "tr": "Take rate"}
-    out["reconstructs"] = True
-    return out
+    # Tag bucket rows with market (for §4 Market column in the global report)
+    for section_key in ("bucket1_fluctuations",):
+        for r in snapshot.get(section_key, []):
+            ce = ce_by_id.get(r.get("ce_id"))
+            if ce:
+                r["market"] = ce.get("metadata", {}).get("market")
+    for cat in snapshot.get("buckets_final", {}).values():
+        if isinstance(cat, dict):
+            for sub in cat.values():
+                rows = sub if isinstance(sub, list) else (sub.get("bleeders", []) + sub.get("full_waste", [])
+                        + sub.get("recovered", []) + sub.get("paused", []) + sub.get("tracking_gap", [])
+                        if isinstance(sub, dict) else [])
+                for r in rows:
+                    if isinstance(r, dict) and "ce_id" in r:
+                        ce = ce_by_id.get(r["ce_id"])
+                        if ce:
+                            r["market"] = ce.get("metadata", {}).get("market")
 
+    # Slack digest sidecar (if a prior agent step wrote one)
+    sc = CACHE / f"slack_context_headout_{config.iso(w0_start)}.json"
+    if sc.exists():
+        try:
+            snapshot["market_review_context"] = json.loads(sc.read_text())
+            print(f"  [slack] loaded {len(snapshot['market_review_context'])} context cards")
+        except Exception as e:
+            print(f"  [slack] sidecar load skipped ({e!r})")
 
-def _review_cards(markets):
-    """Pool §2 Slack cards, tagging each with its source market so §2 can group by market."""
-    out = []
-    for m in markets.values():
-        mkt = m.get("meta", {}).get("market", "?")
-        for c in (m.get("market_review_context") or []):
-            c = dict(c)
-            c["market"] = mkt
-            out.append(c)
-    return out
-
-
-def _sum_burn(markets):
-    tot = {"count": 0, "bleed_wk": 0.0, "names": []}
-    for m in markets.values():
-        b = (((m.get("buckets_final") or {}).get("defend") or {}).get("losing_money") or {}).get("burn_line") or {}
-        tot["count"] += b.get("count") or 0
-        tot["bleed_wk"] += b.get("bleed_wk") or 0
-        tot["names"].extend(b.get("names") or [])
-    tot["bleed_wk"] = round(tot["bleed_wk"])
-    return tot
-
-
-def _merge_no_bid(markets):
-    rows, cnt, spend = [], 0, 0.0
-    for m in markets.values():
-        nb = m.get("no_bid_campaigns") or {}
-        rows.extend(nb.get("rows") or [])
-        t = nb.get("totals") or {}
-        cnt += t.get("count") or 0
-        spend += t.get("spend_total") or 0
-    return {"totals": {"count": cnt, "spend_total": round(spend)}, "rows": rows}
+    return snapshot
 
 
 def main():
@@ -418,9 +657,13 @@ def main():
     args = ap.parse_args()
     snap = build_global(args.week)
     out = Path(args.out) if args.out else CACHE / f"snapshot_headout_{args.week}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(snap, default=str))
-    print(f"  wrote {out}  ({len(snap['ces'])} CEs, {out.stat().st_size//1024} KB)")
-    print(f"  Headout W0 revenue: {snap['market_summary']['headlines']['revenue_w0']}")
+    rev = snap["market_summary"]["headlines"]["revenue_w0"]
+    n_mkt = len(snap.get("market_breakdown", []))
+    n_ces = len(snap["ces"])
+    print(f"\n  wrote {out}  ({n_ces} CEs, {n_mkt} markets, {out.stat().st_size // 1024} KB)")
+    print(f"  Headout W0 revenue: ${rev:,.0f}" if rev else "  Headout W0 revenue: N/A")
 
 
 if __name__ == "__main__":

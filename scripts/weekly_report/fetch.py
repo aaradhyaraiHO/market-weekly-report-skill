@@ -20,7 +20,7 @@ REV = config.REVENUE_COL
 # --------------------------------------------------------------------------- #
 # CE-level weekly business funnel  (combined_entity_stats)
 # --------------------------------------------------------------------------- #
-def ce_weekly_business(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
     Weekly CE funnel: revenue (predicted), orders, clicks, ad conversions, GBV,
     completed GBV, organic GBV. No is_forecasted filter (canon; windows are past).
@@ -81,21 +81,21 @@ def ce_weekly_business(market: str, start: dt.date, end: dt.date) -> pd.DataFram
 
     FROM {config.CE_STATS}
 
-    WHERE business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND business_market = @market' if market else ''}
 
     GROUP BY 1, 3
     """
-    return query_df(
-        sql, "ce_weekly_business",
-        {"market": market, "start": config.iso(start), "end": config.iso(end)},
-    )
+    params = {"start": config.iso(start), "end": config.iso(end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_weekly_business", params)
 
 
 # --------------------------------------------------------------------------- #
 # Market-level trailing weekly revenue  (combined_entity_stats)
 # --------------------------------------------------------------------------- #
-def market_weekly_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
     Market-level weekly revenue (predicted) over [start, end], one row per Monday
     week-start. Used to calibrate the week-type "large" threshold from the
@@ -103,30 +103,32 @@ def market_weekly_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataF
     more, so a fixed $-floor mislabels them). Returns columns: week (DATE),
     revenue (FLOAT).
     """
+    mkt_col = ",\n        business_market AS market" if not market else ""
+    mkt_grp = ", business_market" if not market else ""
     sql = f"""
     SELECT
-        DATE_TRUNC(report_date, WEEK(MONDAY))    AS week,
+        DATE_TRUNC(report_date, WEEK(MONDAY))    AS week{mkt_col},
         SUM({REV})                               AS revenue
 
     FROM {config.CE_STATS}
 
-    WHERE business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND business_market = @market' if market else ''}
 
-    GROUP BY 1
+    GROUP BY 1{mkt_grp}
 
     ORDER BY 1
     """
-    return query_df(
-        sql, "market_weekly_revenue",
-        {"market": market, "start": config.iso(start), "end": config.iso(end)},
-    )
+    params = {"start": config.iso(start), "end": config.iso(end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "market_weekly_revenue", params)
 
 
 # --------------------------------------------------------------------------- #
 # CE-level weekly paid performance  (ads_campaign_stats — Google + Bing)
 # --------------------------------------------------------------------------- #
-def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
     Weekly CE paid rollup: spend, coupon+wallet, CM1 (with pre/post Sep-2025
     migration fallback), conversions, paid clicks, conv value.
@@ -181,33 +183,35 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
 
     FROM {config.ADS_STATS}
 
-    WHERE campaign_target_business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND campaign_target_business_market = @market' if market else ''}
           AND ad_platform IN ('Google Ads', 'Microsoft Ads')
           AND campaign_advertising_channel_type = 'SEARCH'
 
     GROUP BY 1, 2
     """
-    return query_df(
-        sql, "ce_weekly_ads",
-        {"market": market, "start": config.iso(start), "end": config.iso(end)},
-    )
+    params = {"start": config.iso(start), "end": config.iso(end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_weekly_ads", params)
 
 
 # --------------------------------------------------------------------------- #
 # CE metadata  (dim_combined_entities + city from stats)
 # --------------------------------------------------------------------------- #
-def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def ce_metadata(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
     Pivot dimensions for the all-CE view. city is not on the dim, so it is
     sourced from combined_entity_stats (most-frequent value in window).
     """
+    dim_where = "WHERE market = @market" if market else ""
     sql = f"""
     WITH dim AS (
 
         SELECT
             combined_entity_id,
             combined_entity_name,
+            market,
             -- Group-by dims. ~45% of *active* CEs are an unenriched dormant tail
             -- (zero-revenue "Airport Services", "Wifi & SIM", brand-new CEs) with
             -- NULL dims — only ~0.13% of revenue. Coalesce NULLs to explicit,
@@ -236,7 +240,7 @@ def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
 
         FROM {config.DIM_CE}
 
-        WHERE market = @market
+        {dim_where}
 
     ),
 
@@ -249,8 +253,8 @@ def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
 
         FROM {config.CE_STATS}
 
-        WHERE business_market = @market
-              AND report_date BETWEEN @start AND @end
+        WHERE report_date BETWEEN @start AND @end
+              {'AND business_market = @market' if market else ''}
               AND city IS NOT NULL
 
         GROUP BY 1, 2
@@ -279,10 +283,10 @@ def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
     FROM dim
     LEFT JOIN city USING (combined_entity_id)
     """
-    return query_df(
-        sql, "ce_metadata",
-        {"market": market, "start": config.iso(start), "end": config.iso(end)},
-    )
+    params = {"start": config.iso(start), "end": config.iso(end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_metadata", params)
 
 
 # --------------------------------------------------------------------------- #
@@ -300,12 +304,13 @@ def ce_metadata(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
 #     rows — the drawer renders "—/n/a" for those, by design.
 # Each is ONE market-level batch query grouped by CE; build_snapshot splits per CE.
 def ce_tgids(
-    market: str,
+    market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
     ly_start: dt.date, ly_end: dt.date,
 ) -> pd.DataFrame:
     """Enriched TGID table: rev, orders, GBV, completed GBV for W0 + W-1 + LY."""
+    mkt = "AND business_market = @market" if market else ""
     sql = """
     SELECT
         combined_entity_id,
@@ -344,8 +349,8 @@ def ce_tgids(
 
     FROM {tbl}
 
-    WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @ly_s AND @w0_e
+    WHERE DATE(created_at) BETWEEN @ly_s AND @w0_e
+          {mkt}
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
           AND experience_id IS NOT NULL
@@ -355,16 +360,15 @@ def ce_tgids(
                THEN amount_revenue_usd ELSE 0 END) > 0
         OR SUM(CASE WHEN DATE(created_at) BETWEEN @ly_s AND @ly_e
                THEN amount_revenue_usd ELSE 0 END) > 0
-    """.format(tbl=config.FCT_ORDERS)
-    return query_df(
-        sql, "ce_tgids",
-        {
-            "market": market,
-            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
-            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
-            "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
-        },
-    )
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_tgids", params)
 
 
 def ce_tgid_funnel(
@@ -448,11 +452,12 @@ def ce_tgid_funnel(
 
 
 def ce_tgid_leadtime(
-    market: str,
+    market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
 ) -> pd.DataFrame:
     """TGID-grain lead-time band shares for W0 + W-1 (pct within each window)."""
+    mkt = "AND business_market = @market" if market else ""
     sql = """
     WITH bookings AS (
         SELECT
@@ -469,8 +474,8 @@ def ce_tgid_leadtime(
             END                                     AS period,
             booking_id
         FROM {tbl}
-        WHERE business_market = @market
-              AND DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+        WHERE DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+              {mkt}
               AND lead_time_days IS NOT NULL
               AND lead_time_days >= 0
     ),
@@ -488,23 +493,23 @@ def ce_tgid_leadtime(
         MAX(IF(b.period = 'wm1', SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct_wm1
     FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid, period)
     GROUP BY 1, 2, 3
-    """.format(tbl=config.FCT_BOOKINGS)
-    return query_df(
-        sql, "ce_tgid_leadtime",
-        {
-            "market": market,
-            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
-            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
-        },
-    )
+    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_tgid_leadtime", params)
 
 
 def ce_leadtime(
-    market: str,
+    market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
 ) -> pd.DataFrame:
     """Bookings/revenue by lead-time band per CE for W0 + W-1, from fct_bookings."""
+    mkt = "AND business_market = @market" if market else ""
     sql = """
     SELECT
         combined_entity_id,
@@ -525,29 +530,29 @@ def ce_leadtime(
 
     FROM {tbl}
 
-    WHERE business_market = @market
-          AND DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+    WHERE DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+          {mkt}
           AND lead_time_days IS NOT NULL
           AND lead_time_days >= 0
 
     GROUP BY 1, 2
-    """.format(tbl=config.FCT_BOOKINGS)
-    return query_df(
-        sql, "ce_leadtime",
-        {
-            "market": market,
-            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
-            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
-        },
-    )
+    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_leadtime", params)
 
 
 def ce_countries(
-    market: str,
+    market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
 ) -> pd.DataFrame:
     """Orders/revenue by customer country per CE for W0 + W-1, from fct_orders."""
+    mkt = "AND business_market = @market" if market else ""
     sql = """
     SELECT
         combined_entity_id,
@@ -565,22 +570,21 @@ def ce_countries(
 
     FROM {tbl}
 
-    WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @wm1_s AND @w0_e
+    WHERE DATE(created_at) BETWEEN @wm1_s AND @w0_e
+          {mkt}
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
           AND card_issuing_country IS NOT NULL
 
     GROUP BY 1, 2
-    """.format(tbl=config.FCT_ORDERS)
-    return query_df(
-        sql, "ce_countries",
-        {
-            "market": market,
-            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
-            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
-        },
-    )
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_countries", params)
 
 
 # --------------------------------------------------------------------------- #
@@ -597,12 +601,13 @@ def ce_countries(
 #     CE-Health). That table has no business_market, so it is batched by the
 #     market's CE-id list.
 def ce_channels(
-    market: str,
+    market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
     ly_start: dt.date, ly_end: dt.date,
 ) -> pd.DataFrame:
     """Revenue by channel per CE for W0 / W-1 / LY (actuals basis, fct_orders)."""
+    mkt = "AND business_market = @market" if market else ""
     sql = """
     WITH classified AS (
 
@@ -642,10 +647,10 @@ def ce_channels(
 
         FROM {tbl}
 
-        WHERE business_market = @market
-              AND (DATE(created_at) BETWEEN @w0_s AND @w0_e
+        WHERE (DATE(created_at) BETWEEN @w0_s AND @w0_e
                    OR DATE(created_at) BETWEEN @wm1_s AND @wm1_e
                    OR DATE(created_at) BETWEEN @ly_s AND @ly_e)
+              {mkt}
               AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
               AND user_type = 'Customer'
 
@@ -662,16 +667,15 @@ def ce_channels(
     WHERE period IS NOT NULL
 
     GROUP BY 1, 2, 3
-    """.format(tbl=config.FCT_ORDERS)
-    return query_df(
-        sql, "ce_channels",
-        {
-            "market": market,
-            "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
-            "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
-            "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
-        },
-    )
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_channels", params)
 
 
 def ce_funnel(
@@ -769,7 +773,7 @@ def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.Data
 # --------------------------------------------------------------------------- #
 # Daily paid series for the fluctuation engine  (CM1/conv POF)
 # --------------------------------------------------------------------------- #
-def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+def ce_daily_ads(market: str | None, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """Daily CE paid series: CM1, CM1 conversions, clicks, spend (Google Search only)."""
     sql = f"""
     SELECT
@@ -793,24 +797,24 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
 
     FROM {config.ADS_STATS}
 
-    WHERE campaign_target_business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND campaign_target_business_market = @market' if market else ''}
           AND ad_platform = 'Google Ads'
           AND campaign_advertising_channel_type = 'SEARCH'
           AND (account_name != 'Things To Do' OR account_name IS NULL)
 
     GROUP BY 1, 3
     """
-    return query_df(
-        sql, "ce_daily_ads",
-        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
-    )
+    params = {"start": config.iso(daily_start), "end": config.iso(w0_end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_daily_ads", params)
 
 
 # --------------------------------------------------------------------------- #
 # Daily business series for the fluctuation engine  (RPC POF)
 # --------------------------------------------------------------------------- #
-def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+def ce_daily_business(market: str | None, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """Daily CE business series: revenue (predicted), clicks, orders, GBV, completed GBV.
     GBV + completed enable the 3-day-vs-28-day driver breakdown (AOV/CR/TR) in the
     fluctuations bucket — RPC = CVR·AOV·CR·TR (2026-07-17)."""
@@ -826,18 +830,18 @@ def ce_daily_business(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.
 
     FROM {config.CE_STATS}
 
-    WHERE business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND business_market = @market' if market else ''}
 
     GROUP BY 1, 2
     """
-    return query_df(
-        sql, "ce_daily_business",
-        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
-    )
+    params = {"start": config.iso(daily_start), "end": config.iso(w0_end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_daily_business", params)
 
 
-def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+def ce_daily_paid_google(market: str | None, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """Daily GOOGLE-SEARCH paid FUNNEL — single-source from ads_campaign_stats (2026-07-20 switch).
     Carries every field the RPC decomposition needs so the funnel no longer joins fct_orders:
         orders   = count_attributed_orders
@@ -862,21 +866,21 @@ def ce_daily_paid_google(market: str, daily_start: dt.date, w0_end: dt.date) -> 
 
     FROM {config.ADS_STATS}
 
-    WHERE campaign_target_business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND campaign_target_business_market = @market' if market else ''}
           AND ad_platform = 'Google Ads'
           AND campaign_advertising_channel_type = 'SEARCH'
           AND (account_name != 'Things To Do' OR account_name IS NULL)
 
     GROUP BY 1, 2
     """
-    return query_df(
-        sql, "ce_daily_paid_google",
-        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
-    )
+    params = {"start": config.iso(daily_start), "end": config.iso(w0_end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_daily_paid_google", params)
 
 
-def ce_daily_orders_google(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+def ce_daily_orders_google(market: str | None, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """Daily GOOGLE-SEARCH paid ORDER funnel from fct_orders (2026-07-20): order-grounded
     booked / completed / net-revenue so the paid decomposition can separate Completion from
     Take-rate (the ad-attribution table can't — completed/booked >100%). ad_network filter =
@@ -894,23 +898,23 @@ def ce_daily_orders_google(market: str, daily_start: dt.date, w0_end: dt.date) -
 
     FROM {config.FCT_ORDERS}
 
-    WHERE business_market = @market
-          AND DATE(created_at) BETWEEN @start AND @end
+    WHERE DATE(created_at) BETWEEN @start AND @end
+          {'AND business_market = @market' if market else ''}
           AND ad_network = 'Google: Search'
           AND valid_to_timestamp IS NULL
 
     GROUP BY 1, 2
     """
-    return query_df(
-        sql, "ce_daily_orders_google",
-        {"market": market, "start": config.iso(daily_start), "end": config.iso(w0_end)},
-    )
+    params = {"start": config.iso(daily_start), "end": config.iso(w0_end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_daily_orders_google", params)
 
 
 # --------------------------------------------------------------------------- #
 # tROAS history for the bid-change innocence check
 # --------------------------------------------------------------------------- #
-def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+def troas_history(market: str | None, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
     """
     Per-campaign as-of tROAS + spend over the window (Google Search + Bing).
     Uses campaign_target_roas (as-of report_date) so day-over-day changes are
@@ -929,17 +933,17 @@ def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
 
     FROM {config.ADS_STATS}
 
-    WHERE campaign_target_business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND campaign_target_business_market = @market' if market else ''}
           AND ad_platform IN ('Google Ads', 'Microsoft Ads')
           AND campaign_advertising_channel_type = 'SEARCH'
 
     ORDER BY campaign_id, report_date
     """
-    return query_df(
-        sql, "troas_history",
-        {"market": market, "start": config.iso(start), "end": config.iso(w0_end)},
-    )
+    params = {"start": config.iso(start), "end": config.iso(w0_end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "troas_history", params)
 
 
 # --------------------------------------------------------------------------- #
