@@ -146,24 +146,79 @@ def publish_headout(week, deploy, n):
             "spark": _sparkline([s["rev"] for s in series]), "n_markets": nm}
 
 
+def _hero_sparkline(revs, w=140, h=40, pad=3):
+    pts = [float(r) for r in revs if r is not None]
+    if len(pts) < 2:
+        return ""
+    lo, hi = min(pts), max(pts); span = (hi - lo) or 1.0; n = len(pts)
+    xs = lambda i: round(pad + i * (w - 2 * pad) / (n - 1), 1)
+    ys = lambda v: round(h - pad - (v - lo) * (h - 2 * pad) / span, 1)
+    line = "M" + " L".join(f"{xs(i)} {ys(v)}" for i, v in enumerate(pts))
+    fill = line + f" L{xs(n-1)} {h} L{xs(0)} {h} Z"
+    cx, cy = xs(n - 1), ys(pts[-1])
+    return (f'<svg viewBox="0 0 {w} {h}" width="100%" height="46" style="display:block" preserveAspectRatio="none">'
+            f'<defs><linearGradient id="hfill" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0%" stop-color="#B478FF" stop-opacity="0.45"/>'
+            f'<stop offset="100%" stop-color="#B478FF" stop-opacity="0"/></linearGradient></defs>'
+            f'<path d="{fill}" fill="url(#hfill)"/>'
+            f'<path d="{line}" fill="none" stroke="#B478FF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{cx}" cy="{cy}" r="2.8" fill="#fff"/></svg>')
+
+
 def _headout_hero(ho):
     if not ho or not ho.get("series"):
         return ""
     s = ho["series"][-1]
     wow = s.get("wow_pct")
+    wow_col = "#12A150" if (wow is not None and wow >= 1) else "#E5384F" if (wow is not None and wow <= -1) else "#B5AEC6"
     arr = "▲" if (wow is not None and wow >= 1) else "▼" if (wow is not None and wow <= -1) else "·"
-    spark = (ho.get("spark") or "").replace("#8000FF", "#ffffff")
-    return (f'<a href="{ho["report_path"]}" style="display:flex;align-items:center;justify-content:space-between;'
-            f'gap:18px;margin-top:20px;padding:20px 26px;background:linear-gradient(100deg,#8000FF,#B44CFF);'
-            f'color:#fff;border-radius:18px;box-shadow:0 6px 22px rgba(128,0,255,.28)">'
-            f'<div><div style="font:700 11px \'Hanken Grotesk\';letter-spacing:.16em;text-transform:uppercase;opacity:.85">'
-            f'Headout · all markets</div>'
-            f'<div style="font:800 34px \'Figtree\';margin-top:3px">{_money(s["rev"])}'
-            f'<span style="font:700 15px \'Hanken Grotesk\';margin-left:11px;opacity:.95">{arr} {_pct(wow)} WoW</span></div>'
-            f'<div style="font:600 11px \'Hanken Grotesk\';opacity:.82;margin-top:2px">'
-            f'{ho.get("n_markets") or ""} markets · full portfolio rollup</div></div>'
-            f'<div style="text-align:right"><div>{spark}</div>'
-            f'<div style="font:700 12px \'Hanken Grotesk\';margin-top:6px">View full Headout report →</div></div></a>')
+    spark = _hero_sparkline([x["rev"] for x in ho["series"]])
+    nm = ho.get("n_markets") or ""
+    week_label = s.get("week", "")
+    if week_label:
+        try:
+            week_label = dt.date.fromisoformat(week_label).strftime("Week of %b %-d")
+        except Exception:
+            pass
+    return (
+        f'<a href="{ho["report_path"]}" style="display:block;margin-top:20px;position:relative;overflow:hidden;'
+        f'border-radius:22px;color:#fff;'
+        f'background:radial-gradient(1200px 500px at 88% -10%,#3B1470 0%,#1C1726 46%,#14101E 100%);'
+        f'box-shadow:0 24px 60px rgba(28,23,38,0.32)">'
+        # glow overlay
+        f'<div style="position:absolute;inset:0;background:radial-gradient(600px 300px at 92% 0%,rgba(128,0,255,0.35),transparent 60%);pointer-events:none"></div>'
+        f'<div style="position:relative;padding:30px 36px;display:flex;align-items:center;gap:32px">'
+        # LEFT
+        f'<div style="flex:1;min-width:0">'
+        # pill
+        f'<div style="display:inline-flex;align-items:center;gap:9px;background:rgba(128,0,255,0.18);'
+        f'border:1px solid rgba(180,120,255,0.35);border-radius:999px;padding:5px 13px;'
+        f'font:700 10.5px \'Hanken Grotesk\';letter-spacing:.14em;text-transform:uppercase;color:#D9C2FF">'
+        f'<span style="width:7px;height:7px;border-radius:50%;background:#B478FF;box-shadow:0 0 0 4px rgba(180,120,255,0.22)"></span>'
+        f'Portfolio rollup · Live</div>'
+        # title
+        f'<div style="margin-top:16px;font:800 38px/1 \'Figtree\';letter-spacing:-.03em">Headout</div>'
+        f'<div style="margin-top:6px;font:600 12px \'Hanken Grotesk\';letter-spacing:.05em;text-transform:uppercase;color:#B5AEC6">'
+        f'{nm} markets · {week_label}</div>'
+        # CTA
+        f'<div style="display:inline-flex;align-items:center;gap:8px;margin-top:18px;background:#8000FF;'
+        f'padding:10px 20px;border-radius:10px;box-shadow:0 10px 26px rgba(128,0,255,0.4);'
+        f'font:800 13px \'Figtree\';letter-spacing:-.01em">View full report <span style="font-size:16px;line-height:1">→</span></div>'
+        f'</div>'
+        # RIGHT: stat card
+        f'<div style="flex:0 0 280px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);'
+        f'border-radius:18px;padding:22px 24px;backdrop-filter:blur(6px)">'
+        f'<div style="font:700 10.5px \'Hanken Grotesk\';letter-spacing:.14em;text-transform:uppercase;color:#9C93B4">Weekly revenue</div>'
+        f'<div style="display:flex;align-items:flex-end;gap:10px;margin-top:8px">'
+        f'<div style="font:800 36px/1 \'Figtree\';letter-spacing:-.03em">{_money(s["rev"])}</div>'
+        f'<div style="font:700 13px \'Hanken Grotesk\';color:{wow_col};padding-bottom:3px">{arr} {_pct(wow)} WoW</div></div>'
+        # sparkline
+        f'<div style="margin-top:16px">'
+        f'<div style="font:700 10.5px \'Hanken Grotesk\';letter-spacing:.12em;text-transform:uppercase;color:#9C93B4">Trailing weeks</div>'
+        f'<div style="margin-top:6px">{spark}</div></div>'
+        f'</div>'
+        f'</div></a>'
+    )
 
 
 # --------------------------------------------------------------------------- #
