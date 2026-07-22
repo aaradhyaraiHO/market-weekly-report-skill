@@ -585,7 +585,16 @@ def build_global(week: str) -> dict:
             wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
     print("    drawers attached.")
 
-    # ---- 12. Assemble snapshot ----
+    # ---- 12. No-bid campaigns (global: ENABLED, no tROAS, spend ≥ floor) ----
+    print("  fetching no-bid campaigns (global)...")
+    try:
+        import no_bid
+        no_bid_result = no_bid.build_no_bid("headout", w0_start)
+    except Exception as e:
+        print(f"  [no_bid] skipped: {e}")
+        no_bid_result = {"totals": {"count": 0, "spend_total": 0}, "rows": []}
+
+    # ---- 13. Assemble snapshot ----
     meta = {
         "market": "Headout (all markets)",
         "market_slug": "headout",
@@ -629,7 +638,7 @@ def build_global(week: str) -> dict:
         "bucket_b3": {"rows": b3_rows},
         "bucket_b4": {"rows": b4_rows},
         "bucket_cascade": cascade_summary,
-        "no_bid_campaigns": {"totals": {"count": 0, "spend_total": 0}, "rows": []},
+        "no_bid_campaigns": no_bid_result,
         "seasonality_adjustments": [],
         "levers": [],
         "market_review_context": [],

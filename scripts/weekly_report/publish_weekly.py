@@ -43,6 +43,7 @@ def notebook_dir() -> Path:
 
 # weekly slug -> (ledger slug, name, flag, region)
 MARKET_META = {
+    "headout": ("headout", "Headout — all markets", "🌐", "Portfolio"),
     "north_america": ("north-america", "North America", "🇺🇸", "Americas"),
     "italy": ("italy", "Italy", "🇮🇹", "Southern Europe"),
     "iberia": ("iberia", "Iberia", "🇪🇸", "Southern Europe"),
@@ -54,7 +55,7 @@ MARKET_META = {
     "sea": ("sea-sin-tha", "SEA (SIN+THA)", "🇸🇬", "Southeast Asia"),
     "oceania": ("oceania", "Oceania", "🇦🇺", "Oceania"),
 }
-REGION_ORDER = ["Americas", "Southern Europe", "Western Europe", "British Isles",
+REGION_ORDER = ["Portfolio", "Americas", "Southern Europe", "Western Europe", "British Isles",
                 "Central & SE Europe", "Middle East", "East Asia", "Southeast Asia", "Oceania"]
 
 

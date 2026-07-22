@@ -131,9 +131,13 @@ def pp_row(ce, ppd, week):
 
 
 def build_pp(snap):
-    """Report-engine entry: PP rows for THIS snapshot's market. Returns [] on failure."""
+    """Report-engine entry: PP rows for THIS snapshot's market. Returns [] on failure.
+    Headout rollup (market_slug='headout' / n_markets>1): keep every pilot-market row
+    instead of filtering to one market — else the "Headout (all markets)" meta.market
+    never equals a per-CE market and the whole section empties."""
     meta = snap.get("meta") or {}
     market = meta.get("market"); week = meta.get("week_start")
+    is_headout = meta.get("market_slug") == "headout" or (meta.get("n_markets") or 0) > 1
     ces = {str(c.get("ce_id")): c for c in snap.get("ces", [])}
     try:
         ppmap = pp_by_ce(week)
@@ -141,7 +145,7 @@ def build_pp(snap):
         return []
     rows = []
     for cid, ppd in ppmap.items():
-        if ppd["market"] != market:
+        if not is_headout and ppd["market"] != market:
             continue
         ppd["ce_id"] = cid
         r = pp_row(ces.get(cid), ppd, week)
