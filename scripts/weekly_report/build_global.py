@@ -204,7 +204,17 @@ def build_global(week: str) -> dict:
     paid_idx = {(r["combined_entity_id"], r["week"]): r for _, r in paid.iterrows()}
     meta_idx = {r["combined_entity_id"]: r for _, r in meta_df.iterrows()}
 
-    all_ce_ids = sorted(set(biz["combined_entity_id"]) | set(paid["combined_entity_id"]))
+    # combined_entity_id is a composite string ("1043 - Paris", "1008 - Barcelona") —
+    # NOT purely numeric, so we can't gate on digits. Drop only the genuinely null-
+    # attributed id (pandas astype(str) turns a NULL campaign_target_combined_entity_id
+    # into "nan"/"None"): globally that lone bucket aggregates ~$65K/wk of UNATTRIBUTED
+    # paid spend into a phantom "None" CE with no business rows. Its spend still counts
+    # in the market_summary totals (computed from the paid df), just not as a fake CE.
+    _JUNK_IDS = {"", "nan", "none", "null"}
+    all_ce_ids = sorted(
+        i for i in (set(biz["combined_entity_id"]) | set(paid["combined_entity_id"]))
+        if i is not None and str(i).strip().lower() not in _JUNK_IDS
+    )
     print(f"  assembling {len(all_ce_ids)} CEs...")
 
     ces = []
