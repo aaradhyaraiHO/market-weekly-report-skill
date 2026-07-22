@@ -21,11 +21,16 @@ def client() -> bigquery.Client:
     return _client
 
 
-def query_df(sql: str, label: str = "run", params: dict | None = None) -> pd.DataFrame:
+def query_df(sql: str, label: str = "run", params: dict | None = None,
+             max_bytes: int | None = None) -> pd.DataFrame:
     """
     Run `sql` and return a DataFrame. `params` maps @name -> value (str/int/float
     or list for @name IN UNNEST). Dates should be passed as ISO strings and cast
     in SQL, or as datetime.date (mapped to DATE params).
+
+    `max_bytes` overrides the default 80 GB per-query cap for a single call — used
+    by the global (Headout) Mixpanel drawer queries, whose surfaced-CE set scans a
+    bit more than one market. Per-market callers leave it None (→ config default).
     """
     query_params = []
     for name, value in (params or {}).items():
@@ -42,7 +47,7 @@ def query_df(sql: str, label: str = "run", params: dict | None = None) -> pd.Dat
             query_params.append(bigquery.ScalarQueryParameter(name, "STRING", str(value)))
 
     job_config = bigquery.QueryJobConfig(
-        maximum_bytes_billed=config.MAX_BYTES_BILLED,
+        maximum_bytes_billed=max_bytes or config.MAX_BYTES_BILLED,
         query_parameters=query_params,
         labels={"tool": "weekly_report", "step": label[:63].lower()},
     )

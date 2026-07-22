@@ -556,12 +556,17 @@ def build_global(week: str) -> dict:
     ly_w0_start = w0_start - dt.timedelta(days=config.YOY_LAG_DAYS)
     ly_w0_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
     surfaced_ids = [c["ce_id"] for c in ces_capped]
+    # The two Mixpanel drawer queries scan the surfaced-CE set across ALL markets —
+    # a bit more than one market's worth. The 7.7 TB table grows daily, so this
+    # crept just over the 80 GB per-market rail (~87 GB). Give ONLY these two global
+    # calls extra headroom; per-market builds stay at config.MAX_BYTES_BILLED.
+    MIXPANEL_GLOBAL_CAP = 140 * 1024 ** 3   # 140 GB
 
     print(f"  fetching RE-SOURCE drawers for {len(surfaced_ids)} surfaced CEs...")
     print("    tgids (fct_orders, global)...")
     tgids_df = fetch.ce_tgids(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    tgid_funnel (Mixpanel, CE-filtered)...")
-    tgid_funnel_df = fetch.ce_tgid_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+    tgid_funnel_df = fetch.ce_tgid_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end, max_bytes=MIXPANEL_GLOBAL_CAP)
     print("    tgid_leadtime (fct_bookings, global)...")
     tgid_lt_df = fetch.ce_tgid_leadtime(None, w0_start, w0_end, wm1_start, wm1_end)
     print("    leadtime (fct_bookings, global)...")
@@ -571,7 +576,7 @@ def build_global(week: str) -> dict:
     print("    channels (fct_orders, global)...")
     chan_df = fetch.ce_channels(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    funnel (Mixpanel, CE-filtered)...")
-    funnel_df = fetch.ce_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
+    funnel_df = fetch.ce_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end, max_bytes=MIXPANEL_GLOBAL_CAP)
 
     _attach_resource_breakdowns(ces_capped, tgids_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
     _attach_channels_funnel(ces_capped, chan_df, funnel_df)

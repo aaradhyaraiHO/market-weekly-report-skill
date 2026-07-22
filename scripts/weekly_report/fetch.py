@@ -376,6 +376,7 @@ def ce_tgid_funnel(
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
     ly_start: dt.date, ly_end: dt.date,
+    max_bytes: int | None = None,
 ) -> pd.DataFrame:
     """TGID-grain funnel: select users, S2C, C2O for W0 + W-1 + LY."""
     if not ce_ids:
@@ -448,6 +449,7 @@ def ce_tgid_funnel(
             "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
             "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
         },
+        max_bytes=max_bytes,
     )
 
 
@@ -683,6 +685,7 @@ def ce_funnel(
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
     ly_start: dt.date, ly_end: dt.date,
+    max_bytes: int | None = None,
 ) -> pd.DataFrame:
     """CE-level LP→order funnel for W0 / W-1 / LY (mixpanel page-funnel table)."""
     if not ce_ids:
@@ -740,6 +743,7 @@ def ce_funnel(
             "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
             "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
         },
+        max_bytes=max_bytes,
     )
 
 
