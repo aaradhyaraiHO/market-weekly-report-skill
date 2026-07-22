@@ -105,7 +105,15 @@ def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
 
     rows = []
     total_delta = 0.0
+    n_hidden = 0
     for mkt, v in by_mkt.items():
+        # Drop dormant/phantom business_market values (e.g. "#N/A", "Online",
+        # "Central LE", legacy country labels) that carry no activity in the whole
+        # window — they only clutter the breakdown. total_delta is unaffected (they
+        # contribute 0), so contrib_pct stays exact for the real markets.
+        if not (v["w0"] or v["wm1"] or v["ly"]):
+            n_hidden += 1
+            continue
         delta = v["w0"] - v["wm1"]
         total_delta += delta
         denom = v["spend_w0"] + v["cw_w0"]
@@ -121,7 +129,7 @@ def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
     for r in rows:
         r["contrib_pct"] = _num(100.0 * r["delta_abs"] / total_delta) if total_delta else None
     rows.sort(key=lambda r: -(r["revenue_w0"] or 0))
-    return rows
+    return rows, n_hidden
 
 
 # --------------------------------------------------------------------------- #
@@ -523,8 +531,8 @@ def build_global(week: str) -> dict:
     cascade_summary = _apply_cascade({"B1": b1_rows, "B2": bucket1, "B3": b3_rows, "B4": b4_rows})
 
     # ---- 9. Market breakdown ----
-    breakdown = _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start)
-    print(f"  market breakdown: {len(breakdown)} markets")
+    breakdown, n_hidden_markets = _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start)
+    print(f"  market breakdown: {len(breakdown)} active markets ({n_hidden_markets} dormant hidden)")
 
     # ---- 10. CE cap (keep all referenced + top-N by revenue) ----
     CAP = 300
@@ -582,6 +590,7 @@ def build_global(week: str) -> dict:
         "market": "Headout (all markets)",
         "market_slug": "headout",
         "n_markets": n_markets,
+        "market_breakdown_hidden": n_hidden_markets,   # dormant $0 markets dropped from §1 table
         "week_start": config.iso(w0_start),
         "week_end": config.iso(w0_end),
         "fluctuation_window_start": config.iso(flux_w0_start),
