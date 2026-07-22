@@ -17,14 +17,16 @@ from bq import query_df
 
 
 def _fetch_no_bid_campaigns(
-    market: str, start: dt.date, end: dt.date
+    market: str | None, start: dt.date, end: dt.date
 ) -> list[dict]:
+    """market=None → global (all business_markets), for the Headout rollup."""
     sql = f"""
     SELECT
         campaign_id,
         ANY_VALUE(campaign_name)                                     AS campaign_name,
         ANY_VALUE(campaign_target_combined_entity_id)                AS combined_entity_id,
         ANY_VALUE(campaign_target_combined_entity_name)              AS combined_entity_name,
+        ANY_VALUE(campaign_target_business_market)                   AS market,
         ANY_VALUE(current_campaign_bidding_strategy)                 AS bidding_strategy,
         ANY_VALUE(current_bidding_strategy_name)                     AS portfolio_name,
         SUM(sum_spend)                                               AS spend,
@@ -33,8 +35,8 @@ def _fetch_no_bid_campaigns(
 
     FROM {config.ADS_STATS}
 
-    WHERE campaign_target_business_market = @market
-          AND report_date BETWEEN @start AND @end
+    WHERE report_date BETWEEN @start AND @end
+          {'AND campaign_target_business_market = @market' if market else ''}
           AND ad_platform = 'Google Ads'
           AND current_campaign_status = 'ENABLED'
           AND (current_campaign_target_roas IS NULL OR current_campaign_target_roas = 0)
@@ -43,15 +45,14 @@ def _fetch_no_bid_campaigns(
 
     HAVING SUM(sum_spend) >= @spend_floor
     """
-    df = query_df(
-        sql, "no_bid_campaigns",
-        {
-            "market": market,
-            "start": config.iso(start),
-            "end": config.iso(end),
-            "spend_floor": config.WEEKLY_SPEND_FLOOR,
-        },
-    )
+    params = {
+        "start": config.iso(start),
+        "end": config.iso(end),
+        "spend_floor": config.WEEKLY_SPEND_FLOOR,
+    }
+    if market:
+        params["market"] = market
+    df = query_df(sql, "no_bid_campaigns", params)
     if df.empty:
         return []
     df["combined_entity_id"] = df["combined_entity_id"].astype(str)
@@ -68,9 +69,14 @@ def _roi_pct(cm1: float, spend: float) -> float | None:
 
 
 def build_no_bid(market_slug: str, w0_start: dt.date) -> dict:
-    market = config.MARKETS.get(market_slug)
-    if not market:
-        return {"totals": {"count": 0, "spend_total": 0}, "rows": []}
+    # "headout" → global (market=None, no filter). Otherwise resolve the slug;
+    # an unknown slug returns empty (unchanged).
+    if market_slug == "headout":
+        market = None
+    else:
+        market = config.MARKETS.get(market_slug)
+        if not market:
+            return {"totals": {"count": 0, "spend_total": 0}, "rows": []}
 
     w0_end = w0_start + dt.timedelta(days=6)
     wm1_start = w0_start - dt.timedelta(days=7)
@@ -93,6 +99,7 @@ def build_no_bid(market_slug: str, w0_start: dt.date) -> dict:
             "campaign_name": r["campaign_name"],
             "ce_id": str(r["combined_entity_id"]),
             "ce_name": r["combined_entity_name"] or str(r["combined_entity_id"]),
+            "market": r.get("market"),
             "bidding_strategy": r["bidding_strategy"],
             "portfolio_name": r.get("portfolio_name"),
             "spend_wk": round(spend, 2),
