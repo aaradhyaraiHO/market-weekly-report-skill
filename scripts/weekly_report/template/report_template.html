@@ -924,8 +924,10 @@ function renderHead(M){
 
   // Headout aggregate only: per-market breakdown of the portfolio total + each market's share of the WoW move.
   const mb = M.market_breakdown;
+  const mbHidden = (M.meta && M.meta.market_breakdown_hidden) || 0;
+  const mbHiddenNote = mbHidden ? ' · '+mbHidden+' dormant $0 markets hidden' : '';
   const mbHtml = (mb && mb.length) ?
-    '<div style="margin-top:18px"><div class="dr-sec-t">Market breakdown · '+mb.length+' markets · share of the Headout WoW move</div>'+
+    '<div style="margin-top:18px"><div class="dr-sec-t">Market breakdown · '+mb.length+' markets · share of the Headout WoW move'+mbHiddenNote+'</div>'+
     '<div class="tablewrap"><table><thead><tr>'+
       '<th class="stick">Market</th><th class="num">Revenue W0</th><th class="num">WoW</th><th class="num">YoY</th><th class="num">ROI</th><th class="num">Δ Rev wk</th><th class="num">% of move</th>'+
     '</tr></thead><tbody>'+
