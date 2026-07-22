@@ -254,12 +254,16 @@ def table_losing(mk, report_url):
              f"{r.get('roi_v4'):+.0f}pp" if r.get("roi_v4") is not None else "—",
              fmt_money(r.get("cm2_bleed_wk")), fmt_pct(r.get("rpc_v4"),0),
              fmt_pct(r.get("cpc_v4"),0)] for r, w in ordered]
-    return [
+    MAX_ROWS = 20
+    blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": f"🔴 Losing Money · {len(ordered)} CEs", "emoji": True}},
         GOOGLE_ADS_ONLY,
-        {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body, caps=TABLE_CAPS(len(hdr)))}},
-        report_ctx(report_url, action=True),
+        {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body[:MAX_ROWS], caps=TABLE_CAPS(len(hdr)))}},
     ]
+    if len(body) > MAX_ROWS:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body[MAX_ROWS:], caps=TABLE_CAPS(len(hdr)))}})
+    blocks.append(report_ctx(report_url, action=True))
+    return blocks
 
 # RPC fluctuation rows filtered by direction ("down" or "up")
 FLUCT_META = {
