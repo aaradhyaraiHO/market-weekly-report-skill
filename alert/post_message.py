@@ -190,6 +190,20 @@ def slack_post(token: str, channel: str, blocks: list[dict],
     return body
 
 
+def slack_update(token: str, channel: str, ts: str, blocks: list[dict],
+                 fallback_text: str = "Market alert") -> dict:
+    resp = requests.post(
+        "https://slack.com/api/chat.update",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
+        data=json.dumps({"channel": channel, "ts": ts, "blocks": blocks, "text": fallback_text}),
+        timeout=15,
+    )
+    body = resp.json()
+    if not body.get("ok"):
+        log.error("Slack update failed: %s", body)
+    return body
+
+
 def get_permalink(token: str, channel: str, ts: str) -> str | None:
     """Fetch a message permalink (for the summary to link to)."""
     try:
@@ -279,6 +293,8 @@ def main() -> None:
     parser.add_argument("--report-url", default=None, help="Hosted report URL — linked in the parent (parent shape only)")
     parser.add_argument("--rca-blocks", default=None, help="JSON file of precomputed RCA blocks (from rca_helper.py) for $rca refs")
     parser.add_argument("--tables", default=None, help="JSON file of extracted bucket tables (from tables_helper.py) for $table refs")
+    parser.add_argument("--update", default=None,
+                        help="Comma-separated parent message timestamps to update in-place (one per message group)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -315,22 +331,42 @@ def main() -> None:
         log.info("Dry-run OK: %d message(s)", len(messages))
         return
 
-    # ----- Real post -----
+    # ----- Real post / update -----
     token = os.environ.get("REVENUE_ALERT_SLACK_TOKEN")
     if not token:
         log.error("REVENUE_ALERT_SLACK_TOKEN not set — export it or use --dry-run"); sys.exit(1)
 
+    update_ts = args.update.split(",") if args.update else []
+    if update_ts and len(update_ts) != len(messages):
+        log.error("--update needs %d timestamps (one per message group), got %d", len(messages), len(update_ts))
+        sys.exit(1)
+
     permalinks = []
-    for m in messages:
+    for i, m in enumerate(messages):
         fb = m.get("fallback", "message")
-        log.info("Posting message: %s", fb)
-        ts = post_message_chunked(token, args.channel, expand_blocks(m["blocks"]),
-                                  thread_ts=None, fallback_text=fb)
-        if not ts:
-            log.warning("  ❌ message post failed — skipping its threads"); continue
-        link = get_permalink(token, args.channel, ts)
-        permalinks.append((fb, link))
-        log.info("  ✅ posted: ts=%s  link=%s", ts, link)
+        blocks = expand_blocks(m["blocks"])
+
+        if update_ts:
+            parent_ts = update_ts[i].strip()
+            log.info("Updating message: %s (ts=%s)", fb, parent_ts)
+            for chunk in chunk_blocks(blocks):
+                resp = slack_update(token, args.channel, parent_ts, chunk, fallback_text=fb)
+                if not resp.get("ok"):
+                    break
+                time.sleep(0.4)
+            link = get_permalink(token, args.channel, parent_ts)
+            permalinks.append((fb, link))
+            log.info("  ✅ updated: ts=%s  link=%s", parent_ts, link)
+            ts = parent_ts
+        else:
+            log.info("Posting message: %s", fb)
+            ts = post_message_chunked(token, args.channel, blocks,
+                                      thread_ts=None, fallback_text=fb)
+            if not ts:
+                log.warning("  ❌ message post failed — skipping its threads"); continue
+            link = get_permalink(token, args.channel, ts)
+            permalinks.append((fb, link))
+            log.info("  ✅ posted: ts=%s  link=%s", ts, link)
 
         time.sleep(1)
         for th in resolve_threads(m.get("threads", []), rca_blocks):
@@ -340,7 +376,7 @@ def main() -> None:
                                  thread_ts=ts, fallback_text=tfb)
             time.sleep(0.6)
 
-    log.info("🎉 Done — %d message(s) posted", len(messages))
+    log.info("🎉 Done — %d message(s) %s", len(messages), "updated" if update_ts else "posted")
     if permalinks:
         log.info("Permalinks (for the summary to link):")
         for fb, link in permalinks:
