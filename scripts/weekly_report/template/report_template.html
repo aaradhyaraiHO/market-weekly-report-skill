@@ -2182,7 +2182,8 @@ function openMarketDrawer(){
     '<table class="km"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th>'+
       '<th class="spk">12-wk · TY vs LY</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
     '<div class="dr-cap">Solid = this year, dashed = last year (same 12 weeks, −364d), shared scale per metric.'+
-      '<br>* Paid = Google Ads (Search, PMax, Display, Video) + Bing — all campaign types from ads_campaign_stats.</div>';
+      '<br>* Paid metrics (Clicks · CVR · Conv Value · Avg CM1 · Paid RoI) = Google Ads + Bing <b>Search campaigns only</b> (ads_campaign_stats; PMax / Display / Video excluded). '+
+      'ROI 1 is broader: business CM1 ÷ total marketing cost across <b>all</b> paid channels (every ad-spend column + coupons/wallet/affiliate/creator, from combined_entity_stats).</div>';
 
   // ----- WoW Shapley -----
   let shapBlock='';
