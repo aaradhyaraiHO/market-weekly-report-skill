@@ -129,6 +129,43 @@ def publish_market(slug, week, deploy, n):
             "spark": _sparkline([s["rev"] for s in series])}
 
 
+def publish_headout(week, deploy, n):
+    """Headout = the true-global rollup (all ~69 markets). Rendered as a hero banner
+    above the market matrix (not a region row), linking to its own full report."""
+    snap_p = CACHE_DIR / f"snapshot_headout_{week}.json"
+    rep_p = REPORT_DIR / f"report_headout_{week}.html"
+    if not snap_p.exists() or not rep_p.exists():
+        print(f"  ! no headout snapshot/report for {week} — run build_global.py first"); return None
+    shutil.copyfile(rep_p, deploy / "weekly-report-headout.html")
+    snap = json.loads(snap_p.read_text())
+    series = weekly_series(snap, n)
+    nm = (snap.get("meta") or {}).get("n_markets")
+    print(f"  ✓ Headout (all markets): {_money(series[-1]['rev'])} · WoW {_pct(series[-1]['wow_pct'])} "
+          f"({nm} markets, {len(series)} wks)")
+    return {"report_path": "weekly-report-headout.html", "series": series,
+            "spark": _sparkline([s["rev"] for s in series]), "n_markets": nm}
+
+
+def _headout_hero(ho):
+    if not ho or not ho.get("series"):
+        return ""
+    s = ho["series"][-1]
+    wow = s.get("wow_pct")
+    arr = "▲" if (wow is not None and wow >= 1) else "▼" if (wow is not None and wow <= -1) else "·"
+    spark = (ho.get("spark") or "").replace("#8000FF", "#ffffff")
+    return (f'<a href="{ho["report_path"]}" style="display:flex;align-items:center;justify-content:space-between;'
+            f'gap:18px;margin-top:20px;padding:20px 26px;background:linear-gradient(100deg,#8000FF,#B44CFF);'
+            f'color:#fff;border-radius:18px;box-shadow:0 6px 22px rgba(128,0,255,.28)">'
+            f'<div><div style="font:700 11px \'Hanken Grotesk\';letter-spacing:.16em;text-transform:uppercase;opacity:.85">'
+            f'Headout · all markets</div>'
+            f'<div style="font:800 34px \'Figtree\';margin-top:3px">{_money(s["rev"])}'
+            f'<span style="font:700 15px \'Hanken Grotesk\';margin-left:11px;opacity:.95">{arr} {_pct(wow)} WoW</span></div>'
+            f'<div style="font:600 11px \'Hanken Grotesk\';opacity:.82;margin-top:2px">'
+            f'{ho.get("n_markets") or ""} markets · full portfolio rollup</div></div>'
+            f'<div style="text-align:right"><div>{spark}</div>'
+            f'<div style="font:700 12px \'Hanken Grotesk\';margin-top:6px">View full Headout report →</div></div></a>')
+
+
 # --------------------------------------------------------------------------- #
 def _cell(s, is_current):
     if not s or s.get("rev") is None:
@@ -201,6 +238,7 @@ def render_matrix(state, week, cols):
   <div style="text-align:right;font:600 12px 'Hanken Grotesk';letter-spacing:.08em;text-transform:uppercase;color:#9A92AC;line-height:1.7">
    <div style="color:#6E6680">Week of {week}</div><div>{len(live)} market{"s" if len(live) != 1 else ""} · last {len(cols)} weeks</div></div>
  </div>
+ {_headout_hero(state.get("headout"))}
  <table class="board"><thead><tr><th class="mkth">Market</th>{labels}</tr></thead><tbody>{body}</tbody></table>
  <div style="margin-top:14px;font:600 11px 'Hanken Grotesk';color:#9A92AC">Each cell: weekly revenue + WoW%. Click a row for the full report. Revenue = predicted.</div>
 </div></body></html>"""
@@ -216,8 +254,10 @@ def main(argv=None):
     deploy = notebook_dir()
     if not deploy.exists():
         sys.exit(f"notebook dir not found: {deploy} (set MMR_NOTEBOOK_DIR)")
-    targets = list(config.MARKETS) if args.market == "all" else [args.market]
-    print(f"Weekly Ledger (matrix) · week {args.week} · {targets}\n  deploy: {deploy}")
+    # 'headout' publishes only the portfolio hero; 'all' does the 10 markets + refreshes headout if present
+    targets = (list(config.MARKETS) if args.market == "all"
+               else [] if args.market == "headout" else [args.market])
+    print(f"Weekly Ledger (matrix) · week {args.week} · {targets or ['headout']}\n  deploy: {deploy}")
 
     state = load_state(deploy)
     n = 0
@@ -225,10 +265,15 @@ def main(argv=None):
         e = publish_market(slug, args.week, deploy, args.cols)
         if e:
             upsert(state, e); n += 1
+    if args.market in ("headout", "all"):
+        ho = publish_headout(args.week, deploy, args.cols)
+        if ho:
+            state["headout"] = ho; n += 1
     if not n:
-        sys.exit("nothing published — run weekly_market_report.py first")
-    # union of column weeks across markets (they share the same Mondays), trailing N
-    weeks = sorted({s["week"] for m in state["markets"] for s in m.get("series", [])})[-args.cols:]
+        sys.exit("nothing published — run weekly_market_report.py / build_global.py first")
+    # union of column weeks across markets + headout (they share the same Mondays), trailing N
+    weeks = sorted({s["week"] for m in state["markets"] for s in m.get("series", [])}
+                   | {s["week"] for s in state.get("headout", {}).get("series", [])})[-args.cols:]
     state["edition"] = {"week": args.week, "cols": weeks}
     (deploy / "weekly_state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False))
     (deploy / "weekly.html").write_text(render_matrix(state, args.week, weeks))
