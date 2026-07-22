@@ -186,11 +186,11 @@ def build_summary_blocks(mk, report_url):
         f"Revenue: *{fmt_money(hl.get('revenue_w0'))}* "
         f"({fmt_pct(hl.get('wow_pct'))} WoW {dir_emoji(hl.get('wow_pct'))} · "
         f"{fmt_pct(hl.get('yoy_pct'))} YoY {dir_emoji(hl.get('yoy_pct'))})  ·  "
-        f"ROI *{fmt_plain_pct(hl.get('roi_w0_pct'),0)}*"
+        f"Paid ROI *{fmt_plain_pct(hl.get('roi_w0_pct'),0)}*"
     )
     metrics = "*Main metrics this week (WoW):*\n" + "\n".join([
         kmline(1, "Revenue", "revenue", money=True),
-        kmline(2, "Blended ROI", "paid_roi", pctval=True),
+        kmline(2, "Paid ROI", "paid_roi", pctval=True),
         kmline(3, "Paid clicks", "paid_clicks"),
         kmline(4, "Paid CVR", "paid_cvr", pctval=True),
         kmline(5, "AOV", "aov", money=True),

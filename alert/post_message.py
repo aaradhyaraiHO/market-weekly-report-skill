@@ -368,13 +368,14 @@ def main() -> None:
             permalinks.append((fb, link))
             log.info("  ✅ posted: ts=%s  link=%s", ts, link)
 
-        time.sleep(1)
-        for th in resolve_threads(m.get("threads", []), rca_blocks):
-            tfb = th.get("fallback", "reply")
-            log.info("    → thread: %s", tfb)
-            post_message_chunked(token, args.channel, expand_blocks(th["blocks"]),
-                                 thread_ts=ts, fallback_text=tfb)
-            time.sleep(0.6)
+        if not update_ts:
+            time.sleep(1)
+            for th in resolve_threads(m.get("threads", []), rca_blocks):
+                tfb = th.get("fallback", "reply")
+                log.info("    → thread: %s", tfb)
+                post_message_chunked(token, args.channel, expand_blocks(th["blocks"]),
+                                     thread_ts=ts, fallback_text=tfb)
+                time.sleep(0.6)
 
     log.info("🎉 Done — %d message(s) %s", len(messages), "updated" if update_ts else "posted")
     if permalinks:
