@@ -956,27 +956,16 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         fetch.ce_channels(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         fetch.ce_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
     )
-    # Overall CVR (funnel: order-users ÷ LP users, all traffic, PMax excluded).
-    # Full 12-week series so the drawer sparkline renders correctly.
-    wf = fetch.ce_weekly_funnel([c["ce_id"] for c in ces], start, w0_end)
-    if not wf.empty:
-        wf["combined_entity_id"] = wf["combined_entity_id"].astype(str)
-        wf["week"] = pd.to_datetime(wf["week"]).dt.date
-        for ce in ces:
-            cid = str(ce["ce_id"])
-            cf = wf[wf["combined_entity_id"] == cid]
-            if cf.empty:
-                continue
-            cvr_by_week = {}
-            for _, r in cf.iterrows():
-                lp = r["lp_users"]
-                ou = r["order_users"]
-                if lp and lp > 0:
-                    cvr_by_week[config.iso(r["week"])] = round(100.0 * ou / lp, 4)
-            for w in ce.get("weekly") or []:
-                wk_iso = w.get("week")
-                if wk_iso in cvr_by_week:
-                    w["overall_cvr_pct"] = cvr_by_week[wk_iso]
+    # Overall CVR = orders / clicks (all-traffic, from BQ — already in every
+    # weekly record, so the 12-week sparkline renders with no extra query).
+    def _inject_overall_cvr(weekly):
+        for w in weekly:
+            orders = w.get("orders")
+            clicks = w.get("clicks")
+            w["overall_cvr_pct"] = round(100.0 * orders / clicks, 4) if (clicks and orders is not None) else None
+    for ce in ces:
+        _inject_overall_cvr(ce.get("weekly") or [])
+        _inject_overall_cvr(ce.get("weekly_ly") or [])
 
     # ---- Week-type calibration: p75 of the trailing-52-week |WoW-Δ| distribution.
     # Small markets churn more, so a fixed $-floor mislabels them (spec §4). Pull
