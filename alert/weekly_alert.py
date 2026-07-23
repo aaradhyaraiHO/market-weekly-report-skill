@@ -263,14 +263,20 @@ def table_losing(mk, report_url):
              f"{r.get('roi_v4'):+.0f}pp" if r.get("roi_v4") is not None else "—",
              fmt_money(r.get("lost_wk")), fmt_pct(r.get("rpc_v4"),0),
              fmt_pct(r.get("cpc_v4"),0)] for r, k in ordered]
-    MAX_ROWS = 20
+    # Paginate rows into fenced sections of ROWS_PER_BLOCK each — a single fenced
+    # code block can't exceed Slack's ~3000-char section limit and can't be split
+    # mid-fence, so we chunk the rows themselves (eroders push headout past 60 CEs).
+    ROWS_PER_BLOCK = 18
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": f"🔴 Losing Money · {len(ordered)} CEs", "emoji": True}},
         GOOGLE_ADS_ONLY,
-        {"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body[:MAX_ROWS], caps=TABLE_CAPS(len(hdr)))}},
     ]
-    if len(body) > MAX_ROWS:
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": render_table(hdr, body[MAX_ROWS:], caps=TABLE_CAPS(len(hdr)))}})
+    for i in range(0, len(body) or 1, ROWS_PER_BLOCK):
+        chunk = body[i:i + ROWS_PER_BLOCK]
+        if not chunk and i:
+            break
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                       "text": render_table(hdr, chunk, caps=TABLE_CAPS(len(hdr)))}})
     blocks.append(report_ctx(report_url, action=True))
     return blocks
 
