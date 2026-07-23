@@ -9,14 +9,40 @@ matched by header text. RCA thread replies are unchanged and left alone.
 
 Usage:
     export REVENUE_ALERT_SLACK_TOKEN="xoxb-…"
+    # explicit timestamps:
     python3 update_posts_weekly.py --payload payload.json --channel <CID> \
         --msg1-ts <summary_ts> --msg2-ts <movers_ts> [--dry-run]
+    # or resolve channel + timestamps from posted_ledger.json (written by
+    # post_message.py --slug at post time):
+    python3 update_posts_weekly.py --payload payload.json --slug north_america \
+        --week 2026-07-13 [--dry-run]
 
 Blocks in the payload are already Block Kit — passed through as-is.
 """
 import argparse, json, os, sys, time, urllib.request, urllib.parse
+from pathlib import Path
 
 API = "https://slack.com/api/"
+LEDGER_PATH = Path(__file__).resolve().parent / "posted_ledger.json"
+
+
+def resolve_from_ledger(slug, week):
+    """Return (channel, msg1_ts, msg2_ts) for slug from posted_ledger.json. If week
+    is omitted, use the latest week that contains the slug."""
+    if not LEDGER_PATH.exists():
+        sys.exit(f"no ledger at {LEDGER_PATH} — post with --slug first, or pass --channel/--msg*-ts")
+    led = json.loads(LEDGER_PATH.read_text())
+    if week is None:
+        weeks = sorted(w for w, mk in led.items() if slug in mk)
+        if not weeks:
+            sys.exit(f"slug {slug!r} not found in {LEDGER_PATH.name}")
+        week = weeks[-1]
+    entry = (led.get(week) or {}).get(slug)
+    if not entry:
+        sys.exit(f"no ledger entry for week={week} slug={slug!r}")
+    if "msg1_ts" not in entry or "msg2_ts" not in entry:
+        sys.exit(f"ledger entry {week}/{slug} missing msg1_ts/msg2_ts")
+    return entry["channel"], entry["msg1_ts"], entry["msg2_ts"]
 
 
 def call(method, token, payload, get=False):
@@ -44,11 +70,22 @@ def header_of(blocks):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--payload", required=True)
-    ap.add_argument("--channel", required=True)
-    ap.add_argument("--msg1-ts", required=True, help="summary (MSG1) parent ts")
-    ap.add_argument("--msg2-ts", required=True, help="movers (MSG2) parent ts")
+    ap.add_argument("--channel", help="Slack channel ID (or resolve via --slug from the ledger)")
+    ap.add_argument("--msg1-ts", help="summary (MSG1) parent ts (or resolve via --slug)")
+    ap.add_argument("--msg2-ts", help="movers (MSG2) parent ts (or resolve via --slug)")
+    ap.add_argument("--slug", default=None,
+                    help="Market slug — resolve channel + msg ts from posted_ledger.json")
+    ap.add_argument("--week", default=None, help="Week-Monday for the ledger lookup (default: latest)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    if args.slug:
+        ch, m1_ts, m2_ts = resolve_from_ledger(args.slug, args.week)
+        args.channel = args.channel or ch
+        args.msg1_ts = args.msg1_ts or m1_ts
+        args.msg2_ts = args.msg2_ts or m2_ts
+    if not (args.channel and args.msg1_ts and args.msg2_ts):
+        sys.exit("need --channel + --msg1-ts + --msg2-ts, or --slug to resolve them from the ledger")
 
     token = os.environ.get("REVENUE_ALERT_SLACK_TOKEN")
     if not token and not args.dry_run:

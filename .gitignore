@@ -4,3 +4,6 @@ scripts/weekly_report/sample_data.json
 **/snapshot_*.json
 .cache/
 __pycache__/
+
+# Slack alert posted-message ledger (runtime state)
+alert/posted_ledger.json

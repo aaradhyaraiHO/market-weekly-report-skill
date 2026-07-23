@@ -39,6 +39,29 @@ import requests
 TEST_CHANNEL_NAME = "#revenue-alert-testing"
 TEST_CHANNEL_ID   = "C0B6U94PGJ0"
 
+# Posted-message ledger: slug → {channel, msg1_ts, msg2_ts, week} per week, so
+# update_posts_weekly.py can edit every market's alert in place without hunting
+# for timestamps. Written by --slug; lives next to this script.
+LEDGER_PATH = Path(__file__).resolve().parent / "posted_ledger.json"
+
+
+def record_ledger(ledger_path: Path, week: str, slug: str, channel: str, parent_ts: list[str]) -> None:
+    """Upsert {week: {slug: {channel, msg1_ts, msg2_ts, posted_at}}}. parent_ts is
+    the ordered list of message-group parent timestamps (MSG1 summary, MSG2 movers)."""
+    led = {}
+    if ledger_path.exists():
+        try:
+            led = json.loads(ledger_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            led = {}
+    entry = {"channel": channel}
+    if len(parent_ts) > 0:
+        entry["msg1_ts"] = parent_ts[0]
+    if len(parent_ts) > 1:
+        entry["msg2_ts"] = parent_ts[1]
+    led.setdefault(week, {})[slug] = entry
+    ledger_path.write_text(json.dumps(led, indent=2, ensure_ascii=False))
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("post_message")
 
@@ -295,6 +318,10 @@ def main() -> None:
     parser.add_argument("--tables", default=None, help="JSON file of extracted bucket tables (from tables_helper.py) for $table refs")
     parser.add_argument("--update", default=None,
                         help="Comma-separated parent message timestamps to update in-place (one per message group)")
+    parser.add_argument("--slug", default=None,
+                        help="Market slug — when set, record the posted parent timestamps to posted_ledger.json")
+    parser.add_argument("--week", default=None,
+                        help="Week-Monday (YYYY-MM-DD) for the ledger key; defaults to the payload's _rca.week_start")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -342,6 +369,7 @@ def main() -> None:
         sys.exit(1)
 
     permalinks = []
+    parent_ts: list[str] = []
     for i, m in enumerate(messages):
         fb = m.get("fallback", "message")
         blocks = expand_blocks(m["blocks"])
@@ -368,6 +396,7 @@ def main() -> None:
             permalinks.append((fb, link))
             log.info("  ✅ posted: ts=%s  link=%s", ts, link)
 
+        parent_ts.append(ts)
         if not update_ts:
             time.sleep(1)
             for th in resolve_threads(m.get("threads", []), rca_blocks):
@@ -382,6 +411,17 @@ def main() -> None:
         log.info("Permalinks (for the summary to link):")
         for fb, link in permalinks:
             log.info("  • %s → %s", fb, link)
+
+    # Record the posted parents to the ledger so a later in-place update sweep
+    # (update_posts_weekly.py --slug) can find them without hunting the channel.
+    if args.slug and not update_ts and parent_ts:
+        week = args.week or (payload.get("_rca") or {}).get("week_start")
+        if not week:
+            log.warning("  --slug given but no --week and no _rca.week_start — skipping ledger write")
+        else:
+            record_ledger(LEDGER_PATH, week, args.slug, args.channel, parent_ts)
+            log.info("  📒 ledger: %s[%s][%s] ← %s", LEDGER_PATH.name, week, args.slug,
+                     ", ".join(parent_ts))
 
 
 if __name__ == "__main__":
