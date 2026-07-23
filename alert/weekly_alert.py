@@ -237,23 +237,32 @@ GOOGLE_ADS_ONLY = {"type": "context", "elements": [{"type": "mrkdwn",
 TABLE_CAPS = lambda n: [14, 26] + [20] * (n - 2)  # CE ID | CE | rest
 
 def table_losing(mk, report_url):
-    # Source the report's actual §4 Losing Money bucket (buckets_final.defend.losing_money),
-    # NOT the legacy bucket_b1 movement block — so the alert matches the report exactly
-    # (Google-Search-only economics, full-waste first, then bleeders worst-first by 4w CM2 bled).
+    # Mirror the report's §4 Losing Money bucket exactly (buckets_final.defend.losing_money):
+    # full-waste pinned top, then bleeders + ERODERS merged worst-first by CM2 lost/wk
+    # (report_template.html merges the same two lists the same way).
+    #   Bleeding = ROI < 100% (losing money) · Eroding = ROI ≥ 100% but CM2 dropping ≥ $1k
+    #   vs its 4-week average · Full waste = spend with 0 conversions.
+    # Eroders were previously OMITTED here, so GM alerts silently dropped the biggest quiet
+    # losers — high-ROI CEs shedding CM2 (e.g. Vatican Museums, Niagara Falls). lost_wk is the
+    # unified positive "CM2 lost/wk vs healthy baseline" magnitude (cm2_bleed_wk has mixed signs
+    # across the two lanes, so it can't rank them together).
     lm = (mk.get("buckets_final") or {}).get("defend", {}).get("losing_money", {}) or {}
-    ordered = [(r, True) for r in (lm.get("full_waste") or [])] + \
-              [(r, False) for r in sorted(lm.get("bleeders") or [],
-                                          key=lambda r: (bool(r.get("recovering")), r.get("cm2_bleed_4w") or 0))]
-    def stat(r, is_waste):
-        if is_waste: return "FULL WASTE"
+    waste = [(r, "waste") for r in (lm.get("full_waste") or [])]
+    merged = sorted([(r, "bleed") for r in (lm.get("bleeders") or [])]
+                    + [(r, "erode") for r in (lm.get("eroding") or [])],
+                    key=lambda t: -(t[0].get("lost_wk") or 0))
+    ordered = waste + merged
+    def stat(r, kind):
+        if kind == "waste": return "FULL WASTE"
+        if kind == "erode": return "Eroding"
         if r.get("recovering"): return "Recovering"
         s = r.get("status")
         return f"{s} bleed" if s else "—"
-    hdr = ["CE ID", "CE", "Status", "ROI", "ROI Δ4w", "CM2 bleed/wk", "RPC Δ4w", "CPC Δ4w"]
-    body = [[r.get("ce_id"), r.get("ce_name"), stat(r, w), fmt_plain_pct(r.get("roi"),0),
+    hdr = ["CE ID", "CE", "Status", "ROI", "ROI Δ4w", "CM2 lost/wk", "RPC Δ4w", "CPC Δ4w"]
+    body = [[r.get("ce_id"), r.get("ce_name"), stat(r, k), fmt_plain_pct(r.get("roi"),0),
              f"{r.get('roi_v4'):+.0f}pp" if r.get("roi_v4") is not None else "—",
-             fmt_money(r.get("cm2_bleed_wk")), fmt_pct(r.get("rpc_v4"),0),
-             fmt_pct(r.get("cpc_v4"),0)] for r, w in ordered]
+             fmt_money(r.get("lost_wk")), fmt_pct(r.get("rpc_v4"),0),
+             fmt_pct(r.get("cpc_v4"),0)] for r, k in ordered]
     MAX_ROWS = 20
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": f"🔴 Losing Money · {len(ordered)} CEs", "emoji": True}},
