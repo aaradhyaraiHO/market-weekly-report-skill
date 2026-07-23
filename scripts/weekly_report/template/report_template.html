@@ -1692,7 +1692,7 @@ function renderBuckets(M){
   _bktIdCnt={};
   const BF=M.buckets_final||{};
   const D=BF.defend||{}, C=BF.compound||{}, L=BF.lifecycle||{};
-  const LM=D.losing_money||{}, bleeders=LM.bleeders||[], recovered=LM.recovered||[], fullWaste=LM.full_waste||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{};
+  const LM=D.losing_money||{}, bleeders=LM.bleeders||[], recovered=LM.recovered||[], fullWaste=LM.full_waste||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{}, eroding=LM.eroding||[];
   const seasDn=D.seasonality_down||[], seasUp=C.seasonality_up||[], scale=C.scale_up||[];
   const newCes=L.new_ces||[], iters=L.iteration||[];
   const ceBy={}; (M.ces||[]).forEach(c=>ceBy[c.ce_id]=c);
@@ -1748,8 +1748,15 @@ function renderBuckets(M){
       if(Math.round(dv)===0) return '<span class="lmd mut">0pp '+lbl+'</span>';
       return '<span class="lmd '+(dv<0?'gn':'gp')+'">'+(dv>0?'+':MINUS)+Math.abs(dv).toFixed(0)+'pp '+lbl+'</span>'; };
     return '<div class="lmv">'+Math.round(val)+'%</div><div style="line-height:1.35">'+seg(wow,'WoW')+'<br>'+seg(v4,'4w')+'</div>'; };
-  // CM2 bleed: /wk rate + 4w total
-  const lmCm2=(w,f)=>'<div class="lmv neg">'+fmtMoneyDelta(w)+'<span class="lm-hb"> /wk</span></div><div class="lmd mut">'+fmtMoneyDelta(f)+' 4w</div>';
+  // CM2 lost /wk vs healthy — bleeder: this week's CM2 loss + 4w accumulated; eroder: drop vs
+  // its own 4-wk avg + muted baseline note. Never shows a positive number.
+  const lmLost=r=>{ const lost=(r.lost_wk!=null)?+r.lost_wk:-(+r.cm2_bleed_wk||0);
+    if(!(lost>0)) return '<div class="lmv">—</div>';
+    const head='<div class="lmv neg">'+MINUS+fmtMoney(lost)+'<span class="lm-hb"> /wk</span></div>';
+    const isB=(r.roi!=null&&r.roi<100);
+    const sub=isB ? ((r.cm2_bleed_4w!=null&&r.cm2_bleed_4w<0)?'<div class="lmd gn">'+fmtMoneyDelta(r.cm2_bleed_4w)+' 4w</div>':'')
+                  : '<div class="lmd mut">vs 4-wk avg</div>';
+    return head+sub; };
   // Spend: value + Δ4w %; ↑ amber if spend ramped >25% WoW on a bleeder (up = bad on a bleeder)
   const lmSpend=r=>{ const wk=r.spend_wk,dvs=r.spend_dvs4,wow=r.spend_wow, val=fmtMoney(wk);
     const ramp=(wow!=null&&wow>25);
@@ -1767,44 +1774,44 @@ function renderBuckets(M){
   const mktTh=showMkt?'<th>Market</th>':'';
   const mktTd=r=>showMkt?'<td><span class="chip ghost" style="font-size:9.5px">'+esc(r.market||'—')+'</span></td>':'';
   const lmHead='<th class="stick">Combined Entity</th>'+mktTh+
-    '<th title="Weeks bleeding & severity — NEW (1w) · Nw · CHRONIC (≥6w) · ESCALATING (ROI −>30pp WoW) · Recovering (CM2 bleed at least halved vs prior 3wk).">Status <span class="lm-hb">ⓘ</span></th>'+
+    '<th title="Bleeding = ROI < 100% (losing money) · Eroding = ROI ≥ 100% but CM2 dropping ≥ $1k vs its 4-week average · Recovering = CM2 loss ≥ halved vs prior 3wk · Full waste = spend with 0 conversions.">Status <span class="lm-hb">ⓘ</span></th>'+
     '<th class="num" title="Google-Search Paid ROI. Two deltas: WoW (vs last week, acute) and 4w (vs the prior-4-week average, structural).">Paid ROI <span class="lm-hb">WoW · 4w ⓘ</span></th>'+
-    '<th class="num" title="Weekly margin bled = Google-Search CM1 − spend. /wk = this week · 4w = last-4-week total.">CM2 bleed <span class="lm-hb">/wk · 4w ⓘ</span></th>'+
+    '<th class="num" title="CM2 lost per week vs a healthy baseline. Bleeder: this week&#39;s CM2 loss (baseline = breakeven) + 4-week accumulated. Eroder: the drop vs its own 4-week average. Table is sorted by this.">CM2 lost <span class="lm-hb">/wk · 4w ⓘ</span></th>'+
     '<th class="num" title="Google-Search spend. Δ = % vs the prior-4-week average; ↑ amber = ramped >25% WoW on a bleeder.">Spend <span class="lm-hb">Δ4w</span></th>'+
-    '<th class="num" title="Revenue per click. Δ vs the prior-4-week average.">RPC <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Contribution revenue-per-click (cm1 ÷ clicks). Δ vs the prior-4-week average. Highlighted = dominant driver of the CM2 loss (RPC = CVR × value-per-conversion).">RPC <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Google-Search conversion rate (conversions ÷ clicks). Δ vs the prior-4-week average.">CVR <span class="lm-hb">Δ4w</span></th>'+
     '<th class="num" title="Cost per click (Google Search). Δ vs the prior-4-week average — up is bad.">CPC <span class="lm-hb">Δ4w</span></th>'+
-    '<th class="num" title="Clicks — neutral: volume is not good or bad on a bleeder. Δ vs the prior-4-week average.">Clicks <span class="lm-hb">Δ4w</span></th>'+
-    '<th class="num" title="Take rate (net revenue ÷ completed GBV). Δ vs the prior-4-week average.">TR% <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Clicks — neutral: volume is not good or bad. Δ vs the prior-4-week average.">Clicks <span class="lm-hb">Δ4w</span></th>'+
+    '<th class="num" title="Google-Search take rate (net revenue ÷ gross booking value, offline-attributed) — the pricing/commission lever inside value-per-conversion. Δ vs the prior-4-week average.">TR% <span class="lm-hb">Δ4w</span></th>'+
     '<th title="Weekly CM2 (CM1 − spend) over 12 weeks; dashed line = breakeven. Hover a point for its value.">CM2 trend 12w <span class="lm-hb">ⓘ</span></th>'+
     '<th title="Your call: Pause / Scale down / Intentional. Saved per week.">Action</th>';
   const lmRow=(r,cls,statusCell,ceSub)=>'<tr class="cerow'+(cls?' '+cls:'')+'" data-ce="'+esc(r.ce_id)+'">'+
       '<td class="ce stick">'+lmCEcell(r)+(ceSub||'')+'</td>'+mktTd(r)+
       '<td>'+statusCell+'</td>'+
       '<td class="num">'+lmRoi(r.roi,r.roi_dpp,r.roi_v4)+'</td>'+
-      '<td class="num">'+lmCm2(r.cm2_bleed_wk,r.cm2_bleed_4w)+'</td>'+
+      '<td class="num">'+lmLost(r)+'</td>'+
       '<td class="num">'+lmSpend(r)+'</td>'+
-      '<td class="num">'+lmVD(r.rpc,r.rpc_v4,{good:1,dp:2,pre:'$'})+'</td>'+
-      '<td class="num">'+lmVD(r.cpc,r.cpc_v4,{good:-1,dp:2,pre:'$'})+'</td>'+
-      '<td class="num">'+lmVD(r.clicks,r.clicks_v4,{good:0})+'</td>'+
-      '<td class="num">'+lmVD(r.tr_pct,r.tr_v4,{good:1,pp:true,suf:'%'})+'</td>'+
+      '<td class="num'+((r.dominant_driver==='rpc'||r.dominant_driver==='valconv')?' fxdom':'')+'">'+lmVD(r.rpc_g,r.rpc_g_v4,{good:1,dp:2,pre:'$'})+'</td>'+
+      '<td class="num'+(r.dominant_driver==='cvr'?' fxdom':'')+'">'+lmVD(r.cvr_g,r.cvr_g_v4,{good:1,dp:2,suf:'%'})+'</td>'+
+      '<td class="num'+(r.dominant_driver==='cpc'?' fxdom':'')+'">'+lmVD(r.cpc,r.cpc_v4,{good:-1,dp:2,pre:'$'})+'</td>'+
+      '<td class="num'+(r.dominant_driver==='clicks'?' fxdom':'')+'">'+lmVD(r.clicks_g,r.clicks_g_v4,{good:0})+'</td>'+
+      '<td class="num">'+lmVD(r.tr_g,r.tr_g_v4,{good:1,pp:true,suf:'%'})+'</td>'+
       '<td>'+cm2Spark(r.cm2_series,r.cm2_weeks)+'</td>'+
       '<td>'+lmAction(r)+'</td></tr>';
-  const lmHowto='<div class="lm-howto"><b>How to read (guideline only — set the Action per row):</b> ranked worst-first by 4-week CM2 bled. <b>Full-waste</b> (spend, 0 conversions) = pure loss, pause first. For a bleeder 3–4 weeks in with no recovery: <b>New CE → ROI &lt; 30% pause</b>; <b>Existing CE → ROI &lt; 70% pause</b>; otherwise <b>scale down within the week</b>. <b>Recovering</b> = CM2 loss has at least halved vs the prior 3 weeks — hold.</div>';
-  const lmLegend='<div class="lm-legend"><span class="chip red">FULL WASTE</span>spend, 0 conversions &nbsp;·&nbsp; <span class="chip blue">New</span>/<span class="chip ghost">Existing</span> CE type (drives the ROI threshold) &nbsp;·&nbsp; <span class="chip green">Recovering</span>CM2 bleed halving &nbsp;·&nbsp; <span class="chip red">CHRONIC</span>≥6 weeks &nbsp;·&nbsp; <span class="chip red">ESCALATING</span>ROI −&gt;30pp WoW</div>';
+  const lmHowto='<div class="lm-howto"><b>How to read (set the Action per row):</b> every CE losing CM2 this week, <b>worst first</b>. <b>CM2 lost</b> = how much weekly CM2 dropped vs its healthy baseline (bleeders vs breakeven, eroders vs their own 4-week average) — the ranking signal. <b>Status:</b> <b>Bleeding</b> ROI &lt; 100% · <b>Eroding</b> ROI ≥ 100% but dropping · <b>Full waste</b> spend, 0 conversions · <b>Recovering</b> CM2 loss ≥ halved vs prior 3wk. <b>Paid ROI</b> shows last week and its drop vs the 4-week average. The <b>highlighted column</b> is the dominant driver of the loss. The <b>CM2 trend</b> sparkline shows how long it&rsquo;s been negative (chronic = long red).</div>';
+  const lmLegend='<div class="lm-legend"><span class="chip red">Bleeding</span>ROI &lt; 100% &nbsp;·&nbsp; <span class="chip amber">Eroding</span>ROI ≥ 100%, CM2 dropping &nbsp;·&nbsp; <span class="chip red">Full waste</span>spend, 0 conversions &nbsp;·&nbsp; <span class="chip green">Recovering</span>CM2 loss halving &nbsp;·&nbsp; <span class="chip blue">New</span>/<span class="chip ghost">Existing</span> CE type &nbsp;·&nbsp; Google-Search Paid only (Bing excluded).</div>';
   let lmBody;
-  if(!bleeders.length && !fullWaste.length){ lmBody='<div class="emptystate">No CEs bleeding above the $1k / 4-week gate. <b>✅</b></div>'; }
+  if(!bleeders.length && !fullWaste.length && !eroding.length){ lmBody='<div class="emptystate">No CEs losing or eroding CM2 above the $1k / 4-week gate. <b>✅</b></div>'; }
   else{
-    const lmTotal=bleeders.concat(fullWaste).reduce((s,r)=>s+(+r.cm2_bleed_wk||0),0);
-    const nEsc=bleeders.filter(r=>lmU(r.status)==='ESCALATING').length, nChr=bleeders.filter(r=>lmU(r.status)==='CHRONIC').length, nNew=bleeders.filter(r=>lmU(r.status)==='NEW'||lmU(r.status)==='NW').length;
-    const lmReason=[fullWaste.length?fullWaste.length+' full-waste':'',nEsc?nEsc+' escalating':'',nChr?nChr+' chronic':'',nNew?nNew+' new':''].filter(Boolean).join(' · ');
-    const wasteRows=fullWaste.map(r=>lmRow(r,'lm-waste','<span class="chip red">FULL WASTE</span>',
-        '<div class="idbr" style="margin-top:3px">0 paid conversions on '+fmtMoney(r.spend_4w)+' (4w) — total loss</div>')).join('');
-    const bleedRows=bleeders.map(r=>{
-      const statusCell = r.recovering
-        ? '<span class="chip green">Recovering</span><div class="idbr" style="margin-top:2px">CM2 +'+r.cm2_improve_pct+'% vs prior 3wk</div>'
-        : lmStatus(r.status)+'<div class="idbr" style="margin-top:2px">'+(r.weeks||0)+'w bleeding</div>';
-      return lmRow(r,'',statusCell); }).join('');
-    lmBody=lmHowto+lmLegend+_tbl(lmHead, wasteRows+bleedRows);
+    // ONE ranked list: full-waste pinned top, then bleeders + eroders merged worst-first by CM2 lost/wk.
+    const merged=bleeders.concat(eroding).sort((a,b)=>((+b.lost_wk||0)-(+a.lost_wk||0)));
+    const statusOf=r=> r.recovering ? '<span class="chip green">Recovering</span>'
+        : (r.roi!=null&&r.roi<100) ? '<span class="chip red">Bleeding</span>'
+        : '<span class="chip amber">Eroding</span>';
+    const wasteRows=fullWaste.map(r=>lmRow(r,'lm-waste','<span class="chip red">Full waste</span>',
+        '<div class="idbr" style="margin-top:3px">0 conv · '+fmtMoney(r.spend_4w)+' 4w — total loss</div>')).join('');
+    const mergedRows=merged.map(r=>lmRow(r,'',statusOf(r))).join('');
+    lmBody=lmHowto+lmLegend+_tbl(lmHead, wasteRows+mergedRows);
   }
   let lmFn='';
   if(recovered.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--green)"><b>✅ '+recovered.length+' recovered:</b> '+recovered.map(r=>esc(r.ce_name)+' ('+fmtPct(r.roi,0)+', was bleeding '+r.was_bleeding_wks+'w)').join(' · ')+'</div>'; }
@@ -1926,8 +1933,9 @@ function renderBuckets(M){
   }
 
   // bucket header stats
-  const lmCount=fullWaste.length+bleeders.length;
-  const lmBleed=bleeders.concat(fullWaste).reduce((s,r)=>s+(+r.cm2_bleed_wk||0),0);
+  const lmCount=fullWaste.length+bleeders.length+eroding.length;
+  const _lostOf=r=>(r.lost_wk!=null)?+r.lost_wk:-(+r.cm2_bleed_wk||0);
+  const lmBleed=-(bleeders.concat(eroding,fullWaste).reduce((s,r)=>s+_lostOf(r),0));  // total weekly CM2 lost (neg for display)
   const sdCount=seasDn.length, suCount=seasUp.length;
   const sdDrivers=_driverSummary(seasDn), suDrivers=_driverSummary(seasUp);
   const nGradH=newCes.filter(r=>r.lane==='A_graduated').length, nPaceH=newCes.filter(r=>r.lane==='B_on_pace').length;
@@ -1935,9 +1943,9 @@ function renderBuckets(M){
 
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
-    _bucketBlock('🛡️','Losing Money','ROI &lt; 100% on &gt; $1k spend (4wk), ranked worst-first.', lmBody+lmFn, {
+    _bucketBlock('🛡️','Losing Money','CM2 lost or eroding on &gt; $1k spend (4wk), ranked worst-first.', lmBody+lmFn, {
       stat:lmCount+' CEs', val:fmtMoneyDelta(lmBleed)+'/wk',
-      fullSub:'Actively losing money on ads — Paid ROI below 100% on &gt; $1k spend (4wk). Ranked worst-first by 4-week CM2 bled; full-waste (spend, 0 conversions) on top.'})+
+      fullSub:'Every CE losing CM2 this week on &gt; $1k spend (4wk) — Bleeding (ROI &lt; 100%) and Eroding (still profitable but CM2 dropped ≥ $1k vs its 4-week average). Ranked worst-first by weekly CM2 lost; full-waste (spend, 0 conversions) on top. Google-Search Paid basis.'})+
     _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs 28-day baseline. Google Search only.', seasDnBody, {
       stat:sdCount+' flagged', detail:sdDrivers?('root driver: '+sdDrivers):'',
       fullSub:'RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+

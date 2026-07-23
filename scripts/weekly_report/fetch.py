@@ -174,6 +174,9 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
                 THEN count_conversions_offline_contribution_margin
             ELSE count_conversions_online
         END, 0))                                                AS conversions_g,
+        -- Google-Search take rate components: net revenue ÷ gross booking value (offline attr).
+        SUM(IF(ad_platform = 'Google Ads', sum_conversion_value_offline_revenue, 0))        AS offline_revenue_g,
+        SUM(IF(ad_platform = 'Google Ads', sum_conversion_value_offline_gross_bookings, 0)) AS gbv_g,
         -- Search Impression Share — GOOGLE SEARCH ONLY. Bing's
         -- count_eligible_searches is unreliable (yields SIS > 100%), so SIS is
         -- Google-only (perf-audit canon: SUM(impr)/SUM(eligible), never
