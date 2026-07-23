@@ -13,6 +13,9 @@ from __future__ import annotations
 
 # ---- locked constants ----
 BLEED_ROI, BLEED_SPEND4W = 100.0, 1000.0
+# Eroding (2026-07-23): profitable CEs (ROI≥100) whose weekly CM2 dropped ≥ $1k vs the
+# trailing-4wk average. Catches the high-ROI CM2 bleed the ROI<100 gate is blind to.
+ERODE_CM2_DECLINE = 1000.0
 SEAS_UP, SEAS_DN = 140.0, 120.0
 # Fluctuations multi-metric gate (2026-07-20) — cap output to the ~5-6 real opportunities.
 # A driver is "red" if its adverse move ≥ FX_RED_FLOOR. One red → needs FX_SINGLE_MIN
@@ -143,12 +146,15 @@ def losing_money(ces, b1, cat_rpc):
     consistent across roi/rpc/cpc/clicks/tr (locked 2026-07-16 review). Spend renders as the
     Δ4w % only (no 4-week $ total — CM2 bleed already carries the dollars burned).
     """
-    bleeders, recovered, full_waste, paused, tracking_gap = [], [], [], [], []
+    bleeders, recovered, full_waste, paused, tracking_gap, eroding = [], [], [], [], [], []
     burn = {"count": 0, "bleed": 0.0, "items": []}
     # Google-Search-only decision basis (2026-07-17) when the split columns are present; falls
     # back to the Google+Bing business metrics on pre-split (cached) snapshots.
     has_g = any("spend_g" in (w or {}) for ce in ces for w in (ce.get("weekly") or []))
     SPK, CMK, RK, CPK = ("spend_g", "cm1_g", "roi_g", "cpc_g") if has_g else ("spend", "cm1", "roi_pct", "cpc")
+    CLK = "paid_clicks_g" if has_g else "clicks"          # Google-search clicks for the driver split
+    CVK = "conversions_g" if has_g else "ad_conversions"  # Google-search conversions (CVR driver)
+    has_conv = any((w or {}).get("conversions_g") is not None for ce in ces for w in (ce.get("weekly") or []))
     for ce in ces:
         wk = ce.get("weekly") or []
         if len(wk) < 4: continue
@@ -176,6 +182,10 @@ def losing_money(ces, b1, cat_rpc):
         spend_base = _mean([x.get(SPK) for x in prior])
         rpc_hist = [x.get("rpc") for x in prior if x.get("rpc")]
         cat = cat_rpc.get((ce.get("metadata") or {}).get("category"))
+        # Google-search driver displays (consistent with the CM2/ROI/decomposition basis):
+        # Clicks = paid_clicks_g · RPC = cm1_g/clicks_g (contribution per Google click) · CPC = cpc_g.
+        rpcg_now = ((w0.get(CMK) or 0) / w0.get(CLK)) if w0.get(CLK) else None
+        rpcg_base = _mean([((x.get(CMK) or 0) / x.get(CLK)) for x in prior if x.get(CLK)])
         # one metric bundle, shared by full_waste + bleeders (so both render the same columns).
         # CM2/wk = current (cm1 − spend) directly — same definition as the 4w sum (no roi round-trip).
         feat = {
@@ -192,8 +202,16 @@ def losing_money(ces, b1, cat_rpc):
             "rpc": w0.get("rpc"), "rpc_v4": vsp("rpc"),
             "rpc_vs_4w": (round((w0["rpc"] / (sum(rpc_hist) / len(rpc_hist)) - 1) * 100)
                           if (w0.get("rpc") and len(rpc_hist) >= 2) else None),
+            # Google-search driver displays (match the decomposition basis)
+            "clicks_g": w0.get(CLK), "clicks_g_v4": vsp(CLK),
+            "rpc_g": (round(rpcg_now, 2) if rpcg_now is not None else None),
+            "rpc_g_v4": (round((rpcg_now / rpcg_base - 1) * 100) if (rpcg_now is not None and rpcg_base) else None),
             "cpc": w0.get(CPK), "cpc_v4": vsp(CPK),
             "tr_pct": w0.get("tr_pct"), "tr_v4": vsp("tr_pct", pp=True),
+            # Google-search take rate (matches the driver-row basis); fall back to business TR if absent
+            "tr_g": (w0.get("tr_g_pct") if w0.get("tr_g_pct") is not None else w0.get("tr_pct")),
+            "tr_g_v4": (vsp("tr_g_pct", pp=True) if any(x.get("tr_g_pct") is not None for x in prior)
+                        else vsp("tr_pct", pp=True)),
             "rpc_vs_cat": _vs_cat(w0.get("rpc"), cat),
             "rpc_upside": (round((cat - w0["rpc"]) * (w0.get("clicks") or 0))
                            if (w0.get("rpc") and cat and w0["rpc"] < cat) else None),
@@ -207,11 +225,49 @@ def losing_money(ces, b1, cat_rpc):
         cm2_improve_pct = (round((cm2_now - cm2_prior3avg) / abs(cm2_prior3avg) * 100)
                            if (cm2_prior3avg is not None and cm2_prior3avg < 0) else None)
         recovering = (cm2_improve_pct is not None and cm2_improve_pct >= RECOVER_CM2_IMPROVE_PCT)
+        # Eroding (2026-07-23): weekly CM2 vs the trailing-4wk average + reconciling driver split
+        # that sums exactly to the CM2 move. 4-factor when Google conversions are present:
+        #   CM2 = clicks × (CVR × Val/conv − CPC)   → Clicks · CVR · Val/conv · CPC
+        # else the coarser 3-factor (Clicks · RPC · CPC), RPC = cm1_g/clicks.
+        cm2_prior4avg = _mean(cm2_series[-5:-1])
+        cm2_decline = round(cm2_prior4avg - cm2_now) if cm2_prior4avg is not None else None
+        clk_w0 = w0.get(CLK); conv_w0 = w0.get(CVK)
+        clk_b = _mean([x.get(CLK) for x in prior])
+        cm1_pr = sum((x.get(CMK) or 0) for x in prior); sp_pr = sum((x.get(SPK) or 0) for x in prior)
+        clk_pr = sum((x.get(CLK) or 0) for x in prior); conv_pr = sum((x.get(CVK) or 0) for x in prior)
+        cpc_b = (sp_pr / clk_pr) if clk_pr else None
+        cpc_c = (spw / clk_w0) if clk_w0 else None
+        cm2_drivers, dominant = {}, None
+        if has_conv and clk_b and clk_w0 and conv_pr and conv_w0 and cpc_b is not None and cpc_c is not None:
+            cvr_b, cvr_c = conv_pr / clk_pr, conv_w0 / clk_w0        # conversions / click
+            vpc_b, vpc_c = cm1_pr / conv_pr, (w0.get(CMK) or 0) / conv_w0   # cm1 per conversion
+            _d = {"clicks":  (clk_w0 - clk_b) * (cvr_b * vpc_b - cpc_b),
+                  "cvr":     clk_w0 * vpc_b * (cvr_c - cvr_b),
+                  "valconv": clk_w0 * cvr_c * (vpc_c - vpc_b),
+                  "cpc":    -clk_w0 * (cpc_c - cpc_b)}
+        else:
+            rpc_b = (cm1_pr / clk_pr) if clk_pr else None
+            rpc_c = ((w0.get(CMK) or 0) / clk_w0) if clk_w0 else None
+            _d = ({"clicks": (clk_w0 - clk_b) * (rpc_b - cpc_b),
+                   "rpc":    clk_w0 * (rpc_c - rpc_b),
+                   "cpc":   -clk_w0 * (cpc_c - cpc_b)}
+                  if (clk_b and clk_w0 and rpc_b is not None and rpc_c is not None
+                      and cpc_b is not None and cpc_c is not None) else None)
+        if _d:
+            cm2_drivers = {k: round(v) for k, v in _d.items()}
+            _adv = {k: v for k, v in _d.items() if v < 0}
+            dominant = min(_adv, key=_adv.get) if _adv else None
+        # Google-search CVR (conversions/click) + Δ vs pooled prior-4wk, for the CVR column
+        cvr_g = round(100 * conv_w0 / clk_w0, 2) if (conv_w0 and clk_w0) else None
+        cvr_g_v4 = (round((conv_w0 / clk_w0) / (conv_pr / clk_pr) * 100 - 100)
+                    if (conv_w0 and clk_w0 and conv_pr and clk_pr) else None)
         base_row = {"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "spend_4w": round(sp4),
                     "cm2_bleed_4w": round(cm2_4w), "orders_4w": round(orders4), "adconv_4w": round(adconv4),
                     "cm2_series": cm2_series[-12:], "cm2_weeks": [w.get("week") for w in wk][-12:],
                     "tier": _tier(ce), "new_existing": _new_existing(ce), "movement_b1": b1.get(ce["ce_id"]),
-                    "cm2_improve_pct": cm2_improve_pct, "recovering": recovering}
+                    "cm2_improve_pct": cm2_improve_pct, "recovering": recovering,
+                    "cm2_decline": cm2_decline, "cm2_drivers": cm2_drivers, "dominant_driver": dominant,
+                    "cvr_g": cvr_g, "cvr_g_v4": cvr_g_v4}
         if adconv4 == 0:                                   # spend, zero paid conversions = FULL WASTE
             full_waste.append({**base_row, **feat}); continue
         if spw == 0:                                       # spend stopped this week → PAUSED
@@ -223,17 +279,23 @@ def losing_money(ces, b1, cat_rpc):
             dpp = feat["roi_dpp"]
             status = "NEW" if w == 1 else ("CHRONIC" if w >= 6 else (f"{w}w"))
             if dpp is not None and dpp < -CLIFF_PP: status = "ESCALATING"
-            bleeders.append({**base_row, **feat, "status": status, "weeks": w})
+            # lost_wk = money lost this week vs breakeven (positive = loss) → shared sort key w/ eroders
+            bleeders.append({**base_row, **feat, "status": status, "weeks": w,
+                             "lost_wk": -feat["cm2_bleed_wk"]})
         elif roi >= RECOVER_ROI and _bleed_streak(series[:-1]) >= RECOVER_MIN_BLEED:
             recovered.append({"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "roi": round(roi),
                               "was_bleeding_wks": _bleed_streak(series[:-1])})
+        elif cm2_decline is not None and cm2_decline >= ERODE_CM2_DECLINE:  # ERODING (any ROI, not a bleeder)
+            # lost_wk = drop vs the CE's own 4wk-avg (healthy baseline) → shared sort key w/ bleeders
+            eroding.append({**base_row, **feat, "lost_wk": cm2_decline})
     # worst 4-week bled first; Recovering ones pushed to the bottom (2026-07-17)
     bleeders.sort(key=lambda r: (bool(r.get("recovering")), r["cm2_bleed_4w"]))
+    eroding.sort(key=lambda r: -(r.get("lost_wk") or 0))          # biggest weekly CM2 drop first
     full_waste.sort(key=lambda r: -r["spend_4w"])
     paused.sort(key=lambda r: -r["spend_4w"]); tracking_gap.sort(key=lambda r: -r["spend_4w"])
     burn_names = [n for n, _ in sorted(burn["items"], key=lambda x: x[1])]   # worst-first, all names
     return {"bleeders": bleeders, "recovered": recovered, "full_waste": full_waste,
-            "paused": paused, "tracking_gap": tracking_gap,
+            "paused": paused, "tracking_gap": tracking_gap, "eroding": eroding,
             "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
 
 

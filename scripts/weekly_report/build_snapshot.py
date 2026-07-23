@@ -158,6 +158,10 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
     spend_g = _f(p, "spend_g") if paid is not None else None
     cm1_g = _f(p, "cm1_g") if paid is not None else None
     paid_clicks_g = _f(p, "paid_clicks_g") if paid is not None else None
+    conversions_g = _f(p, "conversions_g") if paid is not None else None   # Google-search conv → CVR driver split
+    offline_revenue_g = _f(p, "offline_revenue_g") if paid is not None else None
+    gbv_g = _f(p, "gbv_g") if paid is not None else None
+    tr_g = _pct(offline_revenue_g, gbv_g) if (paid is not None and gbv_g) else None   # Google-search take rate
     roi_g = (_pct(cm1_g, spend_g, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
              if (spend_g is not None and spend_g >= config.WEEKLY_SPEND_FLOOR) else None)
     cpc_g = _num(spend_g / paid_clicks_g) if (paid_clicks_g and spend_g is not None) else None
@@ -202,6 +206,8 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         # Google-Search-only paid (decision columns for Losing Money + Fluctuations)
         "spend_g": _num(spend_g), "cm1_g": _num(cm1_g), "roi_g": roi_g, "cpc_g": cpc_g,
         "paid_clicks_g": int(paid_clicks_g) if _num(paid_clicks_g) is not None else None,
+        "conversions_g": int(conversions_g) if _num(conversions_g) is not None else None,
+        "tr_g_pct": tr_g,   # Google-search take rate (net rev ÷ gross bookings)
         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
         # Paid RPC = paid-attributed net revenue ÷ paid clicks (not total revenue).
         "paid_revenue": _num(offline_rev),
