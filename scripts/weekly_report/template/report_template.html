@@ -1208,7 +1208,9 @@ function bucketMembers(){
   if(_bktMembMi===mi && _bktMemb) return _bktMemb;
   _bktMemb={}; const bf=MARKETS[mi].buckets_final||{}, D=bf.defend||{}, C=bf.compound||{}, L=bf.lifecycle||{};
   const add=(arr,tag)=>(arr||[]).forEach(x=>{ (_bktMemb[x.ce_id]=_bktMemb[x.ce_id]||{})[tag]=1; });
-  add((D.losing_money||{}).bleeders,'losing_money'); add(D.seasonality_down,'fluct_down');
+  const _lm=D.losing_money||{};
+  add(_lm.bleeders,'losing_money'); add(_lm.eroding,'losing_money'); add(_lm.full_waste,'losing_money');
+  add(D.seasonality_down,'fluct_down');
   add(C.scale_up,'scale_up'); add(C.seasonality_up,'fluct_up');
   add(L.new_ces,'new_ces'); add(L.iteration,'iteration');
   _bktMembMi=mi; return _bktMemb;

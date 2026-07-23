@@ -269,8 +269,6 @@ RECOVER_ROI, RECOVER_MIN_BLEED, RECOVER_CM2_IMPROVE_PCT = 105.0, 2, 50.0   # exi
 ## 12. Open / parked
 - **Alert wiring** — bringing eroders into `alert/weekly_alert.py` (posts to GM channels)
   is a deliberate separate decision; `eroding` is a new list the alert doesn't yet read.
-- **§3 All-CE Defend tag** — eroders aren't yet tagged in the §3 all-CE view (only bleeders);
-  minor enhancement.
 - **Thin-margin watchlist** (ROI ~100–110% on material spend, e.g. Blue Lagoon Malta
   ROI 101%, stable) — deliberately NOT in this bucket (neither a loss nor a decline).
   Parked as a possible separate low-threshold view; do not dilute Losing Money.
