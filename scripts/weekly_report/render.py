@@ -51,6 +51,19 @@ def load_markets(paths):
                 continue
             seen.add(key)
             _validate(s, p)
+            # Robustness: pick up the S3 Slack-signal sidecar at RENDER time when present, so a
+            # re-render always reflects the latest digest. build_snapshot's loader only runs at
+            # build time — if the snapshot was built before the sidecar was written (S3 runs
+            # after the build), a plain re-render would otherwise drop the cards.
+            ms, wk = meta.get("market_slug"), meta.get("week_start")
+            if ms and wk:
+                side = os.path.join(os.path.dirname(os.path.abspath(p)),
+                                    f"slack_context_{ms}_{wk}.json")
+                if os.path.exists(side):
+                    try:
+                        s["market_review_context"] = json.load(open(side))
+                    except (json.JSONDecodeError, OSError):
+                        pass
             markets.append(s)
     if not markets:
         sys.exit("No market snapshots found in the given inputs.")
