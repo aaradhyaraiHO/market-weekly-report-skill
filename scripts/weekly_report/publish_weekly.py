@@ -121,7 +121,8 @@ def publish_market(slug, week, deploy, n):
     rep_p = REPORT_DIR / f"report_{slug}_{week}.html"
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! missing snapshot/report for {slug} {week} — run the producer first"); return None
-    shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}.html")
+    shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}.html")            # current alias
+    shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}-{week}.html")     # week archive → Ledger history
     series = weekly_series(json.loads(snap_p.read_text()), n)
     print(f"  ✓ {name}: {_money(series[-1]['rev'])} · WoW {_pct(series[-1]['wow_pct'])} "
           f"({len(series)} wks)")
@@ -138,6 +139,7 @@ def publish_headout(week, deploy, n):
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! no headout snapshot/report for {week} — run build_global.py first"); return None
     shutil.copyfile(rep_p, deploy / "weekly-report-headout.html")
+    shutil.copyfile(rep_p, deploy / f"weekly-report-headout-{week}.html")           # week archive
     snap = json.loads(snap_p.read_text())
     series = weekly_series(snap, n)
     nm = (snap.get("meta") or {}).get("n_markets")
@@ -223,18 +225,26 @@ def _headout_hero(ho):
 
 
 # --------------------------------------------------------------------------- #
-def _cell(s, is_current):
+def _cell(s, is_current, ledger_slug=None, deploy=None):
     if not s or s.get("rev") is None:
         return '<td class="cell"><span class="dash">—</span></td>'
     wow = s.get("wow_pct")
     col = "#12A150" if (wow is not None and wow >= 1) else "#E5384F" if (wow is not None and wow <= -1) else "#9A92AC"
     arr = "▲" if (wow is not None and wow >= 1) else "▼" if (wow is not None and wow <= -1) else "·"
     wtxt = "" if wow is None else f'<div class="wow" style="color:{col}">{arr} {_pct(wow)}</div>'
-    return (f'<td class="cell{" cur" if is_current else ""}">'
-            f'<div class="rev">{_money(s["rev"])}</div>{wtxt}</td>')
+    inner = f'<div class="rev">{_money(s["rev"])}</div>{wtxt}'
+    # Link the cell to THAT week's archived report when it exists (Ledger history). stopPropagation
+    # so it doesn't fall through to the row's current-week onclick; weeks without an archive stay
+    # plain (and fall through to the current report).
+    if ledger_slug and deploy is not None:
+        arch = f"weekly-report-{ledger_slug}-{s['week']}.html"
+        if (deploy / arch).exists():
+            inner = (f'<a href="{arch}" onclick="event.stopPropagation()" '
+                     f'style="display:block;color:inherit;cursor:pointer">{inner}</a>')
+    return f'<td class="cell{" cur" if is_current else ""}">{inner}</td>'
 
 
-def render_matrix(state, week, cols):
+def render_matrix(state, week, cols, deploy=None):
     labels = "".join(f'<th class="wk{" cur" if c == cols[-1] else ""}">{_collabel(c)}'
                      f'{"<div class=cur-tag>current</div>" if c == cols[-1] else ""}</th>' for c in cols)
     body = ""
@@ -247,7 +257,7 @@ def render_matrix(state, week, cols):
                  f'<span class="rcount">{len(rms)} market{"s" if len(rms) != 1 else ""}</span></td></tr>')
         for m in rms:
             by = {s["week"]: s for s in m["series"]}
-            cells = "".join(_cell(by.get(c), c == cols[-1]) for c in cols)
+            cells = "".join(_cell(by.get(c), c == cols[-1], m["slug"], deploy) for c in cols)
             body += (f'<tr class="mrow" onclick="location.href=\'{m["report_path"]}\'">'
                      f'<td class="mkt"><span class="flag">{m["flag"]}</span>'
                      f'<span class="mname">{m["name"]}</span>'
@@ -332,7 +342,7 @@ def main(argv=None):
                    | {s["week"] for s in state.get("headout", {}).get("series", [])})[-args.cols:]
     state["edition"] = {"week": args.week, "cols": weeks}
     (deploy / "weekly_state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False))
-    (deploy / "weekly.html").write_text(render_matrix(state, args.week, weeks))
+    (deploy / "weekly.html").write_text(render_matrix(state, args.week, weeks, deploy))
     print(f"\n  wrote {deploy/'weekly.html'} + weekly_state.json ({n} market(s), {len(weeks)} cols)")
     print(f"\n  open {deploy/'weekly.html'}")
     print("  vercel deploy --prod --cwd market-notebook-v2   # from ~/analytics — USER runs")
