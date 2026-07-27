@@ -223,6 +223,8 @@ def build_summary_blocks(mk, report_url):
         {"type": "section", "text": {"type": "mrkdwn", "text": top_drops}},
         {"type": "section", "text": {"type": "mrkdwn", "text": top_gains}},
         {"type": "context", "elements": [{"type": "mrkdwn",
+            "text": "🔸 _Ranked by biggest move — 4-wk trend or WoW. A CE can appear here on a drop vs its L4W average even if revenue grew WoW._"}]},
+        {"type": "context", "elements": [{"type": "mrkdwn",
             "text": "🧵 Losing Money · RPC Fluctuations Down · RPC Fluctuations Up tables in thread ⬇️"}]},
         report_ctx(report_url),
     ]
