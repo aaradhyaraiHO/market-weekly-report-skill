@@ -134,7 +134,9 @@ def losing_money(ces, b1, cat_rpc):
     """DEFEND · unified CM2-bleed table. b1 = {ce_id: movement} from bucket_b1.
 
     Funded CEs (spend_4w > $1k) are classified IN ORDER:
-      FULL WASTE   — ad_conversions_4w == 0 (spend, zero paid conversions = total loss)
+      FULL WASTE   — ad_conversions_4w == 0 AND orders_4w == 0 (spend, genuinely zero
+                     conversions = total loss; the orders guard keeps composite city-suffixed
+                     CEs with NULL ad_conversions but real bookings out of the waste bucket)
       PAUSED       — spend_wk == 0 (was funded across the 4wk window, stopped this week;
                      ROI reads null because spend is 0 → confirm the pause was intentional)
       TRACKING GAP — roi is None with spend_wk > 0 (current-week CM1 feed gap; verify, NOT waste)
@@ -268,7 +270,11 @@ def losing_money(ces, b1, cat_rpc):
                     "cm2_improve_pct": cm2_improve_pct, "recovering": recovering,
                     "cm2_decline": cm2_decline, "cm2_drivers": cm2_drivers, "dominant_driver": dominant,
                     "cvr_g": cvr_g, "cvr_g_v4": cvr_g_v4}
-        if adconv4 == 0:                                   # spend, zero paid conversions = FULL WASTE
+        if adconv4 == 0 and orders4 == 0:                  # spend, zero paid conversions AND zero orders = FULL WASTE
+            # orders4 guard (2026-07-27): composite city-suffixed CEs ("1043 - Paris") have
+            # NULL ad_conversions in the GLOBAL query → adconv4==0 alone falsely flags a
+            # profitable CE (Paris ~123% ROI, real paid_conversions + orders) as total loss.
+            # Real orders ⇒ it converted; the null is an attribution gap, not waste. Fall through.
             full_waste.append({**base_row, **feat}); continue
         if spw == 0:                                       # spend stopped this week → PAUSED
             paused.append(base_row); continue

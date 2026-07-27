@@ -322,6 +322,8 @@ def main() -> None:
                         help="Market slug — when set, record the posted parent timestamps to posted_ledger.json")
     parser.add_argument("--week", default=None,
                         help="Week-Monday (YYYY-MM-DD) for the ledger key; defaults to the payload's _rca.week_start")
+    parser.add_argument("--force", action="store_true",
+                        help="Post even if the ledger already has this week+slug (bypass the duplicate guard)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -367,6 +369,25 @@ def main() -> None:
     if update_ts and len(update_ts) != len(messages):
         log.error("--update needs %d timestamps (one per message group), got %d", len(messages), len(update_ts))
         sys.exit(1)
+
+    # Duplicate-alert guard (2026-07-27): a fresh post that already has a ledger entry for
+    # this week+slug means the alert was posted before — re-running would double-post (the
+    # exact failure flagged in #team-central-biz). Refuse; the operator should edit in place
+    # via update_posts_weekly.py, or pass --force to override intentionally.
+    if not update_ts and args.slug and not args.force:
+        guard_week = args.week or (payload.get("_rca") or {}).get("week_start")
+        if guard_week and LEDGER_PATH.exists():
+            try:
+                _led = json.loads(LEDGER_PATH.read_text()).get(guard_week, {}).get(args.slug, {})
+            except (json.JSONDecodeError, OSError):
+                _led = {}
+            if _led.get("msg1_ts") or _led.get("msg2_ts"):
+                log.error("Already posted %s[%s]: %s. Edit in place with "
+                          "update_posts_weekly.py --slug %s (or pass --force to re-post).",
+                          guard_week, args.slug,
+                          ", ".join(t for t in (_led.get("msg1_ts"), _led.get("msg2_ts")) if t),
+                          args.slug)
+                sys.exit(1)
 
     permalinks = []
     parent_ts: list[str] = []
