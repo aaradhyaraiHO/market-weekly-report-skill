@@ -13,10 +13,38 @@ import json, subprocess, os, sys
 
 WEEK = "2026-07-13"
 DRY = "--dry-run" in sys.argv
+HERE = os.path.dirname(os.path.abspath(__file__))
 parents = json.load(open("/tmp/market_parents.json"))
 env = os.environ.copy()
 if not env.get("REVENUE_ALERT_SLACK_TOKEN") and not DRY:
     sys.exit("export REVENUE_ALERT_SLACK_TOKEN first (or pass --dry-run)")
+
+
+def _verify_deploy_current(old_dir, new_dir):
+    """Gate against report↔alert drift (2026-07-27): before sweeping, confirm the DEPLOYED
+    report matches the freshly-rendered one for this week. If any market's §4 buckets differ,
+    the live report is stale relative to what we'd push to Slack — abort so the operator
+    re-deploys first (make the sweep the FINAL step, sourced from the deployed report)."""
+    r = subprocess.run(["python3", os.path.join(HERE, "bucket_diff.py"),
+                        "--old-dir", old_dir, "--new-dir", new_dir, "--week", WEEK, "--json"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"verify: bucket_diff failed —\n{r.stderr or r.stdout}")
+    diff = json.loads(r.stdout)
+    stale = [s for s, d in diff.items() if d.get("changed")]
+    if stale:
+        sys.exit(f"verify FAILED — deployed report is stale vs fresh render for: "
+                 f"{', '.join(stale)}.\nRe-deploy the current report, THEN re-run the sweep.")
+    print(f"  verify OK — deployed report == fresh render ({len(diff)} markets)")
+
+
+# --verify <deployed_dir> <fresh_render_dir> : hard gate before any chat.update
+if "--verify" in sys.argv:
+    i = sys.argv.index("--verify")
+    try:
+        _verify_deploy_current(sys.argv[i + 1], sys.argv[i + 2])
+    except IndexError:
+        sys.exit("--verify needs two dirs: --verify <deployed_dir> <fresh_render_dir>")
 
 for slug, info in parents.items():
     ch, m1, m2 = info["channel"], info["msg1"], info["msg2"]

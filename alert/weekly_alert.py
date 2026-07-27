@@ -54,8 +54,12 @@ def dot(attain):
     return "🟢" if attain >= 100 else ("🟠" if attain >= 70 else "🔴")
 
 def dir_emoji(v):
+    # Sentiment color, not just direction: a positive move is green, negative red
+    # (all six summary metrics are "up = good"). Direction is already carried by the
+    # sign of the number, so the ± triangles were only adding a misleading red on gains
+    # (Iberia feedback 2026-07-22: "positive ups are showing red 🔺").
     if v is None: return "➖"
-    return "🔻" if v <= -5 else ("🔺" if v >= 5 else "➖")
+    return "🔴" if v <= -5 else ("🟢" if v >= 5 else "➖")
 
 def trunc(s, w):
     s = str(s)
@@ -186,15 +190,22 @@ def build_summary_blocks(mk, report_url):
         f"Revenue: *{fmt_money(hl.get('revenue_w0'))}* "
         f"({fmt_pct(hl.get('wow_pct'))} WoW {dir_emoji(hl.get('wow_pct'))} · "
         f"{fmt_pct(hl.get('yoy_pct'))} YoY {dir_emoji(hl.get('yoy_pct'))})  ·  "
+        # Lead with Overall ROI (ROI 1, business), unit-consistent with overall revenue;
+        # Paid ROI (Search-only) stays beside it as the actionable lever (Varun 2026-07-23).
+        f"Overall ROI *{fmt_plain_pct(hl.get('roi1_w0_pct'),0)}*  ·  "
         f"Paid ROI *{fmt_plain_pct(hl.get('roi_w0_pct'),0)}*"
     )
+    # Grouped by scope so an overall topline never sits next to a paid-only efficiency
+    # metric: OVERALL block (business), then a divider, then the PAID (Search) lever.
     metrics = "*Main metrics this week (WoW):*\n" + "\n".join([
         kmline(1, "Revenue", "revenue", money=True),
-        kmline(2, "Paid ROI", "paid_roi", pctval=True),
-        kmline(3, "Paid clicks", "paid_clicks"),
-        kmline(4, "Paid CVR", "paid_cvr", pctval=True),
-        kmline(5, "AOV", "aov", money=True),
-        kmline(6, "Take rate", "tr_pct", pctval=True),
+        kmline(2, "Overall ROI", "roi1", pctval=True),
+        kmline(3, "AOV", "aov", money=True),
+        kmline(4, "Take rate", "tr_pct", pctval=True),
+        "— Paid (Search: Google + Bing) —",
+        kmline(5, "Paid ROI", "paid_roi", pctval=True),
+        kmline(6, "Paid clicks", "paid_clicks"),
+        kmline(7, "Paid CVR", "paid_cvr", pctval=True),
     ])
 
     # Top movers — the report's own TOP DROPS / TOP GAINS charts (biggest move,
@@ -204,7 +215,7 @@ def build_summary_blocks(mk, report_url):
     def bullets(rows, side):
         return "\n".join(mover_bullet(r, side) for r in rows[:5])
     top_drops = "🔻 *Top 5 Drops (WoW)*\n" + bullets(drops, "drop")
-    top_gains = "🔺 *Top 5 Gains (WoW)*\n" + bullets(gains, "gain")
+    top_gains = "🟢 *Top 5 Gains (WoW)*\n" + bullets(gains, "gain")
 
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": head}},
