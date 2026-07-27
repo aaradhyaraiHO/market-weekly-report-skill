@@ -15,13 +15,29 @@
     "csee": "CSQ10TALA",
     "east_asia": "CQD6220VB",
     "sea": "C5WFYN82H",
-    "uae": "C046622L80Z"
+    "uae": "C046622L80Z",
+    "gcc": "C0889D22PM5",
+    "north_africa": "C0889D22PM5",
+    "rest_of_mea": "C0889D22PM5"
   },
   "_alternates": {
-    "oceania": ["C039TMH0GEP", "C097DVBLHGS"],
-    "east_asia": ["C01C4NPLYN6", "C01CARUM1CL", "C0809DN93DH (CN/TW)"],
-    "sea": ["C03R4UJ4DHC", "C01CHADFPAM (MLY/IND/VN)"],
-    "uae": ["gcc shares C046622L80Z"]
+    "oceania": [
+      "C039TMH0GEP",
+      "C097DVBLHGS"
+    ],
+    "east_asia": [
+      "C01C4NPLYN6",
+      "C01CARUM1CL",
+      "C0809DN93DH (CN/TW)"
+    ],
+    "sea": [
+      "C03R4UJ4DHC",
+      "C01CHADFPAM (MLY/IND/VN)"
+    ],
+    "uae": [
+      "gcc shares C046622L80Z"
+    ]
   },
-  "_unverified": "oceania/france/uk/iberia/csee/east_asia/sea/uae pulled from monthly channel-map.md — verify channel↔market + bot membership before first live post."
+  "_unverified": "oceania/france/uk/iberia/csee/east_asia/sea/uae pulled from monthly channel-map.md — verify channel↔market + bot membership before first live post.",
+  "_note_mena": "gcc/north_africa/rest_of_mea → #mkt-mena-expansion-internal (C0889D22PM5), separate from UAE (#mkt-mena C046622L80Z), per Shivang 2026-07-27"
 }

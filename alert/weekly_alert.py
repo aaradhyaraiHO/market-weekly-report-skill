@@ -168,6 +168,9 @@ MARKET_TEAM = {
     "east_asia":      ("@east-asia", "🇯🇵🇰🇷🇭🇰"),
     "sea":            ("@sea", "🇸🇬🇹🇭"),
     "uae":            ("@uae", "🇦🇪"),
+    "gcc":            ("@gcc", "🇸🇦🇶🇦"),
+    "north_africa":   ("@north-africa", "🇪🇬🇲🇦"),
+    "rest_of_mea":    ("@rest-of-mea", "🇿🇦"),
 }
 
 def build_summary_blocks(mk, report_url):
@@ -308,6 +311,7 @@ LEDGER_SLUG = {
     "france": "france", "united_kingdom": "united-kingdom", "iberia": "iberia",
     "csee": "csee", "uae": "united-arab-emirates",
     "east_asia": "east-asia-jpn-sk-hk", "sea": "sea-sin-tha",
+    "gcc": "gcc", "north_africa": "north-africa", "rest_of_mea": "rest-of-mea",
 }
 
 FLUCT_SRC = {"down": ("defend", "seasonality_down"), "up": ("compound", "seasonality_up")}

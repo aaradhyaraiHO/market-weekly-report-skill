@@ -53,6 +53,10 @@ MARKETS = {
     "east_asia": "East Asia",
     "sea": "South East Asia",
     "uae": "United Arab Emirates",
+    # MENA subdivisions (2026-07-27) — separate pilots, all alert to #mkt-mena-expansion-internal
+    "gcc": "GCC",
+    "north_africa": "North Africa",
+    "rest_of_mea": "Rest of MEA",
 }
 
 # --------------------------------------------------------------------------- #
