@@ -134,9 +134,10 @@ def losing_money(ces, b1, cat_rpc):
     """DEFEND · unified CM2-bleed table. b1 = {ce_id: movement} from bucket_b1.
 
     Funded CEs (spend_4w > $1k) are classified IN ORDER:
-      FULL WASTE   — ad_conversions_4w == 0 AND orders_4w == 0 (spend, genuinely zero
-                     conversions = total loss; the orders guard keeps composite city-suffixed
-                     CEs with NULL ad_conversions but real bookings out of the waste bucket)
+      FULL WASTE   — ad_conversions_4w == 0 AND cm1_4w <= 0 (spend, zero conversions AND zero
+                     conversion value = total loss; the CM1 guard keeps composite city-suffixed
+                     CEs whose orders/ad_conversions read NULL in the global query but whose paid
+                     CM1 is positive — an attribution gap, not waste — out of the waste bucket)
       PAUSED       — spend_wk == 0 (was funded across the 4wk window, stopped this week;
                      ROI reads null because spend is 0 → confirm the pause was intentional)
       TRACKING GAP — roi is None with spend_wk > 0 (current-week CM1 feed gap; verify, NOT waste)
@@ -175,6 +176,7 @@ def losing_money(ces, b1, cat_rpc):
         prior = wk[-5:-1]                                  # base for every Δ4w (current excluded)
         cm2_series = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
         cm2_4w = sum(cm2_series[-4:])
+        cm1_4w = sum((w.get(CMK) or 0) for w in wk[-4:])   # paid conversion VALUE (contribution)
         adconv4 = sum((w.get("ad_conversions") or 0) for w in wk[-4:])
         orders4 = sum((w.get("orders") or 0) for w in wk[-4:])
         def vsp(key, pp=False):                            # value vs prior-4 mean (nulls skipped)
@@ -270,11 +272,13 @@ def losing_money(ces, b1, cat_rpc):
                     "cm2_improve_pct": cm2_improve_pct, "recovering": recovering,
                     "cm2_decline": cm2_decline, "cm2_drivers": cm2_drivers, "dominant_driver": dominant,
                     "cvr_g": cvr_g, "cvr_g_v4": cvr_g_v4}
-        if adconv4 == 0 and orders4 == 0:                  # spend, zero paid conversions AND zero orders = FULL WASTE
-            # orders4 guard (2026-07-27): composite city-suffixed CEs ("1043 - Paris") have
-            # NULL ad_conversions in the GLOBAL query → adconv4==0 alone falsely flags a
-            # profitable CE (Paris ~123% ROI, real paid_conversions + orders) as total loss.
-            # Real orders ⇒ it converted; the null is an attribution gap, not waste. Fall through.
+        if adconv4 == 0 and cm1_4w <= 0:                   # spend, zero conversions AND zero conversion value = FULL WASTE
+            # cm1_4w guard (2026-07-27): composite city-suffixed CEs ("1043 - Paris",
+            # "1036 - sydney", "1132 - Ho Chi Minh") have NULL ad_conversions AND NULL
+            # orders/revenue in the GLOBAL query, so adconv4==0/orders4==0 both falsely fire —
+            # but their paid CM1 (conversion value) attributes fine and is positive (Sydney
+            # +$5.1K on $1.9K spend). Guard on conversion value, per spec: a CE with positive
+            # CM1 earned money → attribution gap, not total loss. Falls through to bleeder/exit.
             full_waste.append({**base_row, **feat}); continue
         if spw == 0:                                       # spend stopped this week → PAUSED
             paused.append(base_row); continue
