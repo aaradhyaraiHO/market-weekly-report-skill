@@ -976,19 +976,41 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     wm1_end = w0_start - dt.timedelta(days=1)
     ly_w0_start = w0_start - dt.timedelta(days=config.YOY_LAG_DAYS)
     ly_w0_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
-    _attach_resource_breakdowns(
-        ces,
-        fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_tgid_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-        fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-        fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
-    )
-    _attach_channels_funnel(
-        ces,
-        fetch.ce_channels(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-        fetch.ce_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
-    )
+    # RE-SOURCE drawer tier (per-CE Mixpanel funnel/channel breakdowns) — report-only
+    # detail, NOT load-bearing for headline / buckets / movers / alert. The Mixpanel funnel
+    # table can spike past the per-query byte cap when a partition IN-WINDOW is bloated or
+    # corrupted (e.g. duplicated rows on one event_date). Degrade gracefully: skip the
+    # drawers for this market and keep the report, rather than aborting the whole run (which
+    # also strands every market queued after it). CEs simply render without a drawer, exactly
+    # as CEs with no funnel activity already do.
+    def _is_cap_error(exc):
+        m = str(exc).lower()
+        return "bytesbilled" in m or "bytes billed" in m or "exceeded limit for bytes" in m
+    try:
+        _attach_resource_breakdowns(
+            ces,
+            fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+            fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+            fetch.ce_tgid_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
+            fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
+            fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
+        )
+    except Exception as exc:
+        if not _is_cap_error(exc):
+            raise
+        print(f"  ⚠ [{market}] RE-SOURCE tgid drawers SKIPPED — a funnel query exceeded the "
+              f"{config.MAX_BYTES_BILLED // 1024**3}GB byte cap (likely a bloated funnel partition "
+              f"in-window). Headline / buckets / movers / alert are unaffected.")
+    try:
+        _attach_channels_funnel(
+            ces,
+            fetch.ce_channels(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+            fetch.ce_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+        )
+    except Exception as exc:
+        if not _is_cap_error(exc):
+            raise
+        print(f"  ⚠ [{market}] channel/funnel drawers SKIPPED — query exceeded the byte cap.")
     # Overall CVR = orders / clicks (all-traffic, from BQ — already in every
     # weekly record, so the 12-week sparkline renders with no extra query).
     # (Replaces the Mixpanel-funnel order-users÷LP-users CVR, which needed a
