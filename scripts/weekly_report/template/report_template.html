@@ -616,22 +616,29 @@ function saveAction(ceId,bucket,patch){
   const cur=getAction(bucket,ceId);
   const merged=Object.assign({},cur,patch,{owner:patch.owner||getAuthor(),updated:new Date().toISOString()});
   if(actionEmpty(merged)){
-    const s=slugKey(); if(actionsData[s]) delete actionsData[s][actionK(bucket,ceId)];
-    saveActionCache();
-    if(!SYNC_OK) return Promise.resolve();
+    if(!SYNC_OK){
+      const s=slugKey(); if(actionsData[s]) delete actionsData[s][actionK(bucket,ceId)];
+      saveActionCache(); return Promise.resolve();
+    }
     const dp=new URLSearchParams({action:'action_delete',market_slug:MARKETS[mi].meta.market_slug,
       ce_id:String(ceId),week_start:curWeek(),bucket:bucket});
-    return fetch(NOTES_URL+'?'+dp.toString(),{redirect:'follow'}).then(r=>r.json()).catch(()=>{});
+    return fetch(NOTES_URL+'?'+dp.toString(),{redirect:'follow'}).then(r=>r.json()).then(res=>{
+      if(!res||!res.ok) throw new Error('delete failed');
+      const s=slugKey(); if(actionsData[s]) delete actionsData[s][actionK(bucket,ceId)];
+      saveActionCache();
+    });
   }
-  putAction(bucket,ceId,merged);
-  if(!SYNC_OK) return Promise.resolve();
+  if(!SYNC_OK){ putAction(bucket,ceId,merged); return Promise.resolve(); }
   const params=new URLSearchParams({
     action:'action_upsert',market_slug:MARKETS[mi].meta.market_slug,
     ce_id:String(ceId),week_start:curWeek(),bucket:bucket,
     checkbox:merged.checkbox?'true':'',note:merged.note||'',
     status:merged.status||'',owner:merged.owner||getAuthor()
   });
-  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'}).then(r=>r.json()).catch(()=>{});
+  return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'}).then(r=>r.json()).then(res=>{
+    if(!res||!res.ok) throw new Error('upsert failed');
+    putAction(bucket,ceId,merged);
+  });
 }
 function actionSyncPull(){
   loadActionCache();
@@ -653,9 +660,33 @@ function actionSyncPull(){
     .catch(()=>{});
 }
 function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
-function wrSetAction(ceId,val){ saveAction(ceId,'losing_money',{status:val}); }
-function wrFxChk(bucket,ceId,checked){ saveAction(ceId,bucket,{checkbox:checked}); }
-function wrFxNote(bucket,ceId,val){ saveAction(ceId,bucket,{note:val}); }
+function wrSetAction(ceId,val,el){
+  const prev=wrGetAction(ceId);
+  saveAction(ceId,'losing_money',{status:val}).catch(()=>{
+    if(el) el.value=prev;
+    _flashSaveErr(el);
+  });
+}
+function wrFxChk(bucket,ceId,checked,el){
+  saveAction(ceId,bucket,{checkbox:checked}).catch(()=>{
+    if(el) el.checked=!checked;
+    _flashSaveErr(el);
+  });
+}
+function wrFxNote(bucket,ceId,val,el){
+  const prev=getAction(bucket,ceId).note||'';
+  saveAction(ceId,bucket,{note:val}).catch(()=>{
+    if(el) el.value=prev;
+    _flashSaveErr(el);
+  });
+}
+function _flashSaveErr(el){
+  if(!el) return;
+  const orig=el.style.outline;
+  el.style.outline='2px solid #e53e3e';
+  el.title='Save failed — try again';
+  setTimeout(()=>{ el.style.outline=orig; el.title=''; },2500);
+}
 
 function putLocal(ceId, patch){
   const slug=slugKey(); notesData[slug]=notesData[slug]||{};
@@ -1769,7 +1800,7 @@ function renderBuckets(M){
   const lmCEcell=r=>'<span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+lmNE(r)+seasonTag(r.ce_id);
   // manual per-row action (Pause / Scale down / Intentional) — persisted locally; guideline stays text-only
   const lmAction=r=>{ const v=wrGetAction(r.ce_id); const o=(val,lbl)=>'<option value="'+val+'"'+(v===val?' selected':'')+'>'+lbl+'</option>';
-    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value)">'+
+    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+
       o('','—')+o('pause','Pause')+o('scale_down','Scale down')+o('intentional','Intentional')+'</select>'; };
   // Headout aggregate: bucket rows carry a `market` tag → add a Market column.
   const showMkt=_isHeadout(M);
@@ -1828,8 +1859,8 @@ function renderBuckets(M){
   const fxDrv=(r,key,val,delta,o)=>{ const cell=lmVD(val,delta,o); return (r.dominant_key===key)?'<div class="fxdom">'+cell+'</div>':cell; };
   const fxAction=(r,bucket)=>{ bucket=bucket||'flux_down'; const a=getAction(bucket,r.ce_id), c=!!a.checkbox, n=a.note||'';
     return '<label class="fx-chk" onclick="event.stopPropagation()"><input type="checkbox"'+(c?' checked':'')+
-        ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked)"> confirm seasonality</label>'+
-      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value)">'+esc(n)+'</textarea>'; };
+        ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked,this)"> confirm seasonality</label>'+
+      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'; };
   // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
   const fluxHead='<th class="stick">Combined Entity</th>'+mktTh+
     '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
