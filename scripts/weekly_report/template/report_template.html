@@ -2675,13 +2675,13 @@ function openDrawer(ceId){
   document.getElementById('cmtClear').onclick=()=>{
     const had=ta.value.trim().length>0;
     ta.value=''; paintCount();
-    if(had && confirm(‘Delete this week’s note for this CE?’)){
+    if(had && confirm('Delete this week\'s note for this CE?')){
       deleteNote(ceId).then(()=>{
-        document.getElementById(‘cmtSaved’).textContent=’deleted’;
+        document.getElementById('cmtSaved').textContent='deleted';
         paintCETable();
       }).catch(()=>{
-        document.getElementById(‘cmtSaved’).textContent=’delete failed’;
-        ta.value=noteFor(ceId)?.note||’’; paintCount();
+        document.getElementById('cmtSaved').textContent='delete failed';
+        var prev=noteFor(ceId); ta.value=(prev&&prev.note)||''; paintCount();
       });
     } else { ta.focus(); }
   };
