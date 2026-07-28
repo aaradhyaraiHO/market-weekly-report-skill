@@ -699,8 +699,7 @@ function putLocal(ceId, patch){
 
 function saveNote(ceId, text){
   const now=new Date().toISOString();
-  putLocal(ceId, {note:text, author:getAuthor(), updated:now});
-  if(!SYNC_OK) return Promise.resolve();
+  if(!SYNC_OK){ putLocal(ceId, {note:text, author:getAuthor(), updated:now}); return Promise.resolve(); }
   const M=MARKETS[mi], ce=M.ces.find(c=>String(c.ce_id)===String(ceId));
   const params=new URLSearchParams({
     action:'upsert', market_slug:M.meta.market_slug, ce_id:String(ceId),
@@ -708,8 +707,11 @@ function saveNote(ceId, text){
   });
   syncStatus='syncing'; updateSyncBadge();
   return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
-    .then(r=>r.json()).then(()=>{ syncStatus='synced'; updateSyncBadge(); })
-    .catch(()=>{ syncStatus='error'; updateSyncBadge(); });
+    .then(r=>r.json()).then(()=>{
+      putLocal(ceId, {note:text, author:getAuthor(), updated:now});
+      syncStatus='synced'; updateSyncBadge();
+    })
+    .catch(()=>{ syncStatus='error'; updateSyncBadge(); throw new Error('save failed'); });
 }
 
 function postNote(ceId, text){
@@ -733,16 +735,21 @@ function postNote(ceId, text){
 }
 
 function deleteNote(ceId){
-  // remove this week's row from cache + sheet
-  const slug=slugKey(), m=notesData[slug]||{};
-  if(m[String(ceId)]) m[String(ceId)]=m[String(ceId)].filter(n=>String(n.week_start)!==String(curWeek()));
-  saveCache();
-  if(!SYNC_OK) return Promise.resolve();
+  if(!SYNC_OK){
+    const slug=slugKey(), m=notesData[slug]||{};
+    if(m[String(ceId)]) m[String(ceId)]=m[String(ceId)].filter(n=>String(n.week_start)!==String(curWeek()));
+    saveCache(); return Promise.resolve();
+  }
   const M=MARKETS[mi];
   const params=new URLSearchParams({action:'delete', market_slug:M.meta.market_slug,
     ce_id:String(ceId), week_start:curWeek()});
   return fetch(NOTES_URL+'?'+params.toString(),{redirect:'follow'})
-    .then(r=>r.json()).catch(()=>{});
+    .then(r=>r.json()).then(res=>{
+      if(!res||!res.ok) throw new Error('delete failed');
+      const slug=slugKey(), m=notesData[slug]||{};
+      if(m[String(ceId)]) m[String(ceId)]=m[String(ceId)].filter(n=>String(n.week_start)!==String(curWeek()));
+      saveCache();
+    });
 }
 
 function syncPull(){
@@ -2654,20 +2661,27 @@ function openDrawer(ceId){
 
   document.getElementById('cmtSave').onclick=()=>{
     const btn=document.getElementById('cmtSave');
+    btn.textContent='Saving…'; btn.classList.add('saved');
     saveNote(ceId, ta.value).then(()=>{
       document.getElementById('cmtSaved').textContent='saved '+new Date().toLocaleString();
+      btn.textContent='Saved ✓';
+      setTimeout(()=>{ btn.textContent='Save'; btn.classList.remove('saved'); },1500);
+      paintCETable();
+    }).catch(()=>{
+      btn.textContent='Save failed'; btn.classList.remove('saved'); btn.style.color='#e53e3e';
+      setTimeout(()=>{ btn.textContent='Save'; btn.style.color=''; },2500);
     });
-    btn.textContent='Saved ✓'; btn.classList.add('saved');
-    setTimeout(()=>{ btn.textContent='Save'; btn.classList.remove('saved'); },1500);
-    paintCETable();   // refresh ● dot
   };
   document.getElementById('cmtClear').onclick=()=>{
     const had=ta.value.trim().length>0;
     ta.value=''; paintCount();
-    if(had && confirm('Delete this week’s note for this CE?')){
+    if(had && confirm(‘Delete this week’s note for this CE?’)){
       deleteNote(ceId).then(()=>{
-        document.getElementById('cmtSaved').textContent='deleted';
+        document.getElementById(‘cmtSaved’).textContent=’deleted’;
         paintCETable();
+      }).catch(()=>{
+        document.getElementById(‘cmtSaved’).textContent=’delete failed’;
+        ta.value=noteFor(ceId)?.note||’’; paintCount();
       });
     } else { ta.focus(); }
   };
