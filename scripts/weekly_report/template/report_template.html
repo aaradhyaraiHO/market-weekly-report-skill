@@ -158,8 +158,10 @@ tr.lm-waste td{background:var(--red-bg)}
 .lm-legend .chip{margin-right:2px}
 /* Fluctuations — highlight the root-cause driver cell */
 .fxdom{background:var(--paper-deep);border-radius:6px;padding:2px 5px;margin:-2px -3px;box-shadow:inset 2px 0 var(--ink-soft)}
-/* Losing Money — per-row action dropdown */
+/* Losing Money — per-row action dropdown + note + attribution */
 .lm-act{font-family:var(--sans);font-size:11px;font-weight:600;border:1px solid var(--rule-dark);border-radius:6px;padding:3px 5px;background:#fff;color:var(--ink);cursor:pointer}
+.lm-note{font-family:var(--sans);font-size:11px;border:1px solid var(--rule-dark);border-radius:6px;padding:5px 7px;background:#fff;color:var(--ink);width:170px;min-height:32px;margin-top:5px;display:block;resize:vertical}
+.lm-who{font-family:var(--sans);font-size:9.5px;font-weight:500;color:var(--ink-faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
 /* Fluctuations — per-row reviewer: confirm-seasonality checkbox + roomy note */
 .fx-chk{display:flex;align-items:center;gap:6px;font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;cursor:pointer}
 .fx-chk input{cursor:pointer;width:14px;height:14px;accent-color:var(--purps)}
@@ -546,6 +548,13 @@ function fmtMoneyDelta(v){ if(v==null||isNaN(v)) return '—';
   const s=v>0?'+':MINUS; return s+fmtMoney(Math.abs(v)); }
 function sgn(v){ return (v==null||isNaN(v))?'':(v>0?'pos':(v<0?'neg':'')); }
 function esc(s){ return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _ago(iso){
+  if(!iso) return '';
+  var ms=Date.now()-new Date(iso).getTime(); if(ms<0) return '';
+  var m=Math.floor(ms/60000); if(m<60) return m+'m ago';
+  var h=Math.floor(m/60); if(h<24) return h+'h ago';
+  var d=Math.floor(h/24); return d+'d ago';
+}
 
 /* ---------- sparkline (inline SVG, null = gap, auto-scaled) ---------- */
 function sparkline(vals, opt){
@@ -660,9 +669,17 @@ function actionSyncPull(){
     .catch(()=>{});
 }
 function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
+function wrGetFull(ceId){ return getAction('losing_money',ceId); }
 function wrSetAction(ceId,val,el){
   const prev=wrGetAction(ceId);
   saveAction(ceId,'losing_money',{status:val}).catch(()=>{
+    if(el) el.value=prev;
+    _flashSaveErr(el);
+  });
+}
+function wrLmNote(ceId,val,el){
+  var prev=wrGetFull(ceId).note||'';
+  saveAction(ceId,'losing_money',{note:val}).catch(()=>{
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
@@ -1805,10 +1822,14 @@ function renderBuckets(M){
     return top+dd; };
   const lmNE=r=>{ const ne=r.new_existing; if(!ne) return ''; return ' <span class="chip '+(ne==='New'?'blue':'ghost')+'">'+ne+'</span>'; };
   const lmCEcell=r=>'<span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+lmNE(r)+seasonTag(r.ce_id);
-  // manual per-row action (Pause / Scale down / Intentional) — persisted locally; guideline stays text-only
-  const lmAction=r=>{ const v=wrGetAction(r.ce_id); const o=(val,lbl)=>'<option value="'+val+'"'+(v===val?' selected':'')+'>'+lbl+'</option>';
+  const lmAction=r=>{
+    const a=wrGetFull(r.ce_id), v=a.status||'', n=a.note||'', who=a.owner||'', when=a.updated||'';
+    const o=(val,lbl)=>'<option value="'+val+'"'+(v===val?' selected':'')+'>'+lbl+'</option>';
+    var attr='';
+    if(who||when){ var ago=when?_ago(when):''; attr='<div class="lm-who">'+(who?esc(who):'')+(ago?' · '+ago:'')+'</div>'; }
     return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+
-      o('','—')+o('pause','Pause')+o('scale_down','Scale down')+o('intentional','Intentional')+'</select>'; };
+      o('','—')+o('pause','Pause')+o('scale_down','Scale down')+o('intentional','Intentional')+'</select>'+
+      '<textarea class="lm-note" onclick="event.stopPropagation()" placeholder="why?" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr; };
   // Headout aggregate: bucket rows carry a `market` tag → add a Market column.
   const showMkt=_isHeadout(M);
   const mktTh=showMkt?'<th>Market</th>':'';
