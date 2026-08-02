@@ -66,6 +66,14 @@ WEEKS_BACK = 12
 MATURITY_DAYS = 3          # generate off data >= 3 days matured
 YOY_LAG_DAYS = 364         # weekday-aligned year-over-year (52 * 7)
 SCHEMA_VERSION = 1
+# Report week = SUNDAY -> SATURDAY (2026-08-03 decision; was Monday -> Sunday).
+# One-day shift back so W0 carries 2 maturation days by the Monday run — weekend
+# backfill isn't complete by Monday on a Mon–Sun week. All 12 weeks re-bucket on
+# the new boundary every build (no 6-day transition week). SQL week-truncs use
+# BQ_WEEK below; python-side boundaries all flow through _week_start().
+WEEK_START_DAY = "SUNDAY"
+BQ_WEEK = f"WEEK({WEEK_START_DAY})"
+_WEEKDAY_OFFSET = {"MONDAY": 0, "SUNDAY": 1}[WEEK_START_DAY]  # days before Monday
 
 # --------------------------------------------------------------------------- #
 # Metric bases  (analytics-skill canon; revenue overridden to predicted)
@@ -174,39 +182,44 @@ NOTES_SLACK_CHANNELS = {
 # --------------------------------------------------------------------------- #
 # Date helpers
 # --------------------------------------------------------------------------- #
-def _monday(d: dt.date) -> dt.date:
-    """Monday of the ISO week containing d."""
-    return d - dt.timedelta(days=d.weekday())
+def _week_start(d: dt.date) -> dt.date:
+    """Start (WEEK_START_DAY) of the report week containing d."""
+    return d - dt.timedelta(days=(d.weekday() + _WEEKDAY_OFFSET) % 7)
+
+
+_monday = _week_start  # legacy alias (pre Sun-Sat shift); do not use in new code
 
 
 def latest_complete_week(today: dt.date | None = None) -> dt.date:
     """
-    Monday (week_start) of the most recent COMPLETE week — i.e. the week that just
-    ended (its Sunday has passed). No maturity pushback: the report is generated for
-    the just-completed week. Data maturity is handled per-bucket where it matters
-    (the Fluctuations bucket runs on the matured portion; see build_snapshot). §1
+    week_start of the most recent COMPLETE report week — i.e. the week that just
+    ended (its last day has passed). Sun→Sat weeks: run on Monday and W0 ended the
+    Saturday before yesterday, giving 2 maturation days. No further maturity
+    pushback: data maturity is handled per-bucket where it matters (the
+    Fluctuations bucket runs on the matured portion; see build_snapshot). §1
     headlines use business predicted revenue, which settles immediately.
     """
     today = today or dt.date.today()
-    return _monday(today) - dt.timedelta(days=7)
+    return _week_start(today) - dt.timedelta(days=7)
 
 
 def latest_matured_week(today: dt.date | None = None) -> dt.date:
     """
-    Monday of the most recent week whose Sunday end is >= MATURITY_DAYS in the past.
-    Used by the Fluctuations bucket for its 28-day ROI/spend context anchor and its
-    all-unsettled fallback — the paid-attribution windows that must be fully settled.
+    week_start of the most recent week whose last day is >= MATURITY_DAYS in the
+    past. Used by the Fluctuations bucket for its 28-day ROI/spend context anchor
+    and its all-unsettled fallback — the paid-attribution windows that must be
+    fully settled.
     """
     today = today or dt.date.today()
-    candidate = _monday(today) - dt.timedelta(days=7)
+    candidate = _week_start(today) - dt.timedelta(days=7)
     while (today - (candidate + dt.timedelta(days=6))).days < MATURITY_DAYS:
         candidate -= dt.timedelta(days=7)
     return candidate
 
 
-def week_starts(w0_monday: dt.date, n: int = WEEKS_BACK) -> list[dt.date]:
-    """The n Mondays ending at (and including) w0_monday, oldest first."""
-    return [w0_monday - dt.timedelta(weeks=(n - 1 - i)) for i in range(n)]
+def week_starts(w0_start: dt.date, n: int = WEEKS_BACK) -> list[dt.date]:
+    """The n week_starts ending at (and including) w0_start, oldest first."""
+    return [w0_start - dt.timedelta(weeks=(n - 1 - i)) for i in range(n)]
 
 
 def iso(d: dt.date) -> str:

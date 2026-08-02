@@ -49,7 +49,7 @@ def _fetch_weekly_perf(
     biz_sql = f"""
     SELECT
         combined_entity_id,
-        DATE_TRUNC(report_date, WEEK(MONDAY))    AS week,
+        DATE_TRUNC(report_date, WEEK(SUNDAY))    AS week,
         SUM({config.REVENUE_COL})                 AS revenue
 
     FROM {config.CE_STATS}
@@ -73,7 +73,7 @@ def _fetch_weekly_perf(
     ads_sql = f"""
     SELECT
         campaign_target_combined_entity_id        AS combined_entity_id,
-        DATE_TRUNC(report_date, WEEK(MONDAY))     AS week,
+        DATE_TRUNC(report_date, WEEK(SUNDAY))     AS week,
         SUM(sum_spend)                            AS spend,
         SUM(sum_conversion_value_offline_contribution_margin)  AS cm1
 

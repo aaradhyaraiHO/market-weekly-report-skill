@@ -3,7 +3,8 @@ BigQuery fetch layer for the weekly report mart.
 
 Every metric follows the analytics-skill canon. Revenue = sum_revenue_predicted
 (see config.REVENUE_COL). All returned frames key on combined_entity_id (STRING)
-and, where weekly, a `week` DATE column truncated to Monday.
+and, where weekly, a `week` DATE column truncated to the report week start
+(Sun→Sat weeks since 2026-08-03; see config.WEEK_START_DAY).
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
     SELECT
         combined_entity_id,
         ANY_VALUE(combined_entity_name)          AS combined_entity_name,
-        DATE_TRUNC(report_date, WEEK(MONDAY))    AS week,
+        DATE_TRUNC(report_date, WEEK(SUNDAY))    AS week,
         SUM({REV})                               AS revenue,
         SUM(count_orders)                        AS orders,
         SUM(count_ad_clicks)                     AS clicks,
@@ -97,7 +98,7 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
 # --------------------------------------------------------------------------- #
 def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """
-    Market-level weekly revenue (predicted) over [start, end], one row per Monday
+    Market-level weekly revenue (predicted) over [start, end], one row per report
     week-start. Used to calibrate the week-type "large" threshold from the
     market's own trailing-52-week WoW-delta distribution (small markets churn
     more, so a fixed $-floor mislabels them). Returns columns: week (DATE),
@@ -107,7 +108,7 @@ def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> p
     mkt_grp = ", business_market" if not market else ""
     sql = f"""
     SELECT
-        DATE_TRUNC(report_date, WEEK(MONDAY))    AS week{mkt_col},
+        DATE_TRUNC(report_date, WEEK(SUNDAY))    AS week{mkt_col},
         SUM({REV})                               AS revenue
 
     FROM {config.CE_STATS}
@@ -137,7 +138,7 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
     sql = f"""
     SELECT
         campaign_target_combined_entity_id                        AS combined_entity_id,
-        DATE_TRUNC(report_date, WEEK(MONDAY))                     AS week,
+        DATE_TRUNC(report_date, WEEK(SUNDAY))                     AS week,
         SUM(sum_spend)                                            AS spend,
         SUM(sum_coupon_and_wallet_credits)                       AS coupon_wallet,
         -- CM1: offline contribution margin post-Sep-2025, calculated fallback pre-Sep
@@ -762,7 +763,7 @@ def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.Data
     sql = """
     SELECT
         combined_entity_id,
-        DATE_TRUNC(event_date, WEEK(MONDAY))                        AS week,
+        DATE_TRUNC(event_date, WEEK(SUNDAY))                        AS week,
         COUNT(DISTINCT user_id)                                     AS lp_users,
         COUNT(DISTINCT IF(has_order_completed, user_id, NULL))      AS order_users
     FROM {tbl}

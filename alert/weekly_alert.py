@@ -253,32 +253,25 @@ GOOGLE_ADS_ONLY = {"type": "context", "elements": [{"type": "mrkdwn",
 TABLE_CAPS = lambda n: [14, 26] + [20] * (n - 2)  # CE ID | CE | rest
 
 def table_losing(mk, report_url):
-    # Mirror the report's §4 Losing Money bucket exactly (buckets_final.defend.losing_money):
-    # full-waste pinned top, then bleeders + ERODERS merged worst-first by CM2 lost/wk
-    # (report_template.html merges the same two lists the same way).
-    #   Bleeding = ROI < 100% (losing money) · Eroding = ROI ≥ 100% but CM2 dropping ≥ $1k
-    #   vs its 4-week average · Full waste = spend with 0 conversions.
-    # Eroders were previously OMITTED here, so GM alerts silently dropped the biggest quiet
-    # losers — high-ROI CEs shedding CM2 (e.g. Vatican Museums, Niagara Falls). lost_wk is the
-    # unified positive "CM2 lost/wk vs healthy baseline" magnitude (cm2_bleed_wk has mixed signs
-    # across the two lanes, so it can't rank them together).
+    # Mirror the report's §4 Losing Money v2 bucket (buckets_final.defend.losing_money):
+    # Existing + New tables merged for the alert, sorted by the CM2 drop (sort_delta asc =
+    # biggest drop first) — the label (Bleeding/Eroding/Recovering/Full waste) is a tag,
+    # not the order. Why = criteria fired: 0conv (full waste this week) · WoW (CM2 drop vs
+    # last week) · 3wk (drop vs the W1–W3 average) · 90d (New CEs, cumulative loss).
     lm = (mk.get("buckets_final") or {}).get("defend", {}).get("losing_money", {}) or {}
-    waste = [(r, "waste") for r in (lm.get("full_waste") or [])]
-    merged = sorted([(r, "bleed") for r in (lm.get("bleeders") or [])]
-                    + [(r, "erode") for r in (lm.get("eroding") or [])],
-                    key=lambda t: -(t[0].get("lost_wk") or 0))
-    ordered = waste + merged
-    def stat(r, kind):
-        if kind == "waste": return "FULL WASTE"
-        if kind == "erode": return "Eroding"
-        if r.get("recovering"): return "Recovering"
-        s = r.get("status")
-        return f"{s} bleed" if s else "—"
-    hdr = ["CE ID", "CE", "Status", "ROI", "ROI Δ4w", "CM2 lost/wk", "RPC Δ4w", "CPC Δ4w"]
-    body = [[r.get("ce_id"), r.get("ce_name"), stat(r, k), fmt_plain_pct(r.get("roi"),0),
-             f"{r.get('roi_v4'):+.0f}pp" if r.get("roi_v4") is not None else "—",
-             fmt_money(r.get("lost_wk")), fmt_pct(r.get("rpc_v4"),0),
-             fmt_pct(r.get("cpc_v4"),0)] for r, k in ordered]
+    ordered = sorted([(r, "Exist") for r in (lm.get("existing") or [])]
+                     + [(r, "New") for r in (lm.get("new") or [])],
+                     key=lambda t: (t[0].get("sort_delta") or 0))
+    LBL = {"full_waste": "FULL WASTE", "bleeding": "Bleeding",
+           "eroding": "Eroding", "recovering": "Recovering"}
+    WHY = {"C1": "0conv", "C2": "WoW", "C3": "3wk", "C4": "90d"}
+    hdr = ["CE ID", "CE", "Set", "Status", "Why", "CM2 Δ", "CM2 W0", "ROI", "Driver"]
+    body = [[r.get("ce_id"), r.get("ce_name"), s,
+             LBL.get(r.get("label"), r.get("label") or "—"),
+             "+".join(WHY.get(c, c) for c in (r.get("criteria") or [])) or "—",
+             fmt_money(r.get("sort_delta")), fmt_money(r.get("cm2_wk")),
+             fmt_plain_pct(r.get("roi_wk"), 0), (r.get("driver") or "—")]
+            for r, s in ordered]
     # Paginate rows into fenced sections of ROWS_PER_BLOCK each — a single fenced
     # code block can't exceed Slack's ~3000-char section limit and can't be split
     # mid-fence, so we chunk the rows themselves (eroders push headout past 60 CEs).

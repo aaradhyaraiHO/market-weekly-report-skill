@@ -7,7 +7,7 @@ three alert buckets so a later in-place alert update (update_posts_weekly.py) is
 warranted only where the bucket set actually moved — and can say what moved.
 
 Buckets compared (buckets_final):
-  - Losing Money  = defend.losing_money.full_waste + .bleeders   (keyed by ce_id)
+  - Losing Money  = defend.losing_money.existing + .new (v2 criteria; keyed by ce_id)
   - Fluctuations ↓ = defend.seasonality_down
   - Fluctuations ↑ = compound.seasonality_up
 
@@ -46,10 +46,11 @@ def load_markets(html_path: Path) -> dict:
 
 def _losing(mk: dict) -> dict:
     lm = (mk.get("buckets_final") or {}).get("defend", {}).get("losing_money", {}) or {}
-    rows = [(r, "full_waste") for r in (lm.get("full_waste") or [])] + \
-           [(r, r.get("status") or "bleed") for r in (lm.get("bleeders") or [])]
-    return {str(r.get("ce_id")): {"name": r.get("ce_name"), "status": st, "roi": r.get("roi")}
-            for r, st in rows}
+    rows = (lm.get("existing") or []) + (lm.get("new") or [])
+    return {str(r.get("ce_id")): {"name": r.get("ce_name"),
+                                  "status": r.get("label") or "flagged",
+                                  "roi": r.get("roi_wk")}
+            for r in rows}
 
 
 def _fluct(mk: dict, fam: str, key: str) -> dict:

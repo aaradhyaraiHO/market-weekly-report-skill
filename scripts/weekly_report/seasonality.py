@@ -54,7 +54,7 @@ def _fetch_weekly_cm2(
     SELECT
         combined_entity_id,
         ANY_VALUE(combined_entity_name)              AS combined_entity_name,
-        DATE_TRUNC(report_date, WEEK(MONDAY))        AS week,
+        DATE_TRUNC(report_date, WEEK(SUNDAY))        AS week,
 
         SUM({config.REVENUE_COL})                    AS revenue,
         SUM(sum_order_value_completed)               AS gbv_completed,

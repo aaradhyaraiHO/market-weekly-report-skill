@@ -690,8 +690,8 @@ def build_global(week: str) -> dict:
     for cat in snapshot.get("buckets_final", {}).values():
         if isinstance(cat, dict):
             for sub in cat.values():
-                rows = sub if isinstance(sub, list) else (sub.get("bleeders", []) + sub.get("full_waste", [])
-                        + sub.get("recovered", []) + sub.get("paused", []) + sub.get("tracking_gap", [])
+                rows = sub if isinstance(sub, list) else (sub.get("existing", []) + sub.get("new", [])
+                        + sub.get("paused", []) + sub.get("tracking_gap", [])
                         if isinstance(sub, dict) else [])
                 for r in rows:
                     if isinstance(r, dict) and "ce_id" in r:
