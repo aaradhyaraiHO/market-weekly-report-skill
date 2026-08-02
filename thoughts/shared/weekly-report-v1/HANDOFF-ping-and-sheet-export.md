@@ -14,12 +14,18 @@ has the compressed state.
 - Week key is the REPORT week start. **Sun→Sat weeks since 2026-08-03** (config.WEEK_START_DAY);
   older rows sit under Monday keys — the template's prev-week pull already queries both −7d and
   −6d, and any new consumer must too (transition-era reads).
-- Backfill DONE: 55 unique (market, CE) rows from perf's "Final Loosing money" tab live under
-  week_start=2026-07-20, owner=`perf-sheet backfill`, note prefix `[perf-sheet wk 07-20]`.
-  Mapping used: Skip/skip+review/to be reviewed/review→skip · tRoAS increase(+…)→roas_change ·
-  −ve Seasonality→negative_seasonality · Pause&Review→pause_review · Paused→pause. Latam rows
-  skipped (not a pilot). Backfill script: session scratchpad `backfill_actions.py` (temp dir —
-  copy into scripts/ if it should survive).
+- Backfill was done and then UNDONE at Aaradhya's request (2026-08-03) — "we need a system,
+  not manual syncs". All 51 `perf-sheet backfill` rows deleted from the actions tab; the store
+  holds organic report-written rows only. KNOWN LOSS: 4 CE-weeks had pre-existing GM entries
+  that the backfill overwrote in place; deletion removed them — east_asia 1879 · iberia
+  "18 - Seville" · iberia 2354 · iberia 7035 (wk 2026-07-20). Recover via Sheet version
+  history (restore point: before 2026-08-02 ~20:15 UTC) or GM re-entry. LESSON for Task 3 /
+  any future import: action_upsert overwrites on key-match — never import over a week that
+  has organic rows without diffing first. The action-text mapping we validated (reusable):
+  Skip/skip+review/to be reviewed/review→skip · tRoAS increase(+…)→roas_change ·
+  −ve Seasonality→negative_seasonality · Pause&Review→pause_review · Paused→pause.
+  "Last wk" chips will read empty for wk 07-20 — expected; the loop is self-feeding from
+  this week forward.
 - Perf's reference layout (their `Final Loosing money`, gid 1066981225): A CID · B name ·
   C category · D account/market · then per week (newest first) 8 cols Cost·Clicks·CPC·
   Conversion·CVR·CM1·ROI·CM2 × 4 weeks (E–AJ) · AK new_existing · AL tier · AM 2wk-neg ·
