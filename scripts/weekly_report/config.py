@@ -28,6 +28,9 @@ import os
 # --------------------------------------------------------------------------- #
 BQ_PROJECT = "headout-analytics"
 BQ_DATASET = "analytics_reporting"
+BQ_LOCATION = "EU"          # analytics_reporting is an EU dataset — pin jobs to it. Without this,
+                           # BQ location auto-detect intermittently mis-routes (seen 2026-08-03:
+                           # "fct_bookings not found in location EU" on an auto-detected job).
 MAX_BYTES_BILLED = 80 * 1024 ** 3  # 80 GB cap per query (SEA/CSEE-sized markets exceeded the old 40 GB; analytics-skill hygiene)
 
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
