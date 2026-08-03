@@ -100,20 +100,32 @@ def rows_for_snapshot(snap: dict, gm_actions: dict[str, dict]) -> list[list]:
     return out
 
 
-def _fetch_gm_actions(market_slug: str, week: str) -> dict[str, dict]:
-    """GM action layer (bucket=losing_money) for the market-week, from the store. Empty on failure."""
-    import os, urllib.parse, urllib.request
+def _fetch_gm_actions(market_slug: str, week: str, attempts: int = 4) -> dict[str, dict]:
+    """GM action layer (bucket=losing_money) for the market-week, from the store.
+
+    RETRIES on transient failure: the Apps Script endpoint throttles under the rapid
+    13-market batch, and the old silent `except: return {}` turned a throttle timeout
+    into blank GM columns — i.e. it CLOBBERED real GM comments in the sheet (seen
+    2026-08-03: Italy's Colosseum/Ferrari comments dropped on a publish-all). On total
+    failure we RAISE, never return {} — callers must skip the write rather than blank
+    the columns. A genuinely comment-less market returns {} normally (no exception)."""
+    import time, urllib.parse, urllib.request
     base = os.environ.get("WR_NOTES_SCRIPT_URL") or config.NOTES_SCRIPT_URL
     if not base:
         return {}
     q = urllib.parse.urlencode({"action": "action_list", "market": market_slug, "week": week})
-    try:
-        with urllib.request.urlopen(base + "?" + q, timeout=15) as r:
-            data = json.loads(r.read().decode())
-    except Exception:
-        return {}
-    return {str(a["ce_id"]): a for a in data.get("actions", [])
-            if a.get("bucket") == "losing_money" and a.get("ce_id")}
+    last = None
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(base + "?" + q, timeout=25) as r:
+                data = json.loads(r.read().decode())
+            return {str(a["ce_id"]): a for a in data.get("actions", [])
+                    if a.get("bucket") == "losing_money" and a.get("ce_id")}
+        except Exception as e:
+            last = e
+            if i < attempts - 1:
+                time.sleep(1.5 * (i + 1))
+    raise RuntimeError(f"GM action fetch failed for {market_slug} {week} after {attempts} tries: {last}")
 
 
 def _gws(sub, params, body=None):
