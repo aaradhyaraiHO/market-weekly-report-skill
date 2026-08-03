@@ -1845,6 +1845,7 @@ function renderBuckets(M){
     {k:'cm2',   label:'CM2',     f:v=>{const t=fmtMoney(v); return (v!=null&&v<0)?'<span class="neg">'+t+'</span>':t;}, tip:'Google-Search CM2 = paid CM1 − spend. W0 on top, W-1..W-3 beneath (newest first); dates are the week starts.'},
     {k:'cm1',   label:'Revenue', f:v=>fmtMoney(v), tip:'Paid CM1 = Google-Search conversion value (= revenue for all practical purposes). W0 on top, W-1..W-3 beneath.'},
     {k:'roi',   label:'ROI',     f:v=>fmtPct(v,0), tip:'Paid ROI = CM1 ÷ spend — read against the tROAS column. W0 on top, W-1..W-3 beneath.'},
+    {k:'troas', label:'tROAS',   f:v=>fmtPct(v,0), tip:'Target ROAS that week (spend-weighted across the CE&rsquo;s Search campaigns). W0 on top, W-1..W-3 beneath — a step-down here means the target was already corrected.'},
   ];
   const LM_METRICS_FUNNEL=[
     {k:'clicks', label:'Clicks',   f:v=>fmtInt(v),   tip:'Google-Search paid clicks. W0 on top, W-1..W-3 beneath.'},
@@ -1887,6 +1888,7 @@ function renderBuckets(M){
       const d=a-b;
       if(m.k==='cm2'||m.k==='cm1') sub=(Math.round(d)===0)?'<div class="lmd mut">0</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+fmtMoneyDelta(d)+'</div>';
       else if(m.k==='roi') sub=(Math.round(d)===0)?'<div class="lmd mut">0pp</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(0)+'pp</div>';
+      else if(m.k==='troas') sub=(Math.round(d)===0)?'<div class="lmd mut">0pp</div>':'<div class="lmd mut">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(0)+'pp</div>';
       else if(m.k==='cvr') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">0pp</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(2)+'pp</div>';
       else if(m.k==='cm1conv') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">$0</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+'$'+Math.abs(d).toFixed(2)+'</div>';
       else if(m.k==='cpc') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">$0</div>':'<div class="lmd '+(d>0?'gn':'gp')+'">'+(d>0?'+':MINUS)+'$'+Math.abs(d).toFixed(2)+'</div>';
@@ -1924,8 +1926,6 @@ function renderBuckets(M){
     const ph=(req?'comment required — why?':'why?')+'&#10;growth: &#10;perf: ';
     return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
       '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" onfocus="wrLmNoteFocus(this)" placeholder="'+ph+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
-  const lmExtrasEx=r=>
-    '<td class="num">'+((r.troas_l4w!=null)?fmtPct(r.troas_l4w,0):'—')+'</td>';
   const lmNewExtras=r=>
     '<td class="num">'+((r.troas_now!=null)?fmtPct(r.troas_now,0):'—')+((r.troas_l4w!=null)?'<div class="lmd mut">L4W '+fmtPct(r.troas_l4w,0)+'</div>':'')+'</td>'+
     '<td class="num"><span class="'+(r.cm2_90d<0?'neg':'')+'">'+fmtMoneyDelta(r.cm2_90d)+'</span>'+(((r.criteria||[]).indexOf('C4')>=0)?'<div class="lmd gn" style="font-weight:800">C4</div>':'')+'</td>'+
@@ -1935,18 +1935,17 @@ function renderBuckets(M){
     '<th class="num" title="On what basis the CE qualified, with the qualifying value. 0 conv = spend with zero conversions this week · WoW = CM2 drop vs last week · vs 3wk avg = drop vs the W-1..W-3 average · 90d = cumulative CM2 loss (New CEs only). Thresholds: drop ≥ $500 flags always · $200–500 flags only when W0 Paid ROI &lt; 140%. Sorted by the worst fired drop.">Criteria <span class="lm-hb">ⓘ</span></th>';
   const lmHeadTail='<th title="What drove the CM2 drop — that metric&rsquo;s column is bolded. From the exact CM2 decomposition vs the W-1..W-3 baseline: Clicks · CVR · CPC · CM1-per-conversion (value).">Driver <span class="lm-hb">ⓘ</span></th>'+
     '<th title="Your call. Selecting an action requires a comment. Growth reviews Tue/Wed; finalized Thursday.">Action</th>';
-  const lmHeadExX='<th class="num" title="Avg target ROAS over the last 4 weeks (spend-weighted across the CE&rsquo;s Google Search campaigns). Read the delivered ROI against this before marking negative seasonality.">tROAS L4W</th>';
   const lmHeadNewX='<th class="num" title="Current target ROAS as of report run (spend-weighted across the CE&rsquo;s Search campaigns); L4W average beneath.">tROAS now</th>'+
     '<th class="num" title="Cumulative CM2 over the trailing ~90 days (12 weeks). ≤ −$500 fires C4 for New CEs.">CM2 ~90d</th>'+
     '<th class="num" title="Oldest Google-Ads campaign launch for this CE (first paid click).">Launched</th>';
-  const lmHeadEx=lmHeadCore+lmMetricHeads(LM_METRICS_MONEY)+lmHeadExX+lmMetricHeads(LM_METRICS_FUNNEL)+lmHeadTail;
+  const lmHeadEx=lmHeadCore+lmMetricHeads(LM_METRICS_MONEY)+lmMetricHeads(LM_METRICS_FUNNEL)+lmHeadTail;
   const lmHeadNew=lmHeadCore+lmMetricHeads(LM_METRICS_MONEY)+lmHeadNewX+lmMetricHeads(LM_METRICS_FUNNEL)+lmHeadTail;
   const lmRow=(r,isNew)=>'<tr class="cerow'+(r.label==='full_waste'?' lm-waste':'')+'" data-ce="'+esc(r.ce_id)+'">'+
       '<td class="ce stick">'+lmCEcell(r)+'</td>'+mktTd(r)+
       '<td>'+lmLabelChip(r)+lmStateChip(r)+'</td>'+
       '<td class="num">'+lmCritCell(r)+'</td>'+
       lmMetricCells(r,LM_METRICS_MONEY)+
-      (isNew?lmNewExtras(r):lmExtrasEx(r))+
+      (isNew?lmNewExtras(r):'')+
       lmMetricCells(r,LM_METRICS_FUNNEL)+
       lmDriverCell(r)+
       '<td>'+lmAction(r)+'</td></tr>';
