@@ -160,7 +160,7 @@ tr.lm-waste td{background:var(--red-bg)}
 .fxdom{background:var(--paper-deep);border-radius:6px;padding:2px 5px;margin:-2px -3px;box-shadow:inset 2px 0 var(--ink-soft)}
 /* Losing Money — per-row action dropdown + note + attribution */
 .lm-act{font-family:var(--sans);font-size:11px;font-weight:600;border:1px solid var(--rule-dark);border-radius:6px;padding:3px 5px;background:#fff;color:var(--ink);cursor:pointer}
-.lm-note{font-family:var(--sans);font-size:11px;border:1px solid var(--rule-dark);border-radius:6px;padding:5px 7px;background:#fff;color:var(--ink);width:170px;min-height:32px;margin-top:5px;display:block;resize:vertical}
+.lm-note{font-family:var(--sans);font-size:11px;border:1px solid var(--rule-dark);border-radius:6px;padding:5px 7px;background:#fff;color:var(--ink);width:170px;min-height:52px;margin-top:5px;display:block;resize:vertical}
 .lm-note-req{border-color:var(--red);box-shadow:0 0 0 2px rgba(220,38,38,.12)}
 /* Losing Money v2 — always-visible weekly micro-rows per metric cell:
    W0 big (+WoW sub-delta), then W-1..W-3 beneath, newest first. Dates only in CM2. */
@@ -713,7 +713,7 @@ function wrSetAction(ceId,val,el){
     if(ta){
       const need=!!val && !(ta.value||'').trim();
       ta.classList.toggle('lm-note-req',need);
-      if(need){ ta.placeholder='comment required — why?'; ta.focus(); }
+      if(need){ ta.placeholder='comment required — why?\ngrowth: \nperf: '; ta.focus(); }
     }
   }
 }
@@ -1905,8 +1905,10 @@ function renderBuckets(M){
     const pv=getPrevAction('losing_money',r.ce_id);
     const lw=pv.status?'<div class="lm-who" title="'+esc(pv.note||'')+'">last wk: <b>'+(LM_ACT_LBL[pv.status]||esc(pv.status))+'</b>'+(pv.owner?' · '+esc(pv.owner):'')+'</div>':'';
     const req=(v&&!(n||'').trim());
+    // shared note, both layers labeled in one box: growth fills Tue/Wed, perf appends after
+    const ph=(req?'comment required — why?':'why?')+'&#10;growth: &#10;perf: ';
     return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
-      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why?')+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
+      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+ph+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
   const lmExtrasEx=r=>
     '<td class="num">'+((r.troas_l4w!=null)?fmtPct(r.troas_l4w,0):'—')+'</td>';
   const lmNewExtras=r=>
