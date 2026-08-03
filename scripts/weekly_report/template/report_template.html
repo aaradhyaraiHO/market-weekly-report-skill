@@ -162,6 +162,17 @@ tr.lm-waste td{background:var(--red-bg)}
 .lm-act{font-family:var(--sans);font-size:11px;font-weight:600;border:1px solid var(--rule-dark);border-radius:6px;padding:3px 5px;background:#fff;color:var(--ink);cursor:pointer}
 .lm-note{font-family:var(--sans);font-size:11px;border:1px solid var(--rule-dark);border-radius:6px;padding:5px 7px;background:#fff;color:var(--ink);width:170px;min-height:32px;margin-top:5px;display:block;resize:vertical}
 .lm-note-req{border-color:var(--red);box-shadow:0 0 0 2px rgba(220,38,38,.12)}
+/* GM reco vs Perf final — side-by-side action columns; history lives in the CE drawer */
+th.lm-gmcol-h{background:#F6F1FE;color:var(--violet)}
+th.lm-perfcol-h{background:#EEF3FE;color:var(--blue)}
+td.lm-perfcol{background:#FAFBFF}
+.lm-dev{display:inline-block;font-size:9px;font-weight:800;color:var(--amber);background:var(--amber-bg);border-radius:4px;padding:1px 5px;margin-bottom:4px}
+.lm-hist{font-size:10px;color:var(--violet);font-weight:700;margin-top:5px;cursor:pointer}
+.lm-hist:hover{text-decoration:underline}
+/* lane tags — used in the drawer action-history trail */
+.lm-lane-tag{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;border-radius:4px;margin-right:5px;vertical-align:middle}
+.lm-lane-tag.gm{background:var(--violet-bg);color:var(--violet)}
+.lm-lane-tag.perf{background:var(--blue-bg);color:var(--blue)}
 /* Losing Money v2 — always-visible weekly micro-rows per metric cell:
    W0 big (+WoW sub-delta), then W-1..W-3 beneath, newest first. Dates only in CM2. */
 .lmw{font-size:10px;font-weight:600;color:var(--ink-faint);font-variant-numeric:tabular-nums;line-height:1.55;white-space:nowrap}
@@ -381,6 +392,16 @@ svg.spark{display:block}
 .hist-when{font-size:10.5px;font-weight:600;color:var(--ink-faint);margin-bottom:4px}
 .hist-when .hist-link{color:var(--purps);text-decoration:none;font-weight:700}
 .hist-text{font-size:12.5px;font-style:italic;color:var(--ink-soft);line-height:1.55;padding-left:12px;border-left:3px solid var(--rule-dark)}
+/* CE-drawer action history — week-by-week GM reco vs Perf final */
+.acthist{border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.acthist-wk{padding:9px 12px;border-bottom:1px solid var(--rule)}
+.acthist-wk:last-child{border-bottom:none}
+.acthist-when{font-size:10.5px;font-weight:700;color:var(--ink-faint);margin-bottom:5px}
+.acthist-row{margin-bottom:7px}.acthist-row:last-child{margin-bottom:0}
+.acthist-bkt{font-size:9.5px;font-weight:700;color:var(--ink-soft);margin-bottom:2px}
+.acthist-row>div{font-size:11.5px;line-height:1.5}
+.acthist-note{font-style:italic;color:var(--ink-soft)}
+.acthist-mut{color:var(--ink-faint)}
 .mono{font-family:var(--sans)}
 a.outlink{color:var(--purps);text-decoration:none;font-family:var(--sans);font-size:12px;font-weight:600;border-bottom:1px solid rgba(128,0,255,.35)}
 a.outlink:hover{color:var(--purps-deep);border-bottom-color:var(--purps-deep)}
@@ -724,6 +745,58 @@ function wrLmNote(ceId,val,el){
     _flashSaveErr(el);
   });
   if(el && (val||'').trim()) el.classList.remove('lm-note-req');
+}
+// perf lane — the FINAL action, a separate '<bucket>_perf' layer so GM reco and perf
+// close-out never overwrite. Read for free: actionSyncPull loads every bucket by name.
+// Generic over bucket (Losing Money = 'losing_money_perf'; Fluctuations = 'flux_down_perf'
+// / 'flux_up_perf'). wrGetPerf/wrSetPerf/wrPerfNote are the Losing-Money conveniences.
+function wrSetPerfB(bucket,ceId,val,el){
+  const prev=getAction(bucket,ceId).status||'';
+  saveAction(ceId,bucket,{status:val}).catch(()=>{ if(el) el.value=prev; _flashSaveErr(el); });
+  if(el){
+    const td=el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note-perf');
+    if(ta){ const need=!!val && !(ta.value||'').trim();
+      ta.classList.toggle('lm-note-req',need);
+      if(need){ ta.placeholder='comment required — what did you do?'; ta.focus(); } }
+  }
+}
+function wrPerfNoteB(bucket,ceId,val,el){
+  const prev=getAction(bucket,ceId).note||'';
+  saveAction(ceId,bucket,{note:val}).catch(()=>{ if(el) el.value=prev; _flashSaveErr(el); });
+  if(el && (val||'').trim()) el.classList.remove('lm-note-req');
+}
+function wrGetPerf(ceId){ return getAction('losing_money_perf',ceId); }
+function wrSetPerf(ceId,val,el){ return wrSetPerfB('losing_money_perf',ceId,val,el); }
+function wrPerfNote(ceId,val,el){ return wrPerfNoteB('losing_money_perf',ceId,val,el); }
+
+// ── Action history (all weeks) — powers the CE-drawer GM-vs-Perf trail ──
+const WR_ACT_LBL={negative_seasonality:'Negative seasonality',roas_change:'ROAS target change',scale_down:'Scale down',pause:'Pause',pause_review:'Pause &amp; review',no_change:'No change',skip:'Skip'};
+const WR_BUCKET_LBL={losing_money:'Losing Money',flux_down:'RPC Fluct ↓',flux_up:'RPC Fluct ↑'};
+function _actLbl(v){ return v?(WR_ACT_LBL[v]||esc(v)):''; }
+let actionsHist={};
+function actionHistoryPull(){
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi], s=M.meta.market_slug;
+  // no week param → all weeks for the market (mirrors the notes `action=list` all-weeks read)
+  return fetch(NOTES_URL+'?action=action_list&market='+encodeURIComponent(s),{redirect:'follow'})
+    .then(r=>r.json())
+    .then(data=>{ const h={};
+      (data.actions||[]).forEach(a=>{ if(!a.ce_id||!a.bucket) return;
+        const c=String(a.ce_id); (h[c]=h[c]||[]).push({week:a.week_start||'',bucket:a.bucket,
+          status:a.status||'',note:a.note||'',owner:a.owner||''}); });
+      actionsHist[s]=h; })
+    .catch(()=>{});
+}
+// prior weeks only (this week lives in the bucket table), newest first; GM reco vs Perf final per bucket.
+function actionHistoryFor(ceId){
+  const s=slugKey(), rows=((actionsHist[s]||{})[String(ceId)]||[]), byWeek={};
+  rows.forEach(a=>{
+    if(!a.week || String(a.week)===String(curWeek())) return;
+    const isPerf=/_perf$/.test(a.bucket), base=a.bucket.replace(/_perf$/,'');
+    const wk=(byWeek[a.week]=byWeek[a.week]||{}); const cell=(wk[base]=wk[base]||{});
+    cell[isPerf?'perf':'gm']=a;
+  });
+  return Object.keys(byWeek).sort((x,y)=>String(y).localeCompare(String(x))).map(w=>({week:w,buckets:byWeek[w]}));
 }
 function wrFxChk(bucket,ceId,checked,el){
   saveAction(ceId,bucket,{checkbox:checked}).catch(()=>{
@@ -1894,19 +1967,28 @@ function renderBuckets(M){
     return '<td><b>'+(LM_DRIVER_LBL[r.driver]||esc(r.driver))+'</b>'+((d!=null)?'<div class="lmd gn">'+fmtMoneyDelta(d)+'</div>':'')+'</td>'; };
   const LM_ACTIONS=[['','—'],['negative_seasonality','Negative seasonality'],['roas_change','ROAS target change'],['scale_down','Scale down'],['pause','Pause'],['pause_review','Pause &amp; review'],['no_change','No change required'],['skip','Skip']];
   const LM_ACT_LBL={}; LM_ACTIONS.forEach(p=>LM_ACT_LBL[p[0]]=p[1]);
-  const lmAction=r=>{
-    const a=wrGetFull(r.ce_id), v=a.status||'', n=a.note||'', who=a.owner||'', when=a.updated||'';
-    const opts=LM_ACTIONS.slice();
-    if(v&&!opts.some(p=>p[0]===v)) opts.push([v,v]);   // legacy stored value (pause/scale_down/intentional) still displays
-    const o=opts.map(p=>'<option value="'+p[0]+'"'+(v===p[0]?' selected':'')+'>'+p[1]+'</option>').join('');
-    var attr='';
-    if(who||when){ var ago=when?_ago(when):''; attr='<div class="lm-who">'+(who?esc(who):'')+(ago?' · '+ago:'')+'</div>'; }
-    // last week's recorded action, visible in-cell (the Status chip carries the triage state)
-    const pv=getPrevAction('losing_money',r.ce_id);
-    const lw=pv.status?'<div class="lm-who" title="'+esc(pv.note||'')+'">last wk: <b>'+(LM_ACT_LBL[pv.status]||esc(pv.status))+'</b>'+(pv.owner?' · '+esc(pv.owner):'')+'</div>':'';
+  const _lmOpts=sel=>{ const opts=LM_ACTIONS.slice();
+    if(sel&&!opts.some(p=>p[0]===sel)) opts.push([sel,sel]);   // legacy stored value still displays
+    return opts.map(p=>'<option value="'+p[0]+'"'+(sel===p[0]?' selected':'')+'>'+p[1]+'</option>').join(''); };
+  const _lmWho=(who,when)=>(who||when)?'<div class="lm-who">'+(who?esc(who):'')+(when?' · '+_ago(when):'')+'</div>':'';
+  // GM column = the recommendation ('losing_money'). Perf column = the final action taken
+  // ('losing_money_perf'). Two side-by-side columns; the week-by-week trail is in the CE drawer.
+  const lmActionGM=r=>{
+    const a=wrGetFull(r.ce_id), v=a.status||'', n=a.note||'';
     const req=(v&&!(n||'').trim());
-    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
-      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why?')+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
+    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+_lmOpts(v)+'</select>'+
+      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why? (growth reco)')+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+
+      _lmWho(a.owner,a.updated); };
+  const lmActionPerf=r=>{
+    const g=wrGetFull(r.ce_id).status||'';
+    const p=wrGetPerf(r.ce_id), pv=p.status||'', pn=p.note||'';
+    const req=(pv&&!(pn||'').trim());
+    const dev=(g&&pv&&g!==pv)?'<span class="lm-dev" title="Perf final differs from GM recommendation">≠ GM</span>':'';
+    return dev+
+      '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetPerf(\''+esc(r.ce_id)+'\',this.value,this)">'+_lmOpts(pv)+'</select>'+
+      '<textarea class="lm-note lm-note-perf'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — what did you do?':'final action + duration')+'" onchange="wrPerfNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(pn)+'</textarea>'+
+      _lmWho(p.owner,p.updated)+
+      '<div class="lm-hist" title="Open the CE drawer for the week-by-week action history">history ▸</div>'; };
   const lmExtrasEx=r=>
     '<td class="num">'+((r.troas_l4w!=null)?fmtPct(r.troas_l4w,0):'—')+'</td>';
   const lmNewExtras=r=>
@@ -1917,7 +1999,8 @@ function renderBuckets(M){
     '<th title="Status label — a tag, not a grouping; the sort is by CM2 drop regardless of label.">Status</th>'+
     '<th class="num" title="On what basis the CE qualified, with the qualifying value. 0 conv = spend with zero conversions this week · WoW = CM2 drop vs last week · vs 3wk avg = drop vs the W-1..W-3 average · 90d = cumulative CM2 loss (New CEs only). Thresholds: drop ≥ $500 flags always · $200–500 flags only when W0 Paid ROI &lt; 140%. Sorted by the worst fired drop.">Criteria <span class="lm-hb">ⓘ</span></th>';
   const lmHeadTail='<th title="What drove the CM2 drop — that metric&rsquo;s column is bolded. From the exact CM2 decomposition vs the W-1..W-3 baseline: Clicks · CVR · CPC · CM1-per-conversion (value).">Driver <span class="lm-hb">ⓘ</span></th>'+
-    '<th title="Your call. Selecting an action requires a comment. Growth reviews Tue/Wed; finalized Thursday.">Action</th>';
+    '<th class="lm-gmcol-h" title="GM recommendation (Tue/Wed). Selecting an action requires a comment.">Action <span class="lm-hb">GM reco</span></th>'+
+    '<th class="lm-perfcol-h" title="Perf&rsquo;s final action taken (Thursday); ≠ GM flags a deviation from the recommendation. Full week-by-week history in the CE drawer.">Final action <span class="lm-hb">Perf</span></th>';
   const lmHeadExX='<th class="num" title="Avg target ROAS over the last 4 weeks (spend-weighted across the CE&rsquo;s Google Search campaigns). Read the delivered ROI against this before marking negative seasonality.">tROAS L4W</th>';
   const lmHeadNewX='<th class="num" title="Current target ROAS as of report run (spend-weighted across the CE&rsquo;s Search campaigns); L4W average beneath.">tROAS now</th>'+
     '<th class="num" title="Cumulative CM2 over the trailing ~90 days (12 weeks). ≤ −$500 fires C4 for New CEs.">CM2 ~90d</th>'+
@@ -1932,7 +2015,8 @@ function renderBuckets(M){
       (isNew?lmNewExtras(r):lmExtrasEx(r))+
       lmMetricCells(r,LM_METRICS_FUNNEL)+
       lmDriverCell(r)+
-      '<td>'+lmAction(r)+'</td></tr>';
+      '<td>'+lmActionGM(r)+'</td>'+
+      '<td class="lm-perfcol">'+lmActionPerf(r)+'</td></tr>';
   const lmHowto='<div class="lm-howto"><b>How to read:</b> a CE is flagged when any <b>Criteria</b> fires — <b>0 conv</b> (spend, zero conversions this week) · <b>WoW</b> / <b>vs 3wk avg</b> (CM2 dropped ≥ $500; or ≥ $200 with W0 ROI &lt; 140%) · <b>90d</b> (New CEs: ≥ $500 cumulative loss). Sorted by the worst fired drop — the Status label is a tag, not the order. Each metric cell shows <b>w0 on top</b> (with its WoW change), then <b>w1 · w2 · w3</b> beneath, newest first (hover a row for its week date; the toggle above hides them). The <b>bolded metric</b> is the driver of the drop. Status carries a triage chip: <b>new this wk</b> · <b>Nth wk · last wk ✓</b> = flagged N weeks running, last week has an action on record (shown in the Action cell, hover for the comment) · <b>Nth wk · no action on record</b> = flagged N weeks running and last week has nothing recorded in the report — review these first and record what was (or wasn&rsquo;t) done. <b>Review guideline:</b> read delivered ROI against <b>tROAS</b> first — if the campaign is running below its target, the first intervention is correcting ROAS (~10% step); <b>negative seasonality</b> applies only when ROAS is already running as expected. Selecting an <b>Action requires a comment</b>.</div>';
   const lmLegend='<div class="lm-legend"><span class="chip red">Bleeding</span>W0 CM2 &lt; 0 &nbsp;·&nbsp; <span class="chip amber">Eroding</span>W0 CM2 ≥ 0 but dropping &nbsp;·&nbsp; <span class="chip green">Recovering</span>loss ≥ halved vs W-1 &nbsp;·&nbsp; <span class="chip red">Full waste</span>spend, 0 conversions &nbsp;·&nbsp; Google-Search Paid only (Bing excluded).</div>';
   const lmSubhead=(t,n,sub)=>'<div style="margin:16px 0 6px;font-family:var(--sans);font-size:13px;font-weight:800;color:var(--ink-head)">'+t+' <span style="color:var(--ink-faint);font-weight:600">('+n+')</span>'+(sub?' <span style="color:var(--ink-faint);font-weight:500;font-size:11.5px">— '+sub+'</span>':'')+'</div>';
@@ -1965,7 +2049,14 @@ function renderBuckets(M){
   const fxAction=(r,bucket)=>{ bucket=bucket||'flux_down'; const a=getAction(bucket,r.ce_id), c=!!a.checkbox, n=a.note||'';
     return '<label class="fx-chk" onclick="event.stopPropagation()"><input type="checkbox"'+(c?' checked':'')+
         ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked,this)"> confirm seasonality</label>'+
-      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'; };
+      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="why? (growth reco)" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'; };
+  // Perf final action for a fluctuation bucket → the '<bucket>_perf' layer (dropdown + comment).
+  const fxActionPerf=(r,bucket)=>{ const pb=(bucket||'flux_down')+'_perf'; const p=getAction(pb,r.ce_id), pv=p.status||'', pn=p.note||'';
+    const req=(pv&&!(pn||'').trim());
+    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetPerfB(\''+esc(pb)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+_lmOpts(pv)+'</select>'+
+      '<textarea class="lm-note lm-note-perf'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — what did you do?':'final action + duration')+'" onchange="wrPerfNoteB(\''+esc(pb)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(pn)+'</textarea>'+
+      _lmWho(p.owner,p.updated)+
+      '<div class="lm-hist" title="Open the CE drawer for the week-by-week action history">history ▸</div>'; };
   // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
   const fluxHead='<th class="stick">Combined Entity</th>'+mktTh+
     '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
@@ -1977,7 +2068,8 @@ function renderBuckets(M){
     '<th class="num" title="Take rate = net revenue ÷ completed GBV (Google-Search orders, from fct_orders). Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
     '<th class="num" title="Paid Google-Search clicks — context only, never a qualifier. Shown so a CVR drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
     '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
-    '<th title="Your call: tick to confirm seasonality, add a note. Saved per week.">Action</th>';
+    '<th class="lm-gmcol-h" title="GM recommendation: tick to confirm seasonality, add a note. Saved per week.">Action <span class="lm-hb">GM reco</span></th>'+
+    '<th class="lm-perfcol-h" title="Perf&rsquo;s final action taken; full week-by-week history in the CE drawer.">Final action <span class="lm-hb">Perf</span></th>';
   const fluxRows=(items,bucket)=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
     '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+mktTd(r)+
     '<td>'+fxAlert(r.alert_type)+'</td>'+
@@ -1990,6 +2082,7 @@ function renderBuckets(M){
     '<td class="num">'+lmVD(r.clicks,r.clicks_d,{good:0})+'</td>'+
     '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
     '<td>'+fxAction(r,bucket)+'</td>'+
+    '<td class="lm-perfcol">'+fxActionPerf(r,bucket)+'</td>'+
     '</tr>').join('');
   const fluxHowto=_howto('All <b>paid Google-Search</b> (orders from fct_orders). Paid RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> = current scale &amp; efficiency, Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
   // Maturity-lag banner — this bucket runs on the last FULLY-MATURED week (paid Google-Search
@@ -2685,6 +2778,23 @@ function openDrawer(ceId){
     '</div>'
   ) : '';
 
+  // Action history — week-by-week GM reco vs Perf final (prior weeks; this week is in the table).
+  const _aHist=actionHistoryFor(ceId);
+  const actionHistHtml = _aHist.length ? (
+    '<div class="dr-sec-t"><span>Action history</span></div>'+
+    '<div class="acthist">'+ _aHist.map(wk=>
+      '<div class="acthist-wk"><div class="acthist-when">W/C '+esc(wk.week)+'</div>'+
+      Object.keys(wk.buckets).map(b=>{ const c=wk.buckets[b], g=c.gm||{}, p=c.perf||{};
+        const dev=(g.status&&p.status&&g.status!==p.status);
+        return '<div class="acthist-row">'+
+          (WR_BUCKET_LBL[b]?'<div class="acthist-bkt">'+WR_BUCKET_LBL[b]+'</div>':'')+
+          '<div><span class="lm-lane-tag gm">GM</span>'+(g.status?_actLbl(g.status)+(g.note?' — <span class="acthist-note">'+esc(g.note)+'</span>':'')+(g.owner?' · '+esc(g.owner):''):'<span class="acthist-mut">no reco</span>')+'</div>'+
+          '<div><span class="lm-lane-tag perf">Perf</span>'+(dev?'<span class="lm-dev">≠ GM</span> ':'')+(p.status?_actLbl(p.status)+(p.note?' — <span class="acthist-note">'+esc(p.note)+'</span>':'')+(p.owner?' · '+esc(p.owner):''):'<span class="acthist-mut">pending</span>')+'</div>'+
+        '</div>'; }).join('')+
+      '</div>').join('')+
+    '</div>'
+  ) : '';
+
   const postBtnHtml = ch ? (
     hasThread
       ? '<a class="btn btn-thread" id="postBtn" href="'+esc(cur.slack_permalink||'#')+'" target="_blank">View thread in #'+esc(ch.name)+' <span class="arr">→</span></a>'
@@ -2705,7 +2815,7 @@ function openDrawer(ceId){
       '<div style="font-family:var(--sans);font-size:13px;color:var(--ink-soft);margin-top:2px">'+
         '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
         '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
-      kmBlock + shapBlock + resourceBlocks(ce) + ceSlackContext(ce.ce_id) +
+      kmBlock + shapBlock + resourceBlocks(ce) + ceSlackContext(ce.ce_id) + actionHistHtml +
       '<div class="dr-sec-t"><span>Notes</span><span id="syncBadge" class="sync-badge"></span></div>'+
       '<div class="gm-note-card">'+
         '<div class="gm-note-head">'+
@@ -2927,7 +3037,7 @@ function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   renderTabs(); renderMeta(); renderApp(); window.scrollTo(0,0);
   syncPull();   // load this market's notes (cache first, then sheet)
   actionSyncPull();
-  actionPrevPull();
+  actionPrevPull(); actionHistoryPull();
 }
 
 // delegated events
@@ -3083,7 +3193,7 @@ renderTabs(); renderMeta(); renderApp();
 wireJumpnav();
 syncPull();
 actionSyncPull();
-actionPrevPull();
+actionPrevPull(); actionHistoryPull();
 </script>
 </body>
 </html>
