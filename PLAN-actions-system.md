@@ -3,15 +3,18 @@
 Worktree `worktree-actions-ping` (off `main` c2f74ce). Build here; **post / Sheet-writes / deploy from main only.**
 Refines `thoughts/shared/weekly-report-v1/HANDOFF-ping-and-sheet-export.md` with the 2026-08-03 decisions.
 
-## Decided flow (locked)
+## Decided flow (locked 2026-08-03 — perf works in the SHEET, not the report)
 ```
 GM   → §4 bucket action + comment  (Losing Money AND RPC/CM1 fluctuation buckets)
-        saveAction(bucket)            [write-through + sync badge — ALREADY LIVE]
-PERF → same report, reviews GM reco, marks FINAL action + comment
-        saveAction(bucket+'_perf')    [NEW lane, reuses the same path]
-Weekly Sheet → CE data + GM action/comment + PERF action/comment            (Phase 3)
-Thursday ping → reads both layers → closed · perf-pending · needs-GM · deviated  (Phase 2)
+        saveAction(bucket)            [write-through + sync badge — ALREADY LIVE, GM-only]
+Weekly Flagged Sheet (Task 2 = PERF SURFACE): CE data + GM action/comment exported into
+        perf's `Final Loosing money` layout (sheet 1sXd0m…, gid 1066981225).
+PERF → reviews + records FINAL action + comment IN THE SHEET (where they already work).
+Thursday ping → reads PERF's final actions FROM THE SHEET → posts actions summary.
+CE drawer → GM action history from the store; (optional) perf finals read back from the sheet.
 ```
+**SUPERSEDED:** the in-report perf lane (two columns / `*_perf` store layer) is PARKED in
+draft commit `f783a05`. Report stays GM-only. Perf's surface is the Sheet.
 - CE-drawer notes = general comments; prior-week history ALREADY renders (`historyFor`). No build.
 - Perf granularity = **CE-level v1** (campaigns named in the perf comment). Per-campaign structured = v2 (needs report to expand CE→campaigns; deferred).
 
