@@ -131,29 +131,27 @@ def _on_main():
 
 
 def write_weekly_tab(rows, week, spreadsheet_id=PERF_SHEET_ID):
-    """Create/populate the `w/c <week>` tab with HEADER + rows (all markets in one tab).
-    Perf's columns (Perf action/comment/final) are written empty — perf fills them in the sheet.
-    A re-run overwrites only our range (through the GM columns); perf edits sit to the right? No —
-    the perf columns ARE in our range, so a re-run would clear perf's edits. GUARD: only write the
-    perf columns on the FIRST create; on refresh, write the range that STOPS before Perf action."""
+    """Create/populate the `w/c <week>` tab: the FULL header row (incl. the 3 perf column titles)
+    + one data row per flagged CE, all markets. Data rows are written only through the GM columns
+    (the last 3 = Perf action/comment/final) so a re-run NEVER clobbers perf's edits. Header row
+    carries no perf values, so writing it in full is safe on refresh too."""
     tab = f"w/c {week}"
+    last = _colname(len(HEADER) - 1)
+    keep = len(HEADER) - 3                        # data rows stop before the 3 perf columns
+    dcol = _colname(keep - 1)
     # 1. ensure the tab exists (addSheet; a duplicate-title error just means it's already there)
     _gws(["spreadsheets", "batchUpdate"], {"spreadsheetId": spreadsheet_id},
          {"requests": [{"addSheet": {"properties": {"title": tab}}}]})
-    # 2. header + rows. On refresh we write only up to (and including) GM comment so perf's
-    #    Perf action/comment/final (last 3 cols) are never clobbered.
-    keep = len(HEADER) - 3                       # stop before the 3 perf columns
-    header = HEADER[:keep]
-    body_rows = [header] + [r[:keep] for r in rows]
-    rng = f"'{tab}'!A1:{_colname(keep - 1)}{len(body_rows)}"
-    ok, txt = _gws(["spreadsheets", "values", "update"],
-                   {"spreadsheetId": spreadsheet_id, "range": rng, "valueInputOption": "USER_ENTERED"},
-                   {"values": body_rows})
-    # write the perf HEADER labels once (so the 3 perf columns are titled); values left blank
-    pc0 = _colname(keep)
+    # 2. full header row (A1:{last}1) — all 46 columns incl. the perf titles
     _gws(["spreadsheets", "values", "update"],
-         {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!{pc0}1", "valueInputOption": "USER_ENTERED"},
-         {"values": [HEADER[keep:]]})
+         {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!A1:{last}1", "valueInputOption": "USER_ENTERED"},
+         {"values": [HEADER]})
+    # 3. data rows through the GM columns only (A2:{dcol}{n+1}) — perf columns untouched
+    data = [r[:keep] for r in rows]
+    ok, txt = _gws(["spreadsheets", "values", "update"],
+                   {"spreadsheetId": spreadsheet_id,
+                    "range": f"'{tab}'!A2:{dcol}{len(data) + 1}", "valueInputOption": "USER_ENTERED"},
+                   {"values": data})
     return ok, tab, txt
 
 
