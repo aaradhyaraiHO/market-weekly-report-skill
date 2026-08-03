@@ -1908,7 +1908,10 @@ function renderBuckets(M){
     if(!r.driver) return '<td>—</td>';
     const d=(r.drivers||{})[r.driver];
     return '<td><b>'+(LM_DRIVER_LBL[r.driver]||esc(r.driver))+'</b>'+((d!=null)?'<div class="lmd gn">'+fmtMoneyDelta(d)+'</div>':'')+'</td>'; };
-  const LM_ACTIONS=[['','—'],['negative_seasonality','Negative seasonality'],['roas_change','ROAS target change'],['scale_down','Scale down'],['pause','Pause'],['pause_review','Pause &amp; review'],['no_change','No change required'],['skip','Skip']];
+  // Perf's working vocabulary (2026-08-03): 4 options; Skip and No-change are ONE thing
+  // (meeting: "no change required is skip only"). Older stored values (scale_down / pause /
+  // intentional / no_change) still display via the legacy-value fallback below.
+  const LM_ACTIONS=[['','—'],['skip','Skip / No change required'],['roas_change','tROAS change'],['negative_seasonality','-ve Seasonality'],['pause_review','Pause &amp; Review']];
   const LM_ACT_LBL={}; LM_ACTIONS.forEach(p=>LM_ACT_LBL[p[0]]=p[1]);
   const lmAction=r=>{
     const a=wrGetFull(r.ce_id), v=a.status||'', n=a.note||'', who=a.owner||'', when=a.updated||'';
