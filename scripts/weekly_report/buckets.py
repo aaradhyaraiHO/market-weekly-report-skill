@@ -263,6 +263,8 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
             streak += 1
         flagged_lw = streak >= 2
         # raw weekly blocks W0..W3, NEWEST FIRST (rendered left→right in the report)
+        ti = troas_now.get(_num_id(ce["ce_id"])) or {}
+        troas_wk = ti.get("wk") or {}
         weeks = []
         for i in range(min(4, len(wk))):
             w = wk[-1 - i]
@@ -274,6 +276,7 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
                           "cvr": (round(100 * conv / clk, 2) if (conv is not None and clk) else None),
                           "cm1conv": (round(cm1 / conv, 2) if conv else None),  # avg CM1 (= value/conv)
                           "cpc": w.get(CPK),
+                          "troas": troas_wk.get(str(w.get("week"))[:10]),  # spend-wtd target that week
                           "roi": (round(r) if r is not None else None)})
         # driver — reconciling CM2 decomposition vs the pooled W1..W3 baseline.
         # 4-factor when conversions are present: CM2 = clicks × (CVR × Val/conv − CPC);
@@ -321,8 +324,7 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
                "cm2_weeks": [w.get("week") for w in wk][-12:],
                "driver": driver, "drivers": drivers,
                "cm2_90d": cm2_90d}
-        ti = troas_now.get(_num_id(ce["ce_id"])) or {}
-        row["troas_l4w"] = ti.get("l4w")          # Existing column: avg L4W target ROAS
+        row["troas_l4w"] = ti.get("l4w")          # L4W avg (New-table sub-line; weekly in `weeks`)
         if ne == "New":
             li = launch.get(_num_id(ce["ce_id"])) or {}
             row["launch_date"] = li.get("date")
@@ -715,15 +717,13 @@ def _launch_map(snap):
 
 
 def _troas_now_map(snap):
-    """{numeric_ce_id: {"now": current tROAS %, "l4w": L4W avg tROAS %}}. Guarded.
+    """{numeric_ce_id: {"now": current tROAS %, "l4w": L4W avg %, "wk": {week_iso: %}}}.
 
-    Both spend-weighted across the CE's campaigns over the L4W window (W-3 Monday →
-    W0 Sunday) so dormant campaigns don't skew the CE-level figure:
-      now — current_campaign_target_roas, the AS-OF-NOW value (constant across report
-            dates) = "target ROAS as of report run date"; the Losing Money New-CE column.
-      l4w — campaign_target_roas, the as-of-each-date value averaged over the window
-            = "avg L4W tROAS"; the Losing Money Existing-CE column.
-    Google Ads Search only. {} on any failure.
+    Spend-weighted across the CE's Search campaigns; "wk" is PER REPORT WEEK over the
+    L4W window (campaign_target_roas as-of-each-date) so the table can show the target
+    week by week — a tROAS step-down in w1 explains a CM2 drop. "now" =
+    current_campaign_target_roas (as-of-run value, constant across dates); "l4w" =
+    spend-weighted avg of the weekly values. Google Ads Search only. {} on any failure.
     """
     meta = snap.get("meta") or {}
     week = meta.get("week_start")
@@ -736,22 +736,36 @@ def _troas_now_map(snap):
         ws = datetime.date.fromisoformat(str(week)[:10])
         sql = f"""
         SELECT CAST(campaign_target_combined_entity_id AS STRING) AS ce_id,
-               SAFE_DIVIDE(SUM(current_campaign_target_roas * sum_spend),
-                           SUM(IF(current_campaign_target_roas IS NOT NULL, sum_spend, NULL))) AS troas_now,
+               DATE_TRUNC(report_date, {config.BQ_WEEK})          AS week,
+               SUM(sum_spend)                                      AS spend,
                SAFE_DIVIDE(SUM(campaign_target_roas * sum_spend),
-                           SUM(IF(campaign_target_roas IS NOT NULL, sum_spend, NULL))) AS troas_l4w
+                           SUM(IF(campaign_target_roas IS NOT NULL, sum_spend, NULL))) AS troas_wk,
+               SAFE_DIVIDE(SUM(current_campaign_target_roas * sum_spend),
+                           SUM(IF(current_campaign_target_roas IS NOT NULL, sum_spend, NULL))) AS troas_now
         FROM {config.ADS_STATS}
         WHERE ad_platform = 'Google Ads'
               AND campaign_advertising_channel_type = 'SEARCH'
               AND report_date BETWEEN DATE_SUB(DATE(@week), INTERVAL 21 DAY)
                                   AND DATE_ADD(DATE(@week), INTERVAL 6 DAY)
               AND CAST(campaign_target_combined_entity_id AS STRING) IN UNNEST(@ids)
-        GROUP BY 1
+        GROUP BY 1, 2
         """
         df = query_df(sql, "troas_now", {"week": config.iso(ws), "ids": ids})
         def _v(x): return round(float(x), 1) if (x is not None and float(x) > 0) else None
-        return {str(r["ce_id"]): {"now": _v(r["troas_now"]), "l4w": _v(r["troas_l4w"])}
-                for _, r in df.iterrows()}
+        out = {}
+        for _, r in df.iterrows():
+            cid = str(r["ce_id"])
+            d = out.setdefault(cid, {"now": None, "l4w": None, "wk": {}, "_w": []})
+            v = _v(r["troas_wk"]); sp = float(r["spend"] or 0)
+            d["wk"][str(r["week"])[:10]] = v
+            if v is not None and sp > 0: d["_w"].append((v, sp))
+            n = _v(r["troas_now"])
+            if n is not None: d["now"] = n
+        for d in out.values():
+            tot = sum(sp for _, sp in d["_w"])
+            d["l4w"] = round(sum(v * sp for v, sp in d["_w"]) / tot, 1) if tot else None
+            del d["_w"]
+        return out
     except Exception as e:
         print(f"[buckets] WARNING: tROAS fetch failed ({e!r}); "
               f"Losing Money tROAS columns will be blank.")
