@@ -236,15 +236,17 @@ def _cell(s, is_current, ledger_slug=None, deploy=None):
     arr = "▲" if (wow is not None and wow >= 1) else "▼" if (wow is not None and wow <= -1) else "·"
     wtxt = "" if wow is None else f'<div class="wow" style="color:{col}">{arr} {_pct(wow)}</div>'
     inner = f'<div class="rev">{_money(s["rev"])}</div>{wtxt}'
-    # Link the cell to THAT week's archived report when it exists (Ledger history). stopPropagation
-    # so it doesn't fall through to the row's current-week onclick; weeks without an archive stay
-    # plain (and fall through to the current report).
+    # Whole-cell click → THAT week's archived report (Ledger history). Put the handler on the
+    # <td> itself (not just an <a> around the number) so clicking anywhere in the cell — padding
+    # included — opens that week; otherwise a click in the cell's padding fell through to the
+    # row's current-week onclick. stopPropagation stops that row handler. Weeks without an
+    # archive get no handler and fall through to the row (current report).
+    click = ""
     if ledger_slug and deploy is not None:
         arch = f"weekly-report-{ledger_slug}-{s['week']}.html"
         if (deploy / arch).exists():
-            inner = (f'<a href="{arch}" onclick="event.stopPropagation()" '
-                     f'style="display:block;color:inherit;cursor:pointer">{inner}</a>')
-    return f'<td class="cell{" cur" if is_current else ""}">{inner}</td>'
+            click = f' onclick="event.stopPropagation();location.href=\'{arch}\'" style="cursor:pointer"'
+    return f'<td class="cell{" cur" if is_current else ""}"{click}>{inner}</td>'
 
 
 def render_matrix(state, week, cols, deploy=None):
