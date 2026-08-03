@@ -703,20 +703,22 @@ function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
 function wrGetFull(ceId){ return getAction('losing_money',ceId); }
 function wrSetAction(ceId,val,el){
   const td=el&&el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
-  // HARD mandatory comment (incl. Skip): with no comment the action is NOT saved —
-  // it commits together with the note in wrLmNote once something is written.
-  if(val && ta && !lmNoteFilled(ta.value)){
+  const unfilled=ta&&!lmNoteFilled(ta.value);
+  // Comment enforcement (2026-08-03): HARD for Skip only — a Skip without a why does
+  // not save; it commits together with the note in wrLmNote once something is written.
+  // Other actions save immediately but soft-flag the comment as still owed.
+  if(val && unfilled){
     ta.classList.add('lm-note-req');
     if(!(ta.value||'').trim()) ta.value=LM_NOTE_TPL;   // insert the persistent labels
     ta.focus(); try{ ta.setSelectionRange(8,8); }catch(_){ }
-    return;
+    if(val==='skip') return;                            // hard gate: Skip waits for the why
   }
   const prev=wrGetAction(ceId);
   saveAction(ceId,'losing_money',{status:val}).catch(()=>{
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
-  if(ta) ta.classList.remove('lm-note-req');
+  if(ta && !unfilled) ta.classList.remove('lm-note-req');
 }
 // growth/perf note template — REAL text (not placeholder) so the labels persist while
 // both parties write. Template with nothing after the labels counts as NO comment.
@@ -1942,7 +1944,7 @@ function renderBuckets(M){
     '<th title="Status label — a tag, not a grouping; the sort is by CM2 drop regardless of label.">Status</th>'+
     '<th class="num" title="On what basis the CE qualified, with the qualifying value. 0 conv = spend with zero conversions this week · WoW = CM2 drop vs last week · vs 3wk avg = drop vs the W-1..W-3 average · 90d = cumulative CM2 loss (New CEs only). Thresholds: drop ≥ $500 flags always · $200–500 flags only when W0 Paid ROI &lt; 140%. Sorted by the worst fired drop.">Criteria <span class="lm-hb">ⓘ</span></th>';
   const lmHeadTail='<th title="What drove the CM2 drop — that metric&rsquo;s column is bolded. From the exact CM2 decomposition vs the W-1..W-3 baseline: Clicks · CVR · CPC · CM1-per-conversion (value).">Driver <span class="lm-hb">ⓘ</span></th>'+
-    '<th title="Your call. Selecting an action requires a comment. Growth reviews Tue/Wed; finalized Thursday.">Action</th>';
+    '<th title="Your call. Skip does not save without a comment; other actions flag the comment as owed. Growth reviews Tue/Wed; finalized Thursday.">Action</th>';
   const lmHeadNewX='<th class="num" title="Current target ROAS as of report run (spend-weighted across the CE&rsquo;s Search campaigns); L4W average beneath.">tROAS now</th>'+
     '<th class="num" title="Cumulative CM2 over the trailing ~90 days (12 weeks). ≤ −$500 fires C4 for New CEs.">CM2 ~90d</th>'+
     '<th class="num" title="Oldest Google-Ads campaign launch for this CE (first paid click).">Launched</th>';
@@ -1957,7 +1959,7 @@ function renderBuckets(M){
       lmMetricCells(r,LM_METRICS_FUNNEL)+
       lmDriverCell(r)+
       '<td>'+lmAction(r)+'</td></tr>';
-  const lmHowto='<div class="lm-howto"><b>How to read:</b> a CE is flagged when any <b>Criteria</b> fires — <b>0 conv</b> (spend, zero conversions this week) · <b>WoW</b> / <b>vs 3wk avg</b> (CM2 dropped ≥ $500; or ≥ $200 with W0 ROI &lt; 140%) · <b>90d</b> (New CEs: ≥ $500 cumulative loss). Sorted by the worst fired drop — the Status label is a tag, not the order. Each metric cell shows <b>w0 on top</b> (with its WoW change), then <b>w1 · w2 · w3</b> beneath, newest first (hover a row for its week date; the toggle above hides them). The <b>bolded metric</b> is the driver of the drop. Status carries a triage chip: <b>new this wk</b> · <b>Nth wk · last wk ✓</b> = flagged N weeks running, last week has an action on record (shown in the Action cell, hover for the comment) · <b>Nth wk · no action on record</b> = flagged N weeks running and last week has nothing recorded in the report — review these first and record what was (or wasn&rsquo;t) done. <b>Review guideline:</b> read delivered ROI against <b>tROAS</b> first — if the campaign is running below its target, the first intervention is correcting ROAS (~10% step); <b>negative seasonality</b> applies only when ROAS is already running as expected. Selecting an <b>Action requires a comment</b>.</div>';
+  const lmHowto='<div class="lm-howto"><b>How to read:</b> a CE is flagged when any <b>Criteria</b> fires — <b>0 conv</b> (spend, zero conversions this week) · <b>WoW</b> / <b>vs 3wk avg</b> (CM2 dropped ≥ $500; or ≥ $200 with W0 ROI &lt; 140%) · <b>90d</b> (New CEs: ≥ $500 cumulative loss). Sorted by the worst fired drop — the Status label is a tag, not the order. Each metric cell shows <b>w0 on top</b> (with its WoW change), then <b>w1 · w2 · w3</b> beneath, newest first (hover a row for its week date; the toggle above hides them). The <b>bolded metric</b> is the driver of the drop. Status carries a triage chip: <b>new this wk</b> · <b>Nth wk · last wk ✓</b> = flagged N weeks running, last week has an action on record (shown in the Action cell, hover for the comment) · <b>Nth wk · no action on record</b> = flagged N weeks running and last week has nothing recorded in the report — review these first and record what was (or wasn&rsquo;t) done. <b>Review guideline:</b> read delivered ROI against <b>tROAS</b> first — if the campaign is running below its target, the first intervention is correcting ROAS (~10% step); <b>negative seasonality</b> applies only when ROAS is already running as expected. <b>Skip does not save without a comment</b>; other actions flag the comment as owed.</div>';
   const lmLegend='<div class="lm-legend"><span class="chip red">Bleeding</span>W0 CM2 &lt; 0 &nbsp;·&nbsp; <span class="chip amber">Eroding</span>W0 CM2 ≥ 0 but dropping &nbsp;·&nbsp; <span class="chip green">Recovering</span>loss ≥ halved vs W-1 &nbsp;·&nbsp; <span class="chip red">Full waste</span>spend, 0 conversions &nbsp;·&nbsp; Google-Search Paid only (Bing excluded).</div>';
   const lmSubhead=(t,n,sub)=>'<div style="margin:16px 0 6px;font-family:var(--sans);font-size:13px;font-weight:800;color:var(--ink-head)">'+t+' <span style="color:var(--ink-faint);font-weight:600">('+n+')</span>'+(sub?' <span style="color:var(--ink-faint);font-weight:500;font-size:11.5px">— '+sub+'</span>':'')+'</div>';
   let lmBody;
