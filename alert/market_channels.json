@@ -18,8 +18,10 @@
     "uae": "C046622L80Z",
     "gcc": "C0889D22PM5",
     "north_africa": "C0889D22PM5",
-    "rest_of_mea": "C0889D22PM5"
+    "rest_of_mea": "C0889D22PM5",
+    "headout": "C0975BGAX0B"
   },
+  "_note_headout": "headout is the PORTFOLIO rollup (all 42 markets), not a market — posts to #team-central-biz (C0975BGAX0B). It IS part of the weekly Losing-Money alert sweep (uses weekly-report-headout.html + --market-slug headout), but is EXCLUDED from the Thursday actions ping (would redundantly re-ping every market's CEs).",
   "_alternates": {
     "oceania": [
       "C039TMH0GEP",

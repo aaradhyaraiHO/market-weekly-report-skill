@@ -202,6 +202,20 @@ for slug in slugs:
     subprocess.run([PY, "post_message.py", "--payload", "payload.json",
                     "--rca-blocks", "rca_blocks.json",
                     "--channel", channels[slug]], cwd=BUNDLE, check=True)
+
+# headout = the PORTFOLIO rollup (all 42 markets) — its OWN report file, posts to
+# #team-central-biz (channels["headout"]). It's part of the weekly sweep: run it
+# alongside the per-market loop above. (Excluded from the Thursday ping — see
+# thursday_actions_ping: it would re-ping every market's CEs.)
+subprocess.run([PY, "weekly_alert.py", "--file", "weekly-report-headout.html",
+                "--market-slug", "headout", "--out", "payload.json"], cwd=BUNDLE, check=True)
+hand = json.loads((BUNDLE / "payload.json").read_text())["_rca"]
+subprocess.run([PY, "weekly_rca_helper.py", "--ce-ids", ",".join(hand["ce_ids"]),
+                "--week-start", hand["week_start"], "--week-end", hand["week_end"],
+                "--out", "rca_blocks.json"], cwd=BUNDLE, check=True)
+subprocess.run([PY, "post_message.py", "--payload", "payload.json", "--rca-blocks", "rca_blocks.json",
+                "--slug", "headout", "--week", hand["week_start"],
+                "--channel", channels["headout"]], cwd=BUNDLE, check=True)
 ```
 
 Keep every `market_channels.json` entry on the test channel (`C0B6U94PGJ0`)
