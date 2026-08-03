@@ -350,6 +350,26 @@ def main(argv=None):
     print(f"\n  open {deploy/'weekly.html'}")
     print("  vercel deploy --prod --cwd market-notebook-v2   # from ~/analytics — USER runs")
 
+    # Weekly Flagged export → perf sheet (Task 2). Runs once on a full `all` publish; writes the
+    # `w/c <week>` tab (all markets, GM cols owned; perf's 3 cols untouched). Best-effort, main-only.
+    if args.market == "all":
+        try:
+            import export_perf_sheet as eps
+            rows = []
+            for slug in config.MARKETS:
+                sp = CACHE_DIR / f"snapshot_{slug}_{args.week}.json"
+                if not sp.exists():
+                    continue
+                snap = json.loads(sp.read_text())
+                gm = eps._fetch_gm_actions(slug, args.week)
+                rows += eps.rows_for_snapshot(snap, gm)
+            if rows:
+                ok, tab, txt = eps.write_weekly_tab(rows, args.week)
+                print(f"  {'✓' if ok else '✗'} perf sheet: {len(rows)} rows → tab '{tab}'"
+                      + ("" if ok else f"  [{txt[:120]}]"))
+        except Exception as e:
+            print(f"  ! perf-sheet export skipped: {e}")
+
 
 if __name__ == "__main__":
     main()
