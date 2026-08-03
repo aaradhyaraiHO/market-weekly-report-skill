@@ -713,9 +713,10 @@ def build_global(week: str) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--week", required=True, help="W0 Monday YYYY-MM-DD")
+    ap.add_argument("--week", required=True, help="W0 week-start = SUNDAY (YYYY-MM-DD); snapped to its Sun–Sat week")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    args.week = config.iso(config._week_start(dt.date.fromisoformat(args.week)))   # ensure Sun-Sat week-start
     snap = build_global(args.week)
     out = Path(args.out) if args.out else CACHE / f"snapshot_headout_{args.week}.json"
     out.parent.mkdir(parents=True, exist_ok=True)

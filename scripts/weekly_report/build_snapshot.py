@@ -1325,12 +1325,13 @@ def main():
     ap = argparse.ArgumentParser(description="Weekly report snapshot producer")
     ap.add_argument("--market", choices=list(config.MARKETS), help="market slug")
     ap.add_argument("--all", action="store_true", help="build all pilot markets")
-    ap.add_argument("--week", help="W0 Monday (YYYY-MM-DD); default = latest matured week")
+    ap.add_argument("--week", help="W0 week-start = SUNDAY (YYYY-MM-DD); any date snaps to its "
+                    "Sun–Sat week. default = latest complete Sun–Sat week")
     ap.add_argument("--validate", action="store_true", help="validate NA against references")
     ap.add_argument("--no-availability", action="store_true", help="skip availability join")
     args = ap.parse_args()
 
-    w0 = _to_date(args.week) if args.week else config.latest_complete_week()
+    w0 = config._week_start(_to_date(args.week)) if args.week else config.latest_complete_week()
     targets = list(config.MARKETS) if args.all else [args.market or "north_america"]
 
     for slug in targets:
