@@ -702,23 +702,21 @@ function actionPrevPull(){
 function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
 function wrGetFull(ceId){ return getAction('losing_money',ceId); }
 function wrSetAction(ceId,val,el){
+  const td=el&&el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
+  // HARD mandatory comment (incl. Skip): with no comment the action is NOT saved —
+  // it commits together with the note in wrLmNote once something is written.
+  if(val && ta && !lmNoteFilled(ta.value)){
+    ta.classList.add('lm-note-req');
+    if(!(ta.value||'').trim()) ta.value=LM_NOTE_TPL;   // insert the persistent labels
+    ta.focus(); try{ ta.setSelectionRange(8,8); }catch(_){ }
+    return;
+  }
   const prev=wrGetAction(ceId);
   saveAction(ceId,'losing_money',{status:val}).catch(()=>{
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
-  // mandatory comment: selecting any action with an empty note flags + focuses the note box
-  if(el){
-    const td=el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
-    if(ta){
-      const need=!!val && !lmNoteFilled(ta.value);
-      ta.classList.toggle('lm-note-req',need);
-      if(need){
-        if(!(ta.value||'').trim()) ta.value=LM_NOTE_TPL;   // insert the persistent labels
-        ta.focus(); try{ ta.setSelectionRange(8,8); }catch(_){ }
-      }
-    }
-  }
+  if(ta) ta.classList.remove('lm-note-req');
 }
 // growth/perf note template — REAL text (not placeholder) so the labels persist while
 // both parties write. Template with nothing after the labels counts as NO comment.
@@ -733,11 +731,18 @@ function wrLmNote(ceId,val,el){
     val='';
     if(el) el.value='';
   }
-  saveAction(ceId,'losing_money',{note:val}).catch(()=>{
+  // commit the note AND the (comment-gated) selected action together
+  const td=el&&el.closest&&el.closest('td'), sel=td&&td.querySelector('.lm-act');
+  const patch={note:val};
+  if(sel && lmNoteFilled(val)) patch.status=sel.value;
+  saveAction(ceId,'losing_money',patch).catch(()=>{
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
-  if(el && lmNoteFilled(val)) el.classList.remove('lm-note-req');
+  if(el){
+    if(lmNoteFilled(val)) el.classList.remove('lm-note-req');
+    else if(sel && sel.value) el.classList.add('lm-note-req');   // action chosen, note wiped → still owed
+  }
 }
 function wrFxChk(bucket,ceId,checked,el){
   saveAction(ceId,bucket,{checkbox:checked}).catch(()=>{
