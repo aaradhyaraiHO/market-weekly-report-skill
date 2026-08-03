@@ -711,19 +711,33 @@ function wrSetAction(ceId,val,el){
   if(el){
     const td=el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
     if(ta){
-      const need=!!val && !(ta.value||'').trim();
+      const need=!!val && !lmNoteFilled(ta.value);
       ta.classList.toggle('lm-note-req',need);
-      if(need){ ta.placeholder='comment required — why?\ngrowth: \nperf: '; ta.focus(); }
+      if(need){
+        if(!(ta.value||'').trim()) ta.value=LM_NOTE_TPL;   // insert the persistent labels
+        ta.focus(); try{ ta.setSelectionRange(8,8); }catch(_){ }
+      }
     }
   }
 }
+// growth/perf note template — REAL text (not placeholder) so the labels persist while
+// both parties write. Template with nothing after the labels counts as NO comment.
+const LM_NOTE_TPL='growth: \nperf: ';
+function lmNoteFilled(v){ return !!(v||'').replace(/growth\s*:/ig,'').replace(/perf\s*:/ig,'').trim(); }
+function wrLmNoteFocus(el){
+  if(!(el.value||'').trim()){ el.value=LM_NOTE_TPL; try{ el.setSelectionRange(8,8); }catch(_){ } }
+}
 function wrLmNote(ceId,val,el){
   var prev=wrGetFull(ceId).note||'';
+  if(!lmNoteFilled(val)){            // unmodified/blank template → store nothing, reset box
+    val='';
+    if(el) el.value='';
+  }
   saveAction(ceId,'losing_money',{note:val}).catch(()=>{
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
-  if(el && (val||'').trim()) el.classList.remove('lm-note-req');
+  if(el && lmNoteFilled(val)) el.classList.remove('lm-note-req');
 }
 function wrFxChk(bucket,ceId,checked,el){
   saveAction(ceId,bucket,{checkbox:checked}).catch(()=>{
@@ -1904,11 +1918,12 @@ function renderBuckets(M){
     // last week's recorded action, visible in-cell (the Status chip carries the triage state)
     const pv=getPrevAction('losing_money',r.ce_id);
     const lw=pv.status?'<div class="lm-who" title="'+esc(pv.note||'')+'">last wk: <b>'+(LM_ACT_LBL[pv.status]||esc(pv.status))+'</b>'+(pv.owner?' · '+esc(pv.owner):'')+'</div>':'';
-    const req=(v&&!(n||'').trim());
-    // shared note, both layers labeled in one box: growth fills Tue/Wed, perf appends after
+    const req=(v&&!lmNoteFilled(n));
+    // shared note, both layers labeled in one box: labels insert as REAL text on focus
+    // (wrLmNoteFocus) so they persist while growth (Tue/Wed) and perf (after) both write
     const ph=(req?'comment required — why?':'why?')+'&#10;growth: &#10;perf: ';
     return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrSetAction(\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
-      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+ph+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
+      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" onfocus="wrLmNoteFocus(this)" placeholder="'+ph+'" onchange="wrLmNote(\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
   const lmExtrasEx=r=>
     '<td class="num">'+((r.troas_l4w!=null)?fmtPct(r.troas_l4w,0):'—')+'</td>';
   const lmNewExtras=r=>
