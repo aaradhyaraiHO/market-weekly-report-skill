@@ -309,7 +309,8 @@ def render_matrix(state, week, cols, deploy=None):
  </div>
  {_headout_hero(state.get("headout"))}
  <table class="board"><thead><tr><th class="mkth">Market</th>{labels}</tr></thead><tbody>{body}</tbody></table>
- <div style="margin-top:14px;font:600 11px 'Hanken Grotesk';color:#9A92AC">Each cell: weekly revenue + WoW%. Click a row for the full report. Revenue = predicted.</div>
+ <div style="margin-top:14px;font:600 11px 'Hanken Grotesk';color:#9A92AC">Each cell: weekly revenue + WoW%. Click a row for the full report, or a cell for that week's report. Revenue = predicted.</div>
+ <div style="margin-top:5px;font:600 11px 'Hanken Grotesk';color:#B4ABC7">Weeks run <b>Sun–Sat</b> from w/c 2026-07-26. Earlier columns are the pre-shift Mon–Sun reports (≈1 day offset), kept for history.</div>
 </div></body></html>"""
 
 
