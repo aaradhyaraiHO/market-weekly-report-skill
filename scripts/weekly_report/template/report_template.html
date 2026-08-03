@@ -661,6 +661,16 @@ function saveAction(ceId,bucket,patch){
     putAction(bucket,ceId,merged);
   });
 }
+// Re-render the buckets section (#s4) in place after an async action pull — the
+// Losing Money / Flux action cells are rendered ONCE by renderApp() from the
+// localStorage cache; without this the fresh Sheet-truth pull updates actionsData
+// in memory but never repaints, so on a load where localStorage lacked the
+// comments (different browser/device, cleared cache, fresh deploy) the cells stay
+// blank even though the Sheet has them. Mirrors syncPull()→paintCETable(). (2026-08-03)
+function repaintBuckets(){
+  const el=document.getElementById('s4');
+  if(el) el.outerHTML=renderBuckets(MARKETS[mi]);
+}
 function actionSyncPull(){
   loadActionCache();
   if(!SYNC_OK) return Promise.resolve();
@@ -677,6 +687,7 @@ function actionSyncPull(){
         };
       });
       saveActionCache();
+      repaintBuckets();   // Sheet truth landed — repaint so it actually shows
     })
     .catch(()=>{});
 }
@@ -698,7 +709,7 @@ function actionPrevPull(){
         if(!actionsPrev[s][kk] || (a.updated||'')>(actionsPrev[s][kk].updated||''))
           actionsPrev[s][kk]={checkbox:a.checkbox==='true',note:a.note||'',status:a.status||'',owner:a.owner||'',updated:a.updated||''};
       }); })
-    .catch(()=>{})));
+    .catch(()=>{}))).then(()=>repaintBuckets());   // prev-week chips landed — repaint LM table
 }
 function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
 function wrGetFull(ceId){ return getAction('losing_money',ceId); }
