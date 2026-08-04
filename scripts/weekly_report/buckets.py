@@ -18,6 +18,12 @@ LM_DELTA_HARD = 500.0          # CM2 drop ($) that flags unconditionally (C2 WoW
 LM_DELTA_SOFT = 200.0          # CM2 drop ($) that flags only when W0 Paid ROI < LM_ROI_GATE
 LM_ROI_GATE = 140.0            # W0 Paid-ROI gate for the soft band
 LM_NEW_90D_LOSS = 500.0        # C4 (New CEs only): cumulative CM2 over trailing ~90d ≤ −$500
+LM_LOSS_FLOOR = 0.0            # C5: W0 CM2 < 0 flags — FLOORLESS (Aaradhya 2026-08-04: "W0 CM2
+                               # −ve OR ROI<100 → flag"; the ROI clause is redundant since
+                               # ROI<100 ⟺ CM2<0 with spend). Restores the transcript's base
+                               # "current week status" check the finalized notes dropped. Losing
+                               # CEs also bypass the $1k funded gate, superseding the burn line.
+                               # Raise this if the table gets too noisy to review.
 LM_RECOVER_IMPROVE_PCT = 50.0  # W0 loss ≥50% smaller than W1 loss → "recovering" tag
 SEAS_UP, SEAS_DN = 140.0, 120.0
 # Fluctuations multi-metric gate (2026-07-20) — cap output to the ~5-6 real opportunities.
@@ -143,7 +149,8 @@ def _lm_fired(wkseq, ne, SPK, CMK, RK, CVK):
     cm2_90d = round(sum(cm2s[-13:]))                      # 12wk window ≈ 90d
     fired = ((["C1"] if c1 else []) + (["C2"] if _f(d_wow) else [])
              + (["C3"] if _f(d_3w) else [])
-             + (["C4"] if (ne == "New" and cm2_90d <= -LM_NEW_90D_LOSS) else []))
+             + (["C4"] if (ne == "New" and cm2_90d <= -LM_NEW_90D_LOSS) else [])
+             + (["C5"] if (cm2s[-1] < 0 and cm2s[-1] <= -LM_LOSS_FLOOR) else []))  # W0 in the red
     return fired, d_wow, d_3w, cm2_90d, c1
 
 
@@ -165,6 +172,10 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
       C3  vs 3wk avg  — ΔCM2 = W0 − mean(W1..W3), same thresholds/ROI gate as C2.
       C4  New only    — cumulative CM2 over the trailing ~90d (the 12wk series)
                         ≤ −LM_NEW_90D_LOSS: chronic slow bleed on a scaling CE.
+      C5  W0 in red   — W0 CM2 < 0, floorless (LM_LOSS_FLOOR=0), regardless of deltas
+                        or ROI. The transcript's base "current week status" check
+                        (2026-08-04). Losing CEs also bypass the $1k funded gate, so
+                        the burn-line/subthreshold footnotes are superseded (empty).
 
     Labels are TAGS, not groupings (sort is label-agnostic):
       full_waste (C1) · bleeding (W0 CM2 < 0) · recovering (W0 CM2 still < 0 but the
@@ -212,11 +223,10 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
         w0 = wk[-1]; roi = w0.get(RK)
         spw = w0.get(SPK) or 0
         sp4 = sum((w.get(SPK) or 0) for w in wk[-4:])
-        # long-tail burn: bleeding but under the $1k funded gate → aggregate footnote line
-        if sp4 <= BLEED_SPEND4W:
-            if _active(ce) and roi is not None and roi < BLEED_ROI and spw > 0:
-                burn["count"] += 1; burn["bleed"] += spw * (roi / 100 - 1)
-                burn["items"].append((ce["ce_name"], spw * (roi / 100 - 1)))
+        # $1k/4wk funded gate — BYPASSED when the CE is losing money THIS week (2026-08-04):
+        # C5 is floorless, so any W0-negative CE gets a row regardless of trailing spend.
+        # This supersedes the old burn-line aggregate (kept in the schema, always empty).
+        if sp4 <= BLEED_SPEND4W and not (spw > 0 and ((w0.get(CMK) or 0) - spw) < 0):
             continue
         ne = _route(ce)
         cm2s = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
@@ -227,7 +237,10 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
             paused.append(ident); continue
         cm2_w0 = cm2s[-1]; conv_w0 = w0.get(CVK)
         fired, d_wow, d_3w, cm2_90d, c1 = _lm_fired(wk, ne, SPK, CMK, RK, CVK)
-        if not c1 and roi is None:                        # spending but ROI didn't compute → feed gap
+        # tracking gap = CM1 genuinely missing (feed didn't populate) — NOT tiny-spend CEs
+        # whose ROI is merely un-computed (< $50/wk floor); those evaluate with ROI shown "—"
+        # so floorless C5 coverage is complete (2026-08-04).
+        if not c1 and roi is None and w0.get(CMK) is None:
             tracking_gap.append(ident); continue
         if not fired:
             # sub-threshold line: still losing money this week (CM2 < 0) but no criterion
