@@ -12,7 +12,8 @@ Stress-tested NA+IT+OC → 0 anomalies.
 from __future__ import annotations
 
 # ---- locked constants ----
-BLEED_ROI, BLEED_SPEND4W = 100.0, 1000.0   # burn-line ROI floor · funded gate ($ Google spend / 4wk)
+# (old losing-money gates BLEED_ROI / BLEED_SPEND4W removed 2026-08-04 — the 5 criteria are
+#  the only filter; see losing_money docstring)
 # Losing Money v2 flag thresholds (criteria locked 2026-07-30 meeting; see losing_money docstring)
 LM_DELTA_HARD = 500.0          # CM2 drop ($) that flags unconditionally (C2 WoW · C3 vs 3wk avg)
 LM_DELTA_SOFT = 200.0          # CM2 drop ($) that flags only when W0 Paid ROI < LM_ROI_GATE
@@ -174,8 +175,7 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
                         ≤ −LM_NEW_90D_LOSS: chronic slow bleed on a scaling CE.
       C5  W0 in red   — W0 CM2 < 0, floorless (LM_LOSS_FLOOR=0), regardless of deltas
                         or ROI. The transcript's base "current week status" check
-                        (2026-08-04). Losing CEs also bypass the $1k funded gate, so
-                        the burn-line/subthreshold footnotes are superseded (empty).
+                        (2026-08-04).
 
     Labels are TAGS, not groupings (sort is label-agnostic):
       full_waste (C1) · bleeding (W0 CM2 < 0) · recovering (W0 CM2 still < 0 but the
@@ -190,15 +190,14 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
     rows add launch_date / days_since_launch (`launch` map), troas_now (target ROAS
     as of run date) and cm2_90d. tROAS values from the `troas_now` map.
 
-    Footnote lines (NOT flags, verify-only): paused · tracking_gap · burn_line ·
-    subthreshold (funded CEs still CM2-negative this week that no criterion caught —
-    drop < $200, or $200-500 at ROI >= 140 — aggregate $ + names, so small chronic
-    bleeders stay visible without adding rows).
+    Scope (2026-08-04, "criteria only"): every CE spending this week is evaluated — the
+    old $1k/4wk funded gate, burn line, subthreshold footnote and history minimum are
+    all REMOVED. Two data-validity guards remain (not criteria): paused (spend=0 this
+    week after recent spend — a no-spend week can't "lose") and tracking_gap (CM1
+    missing from the feed — CM2 unknowable). Both are verify-only footnotes.
     """
     troas_now = troas_now or {}; launch = launch or {}
     existing, new_rows, paused, tracking_gap = [], [], [], []
-    burn = {"count": 0, "bleed": 0.0, "items": []}
-    sub = {"count": 0, "cm2": 0.0, "items": []}   # funded, CM2<0 this wk, but no criterion fired
     def _route(ce):
         # New = never Pro+ in the prior 4 calendar quarters (combined_entity_stats
         # quarterly bands via _prior_proplus_map) — 2026-08-03 decision. Replaces the
@@ -219,22 +218,23 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
     CVK = "conversions_g" if has_g else "ad_conversions"  # Google-search conversions (CVR)
     for ce in ces:
         wk = ce.get("weekly") or []
-        if len(wk) < 2: continue                          # C2 needs a prior week; <2wk = too new
+        if not wk: continue
         w0 = wk[-1]; roi = w0.get(RK)
         spw = w0.get(SPK) or 0
         sp4 = sum((w.get(SPK) or 0) for w in wk[-4:])
-        # $1k/4wk funded gate — BYPASSED when the CE is losing money THIS week (2026-08-04):
-        # C5 is floorless, so any W0-negative CE gets a row regardless of trailing spend.
-        # This supersedes the old burn-line aggregate (kept in the schema, always empty).
-        if sp4 <= BLEED_SPEND4W and not (spw > 0 and ((w0.get(CMK) or 0) - spw) < 0):
-            continue
         ne = _route(ce)
-        cm2s = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
         ident = {"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "tier": _tier(ce),
                  "new_existing": ne, "spend_4w": round(sp4),
                  "orders_4w": round(sum((w.get("orders") or 0) for w in wk[-4:]))}
-        if spw == 0:                                      # funded 4w, stopped this week → PAUSED
-            paused.append(ident); continue
+        # Scope = the 5 criteria ONLY (Aaradhya 2026-08-04): every CE spending this week is
+        # evaluated — no spend floor, no funded gate, no history minimum. The old $1k gate,
+        # burn line and subthreshold footnote are REMOVED. Two data-validity guards remain
+        # (not criteria): spend=0 → can't lose this week (paused footnote if it spent
+        # recently); missing CM1 feed → CM2 unknowable (tracking-gap footnote, below).
+        if spw <= 0:
+            if sp4 > 0: paused.append(ident)              # spent recently, stopped this week
+            continue
+        cm2s = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
         cm2_w0 = cm2s[-1]; conv_w0 = w0.get(CVK)
         fired, d_wow, d_3w, cm2_90d, c1 = _lm_fired(wk, ne, SPK, CMK, RK, CVK)
         # tracking gap = CM1 genuinely missing (feed didn't populate) — NOT tiny-spend CEs
@@ -242,13 +242,7 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
         # so floorless C5 coverage is complete (2026-08-04).
         if not c1 and roi is None and w0.get(CMK) is None:
             tracking_gap.append(ident); continue
-        if not fired:
-            # sub-threshold line: still losing money this week (CM2 < 0) but no criterion
-            # fired (drop < $200, or $200-500 at ROI >= 140) — visible in aggregate only
-            if cm2_w0 < 0:
-                sub["count"] += 1; sub["cm2"] += cm2_w0
-                sub["items"].append((ce["ce_name"], cm2_w0))
-            continue
+        if not fired: continue
         # label — a tag, not a grouping
         if c1:
             label = "full_waste"
@@ -265,13 +259,12 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
              + ([d_3w] if "C3" in fired else [])
         sort_delta = min(cand) if cand else cm2_w0
         # consecutive weeks flagged (this week = 1): re-run the criteria on progressively
-        # truncated series, funded gate re-checked each step. Powers the chronicity chip
-        # ("new this wk" / "✓ Nth wk actioned" / "⚠ Nth wk unactioned"). Capped at 8.
+        # truncated series; a week must have spend to count (criteria scope). Powers the
+        # chronicity chip ("new this wk" / "Nth wk"). Capped at 8.
         streak = 1
-        for back in range(1, min(8, len(wk) - 1)):
+        for back in range(1, min(8, len(wk))):
             seq = wk[:-back]
-            if len(seq) < 2: break
-            if sum((w.get(SPK) or 0) for w in seq[-4:]) <= BLEED_SPEND4W: break
+            if not seq or (seq[-1].get(SPK) or 0) <= 0: break
             if not _lm_fired(seq, ne, SPK, CMK, RK, CVK)[0]: break
             streak += 1
         flagged_lw = streak >= 2
@@ -347,12 +340,8 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
     existing.sort(key=lambda r: r["sort_delta"])          # biggest drop first, label-agnostic
     new_rows.sort(key=lambda r: r["sort_delta"])
     paused.sort(key=lambda r: -r["spend_4w"]); tracking_gap.sort(key=lambda r: -r["spend_4w"])
-    burn_names = [n for n, _ in sorted(burn["items"], key=lambda x: x[1])]   # worst-first, all names
-    sub_names = [f"{n} ({round(v)})" for n, v in sorted(sub["items"], key=lambda x: x[1])]
     return {"existing": existing, "new": new_rows,
-            "paused": paused, "tracking_gap": tracking_gap,
-            "subthreshold": {"count": sub["count"], "cm2_wk": round(sub["cm2"]), "names": sub_names},
-            "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
+            "paused": paused, "tracking_gap": tracking_gap}
 
 
 def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
@@ -842,7 +831,7 @@ if __name__ == "__main__":
     lm = b["defend"]["losing_money"]
     print("== DEFEND · Losing Money v2 ==")
     print(f"  existing {len(lm['existing'])} · new {len(lm['new'])} · "
-          f"paused {len(lm['paused'])} · tracking-gap {len(lm['tracking_gap'])} · burn {lm['burn_line']['count']}")
+          f"paused {len(lm['paused'])} · tracking-gap {len(lm['tracking_gap'])}")
     for r in (lm["existing"][:6] + lm["new"][:4]):
         print(f"    {r['ce_name'][:24]:24s} {r['new_existing'][:3]:3s} {r['label']:10s} "
               f"{'+'.join(r['criteria']):9s} Δ${r['sort_delta']:>6} · CM2 ${r['cm2_wk']:>6} · "
