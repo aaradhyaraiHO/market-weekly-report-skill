@@ -57,9 +57,14 @@ MARKET_META = {
     "east_asia": ("east-asia-jpn-sk-hk", "East Asia (JPN/SK/HK)", "🇯🇵", "East Asia"),
     "sea": ("sea-sin-tha", "SEA (SIN+THA)", "🇸🇬", "Southeast Asia"),
     "oceania": ("oceania", "Oceania", "🇦🇺", "Oceania"),
+    # Long-tail markets (2026-08-04)
+    "benelux": ("benelux", "Benelux", "🇧🇪", "Western Europe"),
+    "nordics": ("nordics", "Nordics", "🇸🇪", "Northern Europe"),
+    "south_america": ("south-america", "South America", "🇧🇷", "Americas"),
+    "mexico_central_america": ("mexico-central-america", "Mexico & Central America", "🇲🇽", "Americas"),
 }
-REGION_ORDER = ["Portfolio", "Americas", "Southern Europe", "Western Europe", "British Isles",
-                "Central & SE Europe", "Middle East", "East Asia", "Southeast Asia", "Oceania"]
+REGION_ORDER = ["Portfolio", "Americas", "Southern Europe", "Western Europe", "Northern Europe",
+                "British Isles", "Central & SE Europe", "Middle East", "East Asia", "Southeast Asia", "Oceania"]
 
 
 def _money(v):

@@ -60,6 +60,13 @@ MARKETS = {
     "gcc": "GCC",
     "north_africa": "North Africa",
     "rest_of_mea": "Rest of MEA",
+    # Long-tail markets added 2026-08-04. Benelux/Nordics/South America have no dedicated
+    # channel — they alert into the shared regional GM channels (UK / CSEE / Iberia); Mexico
+    # has its own #mkt-mexico. business_market strings verified against combined_entity_stats.
+    "benelux": "Benelux",
+    "nordics": "Nordics",
+    "south_america": "South America",
+    "mexico_central_america": "Mexico & Central America",
 }
 
 # --------------------------------------------------------------------------- #
