@@ -358,6 +358,7 @@ def main(argv=None):
     if args.market == "all":
         try:
             import export_perf_sheet as eps
+            camp_cat = eps._fetch_campaign_categories(args.week)   # campaign-level Category (one query)
             rows = []
             for slug in config.MARKETS:
                 sp = CACHE_DIR / f"snapshot_{slug}_{args.week}.json"
@@ -365,7 +366,7 @@ def main(argv=None):
                     continue
                 snap = json.loads(sp.read_text())
                 gm = eps._fetch_gm_actions(slug, args.week)
-                rows += eps.rows_for_snapshot(snap, gm)
+                rows += eps.rows_for_snapshot(snap, gm, camp_cat)
             if rows:
                 ok, tab, txt = eps.write_weekly_tab(rows, args.week)
                 print(f"  {'✓' if ok else '✗'} perf sheet: {len(rows)} rows → tab '{tab}'"

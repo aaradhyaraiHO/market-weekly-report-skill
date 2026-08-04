@@ -21,7 +21,7 @@ Usage:
     python3 export_perf_sheet.py --week YYYY-MM-DD --dry-run               # all markets in .cache
 """
 from __future__ import annotations
-import argparse, glob, json, os, subprocess, sys
+import argparse, datetime as dt, glob, json, os, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -67,12 +67,15 @@ def _week_cells(w: dict | None) -> list:
             cm2 if cm2 is not None else ""]
 
 
-def rows_for_snapshot(snap: dict, gm_actions: dict[str, dict]) -> list[list]:
+def rows_for_snapshot(snap: dict, gm_actions: dict[str, dict], camp_cat: dict | None = None) -> list[list]:
     meta = snap.get("meta", {})
     market = meta.get("market", "")
+    camp_cat = camp_cat or {}
     lm = (((snap.get("buckets_final") or {}).get("defend") or {}).get("losing_money") or {})
     flagged = (lm.get("existing") or []) + (lm.get("new") or [])
-    # category lookup from the CE list (losing_money rows don't carry it)
+    # CE-level category from the CE list — used only as a FALLBACK now. The Category column is the
+    # CAMPAIGN-level category (ads_campaign_stats.campaign_category, via camp_cat) per Aditya
+    # 2026-08-04: the campaign-stats dashboard's category filter, not the combined-entity category.
     cat = {}
     for c in snap.get("ces", []) or []:
         cat[str(c.get("ce_id"))] = ((c.get("metadata") or {}).get("category") or "")
@@ -92,7 +95,7 @@ def rows_for_snapshot(snap: dict, gm_actions: dict[str, dict]) -> list[list]:
         clk_chg = round(clk0 / clk1 - 1, 4) if (clk0 and clk1) else ""
         gm = gm_actions.get(cid, {})
         gm_act = GM_ACT_LBL.get(gm.get("status", ""), gm.get("status", ""))
-        out.append([cid, r.get("ce_name", ""), cat.get(cid, ""), market]
+        out.append([cid, r.get("ce_name", ""), camp_cat.get(cid) or cat.get(cid, ""), market]
                    + blocks
                    + [r.get("new_existing", ""), r.get("tier", ""), neg2, roi_chg, clk_chg,
                       gm_act, gm.get("note", ""),
@@ -128,6 +131,41 @@ def _fetch_gm_actions(market_slug: str, week: str, attempts: int = 4) -> dict[st
     raise RuntimeError(f"GM action fetch failed for {market_slug} {week} after {attempts} tries: {last}")
 
 
+def _fetch_campaign_categories(week: str) -> dict[str, str]:
+    """Dominant CAMPAIGN-level category per CE for the report week, from ads_campaign_stats
+    (`campaign_category` — the 'campaign stats' dashboard's category filter, per Aditya
+    2026-08-04). One query, all markets; category weighted by clicks (the campaign a CID spends
+    the most on). Best-effort: on failure returns {}, and the caller falls back to the CE-level
+    category so the export never breaks. Keyed by str(ce_id)."""
+    try:
+        import bq  # google.cloud.bigquery via ADC — same client the snapshot build uses
+        w0 = dt.date.fromisoformat(week)
+        w_end = w0 + dt.timedelta(days=6)          # Sun-start report week → Sat end
+        sql = f"""
+        WITH c AS (
+          SELECT campaign_target_combined_entity_id AS ce_id,
+                 campaign_category,
+                 SUM(count_clicks) AS clicks
+          FROM {config.ADS_STATS}
+          WHERE report_date BETWEEN @start AND @end
+            AND ad_platform IN ('Google Ads','Microsoft Ads')
+            AND campaign_advertising_channel_type = 'SEARCH'
+            AND campaign_category IS NOT NULL
+          GROUP BY 1, 2
+        )
+        SELECT ce_id, campaign_category
+        FROM c
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY ce_id ORDER BY clicks DESC) = 1
+        """
+        df = bq.query_df(sql, "campaign_category",
+                         {"start": config.iso(w0), "end": config.iso(w_end)})
+        return {str(r["ce_id"]): r["campaign_category"] for _, r in df.iterrows()
+                if r.get("campaign_category")}
+    except Exception as e:
+        print(f"  ! campaign_category fetch failed ({e}) — falling back to CE-level category")
+        return {}
+
+
 def _gws(sub, params, body=None):
     """Run a gws sheets call. Returns (ok, text)."""
     cmd = ["gws", "sheets"] + sub + ["--params", json.dumps(params), "--format", "json"]
@@ -135,6 +173,22 @@ def _gws(sub, params, body=None):
         cmd += ["--json", json.dumps(body)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     return r.returncode == 0, (r.stdout or r.stderr).strip()
+
+
+def _tab_sheet_id(spreadsheet_id, tab):
+    """Numeric sheetId for a tab title (needed for grid-range requests). None if not found."""
+    ok, txt = _gws(["spreadsheets", "get"],
+                   {"spreadsheetId": spreadsheet_id, "fields": "sheets(properties(sheetId,title))"})
+    if not ok:
+        return None
+    try:
+        txt = txt[txt.index("{"):]                 # strip the gws 'Using keyring backend' preamble
+        for sh in json.loads(txt).get("sheets", []):
+            if sh["properties"]["title"] == tab:
+                return sh["properties"]["sheetId"]
+    except Exception:
+        return None
+    return None
 
 
 def _on_main():
@@ -154,6 +208,16 @@ def write_weekly_tab(rows, week, spreadsheet_id=PERF_SHEET_ID):
     # 1. ensure the tab exists (addSheet; a duplicate-title error just means it's already there)
     _gws(["spreadsheets", "batchUpdate"], {"spreadsheetId": spreadsheet_id},
          {"requests": [{"addSheet": {"properties": {"title": tab}}}]})
+    # 1b. unmerge the header row. The export owns a FLAT per-column header; if someone merged
+    # header cells in the sheet (e.g. grouped the identity + weekly blocks), a flat write only
+    # fills each merge's top-left and the sub-labels (CID Name / Category / Market / per-metric)
+    # go blank on every run. Unmerge first so all columns always carry their label. Best-effort
+    # (no-op / ignored if there are no merges). Grouped headers, if wanted, need a 2-row design.
+    sid = _tab_sheet_id(spreadsheet_id, tab)
+    if sid is not None:
+        _gws(["spreadsheets", "batchUpdate"], {"spreadsheetId": spreadsheet_id},
+             {"requests": [{"unmergeCells": {"range": {"sheetId": sid, "startRowIndex": 0,
+               "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(HEADER)}}}]})
     # 2. full header row (A1:{last}1) — all 46 columns incl. the perf titles
     _gws(["spreadsheets", "values", "update"],
          {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!A1:{last}1", "valueInputOption": "USER_ENTERED"},
@@ -180,6 +244,7 @@ def main():
     if not paths:
         raise SystemExit("no snapshot(s) found")
 
+    camp_cat = _fetch_campaign_categories(args.week)   # campaign-level Category (all markets, one query)
     all_rows = []
     for p in paths:
         snap = json.load(open(p))
@@ -187,7 +252,7 @@ def main():
         if meta.get("market_slug") == "headout":
             continue
         gm = _fetch_gm_actions(meta.get("market_slug", ""), args.week)
-        all_rows += rows_for_snapshot(snap, gm)
+        all_rows += rows_for_snapshot(snap, gm, camp_cat)
 
     if args.dry_run:
         print(f"{len(all_rows)} flagged rows · {len(HEADER)} columns (A..{_colname(len(HEADER)-1)})\n")
