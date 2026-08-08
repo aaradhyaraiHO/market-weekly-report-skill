@@ -379,6 +379,15 @@ def main(argv=None):
         except Exception as e:
             print(f"  ! perf-sheet export skipped: {e}")
 
+        # Complete UNGATED Losing-Money view → its own "LM full (no gate)" tab in the same sheet.
+        # Same engine at spend_gate=0 so perf's "every losing CE is listed" check always passes.
+        # Separate tab — never touches the `w/c <week>` action tab. Best-effort, main-only.
+        try:
+            import export_full_lm as efl
+            efl.write_tab(args.week, efl.build_rows(args.week, str(CACHE_DIR)))
+        except Exception as e:
+            print(f"  ! full-LM export skipped: {e}")
+
 
 if __name__ == "__main__":
     main()
