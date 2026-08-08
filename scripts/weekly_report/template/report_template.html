@@ -1816,7 +1816,7 @@ function renderBuckets(M){
   _bktIdCnt={};
   const BF=M.buckets_final||{};
   const D=BF.defend||{}, C=BF.compound||{}, L=BF.lifecycle||{};
-  const LM=D.losing_money||{}, lmExist=LM.existing||[], lmNew=LM.new||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{}, subth=LM.subthreshold||{};
+  const LM=D.losing_money||{}, lmExist=LM.existing||[], lmNew=LM.new||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{};
   const seasDn=D.seasonality_down||[], seasUp=C.seasonality_up||[], scale=C.scale_up||[];
   const newCes=L.new_ces||[], iters=L.iteration||[];
   const ceBy={}; (M.ces||[]).forEach(c=>ceBy[c.ce_id]=c);
@@ -1911,6 +1911,7 @@ function renderBuckets(M){
     if(c.indexOf('C2')>=0) seg.push('<div class="lmd gn" style="font-weight:800">WoW '+fmtMoneyDelta(r.delta_wow)+'</div>');
     if(c.indexOf('C3')>=0) seg.push('<div class="lmd gn" style="font-weight:800">vs 3wk avg '+fmtMoneyDelta(r.delta_3w)+'</div>');
     if(c.indexOf('C4')>=0) seg.push('<div class="lmd gn" style="font-weight:800">90d '+fmtMoneyDelta(r.cm2_90d)+'</div>');
+    if(c.indexOf('C5')>=0) seg.push('<div class="lmd gn" style="font-weight:800">W0 loss '+fmtMoneyDelta(r.cm2_wk)+'</div>');
     return seg.join('')||'—'; };
   const lmMetricCells=(r,list)=>list.map(m=>{
     const wv=r.weeks||[], a=(wv[0]||{})[m.k], b=(wv[1]||{})[m.k];
@@ -1967,7 +1968,7 @@ function renderBuckets(M){
     '<td class="num">'+(r.launch_date?esc(r.launch_date)+((r.days_since_launch!=null)?'<div class="lmd mut">'+fmtInt(r.days_since_launch)+'d ago</div>':''):'—')+'</td>';
   const lmHeadCore='<th class="stick">Combined Entity</th>'+mktTh+
     '<th title="Status label — a tag, not a grouping; the sort is by CM2 drop regardless of label.">Status</th>'+
-    '<th class="num" title="On what basis the CE qualified, with the qualifying value. 0 conv = spend with zero conversions this week · WoW = CM2 drop vs last week · vs 3wk avg = drop vs the W-1..W-3 average · 90d = cumulative CM2 loss (New CEs only). Thresholds: drop ≥ $500 flags always · $200–500 flags only when W0 Paid ROI &lt; 140%. Sorted by the worst fired drop.">Criteria <span class="lm-hb">ⓘ</span></th>';
+    '<th class="num" title="On what basis the CE qualified, with the qualifying value. W0 loss = CM2 negative this week (any amount — the base check) · 0 conv = spend with zero conversions this week · WoW = CM2 drop vs last week · vs 3wk avg = drop vs the W-1..W-3 average · 90d = cumulative CM2 loss (New CEs only). Drop thresholds: ≥ $500 flags always · $200–500 only when W0 Paid ROI &lt; 140%. Sorted by the worst fired drop.">Criteria <span class="lm-hb">ⓘ</span></th>';
   const lmHeadTail='<th title="What drove the CM2 drop — that metric&rsquo;s column is bolded. From the exact CM2 decomposition vs the W-1..W-3 baseline: Clicks · CVR · CPC · CM1-per-conversion (value).">Driver <span class="lm-hb">ⓘ</span></th>'+
     '<th title="Your call. Actions save immediately; a missing comment shows a warning until the why is added. Growth reviews Tue/Wed; finalized Thursday.">Action</th>';
   const lmHeadNewX='<th class="num" title="Current target ROAS as of report run (spend-weighted across the CE&rsquo;s Search campaigns); L4W average beneath.">tROAS now</th>'+
@@ -1984,7 +1985,7 @@ function renderBuckets(M){
       lmMetricCells(r,LM_METRICS_FUNNEL)+
       lmDriverCell(r)+
       '<td>'+lmAction(r)+'</td></tr>';
-  const lmHowto='<div class="lm-howto"><b>How to read:</b> a CE is flagged when any <b>Criteria</b> fires — <b>0 conv</b> (spend, zero conversions this week) · <b>WoW</b> / <b>vs 3wk avg</b> (CM2 dropped ≥ $500; or ≥ $200 with W0 ROI &lt; 140%) · <b>90d</b> (New CEs: ≥ $500 cumulative loss). Sorted by the worst fired drop — the Status label is a tag, not the order. Each metric cell shows <b>w0 on top</b> (with its WoW change), then <b>w1 · w2 · w3</b> beneath, newest first (hover a row for its week date; the toggle above hides them). The <b>bolded metric</b> is the driver of the drop. Status carries a triage chip: <b>new this wk</b> · <b>Nth wk · last wk ✓</b> = flagged N weeks running, last week has an action on record (shown in the Action cell, hover for the comment) · <b>Nth wk · no action on record</b> = flagged N weeks running and last week has nothing recorded in the report — review these first and record what was (or wasn&rsquo;t) done. <b>Review guideline:</b> read delivered ROI against <b>tROAS</b> first — if the campaign is running below its target, the first intervention is correcting ROAS (~10% step); <b>negative seasonality</b> applies only when ROAS is already running as expected. Every action <b>saves immediately</b>; a missing comment shows a <b>⚠ warning until the why is added</b>.</div>';
+  const lmHowto='<div class="lm-howto"><b>How to read:</b> a CE is flagged when any <b>Criteria</b> fires — <b>W0 loss</b> (CM2 negative this week, any amount — the base check) · <b>0 conv</b> (spend, zero conversions this week) · <b>WoW</b> / <b>vs 3wk avg</b> (CM2 dropped ≥ $500; or ≥ $200 with W0 ROI &lt; 140%) · <b>90d</b> (New CEs: ≥ $500 cumulative loss). Sorted by the worst fired drop — the Status label is a tag, not the order. Each metric cell shows <b>w0 on top</b> (with its WoW change), then <b>w1 · w2 · w3</b> beneath, newest first (hover a row for its week date; the toggle above hides them). The <b>bolded metric</b> is the driver of the drop. Status carries a triage chip: <b>new this wk</b> · <b>Nth wk · last wk ✓</b> = flagged N weeks running, last week has an action on record (shown in the Action cell, hover for the comment) · <b>Nth wk · no action on record</b> = flagged N weeks running and last week has nothing recorded in the report — review these first and record what was (or wasn&rsquo;t) done. <b>Review guideline:</b> read delivered ROI against <b>tROAS</b> first — if the campaign is running below its target, the first intervention is correcting ROAS (~10% step); <b>negative seasonality</b> applies only when ROAS is already running as expected. Every action <b>saves immediately</b>; a missing comment shows a <b>⚠ warning until the why is added</b>.</div>';
   const lmLegend='<div class="lm-legend"><span class="chip red">Bleeding</span>W0 CM2 &lt; 0 &nbsp;·&nbsp; <span class="chip amber">Eroding</span>W0 CM2 ≥ 0 but dropping &nbsp;·&nbsp; <span class="chip green">Recovering</span>loss ≥ halved vs W-1 &nbsp;·&nbsp; <span class="chip red">Full waste</span>spend, 0 conversions &nbsp;·&nbsp; Google-Search Paid only (Bing excluded).</div>';
   const lmSubhead=(t,n,sub)=>'<div style="margin:16px 0 6px;font-family:var(--sans);font-size:13px;font-weight:800;color:var(--ink-head)">'+t+' <span style="color:var(--ink-faint);font-weight:600">('+n+')</span>'+(sub?' <span style="color:var(--ink-faint);font-weight:500;font-size:11.5px">— '+sub+'</span>':'')+'</div>';
   let lmBody;
@@ -2005,8 +2006,7 @@ function renderBuckets(M){
   let lmFn='';
   if(paused.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--ink-soft)"><b>⏸ '+paused.length+' paused this week (was funded 4w):</b> '+paused.map(r=>esc(r.ce_name)+' ('+fmtMoney(r.spend_4w)+' 4w, '+fmtInt(r.orders_4w)+' orders)').join(' · ')+' — spend stopped, ROI reads null. Confirm the pause was intentional.</div>'; }
   if(trackingGap.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--amber)"><b>⚠️ '+trackingGap.length+' null-ROI — feed gap (verify tracking):</b> '+trackingGap.map(r=>esc(r.ce_name)+' ('+fmtInt(r.orders_4w)+' orders, '+fmtMoney(r.spend_4w)+' 4w)').join(' · ')+' — spending &amp; converting, but current-week CM1 didn&rsquo;t populate. NOT waste.</div>'; }
-  if(subth.count){ const sn=esc((subth.names||[]).join(' · ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+sn+'"><b>· '+subth.count+' funded CEs still CM2-negative this week, below the flag thresholds:</b> <span class="neg">'+fmtMoneyDelta(subth.cm2_wk)+'/wk</span> — no criterion fired (drop &lt; $200, or $200&ndash;500 at ROI ≥ 140%) <span style="color:var(--ink-faint)">(hover for names + $)</span></div>'; }
-  if(burn.count){ const bn=esc((burn.names||[]).join(', ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+bn+'">+ '+burn.count+' sub-$1k CEs bleeding <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the individual gate <span style="color:var(--ink-faint)">(hover for names)</span></div>'; }
+  if(burn.count){ const bn=esc((burn.names||[]).join(' · ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+bn+'">+ '+burn.count+' sub-$1k/4wk CEs losing <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the report&rsquo;s materiality gate — full ungated list in the Weekly Flagged sheet <span style="color:var(--ink-faint)">(hover for names + $)</span></div>'; }
 
   // Fluctuations — clean value(Δ) layout, dominant driver inline (full 5 on hover), dual TY/LY spark
   // RPC decomposed → CVR·AOV·Completion·Take-rate (RPC = their product). Root driver highlighted.
@@ -2131,9 +2131,9 @@ function renderBuckets(M){
 
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
-    _bucketBlock('🛡️','Losing Money','Four flag criteria on &gt; $1k spend (4wk) — Existing &amp; New tables, biggest CM2 drop first.', lmBody+lmFn, {
+    _bucketBlock('🛡️','Losing Money','Five flag criteria on &gt; $1k spend (4wk) — Existing &amp; New tables, biggest CM2 drop first; sub-$1k losers in the footnote + sheet.', lmBody+lmFn, {
       stat:lmCount+' CEs', val:fmtMoneyDelta(lmBleed)+'/wk',
-      fullSub:'Flagged when any criterion fires: full waste (spend, 0 conversions this week) · WoW CM2 drop · drop vs the 3-week average (≥ $500 always; $200–500 only when W0 ROI &lt; 140%) · New CEs also on ≥ $500 cumulative 90-day loss. Existing and New CEs in separate tables, each sorted by the CM2 drop regardless of label. Google-Search Paid basis.'})+
+      fullSub:'Flagged when any criterion fires: W0 CM2 negative (any amount — the base check) · full waste (spend, 0 conversions this week) · WoW CM2 drop · drop vs the 3-week average (≥ $500 always; $200–500 only when W0 ROI &lt; 140%) · New CEs also on ≥ $500 cumulative 90-day loss. The report shows CEs above $1k Google spend / 4wk; sub-$1k losers are aggregated in the footnote and listed in full in the Weekly Flagged sheet. Existing and New CEs in separate tables, each sorted by the CM2 drop regardless of label. Google-Search Paid basis.'})+
     _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs 28-day baseline. Google Search only.', seasDnBody, {
       stat:sdCount+' flagged', detail:sdDrivers?('root driver: '+sdDrivers):'',
       fullSub:'RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+
