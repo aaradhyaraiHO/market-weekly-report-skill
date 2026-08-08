@@ -12,8 +12,12 @@ Stress-tested NA+IT+OC → 0 anomalies.
 from __future__ import annotations
 
 # ---- locked constants ----
-# (old losing-money gates BLEED_ROI / BLEED_SPEND4W removed 2026-08-04 — the 5 criteria are
-#  the only filter; see losing_money docstring)
+# Losing Money materiality gate for the REPORT view (2026-08-08 Aaradhya): CEs under $1k
+# Google-Search spend / 4wk aggregate into the burn-line footnote instead of rows. The
+# COMPLETE ungated list ships to the Weekly Flagged sheet via export_full_lm (spend_gate=0)
+# so perf's verification always has full coverage. Pass spend_gate=0 to losing_money for
+# the ungated view. (BLEED_ROI removed — C5 supersedes the old ROI<100 bleeder rule.)
+LM_SPEND_GATE = 1000.0
 # Losing Money v2 flag thresholds (criteria locked 2026-07-30 meeting; see losing_money docstring)
 LM_DELTA_HARD = 500.0          # CM2 drop ($) that flags unconditionally (C2 WoW · C3 vs 3wk avg)
 LM_DELTA_SOFT = 200.0          # CM2 drop ($) that flags only when W0 Paid ROI < LM_ROI_GATE
@@ -155,7 +159,7 @@ def _lm_fired(wkseq, ne, SPK, CMK, RK, CVK):
     return fired, d_wow, d_3w, cm2_90d, c1
 
 
-def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
+def losing_money(ces, troas_now=None, launch=None, prior_pp=None, spend_gate=LM_SPEND_GATE):
     """DEFEND · Losing Money v2 — four flagging criteria (locked 2026-07-30 meeting),
     evaluated per funded CE (> $1k Google-search spend / 4wk). Existing and New CEs
     flag into SEPARATE tables. New = never Pro+ in the prior 4 calendar quarters
@@ -190,14 +194,18 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
     rows add launch_date / days_since_launch (`launch` map), troas_now (target ROAS
     as of run date) and cm2_90d. tROAS values from the `troas_now` map.
 
-    Scope (2026-08-04, "criteria only"): every CE spending this week is evaluated — the
-    old $1k/4wk funded gate, burn line, subthreshold footnote and history minimum are
-    all REMOVED. Two data-validity guards remain (not criteria): paused (spend=0 this
-    week after recent spend — a no-spend week can't "lose") and tracking_gap (CM1
-    missing from the feed — CM2 unknowable). Both are verify-only footnotes.
+    Scope (2026-08-08): every CE spending this week is evaluated by the 5 criteria; the
+    REPORT view applies a $1k/4wk materiality gate (`spend_gate`) — sub-gate CEs that
+    are losing this week aggregate into the burn_line footnote instead of rows. The
+    COMPLETE ungated view (spend_gate=0) ships to the Weekly Flagged sheet via
+    export_full_lm so perf verification always sees full coverage. Two data-validity
+    guards (not criteria): paused (spend=0 after recent spend) and tracking_gap (CM1
+    missing from the feed — CM2 unknowable). No history minimum; no subthreshold
+    footnote (C5 makes it empty by definition).
     """
     troas_now = troas_now or {}; launch = launch or {}
     existing, new_rows, paused, tracking_gap = [], [], [], []
+    burn = {"count": 0, "bleed": 0.0, "items": []}   # sub-gate CEs losing this week (report view)
     def _route(ce):
         # New = never Pro+ in the prior 4 calendar quarters (combined_entity_stats
         # quarterly bands via _prior_proplus_map) — 2026-08-03 decision. Replaces the
@@ -235,6 +243,14 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
             if sp4 > 0: paused.append(ident)              # spent recently, stopped this week
             continue
         cm2s = [((w.get(CMK) or 0) - (w.get(SPK) or 0)) for w in wk]   # Google-search CM2
+        # $1k/4wk materiality gate — REPORT VIEW ONLY (2026-08-08): sub-gate CEs that are
+        # losing this week aggregate into the burn line; the ungated complete list is the
+        # sheet export's job (spend_gate=0). Criteria semantics are unchanged either way.
+        if spend_gate and sp4 <= spend_gate:
+            if cm2s[-1] < 0:
+                burn["count"] += 1; burn["bleed"] += cm2s[-1]
+                burn["items"].append((ce["ce_name"], cm2s[-1]))
+            continue
         cm2_w0 = cm2s[-1]; conv_w0 = w0.get(CVK)
         fired, d_wow, d_3w, cm2_90d, c1 = _lm_fired(wk, ne, SPK, CMK, RK, CVK)
         # tracking gap = CM1 genuinely missing (feed didn't populate) — NOT tiny-spend CEs
@@ -340,8 +356,10 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
     existing.sort(key=lambda r: r["sort_delta"])          # biggest drop first, label-agnostic
     new_rows.sort(key=lambda r: r["sort_delta"])
     paused.sort(key=lambda r: -r["spend_4w"]); tracking_gap.sort(key=lambda r: -r["spend_4w"])
+    burn_names = [f"{n} ({round(v)})" for n, v in sorted(burn["items"], key=lambda x: x[1])]
     return {"existing": existing, "new": new_rows,
-            "paused": paused, "tracking_gap": tracking_gap}
+            "paused": paused, "tracking_gap": tracking_gap,
+            "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
 
 
 def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):

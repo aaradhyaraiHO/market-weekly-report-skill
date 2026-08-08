@@ -1805,7 +1805,7 @@ function renderBuckets(M){
   _bktIdCnt={};
   const BF=M.buckets_final||{};
   const D=BF.defend||{}, C=BF.compound||{}, L=BF.lifecycle||{};
-  const LM=D.losing_money||{}, lmExist=LM.existing||[], lmNew=LM.new||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[];
+  const LM=D.losing_money||{}, lmExist=LM.existing||[], lmNew=LM.new||[], paused=LM.paused||[], trackingGap=LM.tracking_gap||[], burn=LM.burn_line||{};
   const seasDn=D.seasonality_down||[], seasUp=C.seasonality_up||[], scale=C.scale_up||[];
   const newCes=L.new_ces||[], iters=L.iteration||[];
   const ceBy={}; (M.ces||[]).forEach(c=>ceBy[c.ce_id]=c);
@@ -1995,6 +1995,7 @@ function renderBuckets(M){
   let lmFn='';
   if(paused.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--ink-soft)"><b>⏸ '+paused.length+' paused this week (was funded 4w):</b> '+paused.map(r=>esc(r.ce_name)+' ('+fmtMoney(r.spend_4w)+' 4w, '+fmtInt(r.orders_4w)+' orders)').join(' · ')+' — spend stopped, ROI reads null. Confirm the pause was intentional.</div>'; }
   if(trackingGap.length){ lmFn+='<div class="sub" style="margin-top:6px;color:var(--amber)"><b>⚠️ '+trackingGap.length+' null-ROI — feed gap (verify tracking):</b> '+trackingGap.map(r=>esc(r.ce_name)+' ('+fmtInt(r.orders_4w)+' orders, '+fmtMoney(r.spend_4w)+' 4w)').join(' · ')+' — spending &amp; converting, but current-week CM1 didn&rsquo;t populate. NOT waste.</div>'; }
+  if(burn.count){ const bn=esc((burn.names||[]).join(' · ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+bn+'">+ '+burn.count+' sub-$1k/4wk CEs losing <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the report&rsquo;s materiality gate — full ungated list in the Weekly Flagged sheet <span style="color:var(--ink-faint)">(hover for names + $)</span></div>'; }
 
   // Fluctuations — clean value(Δ) layout, dominant driver inline (full 5 on hover), dual TY/LY spark
   // RPC decomposed → CVR·AOV·Completion·Take-rate (RPC = their product). Root driver highlighted.
@@ -2119,9 +2120,9 @@ function renderBuckets(M){
 
   return '<section id="s4"><div class="sec-head"><span class="sec-num">4</span><h2>Diagnostic buckets</h2>'+
       '<span class="sub">Defend / Compound / Lifecycle</span></div>'+
-    _bucketBlock('🛡️','Losing Money','Five flag criteria, every spending CE evaluated — Existing &amp; New tables, biggest CM2 drop first.', lmBody+lmFn, {
+    _bucketBlock('🛡️','Losing Money','Five flag criteria on &gt; $1k spend (4wk) — Existing &amp; New tables, biggest CM2 drop first; sub-$1k losers in the footnote + sheet.', lmBody+lmFn, {
       stat:lmCount+' CEs', val:fmtMoneyDelta(lmBleed)+'/wk',
-      fullSub:'Flagged when any criterion fires: W0 CM2 negative (any amount — the base check) · full waste (spend, 0 conversions this week) · WoW CM2 drop · drop vs the 3-week average (≥ $500 always; $200–500 only when W0 ROI &lt; 140%) · New CEs also on ≥ $500 cumulative 90-day loss. Every CE spending this week is evaluated — no spend floor. Existing and New CEs in separate tables, each sorted by the CM2 drop regardless of label. Google-Search Paid basis.'})+
+      fullSub:'Flagged when any criterion fires: W0 CM2 negative (any amount — the base check) · full waste (spend, 0 conversions this week) · WoW CM2 drop · drop vs the 3-week average (≥ $500 always; $200–500 only when W0 ROI &lt; 140%) · New CEs also on ≥ $500 cumulative 90-day loss. The report shows CEs above $1k Google spend / 4wk; sub-$1k losers are aggregated in the footnote and listed in full in the Weekly Flagged sheet. Existing and New CEs in separate tables, each sorted by the CM2 drop regardless of label. Google-Search Paid basis.'})+
     _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs 28-day baseline. Google Search only.', seasDnBody, {
       stat:sdCount+' flagged', detail:sdDrivers?('root driver: '+sdDrivers):'',
       fullSub:'RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+
