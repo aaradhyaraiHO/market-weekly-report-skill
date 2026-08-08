@@ -711,6 +711,39 @@ function actionPrevPull(){
       }); })
     .catch(()=>{}))).then(()=>repaintBuckets());   // prev-week chips landed — repaint LM table
 }
+
+// ── CE-drawer Action Log — multi-week GM action+comment timeline. Fetches the last ACTLOG_WEEKS
+// week-starts' losing_money actions → actionsHist[slug][ceId][week]={status,note,owner}, merged
+// with the all-weeks notes (ceNotes) in actionLogFor(). Read-only; store is source of truth.
+// The Perf row is a placeholder until perf finals live in the store (Phase 2).
+const GM_ACT_LABEL={skip:'Skip',roas_change:'tROAS change',negative_seasonality:'-ve Seasonality',
+  pause_review:'Pause & Review',pause:'Pause',scale_down:'Scale down',no_change:'No change',
+  troas_new_to_existing:'tROAS: New→Existing',to_review:'To be reviewed'};
+const ACTLOG_WEEKS=6;
+let actionsHist={};
+function actionHistPull(){
+  if(!SYNC_OK) return Promise.resolve();
+  const M=MARKETS[mi], s=M.meta.market_slug, w=curWeek();
+  if(!w) return Promise.resolve();
+  const w0=new Date(w+'T00:00:00Z'); const weeks=[];
+  for(let i=0;i<ACTLOG_WEEKS;i++){ const x=new Date(w0); x.setUTCDate(x.getUTCDate()-7*i); weeks.push(x.toISOString().slice(0,10)); }
+  actionsHist[s]={};
+  return Promise.all(weeks.map(wk=>fetch(NOTES_URL+'?action=action_list&market='+encodeURIComponent(s)+'&week='+encodeURIComponent(wk),{redirect:'follow'})
+    .then(r=>r.json())
+    .then(data=>{ (data.actions||[]).forEach(a=>{ if(!a.ce_id||a.bucket!=='losing_money') return;
+        const id=String(a.ce_id); (actionsHist[s][id]=actionsHist[s][id]||{})[wk]={status:a.status||'',note:a.note||'',owner:a.owner||''};
+      }); })
+    .catch(()=>{})));
+}
+function actionLogFor(ceId){
+  const s=slugKey(), id=String(ceId), byWk={};
+  ceNotes(ceId).forEach(n=>{ if(n.week_start){ (byWk[n.week_start]=byWk[n.week_start]||{}).note=n.note||''; if(n.author) byWk[n.week_start].owner=byWk[n.week_start].owner||n.author; } });
+  const acts=(actionsHist[s]||{})[id]||{};
+  Object.keys(acts).forEach(wk=>{ const b=byWk[wk]=byWk[wk]||{}; b.status=acts[wk].status; if(acts[wk].note&&!b.note) b.note=acts[wk].note; if(acts[wk].owner) b.owner=acts[wk].owner; });
+  return Object.keys(byWk).sort().reverse().slice(0,ACTLOG_WEEKS)
+    .map(wk=>({week:wk,status:byWk[wk].status||'',note:byWk[wk].note||'',owner:byWk[wk].owner||''}))
+    .filter(e=>e.status||e.note);
+}
 function wrGetAction(ceId){ return getAction('losing_money',ceId).status||''; }
 function wrGetFull(ceId){ return getAction('losing_money',ceId); }
 // visible "comment required" warning under the note box — created on demand, toggled
@@ -2736,6 +2769,22 @@ function openDrawer(ceId){
     '</div>'
   ) : '';
 
+  // Action log — per-week timeline of GM action + comment (last ACTLOG_WEEKS wks), newest first.
+  // Perf row is a placeholder until perf finals sync to the store (Phase 2).
+  const alog=actionLogFor(ceId);
+  const actionLogHtml = alog.length ? (
+    '<div class="dr-sec-t" style="margin-top:20px">Action log <span style="color:var(--ink-faint);font-weight:600;text-transform:none;letter-spacing:0">· last '+alog.length+' wk</span></div>'+
+    '<div class="hist-list">'+
+      alog.map(e=>{
+        const act=e.status?'<span class="chip" style="background:#f4ecff;color:var(--purps);font-weight:700;text-transform:none;letter-spacing:0">'+esc(GM_ACT_LABEL[e.status]||e.status)+'</span> ':'';
+        return '<div class="hist-entry"><div class="hist-when">'+esc(e.week)+(e.owner?' · '+esc(e.owner):'')+'</div>'+
+          '<div class="hist-text"><b>GM:</b> '+(act||'— ')+(e.note?esc(e.note):'')+'</div>'+
+          '<div class="hist-text" style="color:var(--ink-faint)"><b>Perf:</b> — <span title="Perf finals live in the Weekly Flagged sheet; they appear here once synced to the store (Phase 2)">(Weekly Flagged sheet)</span></div>'+
+        '</div>';
+      }).join('')+
+    '</div>'
+  ) : '';
+
   const postBtnHtml = ch ? (
     hasThread
       ? '<a class="btn btn-thread" id="postBtn" href="'+esc(cur.slack_permalink||'#')+'" target="_blank">View thread in #'+esc(ch.name)+' <span class="arr">→</span></a>'
@@ -2774,8 +2823,8 @@ function openDrawer(ceId){
           '<span class="char-count" id="charCount"></span>'+
         '</div>'+
         '<div class="cmt-meta" style="margin-top:8px"><span id="cmtSaved" class="cmt-saved">'+esc(curWhen)+'</span></div>'+
-        histHtml+
       '</div>'+
+      actionLogHtml+
     '</div>';
 
   // Show drawer immediately — event wiring failures must not block visibility
@@ -2979,6 +3028,7 @@ function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   syncPull();   // load this market's notes (cache first, then sheet)
   actionSyncPull();
   actionPrevPull();
+  actionHistPull();   // multi-week GM action history for the drawer Action Log
 }
 
 // delegated events
@@ -3135,6 +3185,7 @@ wireJumpnav();
 syncPull();
 actionSyncPull();
 actionPrevPull();
+actionHistPull();   // multi-week GM action history for the drawer Action Log
 </script>
 </body>
 </html>
