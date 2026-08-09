@@ -196,38 +196,90 @@ def _on_main():
     return r.stdout.strip() == "main"
 
 
+# Perf's three columns (export never authors their VALUES — only re-homes them by CID).
+PERF_COLS = {"Perf action": 43, "Perf comment": 44, "Final action": 45}
+
+
+def _read_tab(spreadsheet_id, tab):
+    """Current values of a tab (A1:BZ…), or [] if it doesn't exist / read fails."""
+    ok, txt = _gws(["spreadsheets", "values", "get"],
+                   {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!A1:BZ3000"})
+    if not ok:
+        return []
+    try:
+        return json.loads(txt[txt.index("{"):]).get("values", [])
+    except Exception:
+        return []
+
+
+def _perf_by_cid(tab_rows):
+    """From a tab's values → ({cid: (perf_action, perf_comment, final_action)}, [cid order top→bottom]).
+    Perf columns are located BY HEADER NAME (first match, so the real cols win over any duplicate
+    'Perf comment'/'Final action' columns), falling back to the export's fixed positions. This is the
+    key that lets perf entries follow their CE regardless of row order."""
+    if not tab_rows:
+        return {}, []
+    hdr = [str(c).strip() for c in tab_rows[0]]
+    ci = hdr.index("CID") if "CID" in hdr else 0
+    ix = {name: (hdr.index(name) if name in hdr else pos) for name, pos in PERF_COLS.items()}
+    pa, pc, fa = ix["Perf action"], ix["Perf comment"], ix["Final action"]
+    m, order = {}, []
+    for r in tab_rows[1:]:
+        cid = (str(r[ci]).strip() if ci < len(r) else "")
+        if not cid:
+            continue
+        g = lambda i: (str(r[i]).strip() if i < len(r) else "")
+        m[cid] = (g(pa), g(pc), g(fa)); order.append(cid)
+    return m, order
+
+
 def write_weekly_tab(rows, week, spreadsheet_id=PERF_SHEET_ID):
-    """Create/populate the `w/c <week>` tab: the FULL header row (incl. the 3 perf column titles)
-    + one data row per flagged CE, all markets. Data rows are written only through the GM columns
-    (the last 3 = Perf action/comment/final) so a re-run NEVER clobbers perf's edits. Header row
-    carries no perf values, so writing it in full is safe on refresh too."""
+    """Populate the `w/c <week>` tab — CID-KEYED so perf's columns can never drift:
+      1. READ the current tab → capture perf cells (Perf action/comment/Final) BY CID + the
+         existing CID row order (BEFORE we overwrite anything).
+      2. Reorder: existing CIDs keep their current-tab position (stable — no mid-week reshuffle);
+         newly-flagged CIDs append at the bottom.
+      3. Re-place each perf cell onto ITS CID's new row (perf follows its CE).
+      4. Write header + all rows (A..AT, 46 cols) and CLEAR any columns to the RIGHT (AU+) so
+         stray duplicate 'Perf comment'/'Final action' columns can't accumulate.
+    Because perf cells are addressed by CID, any re-sort / market add / maturation is harmless.
+    DEPLOY ONLY FROM AN ALIGNED SHEET — step 1 trusts the current CID↔perf pairing (a NEW week's
+    fresh tab is aligned by construction; an existing drifted tab must be restored first)."""
     tab = f"w/c {week}"
-    last = _colname(len(HEADER) - 1)
-    keep = len(HEADER) - 3                        # data rows stop before the 3 perf columns
-    dcol = _colname(keep - 1)
-    # 1. ensure the tab exists (addSheet; a duplicate-title error just means it's already there)
+    last = _colname(len(HEADER) - 1)              # AT — export owns A..AT (46 cols)
+    # 1. current tab: perf cells by CID + row order  (BEFORE we overwrite anything)
+    cur_perf, cur_order = _perf_by_cid(_read_tab(spreadsheet_id, tab))
+    # 2. stable order: existing CIDs first (current order), new CIDs appended
+    by_cid = {str(r[0]): r for r in rows}
+    seen = set(cur_order)
+    ordered = ([by_cid[c] for c in cur_order if c in by_cid]
+               + [r for r in rows if str(r[0]) not in seen])
+    # 3. build full rows — perf cols (43/44/45) re-placed BY CID
+    full = []
+    for r in ordered:
+        row = list(r[:len(HEADER)]); row += [""] * (len(HEADER) - len(row))
+        row[43], row[44], row[45] = cur_perf.get(str(r[0]), ("", "", ""))   # perf follows its CE
+        full.append(row)
+    # 4a. ensure tab + unmerge header row (best-effort; keeps flat per-column labels)
     _gws(["spreadsheets", "batchUpdate"], {"spreadsheetId": spreadsheet_id},
          {"requests": [{"addSheet": {"properties": {"title": tab}}}]})
-    # 1b. unmerge the header row. The export owns a FLAT per-column header; if someone merged
-    # header cells in the sheet (e.g. grouped the identity + weekly blocks), a flat write only
-    # fills each merge's top-left and the sub-labels (CID Name / Category / Market / per-metric)
-    # go blank on every run. Unmerge first so all columns always carry their label. Best-effort
-    # (no-op / ignored if there are no merges). Grouped headers, if wanted, need a 2-row design.
     sid = _tab_sheet_id(spreadsheet_id, tab)
     if sid is not None:
         _gws(["spreadsheets", "batchUpdate"], {"spreadsheetId": spreadsheet_id},
              {"requests": [{"unmergeCells": {"range": {"sheetId": sid, "startRowIndex": 0,
                "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(HEADER)}}}]})
-    # 2. full header row (A1:{last}1) — all 46 columns incl. the perf titles
+    # 4b. header (A1:AT1) + all rows (A2:AT{n+1}) — perf columns included, CID-correct
     _gws(["spreadsheets", "values", "update"],
          {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!A1:{last}1", "valueInputOption": "USER_ENTERED"},
          {"values": [HEADER]})
-    # 3. data rows through the GM columns only (A2:{dcol}{n+1}) — perf columns untouched
-    data = [r[:keep] for r in rows]
     ok, txt = _gws(["spreadsheets", "values", "update"],
                    {"spreadsheetId": spreadsheet_id,
-                    "range": f"'{tab}'!A2:{dcol}{len(data) + 1}", "valueInputOption": "USER_ENTERED"},
-                   {"values": data})
+                    "range": f"'{tab}'!A2:{last}{len(full) + 1}", "valueInputOption": "USER_ENTERED"},
+                   {"values": full})
+    # 4c. sweep any columns to the RIGHT of AT (duplicate 'Perf comment'/'Final action' junk)
+    rcol = _colname(len(HEADER))                  # AU — first column past the contract
+    _gws(["spreadsheets", "values", "clear"],
+         {"spreadsheetId": spreadsheet_id, "range": f"'{tab}'!{rcol}1:BZ{len(full) + 1}"})
     return ok, tab, txt
 
 
