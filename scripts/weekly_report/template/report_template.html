@@ -725,6 +725,25 @@ function wrLmNote(ceId,val,el){
   });
   if(el && (val||'').trim()) el.classList.remove('lm-note-req');
 }
+// Fluctuations action dropdown — same shape as Losing Money's (status + mandatory
+// comment), but bucket-parameterised since ↓ and ↑ are separate buckets with their own
+// option lists. Persists through the same saveAction/Sheet path; no schema change.
+function wrFxGet(bucket,ceId){ return getAction(bucket,ceId); }
+function wrFxAction(bucket,ceId,val,el){
+  const prev=getAction(bucket,ceId).status||'';
+  saveAction(ceId,bucket,{status:val}).catch(()=>{
+    if(el) el.value=prev;
+    _flashSaveErr(el);
+  });
+  if(el){
+    const td=el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
+    if(ta){
+      const need=!!val && !(ta.value||'').trim();
+      ta.classList.toggle('lm-note-req',need);
+      if(need){ ta.placeholder='comment required — why?'; ta.focus(); }
+    }
+  }
+}
 function wrFxChk(bucket,ceId,checked,el){
   saveAction(ceId,bucket,{checkbox:checked}).catch(()=>{
     if(el) el.checked=!checked;
@@ -737,6 +756,7 @@ function wrFxNote(bucket,ceId,val,el){
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
+  if(el && (val||'').trim()) el.classList.remove('lm-note-req');
 }
 function _flashSaveErr(el){
   if(!el) return;
@@ -1783,7 +1803,6 @@ function renderBuckets(M){
   const colr=(v,txt)=>{ const c=v<=-25?'var(--red)':v<=-10?'var(--amber)':'var(--green)'; return '<span style="color:'+c+'">'+txt+'</span>'; };
   const rpcVs4w=(rpc,v)=>{ const base=(rpc==null||isNaN(rpc))?'—':(+rpc).toFixed(2); if(v==null||isNaN(v)) return base; const s=v<0?MINUS:'+'; return base+' '+colr(v,'('+s+Math.abs(v).toFixed(0)+'% 4w)'); };
   const swingCell=(sig,sw)=>{ sig=esc(sig||''); if(sw==null||isNaN(sw)) return (sig+' —').trim(); const ar=sw>=0?'↑':'↓'; const col=sw>=0?'var(--green)':'var(--red)'; const inner='<span style="color:'+col+'">'+ar+Math.abs(sw).toFixed(0)+'%</span>'; return sig?sig+' '+inner:inner; };
-  const winAbbr=w=>(({sustained_3d:'3d',wow:'WoW',sdlw:'SDLW'})[w])||(w||'');
   const dsub=txt=>' <span class="d" style="color:var(--ink-faint)">('+txt+')</span>';
   const tierMini=t=>(['Hero','Pro','Seed','Longtail'].indexOf(''+t)>=0)?' '+tierChip(t):'';
   // Explore-layer info tag: FORWARD-LOOKING season phase (builds-to-peak / in-peak / winding-down / off)
@@ -1867,13 +1886,16 @@ function renderBuckets(M){
     return seg.join('')||'—'; };
   const lmMetricCells=(r,list)=>list.map(m=>{
     const wv=r.weeks||[], a=(wv[0]||{})[m.k], b=(wv[1]||{})[m.k];
-    const dom=(LM_DRIVER_COL[r.driver]===m.k)?' fxdom':'';
+    // driver highlight: Losing Money rows carry `driver`, Fluctuations rows carry `dominant_key`
+    const dom=(LM_DRIVER_COL[r.driver]===m.k||r.dominant_key===m.k)?' fxdom':'';
     let sub='';
     if(a!=null&&b!=null&&!isNaN(a)&&!isNaN(b)){
       const d=a-b;
       if(m.k==='cm2'||m.k==='cm1') sub=(Math.round(d)===0)?'<div class="lmd mut">0</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+fmtMoneyDelta(d)+'</div>';
       else if(m.k==='roi') sub=(Math.round(d)===0)?'<div class="lmd mut">0pp</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(0)+'pp</div>';
       else if(m.k==='cvr') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">0pp</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(2)+'pp</div>';
+      // Completion / Take rate are rates -> report the WoW move in percentage points
+      else if(m.k==='cr'||m.k==='tr') sub=(Math.abs(d)<0.05)?'<div class="lmd mut">0pp</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(1)+'pp</div>';
       else if(m.k==='cm1conv') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">$0</div>':'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+'$'+Math.abs(d).toFixed(2)+'</div>';
       else if(m.k==='cpc') sub=(Math.abs(d)<0.005)?'<div class="lmd mut">$0</div>':'<div class="lmd '+(d>0?'gn':'gp')+'">'+(d>0?'+':MINUS)+'$'+Math.abs(d).toFixed(2)+'</div>';
       else { const p=b?100*(a/b-1):null; sub=(p==null||Math.round(p)===0)?'<div class="lmd mut">0%</div>':'<div class="lmd mut">'+(p>0?'+':MINUS)+Math.abs(p).toFixed(0)+'%</div>'; }
@@ -1881,7 +1903,8 @@ function renderBuckets(M){
     let trail='';
     for(let i=1;i<Math.min(4,wv.length);i++){
       const w=wv[i]||{};
-      const dt=(m.k==='cm2')?'<span class="lmwd">w'+i+'</span>':'';
+      // week label rides the leading column of each table: CM2 in Losing Money, Spend in Fluctuations
+      const dt=(m.k==='cm2'||m.k==='spend')?'<span class="lmwd">w'+i+'</span>':'';
       trail+='<div class="lmw'+(i===1?' lmw-rule':'')+'" title="w'+i+(w.week?' · wk of '+esc(w.week):'')+'">'+dt+m.f(w[m.k])+'</div>';
     }
     return '<td class="num'+dom+'"><div class="lmv">'+m.f(a)+'</div>'+sub+trail+'</td>';
@@ -1957,41 +1980,55 @@ function renderBuckets(M){
   if(subth.count){ const sn=esc((subth.names||[]).join(' · ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+sn+'"><b>· '+subth.count+' funded CEs still CM2-negative this week, below the flag thresholds:</b> <span class="neg">'+fmtMoneyDelta(subth.cm2_wk)+'/wk</span> — no criterion fired (drop &lt; $200, or $200&ndash;500 at ROI ≥ 140%) <span style="color:var(--ink-faint)">(hover for names + $)</span></div>'; }
   if(burn.count){ const bn=esc((burn.names||[]).join(', ')); lmFn+='<div class="sub" style="margin-top:6px" title="'+bn+'">+ '+burn.count+' sub-$1k CEs bleeding <span class="neg">'+fmtMoneyDelta(burn.bleed_wk)+'/wk</span> below the individual gate <span style="color:var(--ink-faint)">(hover for names)</span></div>'; }
 
-  // Fluctuations — clean value(Δ) layout, dominant driver inline (full 5 on hover), dual TY/LY spark
-  // RPC decomposed → CVR·AOV·Completion·Take-rate (RPC = their product). Root driver highlighted.
-  // Alert label = WoW or 3D (why it fired). 28d ROI + 28d spend always on. Clicks = context only.
-  const fxAlert=t=>'<span class="chip '+(t==='3D'?'violet':'ghost')+'" title="'+(t==='3D'?'qualified on a 3-day pattern vs 28-day baseline':'qualified week-over-week')+'">'+esc(t||'')+'</span>';
-  const fxDrv=(r,key,val,delta,o)=>{ const cell=lmVD(val,delta,o); return (r.dominant_key===key)?'<div class="fxdom">'+cell+'</div>':cell; };
-  const fxAction=(r,bucket)=>{ bucket=bucket||'flux_down'; const a=getAction(bucket,r.ce_id), c=!!a.checkbox, n=a.note||'';
-    return '<label class="fx-chk" onclick="event.stopPropagation()"><input type="checkbox"'+(c?' checked':'')+
-        ' onchange="wrFxChk(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.checked,this)"> confirm seasonality</label>'+
-      '<textarea class="fx-note" onclick="event.stopPropagation()" placeholder="note…" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'; };
-  // metric Δ basis follows each row's Alert chip: WoW → weekly Δ · 3D → 3-day-vs-28-day Δ
+  // Fluctuations — expanded weekly metrics matching the Losing Money UX (W0+WoW on top, W1..W3 beneath).
+  // Swing = L3W-vs-W0 ratio change. Driver = dominant RPC factor from CVR × AOV × CR × TR decomposition.
+  // Every cell is W0 + its WoW change, then W-1..W-3 beneath — all on equal-length,
+  // weekday-aligned spans anchored to the analysis window (alerts._week_blocks).
+  // CVR·AOV·Completion·Take-rate ARE the RPC decomposition: RPC = CVR × AOV × CR × TR.
+  const FX_METRICS=[
+    {k:'spend',   label:'Spend',      f:v=>fmtMoney(v), tip:'Google-Search spend over the window. W0 on top, W-1..W-3 beneath.'},
+    {k:'roi',     label:'ROI',        f:v=>fmtPct(v,0), tip:'Google-Search Paid ROI = CM1 ÷ spend. This is the value the bucket’s ROI gate is applied to. W0 on top, W-1..W-3 beneath.'},
+    {k:'clicks',  label:'Clicks',     f:v=>fmtInt(v),   tip:'Google-Search paid clicks — context only, never a qualifier. W0 on top, W-1..W-3 beneath.'},
+    {k:'cvr',     label:'CVR',        f:v=>fmtPct(v,2), tip:'RPC driver 1 of 4: orders ÷ clicks (paid Google-Search funnel). W0 on top, W-1..W-3 beneath.'},
+    {k:'aov',     label:'AOV',        f:v=>fmtMoney(v), tip:'RPC driver 2 of 4: booked GBV ÷ orders. W0 on top, W-1..W-3 beneath.'},
+    {k:'cr',      label:'Completion', f:v=>fmtPct(v,1), tip:'RPC driver 3 of 4: completed ÷ booked attributed value. W0 on top, W-1..W-3 beneath.'},
+    {k:'tr',      label:'Take rate',  f:v=>fmtPct(v,1), tip:'RPC driver 4 of 4: net revenue ÷ completed GBV. W0 on top, W-1..W-3 beneath.'},
+    {k:'cm1conv', label:'CM1/conv',   f:v=>fmtCpc(v),   tip:'CM1 per conversion (Google-Search ads). W0 on top, W-1..W-3 beneath.'},
+    {k:'cpc',     label:'CPC',        f:v=>fmtCpc(v),   tip:'Cost per click (Google-Search) — up is bad. W0 on top, W-1..W-3 beneath.'},
+  ];
+  const fxDriverCell=r=>{ if(!r.dominant) return '<td>—</td>'; const d=r[r.dominant_key+'_d']; return '<td><b>'+esc(r.dominant)+'</b>'+((d!=null)?'<div class="lmd '+(d<0?'gn':'gp')+'">'+(d>0?'+':MINUS)+Math.abs(d).toFixed(0)+'%</div>':'')+'</td>'; };
+  // Action cell — same structure as Losing Money (status dropdown + mandatory comment),
+  // with a per-direction option list. 'No change required' / 'Skip' exist so a reviewer who
+  // looks and disagrees can record that: a blank cell reads as "never reviewed" downstream.
+  const FX_ACTIONS_DOWN=[['','—'],['negative_seasonality','−ve seasonality'],['roas_change','ROAS target change'],['pause_review','Pause &amp; review'],['no_change','No change required'],['skip','Skip']];
+  const FX_ACTIONS_UP=[['','—'],['positive_seasonality','+ve seasonality'],['no_change','No change required'],['skip','Skip']];
+  const FX_ACT_LBL={}; FX_ACTIONS_DOWN.concat(FX_ACTIONS_UP).forEach(p=>FX_ACT_LBL[p[0]]=p[1]);
+  const fxAction=(r,bucket)=>{ bucket=bucket||'flux_down';
+    const a=getAction(bucket,r.ce_id), v=a.status||'', n=a.note||'', who=a.owner||'', when=a.updated||'';
+    const opts=(bucket==='flux_up'?FX_ACTIONS_UP:FX_ACTIONS_DOWN).slice();
+    if(v&&!opts.some(p=>p[0]===v)) opts.push([v,v]);   // legacy stored value still displays
+    const o=opts.map(p=>'<option value="'+p[0]+'"'+(v===p[0]?' selected':'')+'>'+p[1]+'</option>').join('');
+    let attr='';
+    if(who||when){ const ago=when?_ago(when):''; attr='<div class="lm-who">'+(who?esc(who):'')+(ago?' · '+ago:'')+'</div>'; }
+    const pv=getPrevAction(bucket,r.ce_id);
+    const lw=pv.status?'<div class="lm-who" title="'+esc(pv.note||'')+'">last wk: <b>'+(FX_ACT_LBL[pv.status]||esc(pv.status))+'</b>'+(pv.owner?' · '+esc(pv.owner):'')+'</div>':'';
+    const req=(v&&!(n||'').trim());
+    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrFxAction(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
+      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why?')+'" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
   const fluxHead='<th class="stick">Combined Entity</th>'+mktTh+
-    '<th title="Why it fired — WoW = week-over-week · 3D = a 3-day pattern vs the 28-day baseline. This also sets each driver Δ basis below.">Alert</th>'+
-    '<th class="num" title="Google-Search Paid ROI over the last 28 days. Δ = percentage-point change vs the prior 28 days.">28d ROI <span class="lm-hb">ⓘ</span></th>'+
-    '<th class="num" title="Google-Search spend over the last 28 days. Δ = % change vs the prior 28 days — shows whether it is already scaling down.">28d Spend <span class="lm-hb">ⓘ</span></th>'+
-    '<th class="num" title="Paid CVR = Google-Search orders ÷ paid clicks (orders from fct_orders). Paid RPC = CVR × AOV × Completion × Take-rate; the columns show which drove the move. Δ follows the Alert (WoW = weekly, 3D = 3-day-vs-28-day).">CVR <span class="lm-hb">Δ ⓘ</span></th>'+
-    '<th class="num" title="Paid AOV = Google-Search booked GBV ÷ orders (from fct_orders). Δ follows the Alert.">AOV <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Completion = completed GBV ÷ booked GBV (Google-Search orders, from fct_orders). Δ follows the Alert.">Completion <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Take rate = net revenue ÷ completed GBV (Google-Search orders, from fct_orders). Δ follows the Alert.">Take rate <span class="lm-hb">Δ</span></th>'+
-    '<th class="num" title="Paid Google-Search clicks — context only, never a qualifier. Shown so a CVR drop can be read against a traffic drop.">Clicks <span class="lm-hb">Δ</span></th>'+
+    lmMetricHeads(FX_METRICS)+
+    '<th title="Dominant RPC driver from the CVR × AOV × Completion × Take-rate decomposition (L3W vs W0).">Driver <span class="lm-hb">ⓘ</span></th>'+
     '<th title="Verdict · cause tag · recommended default action (guideline only).">Read</th>'+
-    '<th title="Your call: tick to confirm seasonality, add a note. Saved per week.">Action</th>';
+    '<th title="Your call. Selecting an action requires a comment. Saved per week.">Action</th>';
   const fluxRows=(items,bucket)=>items.map(r=>'<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
     '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span> <span class="idbr">['+esc(r.ce_id)+']</span>'+seasonTag(r.ce_id)+'</td>'+mktTd(r)+
-    '<td>'+fxAlert(r.alert_type)+'</td>'+
-    '<td class="num"><div class="lmv">'+fmtPct(r.roi_4w,0)+'</div>'+(r.roi_4w_d==null?'':'<div class="lmd '+(r.roi_4w_d<0?"gn":"gp")+'">'+(r.roi_4w_d>0?"+":MINUS)+Math.abs(r.roi_4w_d)+'pp</div>')+'</td>'+
-    '<td class="num"><div class="lmv">'+fmtMoney(r.spend_4w)+'</div>'+(r.spend_4w_d==null?'':'<div class="lmd mut">'+(r.spend_4w_d>0?"+":MINUS)+Math.abs(r.spend_4w_d)+'%</div>')+'</td>'+
-    '<td class="num">'+fxDrv(r,'cvr',r.cvr,r.cvr_d,{good:1,dp:1,suf:'%'})+'</td>'+
-    '<td class="num">'+fxDrv(r,'aov',r.aov,r.aov_d,{good:1,dp:0,pre:'$'})+'</td>'+
-    '<td class="num">'+fxDrv(r,'cr',r.cr,r.cr_d,{good:1,dp:0,suf:'%'})+'</td>'+
-    '<td class="num">'+fxDrv(r,'tr',r.tr,r.tr_d,{good:1,dp:0,suf:'%'})+'</td>'+
-    '<td class="num">'+lmVD(r.clicks,r.clicks_d,{good:0})+'</td>'+
+    lmMetricCells(r,FX_METRICS)+
+    fxDriverCell(r)+
     '<td><div>'+verdictChip(r.verdict)+' '+causeChip(r.cause)+'</div><div class="idbr" style="margin-top:3px">'+esc(r.recommendation||'—')+'</div></td>'+
     '<td>'+fxAction(r,bucket)+'</td>'+
     '</tr>').join('');
-  const fluxHowto=_howto('All <b>paid Google-Search</b> (orders from fct_orders). Paid RPC (revenue/click) = <b>CVR × AOV × Completion × Take-rate</b> — the red driver is the cause; its Δ follows the <b>Alert</b> (<b>WoW</b> weekly · <b>3D</b> 3-day-vs-28-day). <b>28d ROI/Spend</b> = current scale &amp; efficiency, Δ <b>vs the prior 28 days</b> (shows if it&rsquo;s already scaling down / eroding). Clicks is context, not a trigger. Set an <b>Action</b> + note per row.');
+  const fluxHowtoDn=_howto('All <b>paid Google-Search</b>. A CE is flagged when CM1/conv or RPC moved <b>≥35%</b> vs the <b>prior 3 weeks (L3W)</b>, and its <b>W0 ROI is ≤180%</b> — above that it is still profitable despite the drop, so no action is needed. Each metric cell shows <b>W0 on top</b> (with its WoW change), then <b>W-1 · W-2 · W-3</b> beneath — read the four weeks to tell a real trend from a one-week wobble. <b>Driver</b> = dominant factor from the RPC decomposition (CVR × AOV × Completion × Take-rate). Sorted by W0 spend, biggest first. Selecting an <b>Action requires a comment</b>.');
+  const fluxHowtoUp=_howto('All <b>paid Google-Search</b>. A CE is flagged when CM1/conv or RPC moved <b>≥35%</b> vs the <b>prior 3 weeks (L3W)</b>, and its <b>W0 ROI is >100%</b> — below break-even there is nothing to lean into. Each metric cell shows <b>W0 on top</b> (with its WoW change), then <b>W-1 · W-2 · W-3</b> beneath. <b>Driver</b> = dominant factor from the RPC decomposition. Sorted by W0 spend, biggest first. Selecting an <b>Action requires a comment</b>.');
   // Maturity-lag banner — this bucket runs on the last FULLY-MATURED week (paid Google-Search
   // attribution matures ~3 days), which lags the report week when the latter isn't settled yet.
   // States the timeline (report window → settled window vs prior-week comparison) + the reason.
@@ -2001,13 +2038,15 @@ function renderBuckets(M){
       + 'The report covers <b>'+esc(_mt.week_start)+' → '+esc(_mt.week_end)+'</b>, but paid Google-Search '
       + 'attribution (orders / revenue / completion) takes ~3 days to settle. So this bucket compares the '
       + 'settled part of the week — <b>'+esc(_mt.fluctuation_window_start)+' → '+esc(_mt.fluctuation_window_end)
-      + '</b> ('+esc(_mt.fluctuation_days)+'d) — against the same days a week earlier (<b>'
+      + '</b> ('+esc(_mt.fluctuation_days)+'d) — against the <b>prior 3 weeks</b> (<b>'
       + esc(_mt.fluctuation_compare_start)+' → '+esc(_mt.fluctuation_compare_end)+'</b>). The unsettled tail is '
-      + 'excluded and volume floors are pro-rated. 28-day ROI/Spend context uses the last full matured week. '
+      + 'excluded. 28-day ROI/Spend context uses the last full matured week. '
       + 'Headlines (§1) use business revenue and stay on the full report week.</div>'
-    : '<div class="sub" style="color:var(--ink-faint);margin:0 0 8px">Paid fluctuations · week of <b>'+esc(_mt.fluctuation_window_start||_mt.week_start)+'</b> (fully matured)</div>';
-  const seasDnBody=seasDn.length?(fluxLagNote+fluxHowto+_tbl(fluxHead,fluxRows(seasDn,'flux_down'))):(fluxLagNote+'<div class="emptystate">No revenue-quality drops this week. <b>✅</b></div>');
-  const seasUpBody=seasUp.length?(fluxLagNote+fluxHowto+_tbl(fluxHead,fluxRows(seasUp,'flux_up'))):(fluxLagNote+'<div class="emptystate">No revenue-quality spikes this week.</div>');
+    : '<div class="sub" style="color:var(--ink-faint);margin:0 0 8px">Paid fluctuations · full report week <b>'
+      + esc(_mt.fluctuation_window_start||_mt.week_start)+' → '+esc(_mt.fluctuation_window_end||_mt.week_end)
+      + '</b> vs the prior 3 weeks (<b>'+esc(_mt.fluctuation_compare_start)+' → '+esc(_mt.fluctuation_compare_end)+'</b>)</div>';
+  const seasDnBody=seasDn.length?(fluxLagNote+fluxHowtoDn+_tbl(fluxHead,fluxRows(seasDn,'flux_down'))):(fluxLagNote+'<div class="emptystate">No revenue-quality drops this week on a CE returning ≤180% ROI. <b>✅</b></div>');
+  const seasUpBody=seasUp.length?(fluxLagNote+fluxHowtoUp+_tbl(fluxHead,fluxRows(seasUp,'flux_up'))):(fluxLagNote+'<div class="emptystate">No revenue-quality spikes this week on a CE above break-even.</div>');
 
   // COMPOUND - Scale-Up — clean value(Δ) layout + cohort bar + dual spark
   let scaleBody;
@@ -2083,13 +2122,13 @@ function renderBuckets(M){
     _bucketBlock('🛡️','Losing Money','Four flag criteria on &gt; $1k spend (4wk) — Existing &amp; New tables, biggest CM2 drop first.', lmBody+lmFn, {
       stat:lmCount+' CEs', val:fmtMoneyDelta(lmBleed)+'/wk',
       fullSub:'Flagged when any criterion fires: full waste (spend, 0 conversions this week) · WoW CM2 drop · drop vs the 3-week average (≥ $500 always; $200–500 only when W0 ROI &lt; 140%) · New CEs also on ≥ $500 cumulative 90-day loss. Existing and New CEs in separate tables, each sorted by the CM2 drop regardless of label. Google-Search Paid basis.'})+
-    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','RPC fell vs 28-day baseline. Google Search only.', seasDnBody, {
+    _bucketBlock('🛡️','CM1/RPC Fluctuations ↓','Fell ≥35% vs the prior 3 weeks, and ROI ≤180%. Google Search only.', seasDnBody, {
       stat:sdCount+' flagged', detail:sdDrivers?('root driver: '+sdDrivers):'',
-      fullSub:'RPC fell vs its 28-day baseline (3-day pattern or WoW). Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it; each Δ follows the row&rsquo;s Alert (WoW = weekly, 3D = 3-day-vs-28-day). Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+
+      fullSub:'CM1/conv or RPC fell ≥35% comparing this week (Sun–Sat) against the prior 3 weeks, limited to CEs whose W0 ROI is ≤180% — above that the CE is still profitable despite the drop, so no action is warranted. Paid RPC = CVR × AOV × Completion × Take-rate — the columns show which one drove it. Each metric shows W0 on top with its WoW change, then W-1..W-3 beneath. Clicks shown for context only (traffic is never a qualifier). Google Search only.'})+
     /* Scale-Up table hidden from report (2026-07-17) — engine still computes C.scale_up */
-    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','RPC rose vs 28-day baseline. Verify real, then lean in.', seasUpBody, {
+    _bucketBlock('🚀','CM1/RPC Fluctuations ↑','Rose ≥35% vs the prior 3 weeks, and ROI >100%. Verify real, then lean in.', seasUpBody, {
       stat:suCount+' flagged', detail:suDrivers?('root driver: '+suDrivers):'',
-      fullSub:'Same decomposition, upside — RPC rose vs its 28-day baseline. Verify it is real (not a one-off), then lean spend in.'})+
+      fullSub:'Same decomposition, upside — CM1/conv or RPC rose ≥35% vs the prior 3 weeks, limited to CEs whose W0 ROI is above break-even (>100%); below that there is nothing to lean into. Verify it is real (not a one-off) using the W0..W-3 columns, then lean spend in.'})+
     _bucketBlock('🌱','New CEs','Just crossed Pro+ or on pace to. Tomorrow’s Heroes.', newBody, {
       stat:newCes.length+' CEs', detail:nGradH+' graduated · '+nPaceH+' on pace',
       fullSub:'Graduation watch — just crossed Pro+ for the first time in 4 quarters, or on pace to. Where tomorrow&rsquo;s Heroes are forming.'})+

@@ -9,8 +9,8 @@ modules if they are importable, else emits empty arrays for those sections.
 Output: .cache/weekly_report/snapshot_{market_slug}_{week}.json
 
 Usage:
-    python build_snapshot.py --market north_america --week 2026-06-29
-    python build_snapshot.py --market north_america            # latest matured week
+    python build_snapshot.py --market north_america --week 2026-06-28   # Sun week-start
+    python build_snapshot.py --market north_america            # latest complete Sun–Sat week
     python build_snapshot.py --all --validate
 """
 from __future__ import annotations
@@ -1063,20 +1063,17 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # FULLY-MATURED week: flux_w0 = min(report W0, latest_complete_week). No-op when the report week
     # is already matured; lags one week when the report is on a fresh (not-yet-settled) week.
     today = dt.date.today()
-    mat_cutoff = min(w0_end, today - dt.timedelta(days=config.MATURITY_DAYS))
-    if mat_cutoff < w0_start:                 # whole report week unsettled → fall back to last full matured week
-        fallback = config.latest_matured_week(today)
-        flux_w0_start, mat_cutoff = fallback, fallback + dt.timedelta(days=6)
-    else:
-        flux_w0_start = w0_start
-    flux_week_days = [flux_w0_start + dt.timedelta(days=i)
-                      for i in range((mat_cutoff - flux_w0_start).days + 1)]
-    flux_n_days = len(flux_week_days)
-    flux_partial = mat_cutoff < (flux_w0_start + dt.timedelta(days=6))
-    flux_context_week = config.latest_matured_week(today)   # 28d ROI/spend context anchor (fully settled)
-    if flux_partial:
-        print(f"  [fluctuations] matured window {flux_w0_start}..{mat_cutoff} "
-              f"({flux_n_days}d; report-week tail unsettled) vs same span prior week")
+    # The bucket analyses the FULL report week (2026-08-04). The old maturity trim
+    # (mat_cutoff = min(week_end, today − 3)) was dropped: measured on NA + Italy, the
+    # freshest day shows no attribution deficit vs the same weekday a week earlier, and
+    # excluding Saturday shifted pooled RPC / CM1-per-conv by under 1% — far inside a 35%
+    # trigger — while discarding ~15% of W0 volume and making the window depend on the run
+    # day (Mon → 6d, Tue → 7d). A full week is also exactly 3 baseline weeks, so W0 and the
+    # L3W baseline carry an identical weekday mix.
+    flux_w0_start, mat_cutoff = w0_start, w0_end
+    flux_n_days = (mat_cutoff - flux_w0_start).days + 1
+    flux_partial = False
+    flux_context_week = flux_w0_start   # weekly-context anchor == the analysed week
     bucket1, diag = alerts.build_bucket1(
         ce_daily_ads=d_ads,
         ce_daily_business=d_biz,
@@ -1088,7 +1085,6 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         troas=troas,
         w0_start=flux_w0_start,
         wm1_start=flux_w0_start - dt.timedelta(days=7),
-        week_days=flux_week_days,
         w0_end=mat_cutoff,
         availability_fetcher=avail_fetcher,
         shapley_by_ce={c["ce_id"]: c.get("shapley_wow") for c in ces},
@@ -1155,13 +1151,12 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "market_slug": market_slug,   # render keys market-switcher tabs on this
             "week_start": config.iso(w0_start),
             "week_end": config.iso(w0_end),
-            # Fluctuations bucket analyzes the MATURED PORTION of the report week (paid attribution
-            # lags ~3d) vs the same span a week earlier; 28d ROI/spend context uses the last full
-            # matured week. fluctuation_partial=True means the report-week tail was excluded.
+            # Fluctuations bucket analyzes the FULL report week vs the prior 3 weeks (L3W).
+            # fluctuation_partial is retained (always False) for snapshot back-compat.
             "fluctuation_window_start": config.iso(flux_w0_start),
             "fluctuation_window_end": config.iso(mat_cutoff),
-            "fluctuation_compare_start": config.iso(flux_w0_start - dt.timedelta(days=7)),
-            "fluctuation_compare_end": config.iso(mat_cutoff - dt.timedelta(days=7)),
+            "fluctuation_compare_start": config.iso(flux_w0_start - dt.timedelta(days=config.FLUCTUATION_L3W_DAYS)),
+            "fluctuation_compare_end": config.iso(flux_w0_start - dt.timedelta(days=1)),
             "fluctuation_context_week": config.iso(flux_context_week),
             "fluctuation_days": flux_n_days,
             "fluctuation_partial": flux_partial,
@@ -1296,11 +1291,6 @@ def validate_na(snapshot: dict) -> bool:
     print(f"CM1/conv all up-swing: {'YES' if all_up else 'NO'} ({diag['cm1_conv_directions']})")
     ok &= all_up
 
-    cv_ok = diag["cv_excluded_count"] == ref["cv_excluded"]
-    ok &= cv_ok
-    print(f"CV-excluded          : expected {ref['cv_excluded']}, got {diag['cv_excluded_count']} "
-          f"-> {'MATCH' if cv_ok else 'MISMATCH'}")
-
     rev_pred = snapshot["market_summary"]["headlines"]["revenue_w0"]
     print(f"Market revenue W0    : ${rev_pred:,.0f} (predicted) vs ${ref['market_revenue_actuals']:,.0f} "
           f"(actuals ref; predicted expected ~5% lower — informational, not a gate)")
@@ -1325,12 +1315,13 @@ def main():
     ap = argparse.ArgumentParser(description="Weekly report snapshot producer")
     ap.add_argument("--market", choices=list(config.MARKETS), help="market slug")
     ap.add_argument("--all", action="store_true", help="build all pilot markets")
-    ap.add_argument("--week", help="W0 Monday (YYYY-MM-DD); default = latest matured week")
+    ap.add_argument("--week", help="W0 week-start = SUNDAY (YYYY-MM-DD); any date snaps to its "
+                    "Sun–Sat week. default = latest complete Sun–Sat week")
     ap.add_argument("--validate", action="store_true", help="validate NA against references")
     ap.add_argument("--no-availability", action="store_true", help="skip availability join")
     args = ap.parse_args()
 
-    w0 = _to_date(args.week) if args.week else config.latest_complete_week()
+    w0 = config._week_start(_to_date(args.week)) if args.week else config.latest_complete_week()
     targets = list(config.MARKETS) if args.all else [args.market or "north_america"]
 
     for slug in targets:

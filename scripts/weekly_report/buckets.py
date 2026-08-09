@@ -19,11 +19,7 @@ LM_DELTA_SOFT = 200.0          # CM2 drop ($) that flags only when W0 Paid ROI <
 LM_ROI_GATE = 140.0            # W0 Paid-ROI gate for the soft band
 LM_NEW_90D_LOSS = 500.0        # C4 (New CEs only): cumulative CM2 over trailing ~90d ≤ −$500
 LM_RECOVER_IMPROVE_PCT = 50.0  # W0 loss ≥50% smaller than W1 loss → "recovering" tag
-SEAS_UP, SEAS_DN = 140.0, 120.0
-# Fluctuations multi-metric gate (2026-07-20) — cap output to the ~5-6 real opportunities.
-# A driver is "red" if its adverse move ≥ FX_RED_FLOOR. One red → needs FX_SINGLE_MIN
-# (CVR uses FX_CVR_MIN, WoW only). ≥2 red → collective paid-RPC drop ≥ FX_COLLECTIVE_MIN.
-FX_RED_FLOOR, FX_SINGLE_MIN, FX_CVR_MIN, FX_COLLECTIVE_MIN = 15.0, 25.0, 30.0, 20.0
+SEAS_UP, SEAS_DN = 140.0, 120.0   # Fluctuations verdict bands: +ve if ROI>140 · -ve if ROI<120
 SCALE_ROI, SCALE_MIN_OF_4 = 155.0, 3
 CLIFF_PP = 30.0
 MIN_ACTIVE = 3
@@ -340,26 +336,34 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None):
             "burn_line": {"count": burn["count"], "bleed_wk": round(burn["bleed"]), "names": burn_names}}
 
 
-def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
-    """Revenue-quality drops — RPC decomposed into its four multiplicative drivers so the
-    reader sees WHICH one moved, not the composite. Qualifiers unchanged (upstream in
-    alerts.py: WoW or 3-day daily); this only reshapes the display (2026-07-17 spec).
+def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None, lm_ce_ids=None):
+    """Revenue-quality swings — RPC decomposed into its four multiplicative drivers so the
+    reader sees WHICH one moved, not the composite.
 
       RPC = CVR × AOV × CR × TR   (exact identity, with CVR = orders/clicks)
 
-    Per row we surface: the four drivers (value + WoW %Δ, `dominant` = the one explaining the
-    move), always-on 28-day spend + pooled 28-day ROI, and clicks as CONTEXT only (traffic is
-    never a qualifier — Jul-17). alert_type labels why it fired: WoW vs 3D.
+    Qualifiers are upstream in alerts.py: CM1/conv + RPC fire on the L3W-vs-W0 pooled ratio
+    (>=35%, 2026-08-03); CVR + collective-driver rows stay WoW. `alert_type` labels which
+    (L3W vs WoW); driver %Δ all come from the l3w window.
 
-    WoW rows use weekly WoW %Δ; 3D rows use 3-day-vs-28-day %Δ (from alerts.py drivers_3d,
-    matching the alert's own window). On pre-split cached snapshots (no drivers_3d) 3D rows
-    degrade to the weekly WoW path. CVR is orders/clicks (exact decomposition).
+    ROI gate (2026-08-03), on the W0 Google-Search ROI shown in each row's ROI cell:
+    ROI is a graded READ, never a filter: `verdict` needs ROI > SEAS_UP (140) to print
+    "+ve" (and < SEAS_DN (120) for "-ve"), so an unprofitable CE can never collect a
+    "+15%, lean in" recommendation. An explicit ROI gate was tried and removed 2026-08-08 —
+    it filtered 0-1 rows across 5 markets because a >=35% swing already moves ROI.
+
+    Per row we surface: the four drivers (value + %Δ, `dominant` = the one explaining the
+    move), always-on 28-day spend + pooled 28-day ROI, clicks as CONTEXT only (traffic is
+    never a qualifier — Jul-17), and `weeks` = raw W0..W3 weekly blocks (spend · ROI · clicks ·
+    CVR · CM1/conv · CPC, newest first) for the expanded Losing-Money-style display.
     """
     ce_by = {c["ce_id"]: c for c in ces}
     # 28d ROI + spend are the pause/scale decision metrics → Google-Search only where the split
     # columns exist (2026-07-17); business fallback on pre-split snapshots. Funnel drivers stay
     # total-business (the CVR = orders/clicks decomposition uses business clicks).
     has_g = any("spend_g" in (w or {}) for c in ces for w in (c.get("weekly") or []))
+    # SPK/CMK feed the always-on 28-day ROI/spend context only; the per-week display blocks
+    # come from alerts._week_blocks (daily-sourced, weekday-aligned).
     SPK, CMK = ("spend_g", "cm1_g") if has_g else ("spend", "cm1")
     def pctchg(now, prev):
         return round((now / prev - 1) * 100) if (now is not None and prev) else None
@@ -367,7 +371,9 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
     out = []
     for r in fluctuations:
         ce = ce_by.get(r["ce_id"])
-        if not ce or not _active(ce): continue            # existing CEs only
+        # No _active() check: measured across 3 markets it removed ZERO rows — the volume
+        # floors upstream (W0 >= 10 · baseline >= 30 over 21d) already guarantee an active CE.
+        if not ce: continue
         wk = ce.get("weekly") or []
         # Maturity lag: analyze the bucket on the matured week — drop any weekly entries after
         # flux_w0 so w0/wm1 and the 28d windows end on settled data (2026-07-20). No-op when
@@ -377,6 +383,22 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
         w0 = wk[-1] if wk else {}
         wm1 = wk[-2] if len(wk) >= 2 else {}
         d = r.get("direction")
+        # Early-warning dedup: a DOWN-swing already flagged by Losing Money is a cash loss
+        # that has landed — not an early signal — so it belongs in that table, not here. Up
+        # is untouched (Losing Money has no upside lane). Reads the LM output ce-id set.
+        if d == "down" and lm_ce_ids and str(r["ce_id"]) in lm_ce_ids:
+            continue
+        # W0..W-3 blocks come from alerts._week_blocks — built off the daily series on
+        # weekday-aligned, equal-length spans anchored to the ANALYSIS window, so the four
+        # cells are comparable and W0 is the same window the swing was measured on.
+        weeks = r.get("weeks") or []
+        # Dollar floor: enough spend on the CE this week for a recommendation to be worth a
+        # reader's time. The order floor upstream (>=10) lets $79-CEs through; "+15%/7d" on
+        # $79 is noise. Guards against the small-spend tail (~8-12% of rows). Set 0 to disable.
+        import config
+        _min_sp = getattr(config, "FLUCTUATION_MIN_SPEND_W0", 0)
+        if _min_sp and ((weeks[0].get("spend") if weeks else 0) or 0) < _min_sp:
+            continue
         # always-on context: 28-day spend (Σ) + pooled 28-day ROI (Σcm1/Σspend), Google-search basis,
         # each with a Δ vs the prior 28 days (is it already scaling down / eroding?)
         last4, prev4 = wk[-4:], wk[-8:-4]
@@ -388,9 +410,13 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
         roi_4w_prev = (100 * cm1_4w_prev / spend_4w_prev) if spend_4w_prev else None
         spend_4w_d = round((spend_4w / spend_4w_prev - 1) * 100) if spend_4w_prev else None
         roi_4w_d = round(roi_4w - roi_4w_prev) if (roi_4w is not None and roi_4w_prev is not None) else None
-        alert_type = "3D" if r.get("window") == "sustained_3d" else "WoW"
-        # paid Google-Search drivers (pooled, reconcile to paid RPC): 3D→3-day-vs-28d, WoW→week-vs-week
-        drv = (r.get("drivers") or {}).get("3d" if alert_type == "3D" else "wow") or {}
+        # Driver moves are read on the SAME window the row qualified against — L3W rows use
+        # the L3W deltas, WoW rows (CVR / collective-driver) use the WoW deltas. Both the
+        # display below and the Step-3 gate consume this one `drv`, so a row is never
+        # described by one window and filtered by another.
+        basis = "l3w" if r.get("window") == "l3w" else "wow"
+        alert_type = "L3W" if basis == "l3w" else "WoW"
+        drv = (r.get("drivers") or {}).get(basis) or {}
         vals = {}
         for k, aspct in (("cvr", True), ("aov", False), ("cr", True), ("tr", True)):  # CVR/CR/TR as %, AOV as $
             v = (drv.get(k) or {}).get("v")
@@ -401,42 +427,44 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
         aligned = {k: v for k, v in moves.items() if v != 0 and (v < 0) == (d == "down")}
         pool = aligned or moves
         dom = max(pool, key=lambda k: abs(pool[k])) if pool else None
-        # --- Step-3 multi-metric gate (2026-07-20): tighten down-swings to the real opportunities.
-        # CVR uses its WoW move only; AOV/CR/TR use the alert window. One red → ≥25% (CVR ≥30%);
-        # ≥2 red → the compounded paid-RPC drop must clear 20%. CM1/conv is exempt (separate signal).
-        if d == "down" and r.get("signal") in ("rpc", "cvr"):
-            wowd = (r.get("drivers") or {}).get("wow") or {}
-            def _mv(k):                                    # adverse %move; CVR = WoW, others = alert window
-                src = wowd if k == "cvr" else drv
-                return (src.get(k) or {}).get("pct")
-            reds = {k: _mv(k) for k in ("cvr", "aov", "cr", "tr")
-                    if (_mv(k) is not None and _mv(k) <= -FX_RED_FLOOR)}
-            if not reds:
-                continue
-            if len(reds) == 1:
-                k = next(iter(reds))
-                if abs(reds[k]) < (FX_CVR_MIN if k == "cvr" else FX_SINGLE_MIN):
-                    continue
-            else:                                          # ≥2 red → compounded RPC drop
-                prod = 1.0
-                for k in ("cvr", "aov", "cr", "tr"):
-                    p = _mv(k)
-                    if p is not None: prod *= (1 + p / 100.0)
-                if (prod - 1) * 100 > -FX_COLLECTIVE_MIN:
-                    continue
+        # NOTE: the Step-3 driver gate was REMOVED (2026-08-10). It dropped ~0.5 rows/market-week
+        # and, on inspection, those weren't noise — they were BROAD-BASED moves (all four drivers
+        # aligned, none individually ≥30% but compounding to a 35-52% RPC swing, e.g. Sydney Whale
+        # Watching +52%). The gate assumed a real move concentrates in one driver and killed the
+        # distributed ones, which are the cleanest signals. Redundant anyway: RPC = CVR×AOV×CR×TR,
+        # so a 35% RPC move already guarantees the drivers moved. `dominant` is still surfaced.
         pc = w0.get("paid_contribution_pct")
         cause = r.get("cause_tag")
-        roi_now = (w0.get("roi_pct") or 0)
-        verdict = ("+ve" if (d == "up" and roi_now > SEAS_UP) else "-ve" if (d == "down" and roi_now < SEAS_DN) else "hold")
-        # innocence-cascade-aware recommendation (unchanged): unexplained down = investigate
+        # ROI gate — the W0 Google-Search ROI over the ANALYSIS window, i.e. exactly the
+        # number rendered in the row's ROI cell, so the gate is auditable from the table.
+        # Only falls back to the report-week series when the aligned blocks are ABSENT
+        # (pre-split cached snapshot); a present-but-null ROI is a deliberate validity
+        # gate (spend under the floor / out-of-range) and must stay null.
+        if weeks:
+            roi_w0 = weeks[0].get("roi")
+        else:
+            roi_w0 = w0.get("roi_g") if has_g else w0.get("roi_pct")
+        # No ROI *gate*. Measured across 5 markets it removed 0-1 rows: a >=35% drop
+        # mechanically pulls current-week ROI down, so "dropped hard AND still >180%" is
+        # very nearly an empty set (same story at 100% on the up side). The protection it
+        # was meant to give — never say "+15%, lean in" on an unprofitable CE — is already
+        # delivered by the VERDICT below, which needs ROI > SEAS_UP (140) to print "+ve".
+        # ROI stays a graded read, not a filter.
+        if d == "down":
+            verdict = "-ve" if (roi_w0 is not None and roi_w0 < SEAS_DN) else "watch"
+        else:
+            verdict = "+ve" if (roi_w0 is not None and roi_w0 > SEAS_UP) else "watch"
+        # innocence-cascade-aware recommendation: unexplained down = investigate
         if pc is not None and pc < LOW_PAID_PCT:      rec = "review — low paid"
         elif cause == "input-induced":                rec = "verify (bid change)"
         elif cause == "supply-linked":                rec = "route Ops (supply)"
         elif verdict == "+ve":                        rec = "+15%/7d"
-        elif verdict == "-ve":                        rec = "investigate" if cause == "unexplained" else "-15%/7d"
-        else:                                         rec = "verify/hold"
+        elif verdict == "-ve":                        rec = "investigate"   # every -ve reaching here is unexplained
+        else:                                         rec = "monitor"
         out.append({
             "ce_id": r["ce_id"], "ce_name": r["ce_name"],
+            "signal": r.get("signal"),
+            "sustained": r.get("sustained", False),   # True = 2nd week running (confirmed trend chip)
             "direction": d, "group": ("Compound" if d == "up" else "Defend"),
             "alert_type": alert_type, "swing_pct": r.get("magnitude_pct"),
             "roi_4w": roi_4w, "spend_4w": round(spend_4w) if spend_4w else None,
@@ -447,8 +475,12 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None):
             "clicks_d": pctchg(w0.get("paid_clicks_g", w0.get("clicks")), wm1.get("paid_clicks_g", wm1.get("clicks"))),
             "dominant": LBL.get(dom), "dominant_key": dom,
             "verdict": verdict, "cause": cause, "paid_pct": pc, "recommendation": rec,
+            "roi_w0": roi_w0,          # the gated value (Google-Search W0 ROI)
+            "weeks": weeks,
         })
-    out.sort(key=lambda r: -abs(r.get("swing_pct") or 0))
+    # Sort by W0 Google spend, biggest bets first. The swing % is no longer rendered, so
+    # sorting on it would order the table by an invisible field; spend is in the table.
+    out.sort(key=lambda r: -((r.get("weeks") or [{}])[0].get("spend") or 0))
     return out
 
 
@@ -791,14 +823,25 @@ def build_buckets(snap):
     # Fluctuations drivers/qualifiers run on the matured PORTION of the report week (upstream in
     # alerts.py). The 28d ROI/spend CONTEXT columns here use the last full matured week so they
     # aren't contaminated by the unsettled current week (2026-07-20).
-    flux_ctx = (snap.get("meta") or {}).get("fluctuation_context_week")
-    seas = seasonality(fl, ces, cat_rpc, cat_cvr, flux_w0=flux_ctx)
+    # Anchor the weekly-context columns (paid-contribution %, 28d ROI/spend) on the week the
+    # bucket actually ANALYSED, so they describe the same week as every metric beside them.
+    # Previously this passed fluctuation_context_week (the last fully-settled week), which
+    # after the full-week switch resolved to W-1 — the low-paid branch was reading last week.
+    flux_win = ((snap.get("meta") or {}).get("fluctuation_window_start")
+                or (snap.get("meta") or {}).get("week_start"))
     mmp = _mmp_map(snap)
     prior_pp = _prior_proplus_map(snap)
     launch = _launch_map(snap)
     troas_now = _troas_now_map(snap)
+    # Losing Money first, so its flagged set can suppress duplicate down-swings in Fluctuations.
+    # A CE already in the cash bucket isn't an EARLY warning — it's the same finding, later.
+    # We read the OUTPUT ce-ids (existing + new), never the criteria, so this is agnostic to
+    # which Losing Money engine is running (v2 here / C5 on main).
+    lm = losing_money(ces, troas_now, launch, prior_pp)
+    lm_flagged = {str(r["ce_id"]) for r in (lm.get("existing") or []) + (lm.get("new") or [])}
+    seas = seasonality(fl, ces, cat_rpc, cat_cvr, flux_w0=flux_win, lm_ce_ids=lm_flagged)
     return {
-        "defend": {"losing_money": losing_money(ces, troas_now, launch, prior_pp),
+        "defend": {"losing_money": lm,
                    "seasonality_down": [s for s in seas if s["direction"] == "down"]},
         "compound": {"scale_up": scale_up(ces, troas, mw, cat_rpc, cat_cvr),
                      "seasonality_up": [s for s in seas if s["direction"] == "up"]},

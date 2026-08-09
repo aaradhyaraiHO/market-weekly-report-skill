@@ -90,25 +90,24 @@ ROI_MAX_PCT = 1000.0
 WEEKLY_SPEND_FLOOR = 50.0   # ROI computed only where weekly spend >= $50
 
 # --------------------------------------------------------------------------- #
-# Fluctuation engine — POF gates (CM1/conv & RPC daily alert)
+# Fluctuation engine — CM1/conv & RPC swing gate
 # --------------------------------------------------------------------------- #
-POF = dict(
-    baseline_window_days=28,
-    baseline_excl_last_days=3,
-    baseline_min_valid_days=14,
-    baseline_dev_threshold=0.20,   # >= 20% deviation vs 28d baseline
-    sdlw_threshold=0.25,           # +-25% same-day-last-week (short-term trigger)
-    roll7_wow_threshold=0.25,      # +-25% 7d-rolling WoW (alternate trigger/evidence)
-    persistence_threshold=0.15,    # 3-day persistence >= 15% (reported metric)
-    # A qualifying day must also hold on a trailing-3-day smoothed basis: the
-    # swing persists, not just spikes. Calibrated to the NA reference — at 0.15
-    # a one-off up-day (e.g. Disneyland 2026-07-02) leaks in; 0.20 reproduces
-    # exactly the 5 reference alerts and drops all single-day noise.
-    persistence_smoothed_dev=0.25,   # 3-day persistence must hold >25% (2026-07-19; was 0.20 — tighten)
-    cv_max=0.50,                   # coefficient of variation <= 0.50
-    min_conv_per_day=10,           # >= 10 conversions/day
-    min_clicks_35d=500,            # >= 500 clicks / trailing 35d
-)
+# Simplified L3W-vs-W0 ratio comparison (2026-08-03) — replaces the daily POF
+# engine (28d baseline + SDLW + CV + 3-day persistence). One pooled ratio over
+# the report week (Sun–Sat) vs the prior 3 weeks; flags at >=35%. Volume floor
+# is the standard weekly MIN_ORDERS_WK below.
+FLUCTUATION_THRESHOLD = 0.35   # |change| >= 35% flags
+FLUCTUATION_L3W_DAYS = 21      # comparison period: 21 days before the report week
+# Sustained-shift requirement (2026-08-09). When True, a CE flags only if the SAME-direction
+# move also cleared the threshold on the prior week's own W0-vs-L3W comparison — i.e. the
+# level shifted and stayed shifted, rather than one week wobbling. Trades volume for
+# flags that are still true next week.
+# Sustained shift is a LABEL on each row, never a filter (2026-08-10). Filtering on it
+# deleted brand-new moves — the opposite of early warning. Rows always show; `sustained`
+# marks the ones that also cleared the threshold last week (a confirmed 2-week trend).
+# Dollar floor on W0 Google-Search spend — the "enough money to be worth acting on" gate.
+# The order floor alone lets $79 CEs through. Set 0 to disable.
+FLUCTUATION_MIN_SPEND_W0 = 200.0
 
 # --------------------------------------------------------------------------- #
 # Fluctuation engine — CVR WoW signal
@@ -139,17 +138,23 @@ TROAS_FALLBACK_PCT = 135.0      # spend-weighted tROAS fallback where none set
 # --------------------------------------------------------------------------- #
 # NA validation references  (master plan; revenue on ACTUALS basis)
 # --------------------------------------------------------------------------- #
-# Re-baselined 2026-07-20 for the GOOGLE-ONLY CM1/conv scope decision (Jul-19).
-# Original plan reference was 5 CEs on the Google+Bing basis. Arte Museum NY was
-# a borderline alert (CM1/conv ~30 vs a ~20% baseline deviation); its value is
-# nearly identical Google-only (30.4) vs blended (29.7) — Bing is only 7 of 92
-# conversions — but removing Bing from its 28d baseline pushes the deviation just
-# under the ≥20% gate. Correct reclassification under the narrower paid-Google
-# scope, not a masked regression. Gated fields (cm1 alerts, cv_excluded) are now
-# Google-only truth; no_bid/revenue below stay as the original Google+Bing-era
-# plan anchors (informational — validate_na does not gate on them).
+# week_start is a SUNDAY, matching WEEK_START_DAY. It was 2026-06-29 (a MONDAY) — a
+# leftover from the pre-2026-08-03 Mon→Sun convention. That silently broke `--validate`:
+# combined_entity_stats buckets weeks on WEEK(SUNDAY), so every weekly lookup keyed on the
+# Monday missed (BQ returns 06-28; the code asked for 06-29) and each CE came back all-None.
+# Snapped to its own week-start, 2026-06-28 → 07-04, which shares 6 of 7 days with the
+# original reference span (2026-08-08).
+#
+# ⚠ The cm1_conv_alerts list below is STILL STALE, for two independent reasons:
+#   1. it was calibrated against the DAILY POF engine (28d baseline · ≥20% dev · SDLW ·
+#      CV ≤0.50 · 3-day persistence), which no longer exists — CM1/conv now fires on a
+#      single L3W-vs-W0 pooled ratio at ≥35%;
+#   2. the reference span itself shifted by a day in the Mon→Sun move.
+# So `--validate` will still report a MISMATCH until it is re-baselined against a fresh NA
+# run. Kept for provenance, not as a passing gate. no_bid/revenue anchors below were
+# always informational (validate_na never gated them).
 VALIDATION_NA = {
-    "week_start": "2026-06-29",
+    "week_start": "2026-06-28",
     "market_revenue_actuals": 615432,   # sum_revenue basis (plan reference, informational)
     "no_bid_campaigns": 57,             # original plan anchor (informational, not gated)
     "no_bid_spend": 21705,              # original plan anchor (informational, not gated)
@@ -160,7 +165,6 @@ VALIDATION_NA = {
         "American Museum of Natural History",
     ],
     "cm1_conv_alert_count": 4,
-    "cv_excluded": 0,
 }
 
 
