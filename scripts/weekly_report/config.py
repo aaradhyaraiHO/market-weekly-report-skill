@@ -108,25 +108,19 @@ WEEKLY_SPEND_FLOOR = 50.0   # ROI computed only where weekly spend >= $50
 # is the standard weekly MIN_ORDERS_WK below.
 FLUCTUATION_THRESHOLD = 0.35   # |change| >= 35% flags
 FLUCTUATION_L3W_DAYS = 21      # comparison period: 21 days before the report week
-# Sustained-shift requirement (2026-08-09). When True, a CE flags only if the SAME-direction
-# move also cleared the threshold on the prior week's own W0-vs-L3W comparison — i.e. the
-# level shifted and stayed shifted, rather than one week wobbling. Trades volume for
-# flags that are still true next week.
-# Sustained shift is a LABEL on each row, never a filter (2026-08-10). Filtering on it
-# deleted brand-new moves — the opposite of early warning. Rows always show; `sustained`
-# marks the ones that also cleared the threshold last week (a confirmed 2-week trend).
+# Sustained shift is a LABEL on each row, never a filter (2026-08-10). Filtering on it was
+# tried and reverted: it deleted brand-new moves, the opposite of early warning. Rows always
+# show; `sustained` marks the ones that also cleared the threshold last week (a 2-week trend).
 # Dollar floor on W0 Google-Search spend — the "enough money to be worth acting on" gate.
 # The order floor alone lets $79 CEs through. Set 0 to disable.
 FLUCTUATION_MIN_SPEND_W0 = 200.0
 
 # --------------------------------------------------------------------------- #
-# Fluctuation engine — CVR WoW signal
+# Fluctuation engine — volume floor
 # --------------------------------------------------------------------------- #
-CVR_WOW_DROP_THRESHOLD = 0.30   # CVR drop > 30% WoW
-CVR_MIN_CLICKS_WK = 300         # >= 300 clicks/wk floor
-MIN_ORDERS_WK = 10              # >= 10 orders in BOTH weeks for the weekly (WoW) paths —
-                                # the weekly analog of the daily engine's min_conv_per_day=10;
-                                # a ratio off <10 orders on either side is noise (2026-07-20)
+MIN_ORDERS_WK = 10              # W0 needs >= this (pro-rated); L3W baseline needs >= 3x.
+                                # A ratio off < ~10 orders is noise. (CVR_WOW_DROP_THRESHOLD /
+                                # CVR_MIN_CLICKS_WK removed 2026-08-10 with the CVR-WoW path.)
 
 # --------------------------------------------------------------------------- #
 # Gray-zone (P2.3) — near-miss band around bucket triggers

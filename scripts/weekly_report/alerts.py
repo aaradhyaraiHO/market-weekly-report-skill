@@ -214,33 +214,22 @@ def _pooled_drivers(o: pd.DataFrame | None, lo: dt.date, hi: dt.date) -> dict:
 
 def _driver_windows(funnel_df: pd.DataFrame, ce_id: str,
                     w0_start: dt.date, w0_end: dt.date) -> dict | None:
-    """Driver moves on BOTH comparison bases, so each row can be displayed and gated on the
-    window it actually qualified against (CM1/conv + RPC fire on L3W; CVR and the collective
-    -driver path fire WoW). Mixing them — gating a WoW row on L3W deltas — let two different
-    windows decide one row.
-
-      {'l3w': {driver: {v, pct}},   W0 vs the prior 21 days
-       'wow': {driver: {v, pct}}}   W0 vs the same-length preceding week
-    """
+    """RPC-driver moves (CVR·AOV·CR·TR) on the L3W window — W0 vs the prior 21 days, the same
+    window the qualifier fires on. Returns {'l3w': {driver: {v, pct}}}.
+    (Kept as a nested dict for the display's `.get('l3w')` access; there is only one window
+    now that the WoW side-paths are gone.)"""
     o = _indexed(funnel_df, ce_id, _FUNNEL_COLS)
     if o is None:
         return None
     now = _pooled_drivers(o, w0_start, w0_end)
-    n_days = (w0_end - w0_start).days + 1
-
-    def _pack(prev):
-        out = {}
-        for k in ("cvr", "aov", "cr", "tr"):
-            n, p = now.get(k), prev.get(k)
-            out[k] = {"v": None if n is None else round(n, 4),
-                      "pct": (round((n / p - 1) * 100) if (n is not None and p) else None)}
-        return out
-
-    l3w = _pack(_pooled_drivers(o, w0_start - dt.timedelta(days=config.FLUCTUATION_L3W_DAYS),
-                                w0_start - dt.timedelta(days=1)))
-    wow = _pack(_pooled_drivers(o, w0_start - dt.timedelta(days=7),
-                                w0_start - dt.timedelta(days=7) + dt.timedelta(days=n_days - 1)))
-    return {"l3w": l3w, "wow": wow}
+    prev = _pooled_drivers(o, w0_start - dt.timedelta(days=config.FLUCTUATION_L3W_DAYS),
+                           w0_start - dt.timedelta(days=1))
+    l3w = {}
+    for k in ("cvr", "aov", "cr", "tr"):
+        n, p = now.get(k), prev.get(k)
+        l3w[k] = {"v": None if n is None else round(n, 4),
+                  "pct": (round((n / p - 1) * 100) if (n is not None and p) else None)}
+    return {"l3w": l3w}
 
 
 def _week_blocks(ads_df, funnel_df, ce_id: str, w0_start: dt.date, w0_end: dt.date,
@@ -330,9 +319,9 @@ def build_bucket1(
     """
     Returns (bucket1_rows, diagnostics).
 
-    CM1/conv and RPC use the simplified L3W-vs-W0 comparison (pooled ratio over
-    the report week vs the prior 21 days, flagged at >=35%). CVR drops and
-    wow_driver_alerts remain WoW-based.
+    Both signals — CM1/conv and RPC — use the L3W-vs-W0 comparison: pooled ratio over the
+    report week vs the prior 21 days, flagged at >=35%. Every emitted row has window="l3w".
+    (The old CVR-WoW and collective-driver-WoW side-paths were removed 2026-08-08.)
     """
     if w0_end is None:
         w0_end = w0_start + dt.timedelta(days=6)
@@ -451,7 +440,7 @@ def build_bucket1(
             "sustained": res.get("sustained", False),   # True = same-direction move held last week too
             "cause_tag": _cause_tag(ce_id, res["direction"]),
             "swing_driver": _swing_driver(shapley_by_ce.get(ce_id)),
-            # paid Google-Search RPC-driver breakdown (CVR·AOV·CR·TR), WoW + 3D, from the funnel
+            # paid Google-Search RPC-driver breakdown (CVR·AOV·CR·TR) on the L3W window, from the funnel
             "drivers": (_driver_windows(ce_daily_funnel_google, ce_id, w0_start, w0_end)
                         if ce_daily_funnel_google is not None else None),
             # W0..W-3 display blocks on weekday-aligned, equal-length spans

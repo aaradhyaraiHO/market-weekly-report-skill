@@ -364,9 +364,9 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None, lm_ce_ids=Non
 
       RPC = CVR × AOV × CR × TR   (exact identity, with CVR = orders/clicks)
 
-    Qualifiers are upstream in alerts.py: CM1/conv + RPC fire on the L3W-vs-W0 pooled ratio
-    (>=35%, 2026-08-03); CVR + collective-driver rows stay WoW. `alert_type` labels which
-    (L3W vs WoW); driver %Δ all come from the l3w window.
+    Qualifiers are upstream in alerts.py: both signals (CM1/conv + RPC) fire on the L3W-vs-W0
+    pooled ratio (>=35%). Every row is L3W (the WoW side-paths were removed 2026-08-08), so
+    `alert_type` is always "L3W" and all driver %Δ come from the l3w window.
 
     ROI gate (2026-08-03), on the W0 Google-Search ROI shown in each row's ROI cell:
     ROI is a graded READ, never a filter: `verdict` needs ROI > SEAS_UP (140) to print
@@ -432,13 +432,9 @@ def seasonality(fluctuations, ces, cat_rpc, cat_cvr, flux_w0=None, lm_ce_ids=Non
         roi_4w_prev = (100 * cm1_4w_prev / spend_4w_prev) if spend_4w_prev else None
         spend_4w_d = round((spend_4w / spend_4w_prev - 1) * 100) if spend_4w_prev else None
         roi_4w_d = round(roi_4w - roi_4w_prev) if (roi_4w is not None and roi_4w_prev is not None) else None
-        # Driver moves are read on the SAME window the row qualified against — L3W rows use
-        # the L3W deltas, WoW rows (CVR / collective-driver) use the WoW deltas. Both the
-        # display below and the Step-3 gate consume this one `drv`, so a row is never
-        # described by one window and filtered by another.
-        basis = "l3w" if r.get("window") == "l3w" else "wow"
-        alert_type = "L3W" if basis == "l3w" else "WoW"
-        drv = (r.get("drivers") or {}).get(basis) or {}
+        # Every row qualifies on the L3W window, so the driver %Δ are read from there.
+        alert_type = "L3W"
+        drv = (r.get("drivers") or {}).get("l3w") or {}
         vals = {}
         for k, aspct in (("cvr", True), ("aov", False), ("cr", True), ("tr", True)):  # CVR/CR/TR as %, AOV as $
             v = (drv.get(k) or {}).get("v")

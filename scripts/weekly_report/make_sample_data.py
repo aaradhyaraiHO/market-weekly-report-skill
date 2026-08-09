@@ -437,9 +437,9 @@ def build_snapshot(rng, market_name, slug, ce_defs, scale):
                 continue
             bucket1.append({
                 "ce_id": ce["ce_id"], "ce_name": ce["ce_name"],
-                "signal": "cvr", "direction": "down",
-                "magnitude_pct": round(rng.uniform(31, 48), 1),
-                "window": "wow",
+                "signal": "rpc", "direction": "down",
+                "magnitude_pct": round(rng.uniform(36, 52), 1),
+                "window": "l3w",
                 "evidence": {
                     "value_now": w0["cvr_pct"],
                     "baseline": round(w0["cvr_pct"] * 1.5, 2),
