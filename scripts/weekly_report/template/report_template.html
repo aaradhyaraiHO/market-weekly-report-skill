@@ -2761,7 +2761,7 @@ function openDrawer(ceId){
   const NOTE_MAX=600;
 
   const histHtml = hist.length ? (
-    '<button class="hist-toggle" id="histToggle"><span class="caret" id="histCaret">▶</span> History ('+hist.length+')</button>'+
+    '<button class="hist-toggle" id="histToggle"><span class="caret" id="histCaret">▶</span> Note history ('+hist.length+')</button>'+
     '<div class="hist-list" id="histList">'+
       hist.map(h=>'<div class="hist-entry"><div class="hist-when">'+esc(h.week_start)+' · '+esc(h.author||'—')+
         (h.slack_permalink?' · <a class="hist-link" href="'+esc(h.slack_permalink)+'" target="_blank">thread ↗</a>':'')+
@@ -2823,6 +2823,7 @@ function openDrawer(ceId){
           '<span class="char-count" id="charCount"></span>'+
         '</div>'+
         '<div class="cmt-meta" style="margin-top:8px"><span id="cmtSaved" class="cmt-saved">'+esc(curWhen)+'</span></div>'+
+        histHtml+
       '</div>'+
       actionLogHtml+
     '</div>';
