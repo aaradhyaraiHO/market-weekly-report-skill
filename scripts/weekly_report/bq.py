@@ -17,7 +17,8 @@ _client: bigquery.Client | None = None
 def client() -> bigquery.Client:
     global _client
     if _client is None:
-        _client = bigquery.Client(project=config.BQ_PROJECT)
+        # Pin the location (analytics_reporting is EU) so jobs never mis-route on auto-detect.
+        _client = bigquery.Client(project=config.BQ_PROJECT, location=config.BQ_LOCATION)
     return _client
 
 

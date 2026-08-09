@@ -54,15 +54,15 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Weekly Market Report V1 orchestrator")
     ap.add_argument("market", help="market slug, 'all', or 'headout' (true-global) "
                     f"({', '.join(config.MARKETS)})")
-    ap.add_argument("--week", help="W0 Monday (YYYY-MM-DD); "
-                    "default = latest complete matured week")
+    ap.add_argument("--week", help="W0 week-start = SUNDAY (YYYY-MM-DD); "
+                    "any date is snapped to its Sun–Sat week. default = latest complete Sun–Sat week")
     ap.add_argument("--no-open", dest="open_", action="store_false", default=True,
                     help="do not open the rendered HTML")
     ap.add_argument("--validate", action="store_true",
                     help="run the NA reference gate when north_america is in the set")
     args = ap.parse_args()
 
-    w0 = _to_date(args.week) if args.week else config.latest_complete_week()
+    w0 = config._week_start(_to_date(args.week)) if args.week else config.latest_complete_week()
     targets = _resolve_targets(args.market)
     print(f"Weekly Market Report V1 | week {config.iso(w0)} | markets: {targets}")
 

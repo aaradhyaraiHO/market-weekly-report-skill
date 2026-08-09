@@ -149,10 +149,12 @@ def _week_end(week):
 def main():
     ap = argparse.ArgumentParser(description="Weekly run driver (staged)")
     ap.add_argument("market", help="market slug or 'all'")
-    ap.add_argument("--week", required=True, help="W0 Monday YYYY-MM-DD")
+    ap.add_argument("--week", required=True, help="W0 week-start = SUNDAY (YYYY-MM-DD); snapped to its Sun–Sat week")
     ap.add_argument("--stage", required=True, choices=["report", "publish", "alert"])
     ap.add_argument("--post", action="store_true", help="(alert stage) post live instead of dry-run")
     args = ap.parse_args()
+    import datetime as _dt
+    args.week = config.iso(config._week_start(_dt.date.fromisoformat(args.week)))   # ensure Sun-Sat across all stages
 
     slugs = slugs_for(args.market)
     if args.stage == "report":

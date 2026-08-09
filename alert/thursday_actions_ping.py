@@ -186,6 +186,11 @@ def main():
     slugs = ([args.slug] if args.slug
              else [k for k in CHANNELS if not k.startswith("_")] if args.all
              else [])
+    # headout is the portfolio rollup — it's in the weekly-alert sweep but must NOT get a
+    # Thursday ping (it would re-ping every market's CEs). Only drop it in --all; an explicit
+    # --slug headout is honoured (manual override).
+    if args.all:
+        slugs = [s for s in slugs if s != "headout"]
     if not slugs:
         ap.error("pass --slug <slug> or --all")
 

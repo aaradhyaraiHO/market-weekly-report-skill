@@ -57,9 +57,14 @@ MARKET_META = {
     "east_asia": ("east-asia-jpn-sk-hk", "East Asia (JPN/SK/HK)", "🇯🇵", "East Asia"),
     "sea": ("sea-sin-tha", "SEA (SIN+THA)", "🇸🇬", "Southeast Asia"),
     "oceania": ("oceania", "Oceania", "🇦🇺", "Oceania"),
+    # Long-tail markets (2026-08-04)
+    "benelux": ("benelux", "Benelux", "🇧🇪", "Western Europe"),
+    "nordics": ("nordics", "Nordics", "🇸🇪", "Northern Europe"),
+    "south_america": ("south-america", "South America", "🇧🇷", "Americas"),
+    "mexico_central_america": ("mexico-central-america", "Mexico & Central America", "🇲🇽", "Americas"),
 }
-REGION_ORDER = ["Portfolio", "Americas", "Southern Europe", "Western Europe", "British Isles",
-                "Central & SE Europe", "Middle East", "East Asia", "Southeast Asia", "Oceania"]
+REGION_ORDER = ["Portfolio", "Americas", "Southern Europe", "Western Europe", "Northern Europe",
+                "British Isles", "Central & SE Europe", "Middle East", "East Asia", "Southeast Asia", "Oceania"]
 
 
 def _money(v):
@@ -236,15 +241,17 @@ def _cell(s, is_current, ledger_slug=None, deploy=None):
     arr = "▲" if (wow is not None and wow >= 1) else "▼" if (wow is not None and wow <= -1) else "·"
     wtxt = "" if wow is None else f'<div class="wow" style="color:{col}">{arr} {_pct(wow)}</div>'
     inner = f'<div class="rev">{_money(s["rev"])}</div>{wtxt}'
-    # Link the cell to THAT week's archived report when it exists (Ledger history). stopPropagation
-    # so it doesn't fall through to the row's current-week onclick; weeks without an archive stay
-    # plain (and fall through to the current report).
+    # Whole-cell click → THAT week's archived report (Ledger history). Put the handler on the
+    # <td> itself (not just an <a> around the number) so clicking anywhere in the cell — padding
+    # included — opens that week; otherwise a click in the cell's padding fell through to the
+    # row's current-week onclick. stopPropagation stops that row handler. Weeks without an
+    # archive get no handler and fall through to the row (current report).
+    click = ""
     if ledger_slug and deploy is not None:
         arch = f"weekly-report-{ledger_slug}-{s['week']}.html"
         if (deploy / arch).exists():
-            inner = (f'<a href="{arch}" onclick="event.stopPropagation()" '
-                     f'style="display:block;color:inherit;cursor:pointer">{inner}</a>')
-    return f'<td class="cell{" cur" if is_current else ""}">{inner}</td>'
+            click = f' onclick="event.stopPropagation();location.href=\'{arch}\'" style="cursor:pointer"'
+    return f'<td class="cell{" cur" if is_current else ""}"{click}>{inner}</td>'
 
 
 def render_matrix(state, week, cols, deploy=None):
@@ -309,7 +316,8 @@ def render_matrix(state, week, cols, deploy=None):
  </div>
  {_headout_hero(state.get("headout"))}
  <table class="board"><thead><tr><th class="mkth">Market</th>{labels}</tr></thead><tbody>{body}</tbody></table>
- <div style="margin-top:14px;font:600 11px 'Hanken Grotesk';color:#9A92AC">Each cell: weekly revenue + WoW%. Click a row for the full report. Revenue = predicted.</div>
+ <div style="margin-top:14px;font:600 11px 'Hanken Grotesk';color:#9A92AC">Each cell: weekly revenue + WoW%. Click a row for the full report, or a cell for that week's report. Revenue = predicted.</div>
+ <div style="margin-top:5px;font:600 11px 'Hanken Grotesk';color:#B4ABC7">Weeks run <b>Sun–Sat</b> from w/c 2026-07-26. Earlier columns are the pre-shift Mon–Sun reports (≈1 day offset), kept for history.</div>
 </div></body></html>"""
 
 
@@ -355,6 +363,7 @@ def main(argv=None):
     if args.market == "all":
         try:
             import export_perf_sheet as eps
+            camp_cat = eps._fetch_campaign_categories(args.week)   # campaign-level Category (one query)
             rows = []
             for slug in config.MARKETS:
                 sp = CACHE_DIR / f"snapshot_{slug}_{args.week}.json"
@@ -362,13 +371,22 @@ def main(argv=None):
                     continue
                 snap = json.loads(sp.read_text())
                 gm = eps._fetch_gm_actions(slug, args.week)
-                rows += eps.rows_for_snapshot(snap, gm)
+                rows += eps.rows_for_snapshot(snap, gm, camp_cat)
             if rows:
                 ok, tab, txt = eps.write_weekly_tab(rows, args.week)
                 print(f"  {'✓' if ok else '✗'} perf sheet: {len(rows)} rows → tab '{tab}'"
                       + ("" if ok else f"  [{txt[:120]}]"))
         except Exception as e:
             print(f"  ! perf-sheet export skipped: {e}")
+
+        # Complete UNGATED Losing-Money view → its own "LM full (no gate)" tab in the same sheet.
+        # Same engine at spend_gate=0 so perf's "every losing CE is listed" check always passes.
+        # Separate tab — never touches the `w/c <week>` action tab. Best-effort, main-only.
+        try:
+            import export_full_lm as efl
+            efl.write_tab(args.week, efl.build_rows(args.week, str(CACHE_DIR)))
+        except Exception as e:
+            print(f"  ! full-LM export skipped: {e}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Perf-sheet GM-comment re-export, 3x/day (11:00 / 15:00 / 19:00 IST).
+  Pulls GM comments added in the reports during the week into perf's Weekly Flagged sheet
+  (a point-in-time export, not a live sync). Sheet write only — no Vercel deploy.
+
+  Install:  cp scripts/weekly_report/com.headout.weekly-perf-reexport.plist ~/Library/LaunchAgents/ then
+            launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.headout.weekly-perf-reexport.plist
+  Reload:   launchctl bootout  gui/$(id -u)/com.headout.weekly-perf-reexport ; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.headout.weekly-perf-reexport.plist
+  Run now:  launchctl kickstart -k gui/$(id -u)/com.headout.weekly-perf-reexport
+  launchd re-runs a MISSED calendar fire on next wake — asleep at the fire time still re-exports.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.headout.weekly-perf-reexport</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/aaradhyarai/market-weekly-report-skill/scripts/weekly_report/run_perf_reexport.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>/Users/aaradhyarai/market-weekly-report-skill/.cache/weekly_report/launchd.perf.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/aaradhyarai/market-weekly-report-skill/.cache/weekly_report/launchd.perf.err.log</string>
+</dict>
+</plist>
