@@ -814,13 +814,24 @@ function wrFxAction(bucket,ceId,val,el){
     if(el) el.value=prev;
     _flashSaveErr(el);
   });
-  if(el){
-    const td=el.closest&&el.closest('td'), ta=td&&td.querySelector('.lm-note');
-    if(ta){
-      const need=!!val && !(ta.value||'').trim();
-      ta.classList.toggle('lm-note-req',need);
-      if(need){ ta.placeholder='comment required — why?'; ta.focus(); }
+  if(!el) return;
+  const td=el.closest&&el.closest('td');
+  let ta=td&&td.querySelector('.lm-note');
+  if(val){
+    // reveal the comment box on first selection (it isn't rendered on no-action rows)
+    if(!ta){
+      ta=document.createElement('textarea');
+      ta.className='lm-note';
+      ta.onclick=e=>e.stopPropagation();
+      ta.onchange=function(){ wrFxNote(bucket,ceId,this.value,this); };
+      el.insertAdjacentElement('afterend',ta);
     }
+    const need=!(ta.value||'').trim();
+    ta.classList.toggle('lm-note-req',need);
+    ta.placeholder = need ? 'comment required — why?' : 'why?';
+    if(need) ta.focus();
+  } else if(ta && !(ta.value||'').trim()){
+    ta.remove();   // cleared back to "—" with no comment → collapse the box again
   }
 }
 function wrFxChk(bucket,ceId,checked,el){
@@ -2097,8 +2108,13 @@ function renderBuckets(M){
     const pv=getPrevAction(bucket,r.ce_id);
     const lw=pv.status?'<div class="lm-who" title="'+esc(pv.note||'')+'">last wk: <b>'+(FX_ACT_LBL[pv.status]||esc(pv.status))+'</b>'+(pv.owner?' · '+esc(pv.owner):'')+'</div>':'';
     const req=(v&&!(n||'').trim());
-    return '<select class="lm-act" onclick="event.stopPropagation()" onchange="wrFxAction(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
-      '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why?')+'" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'+attr+lw; };
+    // Comment box only appears once an action is chosen (or one is already on record) — an
+    // empty box on every no-action row was just clutter. wrFxAction injects it on selection.
+    const noteBox = (v || (n||'').trim())
+      ? '<textarea class="lm-note'+(req?' lm-note-req':'')+'" onclick="event.stopPropagation()" placeholder="'+(req?'comment required — why?':'why?')+'" onchange="wrFxNote(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+esc(n)+'</textarea>'
+      : '';
+    return '<select class="lm-act" data-bucket="'+esc(bucket)+'" data-ce="'+esc(r.ce_id)+'" onclick="event.stopPropagation()" onchange="wrFxAction(\''+esc(bucket)+'\',\''+esc(r.ce_id)+'\',this.value,this)">'+o+'</select>'+
+      noteBox+attr+lw; };
   const fluxHead='<th class="stick">Combined Entity</th>'+mktTh+
     lmMetricHeads(FX_METRICS)+
     '<th title="Dominant RPC driver from the CVR × AOV × Completion × Take-rate decomposition (L3W vs W0).">Driver <span class="lm-hb">ⓘ</span></th>'+
