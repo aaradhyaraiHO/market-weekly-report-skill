@@ -1161,14 +1161,54 @@ function statusChip(s){
   else if(t.indexOf('soft')>=0||t.indexOf('still')>=0) c='amber';
   return '<span class="chip '+c+'">'+esc(s)+'</span>';
 }
-/* ---------- market review — localStorage (per-market, like CE notes) ---------- */
-function mrKey(){ return 'wr_market_review::'+MARKETS[mi].meta.market_slug; }
-function getMarketReview(){ try{ return JSON.parse(localStorage.getItem(mrKey())||'null'); }catch(e){ return null; } }
+/* ---------- market review — localStorage cache + shared-Sheet persistence (week-keyed) ----------
+   Persisted to the notes/actions store via the existing action endpoint, keyed by
+   (market_slug, week_start) with a sentinel ce_id + bucket='market_review' — so a review survives
+   across users/devices and each week keeps its own, with prior weeks shown as history. localStorage
+   is the offline cache; the Sheet is source-of-truth (marketReviewPull reconciles on load/switch).
+   bucket='market_review' keeps these out of the losing_money consumers (perf export, drawer log). */
+const MR_CE='__market__', MR_BUCKET='market_review', MR_WEEKS=6;
+let mrHistory={}, mrTimer=null;
+function mrKey(wk){ return 'wr_market_review::'+MARKETS[mi].meta.market_slug+'::'+(wk||curWeek()); }
+function getMarketReview(wk){ try{ return JSON.parse(localStorage.getItem(mrKey(wk))||'null'); }catch(e){ return null; } }
 function saveMarketReview(text){
-  if(text && text.trim()) localStorage.setItem(mrKey(), JSON.stringify({text:text, updated:new Date().toISOString()}));
-  else localStorage.removeItem(mrKey());
+  const wk=curWeek(), t=(text||'').trim();
+  if(t) localStorage.setItem(mrKey(wk), JSON.stringify({text:text, updated:new Date().toISOString()}));
+  else localStorage.removeItem(mrKey(wk));
+  if(!SYNC_OK) return Promise.resolve();
+  const p = t
+    ? {action:'action_upsert',market_slug:slugKey(),ce_id:MR_CE,week_start:wk,bucket:MR_BUCKET,checkbox:'',note:text,status:'',owner:getAuthor()}
+    : {action:'action_delete',market_slug:slugKey(),ce_id:MR_CE,week_start:wk,bucket:MR_BUCKET};
+  return fetch(NOTES_URL+'?'+new URLSearchParams(p).toString(),{redirect:'follow'}).then(r=>r.json()).catch(()=>({}));
 }
-let mrTimer=null;
+/* reconcile localStorage with Sheet-truth for the current week + prior MR_WEEKS; repaint if mounted */
+function marketReviewPull(){
+  if(!SYNC_OK) return Promise.resolve();
+  const s=slugKey(), w=curWeek(); if(!w) return Promise.resolve();
+  const w0=new Date(w+'T00:00:00Z'), weeks=[];
+  for(let i=0;i<MR_WEEKS;i++){ const x=new Date(w0); x.setUTCDate(x.getUTCDate()-7*i); weeks.push(x.toISOString().slice(0,10)); }
+  mrHistory={};
+  return Promise.all(weeks.map(wk=>fetch(NOTES_URL+'?action=action_list&market='+encodeURIComponent(s)+'&week='+encodeURIComponent(wk),{redirect:'follow'})
+      .then(r=>r.json())
+      .then(d=>{ const rev=(d.actions||[]).find(a=>String(a.ce_id)===MR_CE&&a.bucket===MR_BUCKET);
+        if(rev&&(rev.note||'').trim()){ mrHistory[wk]={text:rev.note,updated:rev.updated||'',owner:rev.owner||''};
+          localStorage.setItem(mrKey(wk), JSON.stringify({text:rev.note,updated:rev.updated||''})); } })
+      .catch(()=>{})))
+    .then(()=>{ const ta=document.getElementById('mrText');
+      const cur=mrHistory[curWeek()];
+      if(ta && cur && cur.text!==ta.value){ ta.value=cur.text;
+        const el=document.getElementById('mrSaved'); if(el) el.textContent='saved '+new Date(cur.updated).toLocaleString(); }
+      paintMrHistory(); });
+}
+function mrHistoryHtml(){
+  const wks=Object.keys(mrHistory).filter(wk=>wk!==curWeek()).sort().reverse();
+  if(!wks.length) return '';
+  return '<div style="margin-top:14px"><div style="font-family:var(--sans);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px">Prior weeks</div>'+
+    wks.map(wk=>{ const r=mrHistory[wk]; return '<details style="border-top:1px solid var(--rule);padding:7px 0">'+
+      '<summary style="cursor:pointer;font-family:var(--sans);font-size:11px;color:var(--ink-soft)">w/c '+esc(wk)+(r.owner?' · '+esc(r.owner):'')+'</summary>'+
+      '<div style="white-space:pre-wrap;font-family:var(--sans);font-size:12px;color:var(--ink);padding:6px 2px 2px">'+esc(r.text)+'</div></details>'; }).join('')+'</div>';
+}
+function paintMrHistory(){ const box=document.getElementById('mrHistWrap'); if(box) box.innerHTML=mrHistoryHtml(); }
 
 /* ---------- Slack signal card row (shared by §2 grouped digest + CE drawer) ----------
    Cards live in M.market_review_context. scope==='ce' + ce_id → routed into that CE's
@@ -1205,10 +1245,10 @@ function ceSlackContext(ceId){
 }
 
 function renderFollowup(M){
-  const rows = []; // follow-up disabled until GM notes wiring (next week)
+  const rows = M.followup || []; // wired to build_snapshot._build_followup — prior-week flags → status now
   let fuBody;
   if(!rows.length){
-    fuBody='<div class="emptystate">Follow-up will be wired from next week &mdash; tracking flags from your GM notes and prior-week actions.</div>';
+    fuBody='<div class="emptystate">No prior-week flags to follow up &mdash; nothing was flagged last week, or this is the first tracked week.</div>';
   } else {
     fuBody='<div class="tablewrap"><table><thead><tr>'+
       '<th class="stick">Combined Entity</th><th>Flagged</th><th>Signal then</th><th>Status now</th></tr></thead><tbody>'+
@@ -1263,7 +1303,7 @@ function renderFollowup(M){
 
   const mrBody = '<div class="mr-panel" style="max-width:940px">'+
     '<div class="mr-prompt">Weekly market review for <b>'+esc(M.meta.market)+'</b> · w/c '+esc(M.meta.week_start)+
-    '. Your narrative persists locally across weeks — use it to capture the "so what" beyond the numbers.</div>'+
+    '. Your narrative persists to the shared sheet, week by week — prior weeks show below as history.</div>'+
     ctxHtml+
     '<div style="margin-top:24px;background:var(--card);border:1.5px solid var(--rule);border-radius:16px;padding:4px;box-shadow:var(--shadow)">'+
       '<div style="display:flex;align-items:center;gap:9px;padding:13px 16px 8px">'+
@@ -1272,8 +1312,10 @@ function renderFollowup(M){
         '<span id="mrSaved" style="margin-left:auto;font-family:var(--sans);font-weight:600;font-size:11px;color:var(--green)">'+esc(mrWhen)+'</span></div>'+
       '<div style="padding:0 16px 16px" class="mr-review">'+
         '<textarea id="mrText" placeholder="What happened this week? Key themes, decisions made, context that the data alone doesn’t capture…\n\ne.g. ‘Six Flags scaling paused after weather call — revisit W29. Cruises Chicago TR renegotiation in flight (Samkit ETA Jul 18). The YoY gap is closing but demand-mix is shifting to tickets, not passes — AOV drag will persist.’">'+esc(mrText)+'</textarea>'+
-        '<div style="margin-top:7px;font-family:var(--sans);font-size:10px;color:var(--ink-faint)">key: wr_market_review::'+esc(M.meta.market_slug)+'</div>'+
-      '</div></div></div>';
+        '<div style="margin-top:7px;font-family:var(--sans);font-size:10px;color:var(--ink-faint)">synced to the shared sheet · '+esc(M.meta.market_slug)+' · w/c '+esc(M.meta.week_start)+'</div>'+
+      '</div></div>'+
+      '<div id="mrHistWrap"></div>'+
+    '</div>';
 
   const fuCnt = rows.length ? '<span class="cnt">('+rows.length+')</span>' : '';
   const mrHas = mrText ? ' · ●' : '';
@@ -3085,6 +3127,7 @@ function switchMarket(i){ if(i===mi) return; mi=i; closeDrawer();
   actionSyncPull();
   actionPrevPull();
   actionHistPull();   // multi-week GM action history for the drawer Action Log
+  marketReviewPull(); // week-keyed market review from the shared sheet + prior-week history
 }
 
 // delegated events
@@ -3242,6 +3285,7 @@ syncPull();
 actionSyncPull();
 actionPrevPull();
 actionHistPull();   // multi-week GM action history for the drawer Action Log
+marketReviewPull(); // week-keyed market review from the shared sheet + prior-week history
 </script>
 </body>
 </html>
