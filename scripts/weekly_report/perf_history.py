@@ -118,6 +118,9 @@ def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> d
         hdr = vals[hr]
         ci = _find(hdr, ["cid"]) or 0
         di, ri = _find(hdr, DECISION), _find(hdr, REASON)
+        # A CID can appear on MULTIPLE rows in one tab (per-campaign variants) — collapse to ONE
+        # entry per CID per week, preferring the row that carries an actual decision (action).
+        by_cid: dict[str, tuple] = {}
         for row in vals[hr + 1:]:
             def cell(idx):
                 return (str(row[idx]).strip() if idx is not None and idx < len(row) else "")
@@ -132,6 +135,10 @@ def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> d
                 action = ""
             if not (action or comment):
                 continue
+            prev = by_cid.get(cid)
+            if prev is None or (action and not prev[0]):   # prefer a row with a decision
+                by_cid[cid] = (action, comment)
+        for cid, (action, comment) in by_cid.items():
             hist.setdefault(cid, []).append({"week": wk, "action": action, "comment": comment})
 
     for c in hist:
