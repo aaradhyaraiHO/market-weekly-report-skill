@@ -63,9 +63,11 @@ cd <repo>/scripts/weekly_report && python3 weekly_market_report.py <market|all> 
 ```
 Builds a snapshot per market (`.cache/weekly_report/snapshot_{slug}_{week}.json`) then renders once →
 `thoughts/shared/weekly-report-v1/report_{slug}_{week}.html` (single) or `report_multi_{week}.html`
-(`all`). `--validate` runs the **NA reference gate**, but that gate is frozen to the 2026-06-29
-build (5 CM1/conv up-swings, 0 CV-excluded) — it only PASSes for that week. For any other week run
-**without** `--validate` and spot-check in S4.
+(`all`). `--validate` runs the **NA reference gate**, but that gate is **stale**: its `VALIDATION_NA`
+fixtures were calibrated to the pre-2026-08 daily-POF fluctuation engine that the L3W re-cut replaced
+(single ±35% vs the prior 21 days; no CV / 3-day / cv-excluded), and its `week_start` is a Monday that
+is invalid under `WEEK_START_DAY = SUNDAY`. It will MISMATCH until re-baselined against a live NA run.
+Until then, run **without** `--validate` and spot-check in S4.
 
 ### S3 · Slack-signal briefing (agent step — folded into the report)
 The data can't see supply wins, bugs, supplier/payment/bid changes. Mine them and write a **sidecar**
