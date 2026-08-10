@@ -29,9 +29,12 @@ import config  # noqa: E402
 PERF_SHEET_ID = "1sXd0m2d2Qc5rg99ctpp_hnN5Jg8mtsRAwds_i2ZuwLo"
 OUT = Path(config.__file__).resolve().parents[2] / ".cache" / "weekly_report"
 
-# header priorities (case-insensitive, first present wins)
-DECISION = ["final action", "actions took", "action taken"]   # the decision of record
-REASON = ["perf action", "perf comments", "perf comment", "comment"]  # the reasoning/tag
+# header priorities (case-insensitive). Roles differ per tab: on the 07-26 export tab the
+# decision/tag is "Perf comment" (singular) and the reasoning is "Perf action"; on the 07-20 perf
+# tab the decision is "Actions Took" and the reasoning is "Perf Comments" (plural). We scan each
+# list for the first NON-EMPTY cell (a header can be present but blank on a given row).
+DECISION = ["final action", "actions took", "action taken", "perf comment"]  # decision / short tag
+REASON = ["perf action", "perf comments"]                                    # the reasoning / note
 
 
 def _gws_get(rng: str):
@@ -117,7 +120,9 @@ def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> d
         hr = _header_row(vals)
         hdr = vals[hr]
         ci = _find(hdr, ["cid"]) or 0
-        di, ri = _find(hdr, DECISION), _find(hdr, REASON)
+        low = [str(h).strip().lower() for h in hdr]
+        di_cols = [low.index(n) for n in DECISION if n in low]   # priority-ordered
+        ri_cols = [low.index(n) for n in REASON if n in low]
         # A CID can appear on MULTIPLE rows in one tab (per-campaign variants) — collapse to ONE
         # entry per CID per week, preferring the row that carries an actual decision (action).
         by_cid: dict[str, tuple] = {}
@@ -127,12 +132,14 @@ def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> d
             cid = cell(ci)
             if not cid:
                 continue
-            action, comment = cell(di), cell(ri)
+            # first NON-EMPTY cell in each list (a header can be present but blank on a row)
+            action = next((v for v in (cell(i) for i in di_cols) if v), "")
+            comment = next((v for v in (cell(i) for i in ri_cols) if v), "")
+            # drop stray header-word junk that leaked into cells
+            if action.lower() in ("perf action", "final action", "actions took", "perf comment"):
+                action = ""
             if comment == action:
                 comment = ""
-            # drop stray header-word junk that leaked into cells
-            if action.lower() in ("perf action", "final action", "actions took"):
-                action = ""
             if not (action or comment):
                 continue
             prev = by_cid.get(cid)
