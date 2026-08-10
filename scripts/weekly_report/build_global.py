@@ -494,7 +494,6 @@ def build_global(week: str) -> dict:
         troas=troas,
         w0_start=flux_w0_start,
         wm1_start=flux_w0_start - dt.timedelta(days=7),
-        week_days=flux_week_days,
         w0_end=mat_cutoff,
         availability_fetcher=None,
         shapley_by_ce={c["ce_id"]: c.get("shapley_wow") for c in ces},

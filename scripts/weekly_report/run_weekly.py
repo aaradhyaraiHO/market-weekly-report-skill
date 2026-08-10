@@ -126,8 +126,11 @@ def stage_alert(slugs, week, post):
         rca = CACHE / f"_alert_rca_{s}.json"
         run(["python3", "weekly_alert.py", "--file", str(rpt), "--market-slug", s, "--out", str(payload)], cwd=ALERT)
         ids = ",".join(json.loads(payload.read_text())["_rca"]["ce_ids"])
-        run(["python3", "weekly_rca_helper.py", "--ce-ids", ids, "--week-start", week,
-             "--week-end", week_end, "--out", str(rca)], cwd=ALERT)
+        rc = run(["python3", "weekly_rca_helper.py", "--ce-ids", ids, "--week-start", week,
+                  "--week-end", week_end, "--out", str(rca)], cwd=ALERT, check=False)
+        if rc != 0:
+            print(f"  ⚠ {s}: RCA query failed (byte cap?) — posting summary WITHOUT RCA threads")
+            rca.write_text("{}")   # post_message skips unresolved $rca refs; MSG1 still posts
         cmd = ["python3", "post_message.py", "--payload", str(payload), "--rca-blocks", str(rca)]
         if post:
             ch = channels.get(s)
