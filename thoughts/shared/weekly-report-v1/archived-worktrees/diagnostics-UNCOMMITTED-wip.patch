@@ -1,0 +1,68 @@
+diff --git a/scripts/weekly_report/alerts.py b/scripts/weekly_report/alerts.py
+index a787762..e54b261 100644
+--- a/scripts/weekly_report/alerts.py
++++ b/scripts/weekly_report/alerts.py
+@@ -346,6 +346,13 @@ def build_bucket1(
+     paid_w0 = ce_weekly_paid[ce_weekly_paid["week"] == w0_start].set_index("combined_entity_id")
+     biz_w0 = ce_weekly[ce_weekly["week"] == w0_start].set_index("combined_entity_id")
+ 
++    # 4-week trailing revenue for sort ranking (meeting: "28-day revenue as the
++    # common ranking metric across all CEs").
++    _4w_lo = w0_start - dt.timedelta(days=21)  # W0 + 3 prior weeks
++    biz_4w = ce_weekly[(ce_weekly["week"] >= _4w_lo) & (ce_weekly["week"] <= w0_start)]
++    rev_4w = biz_4w.groupby("combined_entity_id")["revenue"].sum()
++    rev_4w = rev_4w.apply(lambda v: round(float(v), 0) if pd.notna(v) else None)
++
+     # Availability enrichment for the union of flagged CEs.
+     flagged = set(cm1_alerts) | set(rpc_alerts) | set(cvr_alerts)
+     avail_map: dict[str, dict] = {}
+@@ -364,6 +371,9 @@ def build_bucket1(
+     def _rev(ce_id):
+         return round(float(biz_w0.loc[ce_id]["revenue"]), 0) if ce_id in biz_w0.index else None
+ 
++    def _rev_4w(ce_id):
++        return float(rev_4w.loc[ce_id]) if ce_id in rev_4w.index else None
++
+     def _reco(direction: str, ce_id: str) -> str:
+         pc = paid_contrib.get(ce_id)
+         if pc is not None and pc < config.PAID_CONTRIB_LOW_PCT:
+@@ -423,6 +433,7 @@ def build_bucket1(
+             "paid_contribution_pct": paid_contrib.get(ce_id),
+             "spend_wk": _spend(ce_id),
+             "revenue_wk": _rev(ce_id),
++            "revenue_4w": _rev_4w(ce_id),
+             "recommendation": _reco(res["direction"], ce_id),
+         })
+ 
+@@ -449,8 +460,8 @@ def build_bucket1(
+         }
+         _emit(ce_id, "cvr", synth, "wow", {"clicks_wk": res["clicks_wk"]})
+ 
+-    # Sort: down-swings first (risk), then by |magnitude| desc.
+-    rows.sort(key=lambda r: (r["direction"] != "down", -abs(r["magnitude_pct"] or 0)))
++    # Sort: down-swings first (risk), then by 4-week revenue desc.
++    rows.sort(key=lambda r: (r["direction"] != "down", -(r["revenue_4w"] or 0)))
+ 
+     diagnostics = {
+         "cm1_conv_alert_ces": sorted(names.get(c, c) for c in cm1_alerts),
+diff --git a/scripts/weekly_report/template/report_template.html b/scripts/weekly_report/template/report_template.html
+index 591407d..eb54928 100644
+--- a/scripts/weekly_report/template/report_template.html
++++ b/scripts/weekly_report/template/report_template.html
+@@ -1028,7 +1028,7 @@ function renderBuckets(M){
+   if(!b2.length){ b2body='<div class="emptystate">No unexplained CM1/conv swings home here this week. <b>✅</b></div>'+_store(b2c.store,'B2')+b2gzLine; }
+   else{
+     b2body=_tbl('<th class="stick">Combined Entity</th><th>Signal</th><th>Dir</th><th class="num">Mag</th>'+
+-      '<th>Cause</th><th>Swing driver</th><th class="num">Persist</th><th class="num">CV</th><th class="num">Spend wk</th><th>Recommendation</th>',
++      '<th>Cause</th><th>Swing driver</th><th class="num">Persist</th><th class="num">CV</th><th class="num">Rev 4w</th><th class="num">Spend wk</th><th>Recommendation</th>',
+       b2.map(r=>{ const e=r.evidence||{}, sd=r.swing_driver;
+         return '<tr class="cerow" data-ce="'+esc(r.ce_id)+'">'+
+           '<td class="ce stick"><span class="cn">'+esc(r.ce_name)+'</span>'+_also(r)+'</td>'+
+@@ -1039,6 +1039,7 @@ function renderBuckets(M){
+           '<td>'+(sd?esc(sd.label)+' <span class="'+sgn(sd.value)+'">'+fmtMoneyDelta(sd.value)+'</span> <span class="sub">'+sd.share_pct+'%</span>':'—')+'</td>'+
+           '<td class="num">'+(e.persistence_days!=null?e.persistence_days+'d':'—')+'</td>'+
+           '<td class="num">'+(e.cv!=null?e.cv.toFixed(2):'—')+'</td>'+
++          '<td class="num">'+fmtMoney(r.revenue_4w)+'</td>'+
+           '<td class="num">'+fmtMoney(r.spend_wk)+'</td>'+
+           '<td>'+esc(r.recommendation)+'</td></tr>';
+       }).join(''))+_store(b2c.store,'B2')+b2gzLine;

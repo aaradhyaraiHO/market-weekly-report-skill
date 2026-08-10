@@ -1,0 +1,203 @@
+From 6e32b041350bd551e8ae2d19ef144be0e985801d Mon Sep 17 00:00:00 2001
+From: ar-aaradhya <ar.aaradhyarai@gmail.com>
+Date: Fri, 17 Jul 2026 10:11:56 +0530
+Subject: [PATCH] Add structured Slack context cards with ce_id + scope routing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+SKILL.md S3: Slack digest now emits structured cards with scope
+(market|ce), ce_id, category (closed vocabulary of 9 types), author,
+permalink, and timestamp. Cards injected into snapshot JSON at
+market_review_context[].
+
+Template: market-scoped cards render in §2 Market Review tab with
+category chips and thread links. CE-scoped cards render in the CE
+drawer under a "Slack context" section between resource blocks and
+notes. Shared _ctxCard/_catChip helpers for consistent rendering.
+
+build_snapshot.py: empty market_review_context[] placeholder in
+snapshot schema — populated by the agent's S3 step.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ .claude/skills/market-weekly-report/SKILL.md  | 47 ++++++++++++++++---
+ scripts/weekly_report/build_snapshot.py       |  1 +
+ .../template/report_template.html             | 43 +++++++++++++----
+ 3 files changed, 77 insertions(+), 14 deletions(-)
+
+diff --git a/.claude/skills/market-weekly-report/SKILL.md b/.claude/skills/market-weekly-report/SKILL.md
+index f8c0882..53eb749 100644
+--- a/.claude/skills/market-weekly-report/SKILL.md
++++ b/.claude/skills/market-weekly-report/SKILL.md
+@@ -37,9 +37,9 @@ cd <repo>/scripts/weekly_report && python3 weekly_market_report.py <market|all>
+ 
+ The orchestrator builds a snapshot per market, then calls `render.py` **once** with all snapshot paths → a single tabbed HTML under `thoughts/shared/weekly-report-v1/`. With `--validate`, when `north_america` is in the set the NA reference gate runs and **must print `RESULT: PASS`** (5 CM1/conv up-swings, 0 CV-excluded) — **abort and fix if it prints `FAIL`**. Other markets have no reference gate; spot-check them in S4. Add `--no-open` for headless/scheduled runs. The rendered path is printed as `wrote: <path>`.
+ 
+-### S3: Slack digest (agent step — the producer cannot read Slack)
++### S3: Slack digest → structured context cards
+ 
+-The HTML carries everything in the data; this step adds **signal beyond the data** — supply wins, bugs, supplier/payment issues, bid-change context. For V1 this is presented in chat alongside the report link (not injected into the HTML).
++The HTML carries everything in the data; this step adds **signal beyond the data** — supply wins, bugs, supplier/payment issues, bid-change context, commission negotiations, campaign decisions. The agent reads Slack channels and emits structured context cards that get **injected into the snapshot JSON**, then rendered in the report (market-scoped cards in the §2 Market Review tab, CE-scoped cards in the CE drawer).
+ 
+ 1. Load Slack tools: `ToolSearch("+slack read channel")`, then `slack_read_channel` per channel.
+ 2. **Market → channel mapping** (read the market channel(s) for the report week):
+@@ -51,13 +51,48 @@ The HTML carries everything in the data; this step adds **signal beyond the data
+    | oceania | CHKRLFDPU, C039TMH0GEP, C097DVBLHGS |
+ 
+ 3. **Global channels — always read:** `#tf-bugalert` (C038T64PD), `#pod-live-entertainment` (C042A57T52Q).
+-4. Extract ONLY signal beyond the data, prioritized by **Hero+ CE × revenue-topic** (the CEs and themes the report's buckets flag). Present the digest in chat next to the report link.
+-
+-**Rules:** verify specifics match (same TGID/supplier/time horizon) before connecting a Slack item to a data signal; near-term (0-2D) ≠ long-term availability; permalink timestamps must fall inside the report week; no time/difficulty editorializing; no extra parens around links.
++4. Extract ONLY signal beyond the data, prioritized by **Hero+ CE × revenue-topic** (the CEs and themes the report's buckets flag).
++5. **Emit structured cards** into the snapshot's `market_review_context` array. Each card:
++
++   ```json
++   {
++     "scope": "market" | "ce",
++     "ce_id": "nyc-statue-of-liberty" | null,
++     "ce_name": "Statue of Liberty" | null,
++     "category": "commission_change" | "availability" | "campaign_decision" | "promo_start_end" | "new_launch" | "competitive_intel" | "supply_issue" | "bug" | "strategy",
++     "text": "Walk Niagara commission up to 35% (from 30%); target 1K PAX by Oct 31 to lock the tier through 2027",
++     "source": "slack",
++     "channel": "#mkt-usa",
++     "author": "Brett Franklin",
++     "permalink": "https://headout.slack.com/archives/CNSHDD2H1/p1752...",
++     "timestamp": "2026-07-08T14:32:00Z"
++   }
++   ```
++
++   **Scope rules:**
++   - `"ce"` — the message names a specific CE, TGID, supplier, or campaign. Set `ce_id` to the matching CE's `combined_entity_id` from the snapshot's `ces[]` array. The template routes these into that CE's drawer.
++   - `"market"` — the message is about the market broadly (holiday flouting, portfolio strategy, competitive landscape, market-wide bug). Leave `ce_id: null`. The template routes these to the §2 Market Review panel.
++
++   **Category vocabulary** (closed set — pick the best fit):
++   | Category | Signal type | Example |
++   |----------|-------------|---------|
++   | `commission_change` | TR negotiation result | "Walk Niagara → 35%" |
++   | `availability` | Inventory/supply break | "Country Music HoF unavailable until Sunday" |
++   | `campaign_decision` | Bid pause, flouting, TROAS change | "American Dream — stop bidding" |
++   | `promo_start_end` | Promo launch or expiry | "KSC promo ended → 34% CVR drop" |
++   | `new_launch` | New CE/product signed | "Alaska Wild Lights — 30%, ~10 blimps" |
++   | `competitive_intel` | Competitor move | "Tripster ~$20-30M rev, Cirque via Outbox" |
++   | `supply_issue` | Vendor/ops/content problem | "Kualoa Ranch CVR hit — availability" |
++   | `bug` | Technical issue impacting revenue | "#tf-bugalert: checkout flow broken on X" |
++   | `strategy` | MMP agenda, portfolio plan, scaling plan | "Six Flags affiliate program proposal" |
++
++6. **Inject cards into the snapshot.** After reading all channels, write the cards array into each market's snapshot JSON at `snapshot["market_review_context"]`, then re-render with `render.py`.
++
++**Rules:** verify specifics match (same TGID/supplier/time horizon) before connecting a Slack item to a data signal; `ce_id` must exactly match a `ces[].ce_id` in the snapshot (grep the snapshot if unsure — a wrong `ce_id` silently orphans the card); near-term (0-2D) ≠ long-term availability; permalink timestamps must fall inside the report week; no time/difficulty editorializing; no extra parens around links.
+ 
+ ### S4: QA + deliver
+ 
+-Confirm the HTML opens. Spot-check per market: **§1 week-type verdict** (header) and **§4 buckets** (B1-B4 home rows + cascade). For Italy/Oceania (no reference gate) sanity-check the headline W0 revenue against Omni. Report the HTML path to the user with the Slack digest.
++Confirm the HTML opens. Spot-check per market: **§1 week-type verdict** (header) and **§4 buckets** (B1-B4 home rows + cascade). For Italy/Oceania (no reference gate) sanity-check the headline W0 revenue against Omni. Check that Slack context cards render: market-scoped in §2 Market Review tab, CE-scoped in their CE drawer. Report the HTML path to the user.
+ 
+ ## Engine notes
+ 
+diff --git a/scripts/weekly_report/build_snapshot.py b/scripts/weekly_report/build_snapshot.py
+index 8528253..0276354 100644
+--- a/scripts/weekly_report/build_snapshot.py
++++ b/scripts/weekly_report/build_snapshot.py
+@@ -947,6 +947,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
+         "no_bid_campaigns": no_bid,
+         "seasonality_adjustments": seasonality or [],
+         "levers": levers,
++        "market_review_context": [],   # populated by S3 Slack digest (agent step)
+         "transitions": transitions,   # SCHEMA ADDITION: Phase-2 forward-compat
+         "_diagnostics": diag,
+     }
+diff --git a/scripts/weekly_report/template/report_template.html b/scripts/weekly_report/template/report_template.html
+index cd2647d..7881c8b 100644
+--- a/scripts/weekly_report/template/report_template.html
++++ b/scripts/weekly_report/template/report_template.html
+@@ -582,6 +582,26 @@ function saveMarketReview(text){
+ }
+ let mrTimer=null;
+ 
++/* ---------- Slack context card renderer (shared by §2 Market Review + CE drawer) ---------- */
++const _CAT_COLOR={commission_change:'violet',availability:'amber',campaign_decision:'blue',
++  promo_start_end:'amber',new_launch:'green',competitive_intel:'red',supply_issue:'amber',
++  bug:'red',strategy:'violet'};
++const _CAT_LABEL={commission_change:'TR change',availability:'availability',campaign_decision:'campaign',
++  promo_start_end:'promo',new_launch:'new launch',competitive_intel:'competitive',supply_issue:'supply',
++  bug:'bug',strategy:'strategy'};
++function _catChip(cat){
++  const c=_CAT_COLOR[cat]||'ghost', l=_CAT_LABEL[cat]||cat;
++  return '<span class="chip '+c+'">'+esc(l)+'</span>';
++}
++function _ctxCard(c){
++  const src = esc(c.source||'slack')+(c.channel?' · '+esc(c.channel):'');
++  const link = c.permalink ? ' <a class="outlink" href="'+esc(c.permalink)+'" target="_blank" rel="noopener">thread ↗</a>' : '';
++  return '<div class="mr-context-item">'+
++    '<div class="mr-src">'+src+(c.author?' · '+esc(c.author):'')+(c.category?' '+_catChip(c.category):'')+'</div>'+
++    '<div class="mr-txt">'+esc(c.text)+link+'</div>'+
++    (c.timestamp?'<div class="mr-when">'+esc(c.timestamp)+'</div>':'')+'</div>';
++}
++
+ function renderFollowup(M){
+   const rows = M.followup||[];
+   let fuBody;
+@@ -598,15 +618,14 @@ function renderFollowup(M){
+       ‘</tbody></table></div>’;
+   }
+ 
+-  // market review content
++  // market review content — only market-scoped cards; CE-scoped ones route to drawers
+   const mr = getMarketReview();
+   const mrText = mr && mr.text ? mr.text : ‘’;
+   const mrWhen = mr && mr.updated ? ‘saved ‘+new Date(mr.updated).toLocaleString() : ‘not saved yet’;
+-  const ctx = M.market_review_context||[];
++  const allCtx = M.market_review_context||[];
++  const ctx = allCtx.filter(c=>c.scope!==’ce’);
+   const ctxHtml = ctx.length ? ‘<div class="mr-context">’+
+-    ctx.map(c=>’<div class="mr-context-item"><div class="mr-src">’+esc(c.source||’slack’)+(c.channel?’ · ‘+esc(c.channel):’’)+’</div>’+
+-      ‘<div class="mr-txt">’+esc(c.text)+’</div>’+
+-      (c.timestamp?’<div class="mr-when">’+esc(c.timestamp)+’</div>’:’’)+’</div>’).join(‘’)+’</div>’ : ‘’;
++    ctx.map(c=>_ctxCard(c)).join(‘’)+’</div>’ : ‘’;
+ 
+   const mrBody = ‘<div class="mr-panel">’+
+     ‘<div class="mr-prompt">Weekly market review for <b>’+esc(M.meta.market)+’</b> · w/c ‘+esc(M.meta.week_start)+
+@@ -617,13 +636,14 @@ function renderFollowup(M){
+       ‘<span class="mono">key: wr_market_review::’+esc(M.meta.market_slug)+’</span></div></div></div>’;
+ 
+   const fuCnt = rows.length ? ‘<span class="cnt">(‘+rows.length+’)</span>’ : ‘’;
+-  const mrHas = mrText ? ‘ · ●’ : ‘’;
++  const mrCnt = ctx.length ? ‘<span class="cnt">(‘+ctx.length+’)</span>’ : ‘’;
++  const mrHas = (mrText || ctx.length) ? ‘ · ●’ : ‘’;
+ 
+   return ‘<section id="s2"><div class="sec-head"><span class="sec-num">2</span><h2>Follow-up</h2>’+
+     ‘<span class="sub">last week’s flagged CEs + your market review</span></div>’+
+     ‘<div class="s2tabs">’+
+       ‘<div class="s2tab active" data-s2tab="followup">Follow-up’+fuCnt+’</div>’+
+-      ‘<div class="s2tab" data-s2tab="review">Market Review’+esc(mrHas)+’</div>’+
++      ‘<div class="s2tab" data-s2tab="review">Market Review’+mrCnt+esc(mrHas)+’</div>’+
+     ‘</div>’+
+     ‘<div class="s2pane active" id="s2-followup">’+fuBody+’</div>’+
+     ‘<div class="s2pane" id="s2-review">’+mrBody+’</div>’+
+@@ -1522,6 +1542,13 @@ function resourceBlocks(ce){
+   return html;
+ }
+ 
++function ceSlackContext(ceId){
++  const cards = (MARKETS[mi].market_review_context||[]).filter(c=>c.scope==='ce' && c.ce_id===ceId);
++  if(!cards.length) return '';
++  return '<div class="dr-sec-t">Slack context · '+cards.length+' item'+(cards.length>1?'s':'')+'</div>'+
++    '<div class="mr-context">'+cards.map(c=>_ctxCard(c)).join('')+'</div>';
++}
++
+ let drawerTimer=null;
+ function openDrawer(ceId){
+   const M=MARKETS[mi];
+@@ -1596,7 +1623,7 @@ function openDrawer(ceId){
+       '<div style="font-family:var(--sans);font-size:13px;color:var(--ink-soft);margin-top:2px">'+
+         '<span class="'+sgn(r.wow)+'">'+fmtDelta(r.wow)+' WoW</span> · '+
+         '<span class="'+sgn(w0.yoy_pct)+'">'+fmtDelta(w0.yoy_pct)+' YoY</span> (−364d, weekday-aligned) · predicted revenue</div>'+
+-      kmBlock + shapBlock + resourceBlocks(ce) +
++      kmBlock + shapBlock + resourceBlocks(ce) + ceSlackContext(ceId) +
+       '<div class="dr-sec-t">Notes · persists week-over-week</div>'+
+       '<div class="cmt-box"><textarea id="cmtText" placeholder="Your running note on this CE. Saved locally and carried across weeks…">'+esc(cmtText)+'</textarea>'+
+         '<div class="cmt-meta"><span id="cmtSaved" class="cmt-saved">'+esc(cmtWhen)+'</span>'+
+-- 
+2.39.5 (Apple Git-154)
+

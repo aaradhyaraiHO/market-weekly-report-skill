@@ -1,0 +1,167 @@
+From 082bfa10357ac9cfc3993fe0fee1ee3fa14014d2 Mon Sep 17 00:00:00 2001
+From: ar-aaradhya <ar.aaradhyarai@gmail.com>
+Date: Mon, 13 Jul 2026 17:45:46 +0530
+Subject: [PATCH] switch paid metrics to ads_campaign_stats (Google Search +
+ Bing Search)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- ADS_STATS → ads_campaign_stats with ad_platform + SEARCH filters
+- CM1/conversions fallback: offline post-Sep-2025, calculated pre-Sep-2025
+- Applied consistently across ce_weekly_ads, ce_daily_ads, troas_history
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ scripts/weekly_report/build_snapshot.py |  6 ++--
+ scripts/weekly_report/config.py         |  2 +-
+ scripts/weekly_report/fetch.py          | 44 ++++++++++++++++++++-----
+ 3 files changed, 39 insertions(+), 13 deletions(-)
+
+diff --git a/scripts/weekly_report/build_snapshot.py b/scripts/weekly_report/build_snapshot.py
+index 8528253..f2acfb4 100644
+--- a/scripts/weekly_report/build_snapshot.py
++++ b/scripts/weekly_report/build_snapshot.py
+@@ -129,7 +129,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
+     paid_clicks = _f(p, "paid_clicks") if paid is not None else None
+     conv_value_gbv = _f(p, "conv_value_gbv") if paid is not None else None
+ 
+-    # Paid RoI (google_ads_campaign_stats): CM1 / (spend + coupon_wallet).
++    # Paid RoI (ads_campaign_stats, Google+Bing SEARCH): CM1 / (spend + coupon_wallet).
+     roi = None
+     if spend is not None and spend >= config.WEEKLY_SPEND_FLOOR:
+         roi = _pct(cm1, spend + coupon_wallet, gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
+@@ -180,7 +180,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
+         "paid_conversions": int(conversions) if _num(conversions) is not None else None,
+         # canon: Paid CVR = offline CM conversions / paid clicks
+         "paid_cvr_pct": _pct(conversions, paid_clicks, gate=(0.0, config.CVR_MAX_PCT)) if paid is not None else None,
+-        # canon: CPC = ad spend / paid clicks (both google_ads_campaign_stats)
++        # canon: CPC = ad spend / paid clicks (both ads_campaign_stats, Google+Bing SEARCH)
+         "cpc": _num(spend / paid_clicks) if (paid_clicks and paid is not None) else None,
+         "rpc": _num(revenue / clicks) if (clicks and biz is not None) else None,
+         # LY (−364d) revenue for this week — powers the All-CE 12-wk TY/LY sparkline.
+@@ -604,7 +604,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
+         roi1 = _pct(cm1_business, gross_mktg_cost,
+                     gate=(config.ROI_MIN_PCT, config.ROI_MAX_PCT))
+ 
+-        # Paid metrics (google_ads_campaign_stats).
++        # Paid metrics (ads_campaign_stats, Google+Bing SEARCH).
+         paid_clicks = float(pw["paid_clicks"].sum())
+         paid_conv = float(pw["conversions"].sum())
+         conv_value_gbv = float(pw["conv_value_gbv"].sum())
+diff --git a/scripts/weekly_report/config.py b/scripts/weekly_report/config.py
+index a08bf89..15ae024 100644
+--- a/scripts/weekly_report/config.py
++++ b/scripts/weekly_report/config.py
+@@ -30,7 +30,7 @@ BQ_DATASET = "analytics_reporting"
+ MAX_BYTES_BILLED = 30 * 1024 ** 3  # 30 GB cap per query (analytics-skill hygiene)
+ 
+ CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
+-ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.google_ads_campaign_stats`"
++ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.ads_campaign_stats`"
+ DIM_CE = f"`{BQ_PROJECT}.{BQ_DATASET}.dim_combined_entities`"
+ FCT_ORDERS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_orders`"
+ FCT_BOOKINGS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_bookings`"
+diff --git a/scripts/weekly_report/fetch.py b/scripts/weekly_report/fetch.py
+index b785418..dc58cb9 100644
+--- a/scripts/weekly_report/fetch.py
++++ b/scripts/weekly_report/fetch.py
+@@ -124,12 +124,13 @@ def market_weekly_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataF
+ 
+ 
+ # --------------------------------------------------------------------------- #
+-# CE-level weekly paid performance  (google_ads_campaign_stats)
++# CE-level weekly paid performance  (ads_campaign_stats — Google Search + Bing Search)
+ # --------------------------------------------------------------------------- #
+ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+     """
+     Weekly CE paid rollup: spend, coupon+wallet, CM1 (offline contribution
+-    margin), CM1 conversions, offline revenue (pre-Sep-2025 fallback basis).
++    margin with pre-Sep-2025 calculated fallback), CM1 conversions, offline
++    revenue. Scoped to Google Search + Microsoft Ads SEARCH only.
+     """
+     sql = f"""
+     SELECT
+@@ -137,18 +138,28 @@ def ce_weekly_ads(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+         DATE_TRUNC(report_date, WEEK(MONDAY))                     AS week,
+         SUM(sum_spend)                                            AS spend,
+         SUM(sum_coupon_and_wallet_credits)                       AS coupon_wallet,
+-        SUM(sum_conversion_value_offline_contribution_margin)    AS cm1,
+-        SUM(count_conversions_offline_contribution_margin)       AS conversions,
++        SUM(CASE
++            WHEN report_date >= '2025-09-01'
++                 AND sum_conversion_value_offline_contribution_margin > 0
++            THEN sum_conversion_value_offline_contribution_margin
++            ELSE sum_conversion_value_calculated_contribution_margin
++        END)                                                      AS cm1,
++        SUM(CASE
++            WHEN report_date >= '2025-09-01'
++                 AND count_conversions_offline_contribution_margin > 0
++            THEN count_conversions_offline_contribution_margin
++            ELSE count_conversions_online
++        END)                                                      AS conversions,
+         SUM(sum_conversion_value_offline_revenue)                AS offline_revenue,
+         SUM(count_clicks)                                        AS paid_clicks,
+-        -- Paid Conversion Value on the GBV basis (perf-audit `offline_gb`) — the
+-        -- default paid conversion value; offline gross-bookings post-2025-09-01.
+         SUM(sum_conversion_value_offline_gross_bookings)         AS conv_value_gbv
+ 
+     FROM {config.ADS_STATS}
+ 
+     WHERE campaign_target_business_market = @market
+           AND report_date BETWEEN @start AND @end
++          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
++          AND campaign_advertising_channel_type = 'SEARCH'
+ 
+     GROUP BY 1, 2
+     """
+@@ -504,14 +515,25 @@ def ce_funnel(
+ # Daily paid series for the fluctuation engine  (CM1/conv POF)
+ # --------------------------------------------------------------------------- #
+ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+-    """Daily CE paid series: CM1, CM1 conversions, clicks, spend."""
++    """Daily CE paid series: CM1, CM1 conversions, clicks, spend.
++    Scoped to Google Search + Bing Search; CM1/conversions use pre-Sep-2025 fallback."""
+     sql = f"""
+     SELECT
+         campaign_target_combined_entity_id                        AS combined_entity_id,
+         ANY_VALUE(campaign_target_combined_entity_name)          AS combined_entity_name,
+         report_date,
+-        SUM(sum_conversion_value_offline_contribution_margin)    AS cm1,
+-        SUM(count_conversions_offline_contribution_margin)       AS conversions,
++        SUM(CASE
++            WHEN report_date >= '2025-09-01'
++                 AND sum_conversion_value_offline_contribution_margin > 0
++            THEN sum_conversion_value_offline_contribution_margin
++            ELSE sum_conversion_value_calculated_contribution_margin
++        END)                                                      AS cm1,
++        SUM(CASE
++            WHEN report_date >= '2025-09-01'
++                 AND count_conversions_offline_contribution_margin > 0
++            THEN count_conversions_offline_contribution_margin
++            ELSE count_conversions_online
++        END)                                                      AS conversions,
+         SUM(count_clicks)                                        AS clicks,
+         SUM(sum_spend)                                           AS spend
+ 
+@@ -519,6 +541,8 @@ def ce_daily_ads(market: str, daily_start: dt.date, w0_end: dt.date) -> pd.DataF
+ 
+     WHERE campaign_target_business_market = @market
+           AND report_date BETWEEN @start AND @end
++          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
++          AND campaign_advertising_channel_type = 'SEARCH'
+ 
+     GROUP BY 1, 3
+     """
+@@ -578,6 +602,8 @@ def troas_history(market: str, start: dt.date, w0_end: dt.date) -> pd.DataFrame:
+ 
+     WHERE campaign_target_business_market = @market
+           AND report_date BETWEEN @start AND @end
++          AND ad_platform IN ('Google Ads', 'Microsoft Ads')
++          AND campaign_advertising_channel_type = 'SEARCH'
+ 
+     ORDER BY campaign_id, report_date
+     """
+-- 
+2.39.5 (Apple Git-154)
+

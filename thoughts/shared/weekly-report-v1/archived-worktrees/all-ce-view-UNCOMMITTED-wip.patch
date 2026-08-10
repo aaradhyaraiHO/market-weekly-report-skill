@@ -1,0 +1,112 @@
+diff --git a/scripts/weekly_report/build_snapshot.py b/scripts/weekly_report/build_snapshot.py
+index f2acfb4..b16b94d 100644
+--- a/scripts/weekly_report/build_snapshot.py
++++ b/scripts/weekly_report/build_snapshot.py
+@@ -38,6 +38,25 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
+ OUT_DIR = REPO_ROOT / ".cache" / "weekly_report"
+ 
+ 
++def _load_groups(market_slug: str) -> dict:
++    """Load persisted BGM groups for a market.
++
++    Priority: groups file (.cache/weekly_report/groups_{slug}.json) written by
++    the report's Export button, then config.DEFAULT_GROUPS fallback.
++    """
++    gpath = OUT_DIR / f"groups_{market_slug}.json"
++    if gpath.exists():
++        try:
++            obj = json.loads(gpath.read_text())
++            groups = obj.get("groups", obj) if isinstance(obj, dict) else {}
++            if groups:
++                print(f"  [groups] loaded {len(groups)} group(s) from {gpath.name}")
++                return groups
++        except Exception:
++            pass
++    return config.DEFAULT_GROUPS.get(market_slug, {})
++
++
+ # --------------------------------------------------------------------------- #
+ # Small numeric helpers
+ # --------------------------------------------------------------------------- #
+@@ -929,6 +948,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
+             "schema_version": config.SCHEMA_VERSION,
+             "revenue_basis": "sum_revenue_predicted",  # provenance
+             "metric_reference": "analytics-skill (business.md / marketing.md)",
++            "default_groups": _load_groups(market_slug),
+         },
+         "market_summary": {"weekly": market_weekly, "weekly_ly": weekly_ly, "headlines": headlines},
+         "ces": ces,
+diff --git a/scripts/weekly_report/config.py b/scripts/weekly_report/config.py
+index 15ae024..a80f761 100644
+--- a/scripts/weekly_report/config.py
++++ b/scripts/weekly_report/config.py
+@@ -46,6 +46,17 @@ MARKETS = {
+     "oceania": "Oceania",
+ }
+ 
++# --------------------------------------------------------------------------- #
++# Default CE groups per market  (shipped with every report; seeds localStorage)
++# Maps market_slug -> {group_name: [ce_id, ...]}
++# Users' local edits override these; export/import carries both.
++# --------------------------------------------------------------------------- #
++DEFAULT_GROUPS: dict[str, dict[str, list[str]]] = {
++    "north_america": {},
++    "italy": {},
++    "oceania": {},
++}
++
+ # --------------------------------------------------------------------------- #
+ # Window
+ # --------------------------------------------------------------------------- #
+diff --git a/scripts/weekly_report/template/report_template.html b/scripts/weekly_report/template/report_template.html
+index 591407d..8a30b05 100644
+--- a/scripts/weekly_report/template/report_template.html
++++ b/scripts/weekly_report/template/report_template.html
+@@ -1595,15 +1595,24 @@ function closeDrawer(){
+   const tip=document.getElementById('kmtip'); if(tip) tip.style.opacity='0';
+   paintCETable();   // refresh comment dots
+ }
++function _dlJSON(obj, filename){
++  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
++  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
++  a.download=filename; a.click(); URL.revokeObjectURL(a.href);
++}
+ function exportNotes(){
+-  const M=MARKETS[mi], prefix='wr_comments::'+M.meta.market_slug+'::', out={};
++  const M=MARKETS[mi], slug=M.meta.market_slug;
++  const prefix='wr_comments::'+slug+'::', out={};
+   for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+     if(k.indexOf(prefix)===0) out[k.slice(prefix.length)]=JSON.parse(localStorage.getItem(k)); }
+-  // also carry the BGM customizations for this market (views / groups / watchlist / rule)
+   const custom={ views:getViews(), groups:getGroups(), watch:Array.from(getWatch()), rule:lsGet('rule','') };
+-  const blob=new Blob([JSON.stringify({market:M.meta.market_slug,exported:new Date().toISOString(),notes:out,customizations:custom},null,2)],{type:'application/json'});
+-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+-  a.download='wr_notes_'+M.meta.market_slug+'.json'; a.click(); URL.revokeObjectURL(a.href);
++  // full export (notes + all customizations)
++  _dlJSON({market:slug,exported:new Date().toISOString(),notes:out,customizations:custom}, 'wr_notes_'+slug+'.json');
++  // groups-only file — pipeline reads this on next build to carry groups forward
++  const g=getGroups();
++  if(g && Object.keys(g).length){
++    _dlJSON({market:slug,exported:new Date().toISOString(),groups:g}, 'groups_'+slug+'.json');
++  }
+ }
+ function importNotes(ev){
+   const f=ev.target.files[0]; if(!f) return;
+@@ -1733,7 +1742,16 @@ document.getElementById('app').addEventListener('change',e=>{
+   }
+ });
+ 
+-// boot
++// boot — seed default groups from snapshot if localStorage has none for this market
++function seedDefaults(){
++  MARKETS.forEach((M,i)=>{
++    const s=M.meta.market_slug, key='wr_groups::'+s;
++    if(localStorage.getItem(key)) return;
++    const dg=M.meta.default_groups;
++    if(dg && Object.keys(dg).length) localStorage.setItem(key, JSON.stringify(dg));
++  });
++}
++seedDefaults();
+ state.rule=lsGet('rule','');   // restore last-used highlight rule for the first market
+ renderTabs(); renderMeta(); renderApp();
+ </script>
