@@ -1324,6 +1324,14 @@ def main():
     w0 = config._week_start(_to_date(args.week)) if args.week else config.latest_complete_week()
     targets = list(config.MARKETS) if args.all else [args.market or "north_america"]
 
+    # Perf action-history sidecar (perf's final actions from the Weekly Flagged sheet → CE-drawer
+    # Action log). Best-effort + skip-if-fresh, so a multi-market run reads the perf sheet once/day.
+    try:
+        import perf_history
+        perf_history.build_sidecar(config.iso(w0), skip_if_fresh=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! perf_history sidecar skipped ({e})")
+
     for slug in targets:
         snap = build_market(slug, w0, with_availability=not args.no_availability)
         _write(snap, slug, w0)

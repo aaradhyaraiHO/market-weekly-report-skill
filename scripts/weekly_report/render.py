@@ -64,6 +64,16 @@ def load_markets(paths):
                         s["market_review_context"] = json.load(open(side))
                     except (json.JSONDecodeError, OSError):
                         pass
+                # Perf action-history sidecar (per report-week, keyed by CID across ALL markets) →
+                # CE-drawer Action log shows PERF's final actions (the decisions of record).
+                ph = os.path.join(os.path.dirname(os.path.abspath(p)), f"perf_hist_{wk}.json")
+                if os.path.exists(ph):
+                    try:
+                        _ph = json.load(open(ph))
+                        for _ce in s.get("ces", []):
+                            _ce["perf_action_hist"] = _ph.get(str(_ce.get("ce_id")), [])
+                    except (json.JSONDecodeError, OSError):
+                        pass
             markets.append(s)
     if not markets:
         sys.exit("No market snapshots found in the given inputs.")

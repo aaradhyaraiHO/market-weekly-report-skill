@@ -2866,17 +2866,17 @@ function openDrawer(ceId){
     '</div>'
   ) : '';
 
-  // Action log — per-week timeline of GM action + comment (last ACTLOG_WEEKS wks), newest first.
-  // Perf row is a placeholder until perf finals sync to the store (Phase 2).
-  const alog=actionLogFor(ceId);
-  const actionLogHtml = alog.length ? (
-    '<div class="dr-sec-t" style="margin-top:20px">Action log <span style="color:var(--ink-faint);font-weight:600;text-transform:none;letter-spacing:0">· last '+alog.length+' wk</span></div>'+
+  // Action log — per-week timeline of PERF's final actions (the decisions of record), newest first.
+  // Sourced from the Weekly Flagged sheet via the perf_hist sidecar (perf_history.py → render),
+  // embedded on each CE as perf_action_hist. GM's free-text notes live in "Note history" above.
+  const plog=(ce.perf_action_hist||[]);
+  const actionLogHtml = plog.length ? (
+    '<div class="dr-sec-t" style="margin-top:20px">Action log <span style="color:var(--ink-faint);font-weight:600;text-transform:none;letter-spacing:0">· Perf · '+plog.length+' wk</span></div>'+
     '<div class="hist-list">'+
-      alog.map(e=>{
-        const act=e.status?'<span class="chip" style="background:#f4ecff;color:var(--purps);font-weight:700;text-transform:none;letter-spacing:0">'+esc(GM_ACT_LABEL[e.status]||e.status)+'</span> ':'';
-        return '<div class="hist-entry"><div class="hist-when">'+esc(e.week)+(e.owner?' · '+esc(e.owner):'')+'</div>'+
-          '<div class="hist-text"><b>GM:</b> '+(act||'— ')+(e.note?esc(e.note):'')+'</div>'+
-          '<div class="hist-text" style="color:var(--ink-faint)"><b>Perf:</b> — <span title="Perf finals live in the Weekly Flagged sheet; they appear here once synced to the store (Phase 2)">(Weekly Flagged sheet)</span></div>'+
+      plog.map(e=>{
+        const act=e.action?'<span class="chip" style="background:#f4ecff;color:var(--purps);font-weight:700;text-transform:none;letter-spacing:0">'+esc(e.action)+'</span> ':'';
+        return '<div class="hist-entry"><div class="hist-when">'+esc(e.week)+'</div>'+
+          '<div class="hist-text">'+(act||'')+(e.comment?esc(e.comment):(e.action?'':'—'))+'</div>'+
         '</div>';
       }).join('')+
     '</div>'
