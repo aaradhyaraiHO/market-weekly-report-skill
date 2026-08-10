@@ -7,3 +7,11 @@ __pycache__/
 
 # Slack alert posted-message ledger (runtime state)
 alert/posted_ledger.json
+
+# Weekly flagged CSV exports (regenerated per run)
+flagged_*.csv
+
+# Follow-up draft/posted runtime artifacts (date-stamped, like posted_ledger.json)
+alert/followup_drafts_*.json
+alert/followup_drafts_*.txt
+alert/followup_posted_*.json
