@@ -145,17 +145,10 @@ CVR      = V_c·VPC_b·(CVR_c − CVR_b)
 Val/conv = V_c·CVR_c·(VPC_c − VPC_b)
 CPC      = −V_c·(CPC_c − CPC_b)
 ```
-`dominant_driver` = the most-negative factor (needs Google conversions in the snapshot;
-falls back to a 3-factor Clicks·RPC·CPC split on pre-`conversions_g` caches). Rendered by
-**highlighting that factor's column cell** (`.fxdom`) — highlight map: `cvr`→CVR · `valconv`
-or `rpc`→RPC · `cpc`→CPC · `clicks`→Clicks. `RPC = CVR × Val/conv`, `cm2/clk = RPC − CPC`.
-
-**All driver columns render on the Google-Search basis** (consistent with CM2/ROI/decomposition):
-`Clicks = paid_clicks_g · RPC = cm1_g/clicks_g · CVR = conversions_g/clicks_g · CPC = cpc_g ·
-TR% = offline_revenue_g/gbv_g`. This matters — a CE's Google clicks can move opposite its
-all-channel/business clicks (e.g. Antelope Canyon: Google clicks −26% while business clicks
-+17%), so mixing bases makes the highlight contradict the column. TR is **informational** (not
-a reconciling factor); take-rate's effect lives inside Val/conv → the RPC highlight.
+`dominant_driver` = the most-negative factor. Rendered by **highlighting that
+factor's existing column cell** (reuse the template's `.fxdom` root-cause highlight)
+— no separate driver column. RPC displayed as the contribution-per-click headline;
+`RPC = CVR × Val/conv`, `cm2/clk = RPC − CPC`.
 
 ---
 
@@ -174,15 +167,12 @@ convention). Row order: Full waste (pinned) → rest by CM2 lost desc.
 | 3 | Paid ROI `vs 4wk` | `Google-Search Paid ROI. Δ = last week vs the trailing-4-week average, in pp.` |
 | 4 | CM2 lost `/wk · 4w` | `CM2 lost per week vs a healthy baseline. Bleeder: this week's CM2 loss (baseline = breakeven) + 4-week accumulated loss. Eroder: the drop vs its own 4-week average. Table is sorted by this.` |
 | 5 | Spend `Δ4w` | `Weekly Google-Search spend. Δ vs the prior-4-week average weekly spend — green = pulled back, red = ramping.` |
-| 6 | RPC `Δ4w` | `Contribution revenue-per-click (cm1_g ÷ clicks_g). Δ vs 4-week avg. Highlighted cell = dominant driver of the CM2 loss (RPC = CVR × value-per-conversion).` |
-| 7 | CVR `Δ4w` | `Google-Search conversion rate (conversions_g ÷ clicks_g). Δ vs 4-week avg.` |
-| 8 | CPC `Δ4w` | `Cost per click (cpc_g). Δ vs 4-week avg — up is bad.` |
-| 9 | Clicks `Δ4w` | `Google-Search clicks (paid_clicks_g) — context/volume (neutral). Δ vs 4-week avg.` |
-| 10 | TR% `Δ4w` | `Google-Search take rate (offline_revenue_g ÷ gbv_g) — pricing/commission lever inside value-per-conversion. Informational (not a reconciling factor). Δ vs 4-week avg.` |
-| 11 | CM2 trend | `Weekly CM2 (CM1 − spend) over ~10–12 weeks; dashed line = breakeven. Duration of red = how chronic.` |
-| 12 | Action | `Your call, saved per week: Pause / Scale down / Intentional.` |
-
-All of RPC/CVR/CPC/Clicks/TR% render on the **Google-Search basis** (§6).
+| 6 | RPC `Δ4w` | `Contribution revenue-per-click (cm1/click). Δ vs 4-week avg. Highlighted cell = dominant driver of the CM2 loss. RPC = CVR × Val/conv.` |
+| 7 | CVR `Δ4w` | `Paid conversion rate (conversions/click). Δ vs 4-week avg.` |
+| 8 | CPC `Δ4w` | `Cost per click. Δ vs 4-week avg — up is bad.` |
+| 9 | Clicks `Δ4w` | `Google-Search clicks — context/volume (neutral). Δ vs 4-week avg.` |
+| 10 | CM2 trend | `Weekly CM2 (CM1 − spend) over ~10–12 weeks; dashed line = breakeven. Duration of red = how chronic.` |
+| 11 | Action | `Your call, saved per week: Pause / Scale down / Intentional.` |
 
 ### How-to block (`.lm-howto`) — verbatim
 > **How to read:** every CE losing CM2 this week, **worst first**. **CM2 lost** = how
@@ -198,7 +188,6 @@ All of RPC/CVR/CPC/Clicks/TR% render on the **Google-Search basis** (§6).
 - `⚠ N null-ROI feed gap: <names>` — spending & converting, CM1 didn't populate; verify tracking, not waste.
 - `✅ N recovered: <names + ROI + was-bleeding wks>` — exited the bleed.
 - Basis note: *Google-Search Paid only (Bing excluded) — magnitudes ~30% below all-paid; same window & definition as the manual ROI-Alert on the market channel.*
-- Divergence-from-Shreyal footnote: our decomposition is **Google-only**; Shreyal's manual alert is **all-paid on business clicks**. When Google clicks move opposite business clicks (Antelope: Google −26% vs business +17%), our engine attributes to Clicks while she attributes to CVR (conv ÷ business-clicks). Both internally valid — different denominators. Dollar totals also differ (Google-only ≈ half of all-paid).
 
 ---
 
@@ -229,17 +218,15 @@ RECOVER_ROI, RECOVER_MIN_BLEED, RECOVER_CM2_IMPROVE_PCT = 105.0, 2, 50.0   # exi
 
 ---
 
-## 10. Implementation notes — SHIPPED (worktree `worktree-eroding-bucket`)
-- **`fetch.py::ce_weekly_ads`** — add Google-only `offline_revenue_g`, `gbv_g` (TR components).
-- **`build_snapshot.py`** — carry `conversions_g` + `tr_g_pct` into the weekly snapshot (guarded).
-- **`buckets.py::losing_money()`** — eroding branch after the bleeder test; `decline`, `lost_wk`,
-  4-factor driver impacts (`clicks/cvr/valconv/cpc`, 3-factor fallback), `dominant_driver`; Google-search
-  driver displays `rpc_g`/`cvr_g`/`clicks_g`/`tr_g` (+ `cpc` already `cpc_g`); return `eroding` list.
-  `bleeders`/`recovered`/`paused`/`tracking_gap`/`status`/`burn_line` outputs **unchanged**.
-- **`template/report_template.html`** — `lmLost` CM2-lost cell (adaptive, never positive); 3-word
-  status by ROI level (+ green Recovering); dropped severity/week sublines; merged bleeders+eroding
-  sorted by `lost_wk` (full-waste pinned); `RPC·CVR·CPC·Clicks·TR` all Google-search; `.fxdom`
-  dominant highlight; updated `lmHead` tooltips + `.lm-howto` + legend.
+## 10. Implementation notes
+- **`buckets.py::losing_money()`** — add the eroding branch after the bleeder test;
+  compute `decline`, `lost_wk`, per-row driver impacts; re-base ESCALATING to 4wk-avg;
+  set `status ∈ {bleeding, eroding, full_waste}` by ROI level; return `lost_wk` as the
+  sort key. Keep `recovered`/`paused`/`tracking_gap`/`burn_line` outputs unchanged.
+- **`template/report_template.html`** — extend the `lm*` renderers: `lmCm2` → the
+  `CM2 lost` cell (adaptive bleeder/eroder, never positive); status = 3-word chip;
+  drop the severity/week sublines; keep Action dropdown; apply `.fxdom` to the
+  dominant driver cell; update `lmHead` tooltips (§7) and `.lm-howto` (§7).
 - **Reference mock-ups:** `scripts/weekly_report/docs/{north-america,italy}-cm2-bucket-mockup.html`
   (generator: `na_mockup_final.py <Market> [week]`).
 - **Diagnostics kept:** `diag_cm2_final.py` (cross-market + verification),
@@ -259,18 +246,10 @@ RECOVER_ROI, RECOVER_MIN_BLEED, RECOVER_CM2_IMPROVE_PCT = 105.0, 2, 50.0   # exi
 - Status = **one word**; duration → sparkline. No Efficiency/Scale/Mixed, **no
   severity tier at all** (CRITICAL/SEVERE/MODERATE were an invented threshold, cut),
   no week-count chips.
-- **All driver columns Google-search** (not business), so the dominant-driver highlight
-  and the column value always agree (the Antelope basis-mismatch fix).
-- **4-factor driver split** (Clicks·CVR·Val/conv·CPC) once `conversions_g` is in the
-  snapshot — the 3-factor (RPC bundles CVR) made every row read "RPC"; rejected.
-- **TR% = Google-search take rate** (`offline_revenue_g/gbv_g`), informational column kept
-  (not dropped for CVR) — TR is a real pricing lever.
 
 ## 12. Open / parked
-- **Alert wiring** — bringing eroders into `alert/weekly_alert.py` (posts to GM channels)
-  is a deliberate separate decision; `eroding` is a new list the alert doesn't yet read.
 - **Thin-margin watchlist** (ROI ~100–110% on material spend, e.g. Blue Lagoon Malta
-  ROI 101%, stable) — deliberately NOT in this bucket (neither a loss nor a decline).
-  Parked as a possible separate low-threshold view; do not dilute Losing Money.
+  ROI 101%, stable) — deliberately NOT in this bucket (it's neither a loss nor a
+  decline). Parked as a possible separate low-threshold view; do not dilute Losing Money.
 - Spend Δ colour uses the bleeder convention (up = red) on **all** rows incl. eroders
   (option 1, simplicity); revisit only if eroder false-alarms appear.
