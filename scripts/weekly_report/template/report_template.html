@@ -2874,9 +2874,9 @@ function openDrawer(ceId){
     '<div class="dr-sec-t" style="margin-top:20px">Action log <span style="color:var(--ink-faint);font-weight:600;text-transform:none;letter-spacing:0">· Perf · '+plog.length+' wk</span></div>'+
     '<div class="hist-list">'+
       plog.map(e=>{
-        const act=e.action?'<span class="chip" style="background:#f4ecff;color:var(--purps);font-weight:700;text-transform:none;letter-spacing:0">'+esc(e.action)+'</span> ':'';
+        const act=e.action?'<b>'+esc(e.action)+'</b>'+(e.comment?' — ':''):'';
         return '<div class="hist-entry"><div class="hist-when">'+esc(e.week)+'</div>'+
-          '<div class="hist-text">'+(act||'')+(e.comment?esc(e.comment):(e.action?'':'—'))+'</div>'+
+          '<div class="hist-text">'+act+(e.comment?esc(e.comment):(e.action?'':'—'))+'</div>'+
         '</div>';
       }).join('')+
     '</div>'

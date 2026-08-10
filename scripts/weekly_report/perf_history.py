@@ -56,6 +56,43 @@ def _find(hdr, names):
     return None
 
 
+def _header_row(vals):
+    """Header row isn't always row 0 — some tabs carry a 'Date Week' title row above it
+    (e.g. w/c 2026-07-20 puts headers on row 2). Find the first row that contains 'CID'."""
+    for i, row in enumerate(vals[:6]):
+        if any(str(c).strip().lower() == "cid" for c in row):
+            return i
+    return 0
+
+
+def _list_week_tabs():
+    """The perf sheet's `w/c <date>` tabs, parsed + sorted newest-first. Tab dates mix
+    conventions (07-20 is a Monday, 07-26/08-02 are Sundays), so we ENUMERATE actual tabs
+    rather than guess names off a fixed 7-day stride."""
+    cmd = ["gws", "sheets", "spreadsheets", "get",
+           "--params", json.dumps({"spreadsheetId": PERF_SHEET_ID,
+                                    "fields": "sheets(properties(title))"}),
+           "--format", "json"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        return []
+    t = (r.stdout or "").strip()
+    try:
+        sheets = json.loads(t[t.index("{"):]).get("sheets", [])
+    except Exception:
+        return []
+    out = []
+    for s in sheets:
+        title = s.get("properties", {}).get("title", "")
+        if title.startswith("w/c "):
+            try:
+                out.append((dt.date.fromisoformat(title[4:].strip()), title))
+            except Exception:
+                continue
+    out.sort(reverse=True)
+    return out
+
+
 def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> dict:
     """Return {cid: [{week, action, comment}]} newest-first and write the sidecar.
     skip_if_fresh: if the sidecar exists and was written today, reuse it (so a 17-market
@@ -71,15 +108,17 @@ def build_sidecar(week: str, n_weeks: int = 6, skip_if_fresh: bool = False) -> d
 
     w0 = dt.date.fromisoformat(week)
     hist: dict[str, list] = {}
-    for i in range(n_weeks):
-        wk = (w0 - dt.timedelta(days=7 * i)).isoformat()
-        vals = _gws_get(f"'w/c {wk}'!A1:BA400")
+    tabs = [(d, t) for d, t in _list_week_tabs() if d <= w0][:n_weeks]
+    for d, title in tabs:
+        wk = d.isoformat()
+        vals = _gws_get(f"'{title}'!A1:BA400")
         if not vals or len(vals) < 2:
             continue
-        hdr = vals[0]
+        hr = _header_row(vals)
+        hdr = vals[hr]
         ci = _find(hdr, ["cid"]) or 0
         di, ri = _find(hdr, DECISION), _find(hdr, REASON)
-        for row in vals[1:]:
+        for row in vals[hr + 1:]:
             def cell(idx):
                 return (str(row[idx]).strip() if idx is not None and idx < len(row) else "")
             cid = cell(ci)
