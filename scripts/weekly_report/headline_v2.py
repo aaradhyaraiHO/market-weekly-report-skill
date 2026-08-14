@@ -33,6 +33,13 @@ _SHAPLEY_LABELS = {
     "tr": "Take rate",
 }
 
+_CE_PERIOD_FIELDS = (
+    "revenue", "orders", "aov", "tr_pct", "cr_pct", "clicks", "paid_clicks",
+    "cvr_pct", "paid_cvr_pct", "cpc", "paid_rpc", "spend", "cm1", "paid_cm2",
+    "roi_pct", "coupon_wallet", "gbv", "gbv_completed", "ad_conversions",
+    "organic_gbv", "paid_revenue",
+)
+
 
 def _number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
@@ -138,8 +145,44 @@ def _shapley_view(headlines):
     }
 
 
+def _ce_bucket_memberships(market):
+    """Project current buckets_final membership without changing bucket logic."""
+    memberships = {}
+
+    def add(rows, key, label, family):
+        for row in rows or []:
+            ce_id = row.get("ce_id") if isinstance(row, dict) else None
+            if ce_id is None:
+                continue
+            memberships.setdefault(str(ce_id), []).append({
+                "key": key,
+                "label": label,
+                "family": family,
+            })
+
+    final = market.get("buckets_final") or {}
+    defend = final.get("defend") or {}
+    compound = final.get("compound") or {}
+    lifecycle = final.get("lifecycle") or {}
+    losing = defend.get("losing_money") or {}
+    add(losing.get("existing"), "losing_money", "Losing Money", "Defend")
+    add(losing.get("new"), "losing_money", "Losing Money", "Defend")
+    add(defend.get("seasonality_down"), "fluct_down", "RPC Fluctuations ↓", "Defend")
+    add(compound.get("scale_up"), "scale_up", "Scale-Up", "Compound")
+    add(compound.get("seasonality_up"), "fluct_up", "RPC Fluctuations ↑", "Compound")
+    add(lifecycle.get("new_ces"), "new_ces", "New CEs", "Lifecycle")
+    add(lifecycle.get("iteration"), "iteration", "Iteration", "Lifecycle")
+    return memberships
+
+
+def _ce_period(row):
+    row = row if isinstance(row, dict) else {}
+    return {key: _number(row.get(key)) for key in _CE_PERIOD_FIELDS}
+
+
 def _ce_views(market, dimensions=None):
     dimensions = dimensions or {}
+    bucket_memberships = _ce_bucket_memberships(market)
     views = []
     for ce in market.get("ces", []):
         weekly = [row for row in (ce.get("weekly") or []) if isinstance(row, dict)]
@@ -160,13 +203,17 @@ def _ce_views(market, dimensions=None):
         })
         metadata = ce.get("metadata") or {}
         ce_dimensions = dimensions.get(str(ce.get("ce_id")), {})
+        ly = (ce.get("weekly_ly") or [])[-1] if ce.get("weekly_ly") else {}
         views.append({
             "ce_id": ce.get("ce_id"),
             "ce_name": ce.get("ce_name") or "Unnamed experience",
             "city": metadata.get("city"),
             "category": metadata.get("category"),
+            "subcategory": metadata.get("subcategory"),
             "management_type": metadata.get("management_type"),
             "growth_stage": metadata.get("evolution"),
+            "lifecycle": metadata.get("new_vs_existing"),
+            "tier": metadata.get("tier"),
             "countries": countries,
             "bdm_region": ce_dimensions.get("bdm_region"),
             "growth_region": ce_dimensions.get("growth_region"),
@@ -179,6 +226,12 @@ def _ce_views(market, dimensions=None):
             "rpc": _number(current.get("paid_rpc")),
             "cm1_per_conv": _number(current.get("cm1_per_conv")),
             "roi_pct": _number(current.get("roi_pct")),
+            "periods": {
+                "w0": _ce_period(current),
+                "w1": _ce_period(previous),
+                "ly": _ce_period(ly),
+            },
+            "buckets": bucket_memberships.get(str(ce.get("ce_id")), []),
             "chart": [
                 {
                     "week": row.get("week"),
@@ -267,6 +320,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         "market_slug": meta.get("market_slug"),
         "week_start": meta.get("week_start"),
         "week_end": meta.get("week_end"),
+        "ce_cap": meta.get("ce_cap"),
         "revenue": revenue,
         "wow_abs": wow_abs,
         "wow_pct": wow_pct,

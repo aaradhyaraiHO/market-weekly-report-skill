@@ -97,7 +97,11 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('data-mover-sort="drops"', html)
         self.assertIn('data-mover-sort="gains"', html)
         self.assertIn('id="all-ces-view"', html)
-        self.assertIn('data-ce-sort="revenue"', html)
+        self.assertIn("const CE_METRICS", html)
+        self.assertIn("data-ce-sort=\"${metric.key}\"", html)
+        self.assertIn('id="ce-expand-metrics"', html)
+        self.assertIn('id="ce-filter-chips"', html)
+        self.assertIn('id="ce-group"', html)
         self.assertIn('id="ce-detail-root"', html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
 
@@ -139,6 +143,14 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(first_drop["primary_delta"], -19_532)
         self.assertEqual(first_drop["primary_lens"], "vs trailing 4w")
         self.assertEqual(first_drop["wow_abs"], -4_858)
+
+        ce = next(row for row in view["all_ces"] if row["buckets"])
+        self.assertIn("subcategory", ce)
+        self.assertIn("tier", ce)
+        self.assertIn("lifecycle", ce)
+        self.assertEqual(set(ce["periods"]), {"w0", "w1", "ly"})
+        self.assertIn("revenue", ce["periods"]["w0"])
+        self.assertTrue(all(set(bucket) == {"key", "label", "family"} for bucket in ce["buckets"]))
 
     def test_report_scope_is_one_market_with_week_history(self):
         older = copy.deepcopy(self.market)

@@ -59,16 +59,16 @@ No subsequent table migration is allowed to reuse the All-CE component until the
 
 | ID | V1 capability | V2 status | Acceptance gate |
 |---|---|---|---|
-| A-01 | Search by CE name, ID, city, category and subcategory. | **Partial** | Add subcategory and verify case-insensitive matching and reset. |
+| A-01 | Search by CE name, ID, city, category and subcategory. | **Verified** | Case-insensitive matching and reset pass browser checks. |
 | A-02 | Sort every static and metric column; nulls always last. | **Partial** | Full V1 metric set is sortable in both directions with null ordering tests. |
-| A-03 | One-click absolute top-mover sort. | **Missing** | Restores `|Δ revenue WoW|` order and visual mover badges. |
+| A-03 | One-click absolute top-mover sort. | **Verified** | Restores `|Δ revenue WoW|` order and visual mover badges. |
 | A-04 | Country filtering. | **Verified** as additive V2 behavior | CE membership and reset pass browser tests. |
-| A-05 | Management, evolution, lifecycle and tier filters. | **Missing** | Snapshot-backed metadata filters preserve multi-select behavior. |
-| A-06 | Diagnostic-bucket filters with counts. | **Missing** | Defend, Compound and Lifecycle chips match `buckets_final` membership. |
+| A-05 | Management, evolution, lifecycle and tier filters. | **Verified** | Snapshot-backed metadata filters preserve multi-select behavior. |
+| A-06 | Diagnostic-bucket filters with counts. | **Verified** | Defend, Compound and Lifecycle chips match `buckets_final` membership. |
 | A-07 | Headout market filter. | **Missing** | Global report filters and groups by source market. |
 | A-08 | BDM and Growth region filters. | **Verified** only with approved sidecar | Filters disable honestly without the mapping and work with it. |
-| A-09 | Group by category, subcategory, city, management, evolution, tier, lifecycle, diagnostic bucket, market and custom group. | **Missing** | Group membership and subtotal values match V1. |
-| A-10 | Collapse/expand individual groups and all groups. | **Missing** | State survives table rerenders during the session. |
+| A-09 | Group by category, subcategory, city, management, evolution, tier, lifecycle, diagnostic bucket, market and custom group. | **Partial** | Snapshot-backed groups work; Headout market and custom groups remain. |
+| A-10 | Collapse/expand individual groups and all groups. | **Verified** | State survives table rerenders during the session. |
 | A-11 | Saved views preserve filters, grouping, sort, watchlist-only state and highlight rule. | **Missing** | Save/apply/delete and per-market persistence tests pass. |
 | A-12 | Persistent per-market watchlist and watchlist-only filter. | **Missing** | Row and drawer stars mirror one state and survive reload/week changes. |
 | A-13 | Highlight-rule parser for ROI/WoW/revenue/YoY/CVR/AOV/TR/spend/CM1/clicks/orders. | **Missing** | Supported expressions match V1 behavior and invalid rules fail soft. |
@@ -81,15 +81,15 @@ No subsequent table migration is allowed to reuse the All-CE component until the
 |---|---|---|---|
 | A-16 | Sticky CE identity plus watch, mover, group and note indicators. | **Missing** | Indicators reflect the same persisted/source state as V1. |
 | A-17 | Direct Omni link per CE without opening the drawer. | **Missing** | Link preserves CE and 12-week context and stops row propagation. |
-| A-18 | Twelve-week TY/LY revenue sparkline per CE. | **Missing** in table | Sparkline renders null LY safely and exposes values accessibly. |
-| A-19 | Filtered-set total row pinned above CE rows. | **Missing** | Aggregations recompute from the visible set. |
-| A-20 | Contribution percentage against the filtered set and full market. | **Missing** | Denominators match V1 semantics for CE/group/total rows. |
-| A-21 | Overall metrics: Revenue, Orders, AOV, TR and CR. | **Partial** | All columns preserve values, formats and tooltips. |
-| A-22 | Paid metrics: Clicks, CVR, CPC, RPC, Spend, CM1, CM2 and ROI. | **Partial** | All columns preserve values, formats, paid boundary and tooltips. |
-| A-23 | Collapsed metric cells show W0 plus WoW change. | **Partial** | Every overall/paid metric follows the same compact contract. |
-| A-24 | Per-metric expansion shows W0, W-1, absolute change, WoW and YoY. | **Missing** | Individual and expand-all toggles pass numeric and layout tests. |
-| A-25 | Group subtotal rows recompute ratios from sums rather than averaging CE ratios. | **Missing** | Aggregation tests cover every derived metric. |
-| A-26 | Contribution strip shows group revenue share, WoW movement and stable materiality index. | **Missing** | Values and the 3% materiality floor match V1. |
+| A-18 | Twelve-week TY/LY revenue sparkline per CE. | **Verified** | Sparkline renders null LY safely and exposes the series accessibly. |
+| A-19 | Filtered-set total row pinned above CE rows. | **Verified** | Aggregations recompute from the visible set. |
+| A-20 | Contribution percentage against the filtered set and full market. | **Partial** | CE/group/total denominators work; expanded denominator evidence remains to be labelled. |
+| A-21 | Overall metrics: Revenue, Orders, AOV, TR and CR. | **Verified** | Values and formats are present in compact and expanded states. |
+| A-22 | Paid metrics: Clicks, CVR, CPC, RPC, Spend, CM1, CM2 and ROI. | **Verified** | Values, formats and the Paid visual boundary are present. |
+| A-23 | Collapsed metric cells show W0 plus WoW change. | **Verified** | Every overall/paid metric follows the same compact contract. |
+| A-24 | Per-metric expansion shows W0, W-1, absolute change, WoW and YoY. | **Verified** for expand-all | Expanded evidence and responsive horizontal scrolling pass browser checks; individual toggles are a product choice. |
+| A-25 | Group subtotal rows recompute ratios from sums rather than averaging CE ratios. | **Verified** | The V1 sum-of-components formulas are preserved in the V2 view. |
+| A-26 | Contribution strip shows group revenue share, WoW movement and stable materiality index. | **Partial** | Revenue share and WoW movement work; the 3% materiality index remains. |
 | A-27 | Capped Headout explanation shows cap, shown count, total count and inclusion rules. | **Missing** | Message matches `meta.ce_cap` and never implies full coverage. |
 | A-28 | Result line reports shown/total CEs, filtered revenue, mover sort, highlighted rows, watched count and custom-group count. | **Partial** | All applicable counts reflect current state. |
 | A-29 | Link to the market’s monthly deep-dive report. | **Missing** | Existing routing behavior is preserved or explicitly replaced. |

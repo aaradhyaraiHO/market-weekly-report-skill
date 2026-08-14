@@ -39,8 +39,12 @@ shape is `{"markets":{"market_slug":{...}}}`. A usable market record requires
 `month`, `monthly_goal`, `mtd_revenue`, `forecast_revenue`, and `as_of`; otherwise
 the report explicitly shows that the target comparison is unavailable.
 
-The V2 All-CE view reads CE weekly metrics and customer-country composition
-directly from the same snapshot. BDM and Growth regions are never inferred from
+The V2 All-CE view reads the complete Overall/Paid weekly metric set,
+TY/LY trajectories, metadata, customer-country composition and current
+`buckets_final` membership directly from the same snapshot. It supports
+snapshot-backed search and multi-select filters, sorting, top-mover order,
+grouping, ratio-safe subtotals, contribution context and expandable
+W0/W-1/change/WoW/YoY evidence. BDM and Growth regions are never inferred from
 management type or lifecycle stage. They can be attached with
 `--ce-dimensions` using this optional shape:
 
@@ -58,5 +62,7 @@ management type or lifecycle stage. They can be attached with
 ```
 
 When this approved mapping is absent, the two organizational filters remain
-disabled while snapshot-backed search, Country, metrics, sorting and CE detail
-continue to work.
+disabled while all snapshot-backed portfolio controls, evidence and CE detail
+continue to work. Saved views, watchlists, custom groups, notes and action
+persistence remain separate migration slices and continue to live in V1 until
+their V2 contracts are implemented.
