@@ -27,6 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import config  # noqa: E402
+import bucket_views  # noqa: E402
 CACHE = Path(config.__file__).resolve().parents[2] / ".cache" / "weekly_report"
 PERF_SHEET_ID = "1sXd0m2d2Qc5rg99ctpp_hnN5Jg8mtsRAwds_i2ZuwLo"   # perf's Weekly Flagged spreadsheet
 
@@ -71,8 +72,7 @@ def rows_for_snapshot(snap: dict, gm_actions: dict[str, dict], camp_cat: dict | 
     meta = snap.get("meta", {})
     market = meta.get("market", "")
     camp_cat = camp_cat or {}
-    lm = (((snap.get("buckets_final") or {}).get("defend") or {}).get("losing_money") or {})
-    flagged = (lm.get("existing") or []) + (lm.get("new") or [])
+    flagged = bucket_views.final_losing_money_rows(snap)
     # CE-level category from the CE list — used only as a FALLBACK now. The Category column is the
     # CAMPAIGN-level category (ads_campaign_stats.campaign_category, via camp_cat) per Aditya
     # 2026-08-04: the campaign-stats dashboard's category filter, not the combined-entity category.

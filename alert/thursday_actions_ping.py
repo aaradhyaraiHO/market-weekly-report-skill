@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(REPO / "scripts" / "weekly_report"))
 import config  # noqa: E402  (weekly_report/config.py — NOTES_SCRIPT_URL, week helpers)
+import bucket_views  # noqa: E402
 
 CACHE = REPO / ".cache" / "weekly_report"
 CHANNELS = json.loads((HERE / "market_channels.json").read_text())
@@ -86,9 +87,7 @@ def flagged_rows(slug: str, week: str) -> list[dict] | None:
     p = CACHE / f"snapshot_{slug}_{week}.json"
     if not p.exists():
         return None
-    lm = (((json.loads(p.read_text()).get("buckets_final") or {})
-           .get("defend") or {}).get("losing_money") or {})
-    rows = (lm.get("existing") or []) + (lm.get("new") or [])
+    rows = bucket_views.final_losing_money_rows(json.loads(p.read_text()))
     for r in rows:
         wk0 = (r.get("weeks") or [{}])[0]
         r["_cm2_w0"] = wk0.get("cm2")

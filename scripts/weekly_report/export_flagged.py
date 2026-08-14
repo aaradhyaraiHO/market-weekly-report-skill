@@ -17,6 +17,7 @@ from pathlib import Path
 from collections import Counter
 
 import config
+import bucket_views
 
 HERE = Path(__file__).resolve().parent
 CACHE = HERE.parents[1] / ".cache" / "weekly_report"
@@ -86,13 +87,11 @@ def main():
         market, slug = meta.get("market", "?"), meta.get("market_slug", "?")
         if slug == "headout":
             continue
-        bf = snap.get("buckets_final", {})
-        lm = (bf.get("defend", {}) or {}).get("losing_money", {}) or {}
-        seas_dn = (bf.get("defend", {}) or {}).get("seasonality_down", []) or []
-        seas_up = (bf.get("compound", {}) or {}).get("seasonality_up", []) or []
+        seas_dn = bucket_views.final_fluctuation_rows(snap, "down")
+        seas_up = bucket_views.final_fluctuation_rows(snap, "up")
 
         for key, label, shown in LM_SUBS:
-            for ce in lm.get(key, []) or []:
+            for ce in bucket_views.legacy_losing_money_rows(snap, key):
                 row = {"market": market, "status_bucket": label, "shown_in_report": shown}
                 for out, fld in LM_COLS:
                     row[out] = _v(ce.get(fld))
