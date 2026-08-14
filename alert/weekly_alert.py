@@ -35,6 +35,11 @@ import re
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+REPORT_DIR = HERE.parent / "scripts" / "weekly_report"
+sys.path.insert(0, str(REPORT_DIR))
+import bucket_views  # noqa: E402
+
 # ---------- formatting ----------
 def fmt_money(v):
     if v is None: return "—"
@@ -258,7 +263,7 @@ def table_losing(mk, report_url):
     # biggest drop first) — the label (Bleeding/Eroding/Recovering/Full waste) is a tag,
     # not the order. Why = criteria fired: 0conv (full waste this week) · WoW (CM2 drop vs
     # last week) · 3wk (drop vs the W1–W3 average) · 90d (New CEs, cumulative loss).
-    lm = (mk.get("buckets_final") or {}).get("defend", {}).get("losing_money", {}) or {}
+    lm = bucket_views.final_losing_money(mk)
     ordered = sorted([(r, "Exist") for r in (lm.get("existing") or [])]
                      + [(r, "New") for r in (lm.get("new") or [])],
                      key=lambda t: (t[0].get("sort_delta") or 0))
@@ -307,12 +312,10 @@ LEDGER_SLUG = {
     "gcc": "gcc", "north_africa": "north-africa", "rest_of_mea": "rest-of-mea",
 }
 
-FLUCT_SRC = {"down": ("defend", "seasonality_down"), "up": ("compound", "seasonality_up")}
 _DRV_DELTA = {"cvr": "cvr_d", "aov": "aov_d", "cr": "cr_d", "tr": "tr_d"}
 
 def fluct_rows(mk, direction):
-    fam, key = FLUCT_SRC[direction]
-    return (mk.get("buckets_final") or {}).get(fam, {}).get(key, []) or []
+    return bucket_views.final_fluctuation_rows(mk, direction)
 
 def table_fluct(mk, report_url, direction):
     emoji, title = FLUCT_META[direction]

@@ -28,7 +28,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPORT_DIR = HERE.parent / "scripts" / "weekly_report"
+sys.path.insert(0, str(REPORT_DIR))
+import bucket_views  # noqa: E402
 
 SWING_EPS = 5.0  # pp — |swing_pct| move below this is noise, not a "material" change
 
@@ -45,16 +51,15 @@ def load_markets(html_path: Path) -> dict:
 
 
 def _losing(mk: dict) -> dict:
-    lm = (mk.get("buckets_final") or {}).get("defend", {}).get("losing_money", {}) or {}
-    rows = (lm.get("existing") or []) + (lm.get("new") or [])
+    rows = bucket_views.final_losing_money_rows(mk)
     return {str(r.get("ce_id")): {"name": r.get("ce_name"),
                                   "status": r.get("label") or "flagged",
                                   "roi": r.get("roi_wk")}
             for r in rows}
 
 
-def _fluct(mk: dict, fam: str, key: str) -> dict:
-    rows = (mk.get("buckets_final") or {}).get(fam, {}).get(key, []) or []
+def _fluct(mk: dict, direction: str) -> dict:
+    rows = bucket_views.final_fluctuation_rows(mk, direction)
     return {str(r.get("ce_id")): {"name": r.get("ce_name"), "swing_pct": r.get("swing_pct"),
                                   "dominant": r.get("dominant_key"), "verdict": r.get("verdict")}
             for r in rows}
@@ -91,10 +96,8 @@ def _fl_material(o, n):
 
 def diff_market(old_mk: dict, new_mk: dict) -> dict:
     lm = _diff(_losing(old_mk), _losing(new_mk), _lm_material)
-    dn = _diff(_fluct(old_mk, "defend", "seasonality_down"),
-               _fluct(new_mk, "defend", "seasonality_down"), _fl_material)
-    up = _diff(_fluct(old_mk, "compound", "seasonality_up"),
-               _fluct(new_mk, "compound", "seasonality_up"), _fl_material)
+    dn = _diff(_fluct(old_mk, "down"), _fluct(new_mk, "down"), _fl_material)
+    up = _diff(_fluct(old_mk, "up"), _fluct(new_mk, "up"), _fl_material)
     changed = any(b["n_added"] or b["n_removed"] or b["n_changed"] for b in (lm, dn, up))
     return {"changed": changed, "losing_money": lm, "fluct_down": dn, "fluct_up": up}
 

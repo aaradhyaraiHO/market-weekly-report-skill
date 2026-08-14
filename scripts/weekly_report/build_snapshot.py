@@ -1187,33 +1187,15 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         "transitions": transitions,   # SCHEMA ADDITION: Phase-2 forward-compat
         "_diagnostics": diag,
     }
-    # FINAL bucket engine (2026-07-13): Defend/Compound over B1/B2/B4, reorganized —
-    # Losing Money (CM2 bleed + movement), Seasonality (one Fluctuations table), Scale-Up
-    # (ROI≥155% ≥3-of-4wk). Consumes the assembled snapshot above.
-    import buckets
-    snapshot["buckets_final"] = buckets.build_buckets(snapshot)
-    try:
-        import pp
-        snapshot["prepurchase"] = pp.build_pp(snapshot)   # §6 PP tracking (dim_pp_allotments → CE)
-    except Exception as e:
-        print(f"  [pp] skipped: {e}")
-        snapshot["prepurchase"] = []
-    try:
-        import seasonality_llm
-        n = seasonality_llm.attach(snapshot)   # Explore layer: high/low-season info tag per CE (guarded)
-        print(f"  seasonality tags attached: {n}")
-    except Exception as e:
-        print(f"  seasonality_llm.attach skipped ({e!r})")
+    # FINAL bucket engine + optional PP/seasonality enrichments. The shared
+    # finalizer preserves the existing order and fail-soft behavior.
+    import snapshot_finalize
+    snapshot_finalize.finalize_common(snapshot)
     # Slack digest (S3 agent step) — read a sidecar if the skill wrote one for this
     # market+week, so the Market Review tab shows the "signal beyond the data" cards.
     # Sidecar: .cache/weekly_report/slack_context_{slug}_{week}.json (list of cards).
     sc = OUT_DIR / f"slack_context_{market_slug}_{config.iso(w0_start)}.json"
-    if sc.exists():
-        try:
-            snapshot["market_review_context"] = json.loads(sc.read_text())
-            print(f"  [slack] loaded {len(snapshot['market_review_context'])} context cards from {sc.name}")
-        except Exception as e:
-            print(f"  [slack] sidecar load skipped ({e!r})")
+    snapshot_finalize.load_review_context(snapshot, sc, success_suffix=f" from {sc.name}")
     return snapshot
 
 
