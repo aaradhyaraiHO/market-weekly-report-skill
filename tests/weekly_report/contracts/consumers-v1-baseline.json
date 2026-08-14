@@ -1,0 +1,37 @@
+{
+  "renderer": {
+    "payload_keys": ["markets", "notes_channels", "notes_url", "schema_version"],
+    "single_report_name": "report_north_america_2026-08-02.html",
+    "title": "Weekly Ledger — North America — w/c 2026-08-02"
+  },
+  "slack": {
+    "report_url": "https://market-notebook.vercel.app/weekly-report-north-america",
+    "message_count": 2,
+    "summary_thread_fallbacks": ["Losing Money", "RPC Fluctuations Down", "RPC Fluctuations Up"],
+    "rca_ce_ids": ["101", "202"]
+  },
+  "sheet": {
+    "column_count": 46,
+    "header": [
+      "CID", "CID Name", "Category", "Market",
+      "W0 Cost", "W0 Clicks", "W0 CPC", "W0 Conversion", "W0 CVR", "W0 CM1", "W0 ROI", "W0 CM2",
+      "W1 Cost", "W1 Clicks", "W1 CPC", "W1 Conversion", "W1 CVR", "W1 CM1", "W1 ROI", "W1 CM2",
+      "W2 Cost", "W2 Clicks", "W2 CPC", "W2 Conversion", "W2 CVR", "W2 CM1", "W2 ROI", "W2 CM2",
+      "W3 Cost", "W3 Clicks", "W3 CPC", "W3 Conversion", "W3 CVR", "W3 CM1", "W3 ROI", "W3 CM2",
+      "New/Exist", "Tier", "CM2 -ve 2wk", "ROI Change", "Clicks Change",
+      "GM action", "GM comment", "Perf action", "Perf comment", "Final action"
+    ]
+  },
+  "ledger": {
+    "ledger_slug": "north-america",
+    "current_report_path": "weekly-report-north-america.html",
+    "archive_report_path": "weekly-report-north-america-2026-08-02.html",
+    "series_columns": 6
+  },
+  "fixture_bucket_membership": {
+    "losing_money_existing": ["101"],
+    "losing_money_new": [],
+    "fluctuations_down": ["101"],
+    "fluctuations_up": ["202"]
+  }
+}

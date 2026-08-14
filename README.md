@@ -8,3 +8,14 @@ Imported 2026-07-12 from `~/analytics` safepoint branch `weekly-report-v1` (1c0b
 - `thoughts/shared/weekly-report-v1/` — final rendered builds + gap audit
 - `dbt/` — reference copies of the ce_weekly_* models; canonical home = analytics repo, PR from safepoint branch `weekly-report-v1`
 - Sibling pattern: ~/market-monthly-review-skill (sync-skill.sh mirrors into analytics)
+
+## V2 baseline verification
+
+Phase 1 freezes the observable V1 producer/consumer boundary with a synthetic fixture,
+snapshot contract, consumer coverage, and golden outputs under `tests/weekly_report/`.
+The verification path is local and no-write with respect to the checkout and every production
+integration:
+
+```sh
+python3 scripts/weekly_report/verify_baseline.py
+```

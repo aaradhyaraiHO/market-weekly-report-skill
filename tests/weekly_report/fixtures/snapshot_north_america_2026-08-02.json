@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "market": "North America",
+    "market_slug": "north_america",
+    "week_start": "2026-08-02",
+    "week_end": "2026-08-08",
+    "weeks": [
+      "2026-05-17", "2026-05-24", "2026-05-31", "2026-06-07",
+      "2026-06-14", "2026-06-21", "2026-06-28", "2026-07-05",
+      "2026-07-12", "2026-07-19", "2026-07-26", "2026-08-02"
+    ],
+    "schema_version": 1,
+    "revenue_basis": "sum_revenue_predicted",
+    "metric_reference": "analytics-skill (business.md / marketing.md)"
+  },
+  "market_summary": {
+    "weekly": [
+      {"week": "2026-05-17", "revenue": 900000}, {"week": "2026-05-24", "revenue": 920000},
+      {"week": "2026-05-31", "revenue": 910000}, {"week": "2026-06-07", "revenue": 940000},
+      {"week": "2026-06-14", "revenue": 960000}, {"week": "2026-06-21", "revenue": 980000},
+      {"week": "2026-06-28", "revenue": 990000}, {"week": "2026-07-05", "revenue": 1010000},
+      {"week": "2026-07-12", "revenue": 1030000}, {"week": "2026-07-19", "revenue": 1050000},
+      {"week": "2026-07-26", "revenue": 1000000}, {"week": "2026-08-02", "revenue": 1100000}
+    ],
+    "weekly_ly": [],
+    "headlines": {
+      "revenue_w0": 1100000, "wow_pct": 10.0, "yoy_pct": 15.0,
+      "roi_w0_pct": 132.0, "roi1_w0_pct": 145.0,
+      "key_metrics": {
+        "revenue": {"w0": 1100000, "delta_pct": 10.0}, "roi1": {"w0": 145.0, "delta_pct": 4.0},
+        "aov": {"w0": 82.5, "delta_pct": 2.5}, "tr_pct": {"w0": 31.2, "delta_pct": -1.0},
+        "paid_roi": {"w0": 132.0, "delta_pct": -6.0}, "paid_clicks": {"w0": 24500, "delta_pct": 8.0},
+        "paid_cvr": {"w0": 4.75, "delta_pct": 0.5}
+      },
+      "week_header": {"trend": {
+        "top_droppers": [{"ce_id": "101", "ce_name": "Example Museum", "w0_rev": 70000, "raw_wow": -30000}],
+        "top_gainers": [{"ce_id": "202", "ce_name": "Example Observatory", "w0_rev": 150000, "raw_wow": 50000}]
+      }}
+    }
+  },
+  "ces": [
+    {
+      "ce_id": "101", "ce_name": "Example Museum", "metadata": {"category": "Museums"},
+      "weekly": [
+        {"week": "2026-05-17", "revenue": 85000}, {"week": "2026-05-24", "revenue": 87000},
+        {"week": "2026-05-31", "revenue": 88000}, {"week": "2026-06-07", "revenue": 90000},
+        {"week": "2026-06-14", "revenue": 91000}, {"week": "2026-06-21", "revenue": 92000},
+        {"week": "2026-06-28", "revenue": 93000}, {"week": "2026-07-05", "revenue": 95000},
+        {"week": "2026-07-12", "revenue": 97000}, {"week": "2026-07-19", "revenue": 98000},
+        {"week": "2026-07-26", "revenue": 100000}, {"week": "2026-08-02", "revenue": 70000, "yoy_pct": -12.0}
+      ]
+    },
+    {
+      "ce_id": "202", "ce_name": "Example Observatory", "metadata": {"category": "Landmarks"},
+      "weekly": [
+        {"week": "2026-05-17", "revenue": 80000}, {"week": "2026-05-24", "revenue": 82000},
+        {"week": "2026-05-31", "revenue": 83000}, {"week": "2026-06-07", "revenue": 85000},
+        {"week": "2026-06-14", "revenue": 87000}, {"week": "2026-06-21", "revenue": 90000},
+        {"week": "2026-06-28", "revenue": 92000}, {"week": "2026-07-05", "revenue": 94000},
+        {"week": "2026-07-12", "revenue": 96000}, {"week": "2026-07-19", "revenue": 98000},
+        {"week": "2026-07-26", "revenue": 100000}, {"week": "2026-08-02", "revenue": 150000, "yoy_pct": 25.0}
+      ]
+    }
+  ],
+  "followup": [], "bucket1_fluctuations": [],
+  "bucket_b1": {"rows": [], "standing_count": 0, "zero_spend_exits": [], "burn_line": {}, "gray_zone": []},
+  "bucket_b3": {"rows": []}, "bucket_b4": {"rows": []}, "bucket_cascade": {},
+  "no_bid_campaigns": {"totals": {"count": 0, "spend_total": 0}, "rows": []},
+  "seasonality_adjustments": [], "levers": [], "market_review_context": [], "transitions": [], "_diagnostics": {},
+  "buckets_final": {
+    "defend": {
+      "losing_money": {
+        "existing": [{
+          "ce_id": "101", "ce_name": "Example Museum", "new_existing": "Existing", "tier": "Tier 1",
+          "label": "bleeding", "criteria": ["C2", "C3"], "sort_delta": -1800,
+          "cm2_wk": -2400, "roi_wk": 72.0, "driver": "CVR",
+          "weeks": [
+            {"label": "w0", "spend": 5000, "clicks": 2000, "cpc": 2.5, "cvr": 2.0, "cm1": 3600, "roi": 72.0, "cm2": -2400},
+            {"label": "w1", "spend": 4500, "clicks": 1800, "cpc": 2.5, "cvr": 3.0, "cm1": 5400, "roi": 120.0, "cm2": -600},
+            {"label": "w2", "spend": 4300, "clicks": 1700, "cpc": 2.5294, "cvr": 3.1, "cm1": 5500, "roi": 127.9, "cm2": 1200},
+            {"label": "w3", "spend": 4200, "clicks": 1650, "cpc": 2.5455, "cvr": 3.2, "cm1": 5600, "roi": 133.3, "cm2": 1400}
+          ]
+        }],
+        "new": [], "bleeders": [], "eroding": [], "full_waste": [], "paused": [], "tracking_gap": []
+      },
+      "seasonality_down": [{
+        "ce_id": "101", "ce_name": "Example Museum", "alert_type": "RPC", "swing_pct": -38.0,
+        "dominant": "CVR", "dominant_key": "cvr", "cvr_d": -31.0, "roi_4w": 88.0,
+        "verdict": "Review demand and conversion"
+      }]
+    },
+    "compound": {
+      "seasonality_up": [{
+        "ce_id": "202", "ce_name": "Example Observatory", "alert_type": "RPC", "swing_pct": 42.0,
+        "dominant": "AOV", "dominant_key": "aov", "aov_d": 28.0, "roi_4w": 176.0,
+        "verdict": "Consider scaling"
+      }],
+      "scale_up": []
+    }
+  },
+  "prepurchase": []
+}
