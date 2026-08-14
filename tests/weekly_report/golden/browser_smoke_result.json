@@ -1,0 +1,17 @@
+{
+  "tested_at": "2026-08-14",
+  "browser": "Codex in-app browser",
+  "execution_mode": "manual_in_app_browser",
+  "artifact": "pre-sanitization captured report with identifiers omitted from evidence",
+  "sanitized_fixture_rerun": false,
+  "results": {
+    "boot": {"passed": true, "headline_visible": true},
+    "all_ce": {"passed": true, "row_count": 46},
+    "search": {"passed": true, "query_redacted": true, "visible_rows": 1},
+    "drawer": {"passed": true, "open_aria_hidden": "false"},
+    "drawer_close": {"passed": true, "close_aria_hidden": "true"},
+    "bucket_toggle": {"passed": true, "states": [false, true, false]},
+    "console": {"passed": true, "error_count": 0}
+  },
+  "evidence_note": "This records the earlier manually executed in-app browser check with source identifiers removed. The automated Python suite validates this evidence file only; it does not launch or control a browser. The sanitized fixture has not been rerun in-browser."
+}

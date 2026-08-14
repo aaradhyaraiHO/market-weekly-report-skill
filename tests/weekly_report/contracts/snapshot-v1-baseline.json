@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weekly-report/snapshot-v1-baseline",
+  "title": "Observed Weekly Report V1 snapshot contract",
+  "type": "object",
+  "required": ["meta", "market_summary", "ces", "followup", "bucket1_fluctuations", "bucket_b1", "bucket_b3", "bucket_b4", "bucket_cascade", "no_bid_campaigns", "seasonality_adjustments", "levers", "market_review_context", "transitions", "_diagnostics", "buckets_final", "prepurchase"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["market", "market_slug", "week_start", "week_end", "weeks", "schema_version", "revenue_basis"],
+      "properties": {
+        "market": {"type": "string"}, "market_slug": {"type": "string"},
+        "week_start": {"type": "string"}, "week_end": {"type": "string"},
+        "weeks": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"type": "string"}},
+        "schema_version": {"const": 1}, "revenue_basis": {"const": "sum_revenue_predicted"}
+      }
+    },
+    "market_summary": {
+      "type": "object", "required": ["weekly", "weekly_ly", "headlines"],
+      "properties": {"weekly": {"type": "array", "minItems": 12}, "weekly_ly": {"type": "array"}, "headlines": {"type": "object"}}
+    },
+    "ces": {"type": "array"},
+    "buckets_final": {
+      "type": "object", "required": ["defend", "compound"],
+      "properties": {
+        "defend": {"type": "object", "required": ["losing_money", "seasonality_down"]},
+        "compound": {"type": "object", "required": ["seasonality_up"]}
+      }
+    }
+  }
+}

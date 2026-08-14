@@ -1,0 +1,21 @@
+{
+  "fixture_policy": "Minimized and pseudonymized offline fixtures with sequential synthetic identifiers, fixed synthetic narratives, and no retained source provenance or original mappings.",
+  "snapshots": {
+    "snapshot_sparse_2026-08-02.json.gz": {
+      "shape": "small sparse market",
+      "market_slug": "sparse",
+      "ces": 8
+    },
+    "snapshot_dense_2026-08-02.json.gz": {
+      "shape": "dense mature market",
+      "market_slug": "dense",
+      "ces": 21
+    },
+    "snapshot_global_2026-08-02.json.gz": {
+      "shape": "global aggregation",
+      "market_slug": "global",
+      "ces": 22,
+      "n_markets": 3
+    }
+  }
+}
