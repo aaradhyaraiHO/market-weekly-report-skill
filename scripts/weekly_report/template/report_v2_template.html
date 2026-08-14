@@ -96,7 +96,71 @@
     .runway-label.forecast { color:var(--purple); transform:translateX(-50%); }
     .runway-label.goal { right:0; text-align:right; }
     .goal-line { margin-top:22px; padding-top:18px; border-top:1px solid rgb(109 44 255 / .16); color:var(--muted); font-size:11px; line-height:1.55; }
-    .data-note { display:flex; justify-content:space-between; gap:16px; padding:14px 26px; border-top:1px solid var(--line); color:var(--muted); background:#fcfbfd; font-size:10px; }
+    .data-note { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px 14px 26px; border-top:1px solid var(--line); color:var(--muted); background:#fcfbfd; font-size:10px; }
+    .data-note-copy { display:flex; gap:16px; flex-wrap:wrap; }
+    .detail-button,.drawer-close { display:inline-flex; align-items:center; justify-content:center; min-height:40px; border:1px solid var(--line); border-radius:10px; background:var(--surface); font-weight:650; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .detail-button { gap:8px; padding:0 14px; color:var(--purple); white-space:nowrap; }
+    .detail-button:hover { border-color:rgb(109 44 255 / .32); background:var(--purple-soft); }
+    .detail-button:active,.drawer-close:active { transform:scale(.96); }
+    .attention { margin-top:30px; }
+    .section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:12px; }
+    .section-head h2 { margin:0; font-size:19px; letter-spacing:-.02em; }
+    .section-head p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .mover-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .mover-card { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--surface); box-shadow:0 10px 30px rgb(31 25 40 / .045); }
+    .mover-head { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:72px; padding:14px 16px 14px 20px; border-bottom:1px solid var(--line); }
+    .mover-title { display:flex; align-items:center; gap:10px; }
+    .mover-icon { display:grid; place-items:center; width:30px; height:30px; border-radius:9px; font-size:16px; font-weight:750; }
+    .mover-card.drop .mover-icon { color:var(--red); background:#fdecef; }
+    .mover-card.gain .mover-icon { color:var(--green); background:#e5f5ed; }
+    .mover-title h3 { margin:0; font-size:14px; }
+    .mover-title p { margin:3px 0 0; color:var(--muted); font-size:10px; }
+    .sort-field { display:grid; gap:4px; color:var(--muted); font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+    .sort-select { min-height:40px; padding:0 28px 0 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface); font-size:11px; font-weight:600; text-transform:none; letter-spacing:0; cursor:pointer; }
+    .mover-list { display:grid; }
+    .mover-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:12px; min-height:76px; padding:12px 18px; }
+    .mover-row + .mover-row { border-top:1px solid var(--line); }
+    .mover-rank { color:#aaa3b4; font-size:11px; font-variant-numeric:tabular-nums; }
+    .mover-name { overflow:hidden; font-size:12px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .mover-meta { margin-top:5px; color:var(--muted); font-size:10px; }
+    .mover-value { text-align:right; font-size:13px; font-weight:750; font-variant-numeric:tabular-nums; }
+    .mover-lens { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:500; }
+    .mover-empty { min-height:152px; padding:40px 24px; color:var(--muted); font-size:12px; line-height:1.5; text-align:center; }
+    body.drawer-open { overflow:hidden; }
+    .drawer-root[hidden] { display:none; }
+    .drawer-root { position:fixed; inset:0; z-index:20; }
+    .drawer-scrim { position:absolute; inset:0; border:0; background:rgb(28 22 37 / .44); cursor:pointer; }
+    .drawer { position:absolute; inset:0 0 0 auto; width:min(860px,94vw); overflow:auto; background:var(--surface); box-shadow:-22px 0 70px rgb(24 19 31 / .18); }
+    .drawer-header { position:sticky; top:0; z-index:2; display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:24px 28px 20px; border-bottom:1px solid var(--line); background:rgb(255 255 255 / .96); backdrop-filter:blur(12px); }
+    .drawer-kicker { color:var(--purple); font-size:10px; font-weight:750; letter-spacing:.09em; text-transform:uppercase; }
+    .drawer-title { margin:7px 0 0; font-size:25px; letter-spacing:-.03em; }
+    .drawer-subtitle { margin:6px 0 0; color:var(--muted); font-size:11px; }
+    .drawer-close { width:40px; height:40px; padding:0; color:var(--muted); font-size:20px; }
+    .drawer-close:hover { color:var(--ink); background:var(--soft); }
+    .drawer-body { padding:0 28px 48px; }
+    .drawer-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:0 -28px; border-bottom:1px solid var(--line); }
+    .drawer-stat { padding:18px 28px; }
+    .drawer-stat + .drawer-stat { border-left:1px solid var(--line); }
+    .drawer-section { padding:28px 0 0; }
+    .drawer-section + .drawer-section { margin-top:28px; border-top:1px solid var(--line); }
+    .drawer-section h3 { margin:0; font-size:15px; }
+    .drawer-section-copy { margin:5px 0 16px; color:var(--muted); font-size:11px; line-height:1.5; }
+    .metric-table { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
+    .metric-table th { height:38px; padding:0 10px; color:var(--muted); background:var(--soft); font-size:9px; letter-spacing:.05em; text-align:right; text-transform:uppercase; }
+    .metric-table th:first-child,.metric-table td:first-child { text-align:left; }
+    .metric-table td { height:58px; padding:8px 10px; border-bottom:1px solid var(--line); text-align:right; }
+    .metric-table td:first-child { font-weight:650; }
+    .metric-spark { display:block; width:112px; height:30px; margin-left:auto; }
+    .shapley-list { display:grid; gap:10px; }
+    .shapley-row { display:grid; grid-template-columns:92px minmax(0,1fr) 76px; align-items:center; gap:12px; font-size:11px; }
+    .shapley-track { position:relative; height:16px; border-radius:6px; background:linear-gradient(90deg,#fbe7eb 0 49.8%,var(--line) 49.8% 50.2%,#e4f4ec 50.2% 100%); }
+    .shapley-fill { position:absolute; top:3px; height:10px; border-radius:4px; }
+    .shapley-fill.negative { right:50%; background:var(--red); }
+    .shapley-fill.positive { left:50%; background:var(--green); }
+    .shapley-value { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+    .provenance { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .provenance-item { min-height:70px; padding:14px; border-radius:12px; background:var(--soft); }
+    .provenance-item strong { display:block; margin-top:5px; font-size:11px; }
     .placeholder { margin-top:28px; padding:24px 4px; border-top:1px solid var(--line); opacity:.56; }
     .placeholder h2 { margin:0; font-size:15px; }
     .placeholder p { margin:6px 0 0; color:var(--muted); font-size:12px; }
@@ -109,6 +173,8 @@
       .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .metric:nth-child(odd) { border-left:0; } .metric:nth-child(n+3) { border-top:1px solid var(--line); }
       .visual-head { flex-direction:column; }
+      .mover-grid { grid-template-columns:1fr; }
+      .drawer { width:min(760px,100vw); }
     }
     @media (max-width:560px) {
       .topbar { align-items:flex-start; flex-direction:column; padding:16px 18px; }
@@ -119,9 +185,22 @@
       .metrics { grid-template-columns:1fr; } .metric + .metric { border-left:0; border-top:1px solid var(--line); }
       .trend,.runway { padding:20px 16px 28px; }
       .data-note { flex-direction:column; }
+      .data-note { align-items:stretch; }
+      .detail-button { width:100%; }
+      .mover-head { align-items:flex-start; }
+      .mover-row { grid-template-columns:22px minmax(0,1fr) auto; padding-inline:14px; }
+      .drawer-header,.drawer-body { padding-left:18px; padding-right:18px; }
+      .drawer-overview { grid-template-columns:1fr; margin-inline:-18px; }
+      .drawer-stat { padding:14px 18px; }
+      .drawer-stat + .drawer-stat { border-left:0; border-top:1px solid var(--line); }
+      .metric-table th:nth-child(3),.metric-table td:nth-child(3),.metric-table th:nth-child(5),.metric-table td:nth-child(5) { display:none; }
+      .metric-spark { width:78px; }
+      .shapley-row { grid-template-columns:72px minmax(0,1fr) 62px; }
+      .provenance { grid-template-columns:1fr; }
       .runway-label.mtd { left:0!important; transform:none; }
       .runway-label.forecast { transform:translateX(-60%); }
     }
+    @media (prefers-reduced-motion:reduce) { .tooltip,.runway-fill { transition-duration:0ms; } }
   </style>
 </head>
 <body>
@@ -149,12 +228,14 @@
             <section class="trend"><div class="visual-head"><div><h3 class="visual-title">12-week revenue trajectory</h3><p class="visual-sub">Weekly revenue · USD</p></div><div class="chart-legend" aria-label="Revenue chart series"><button class="legend-button" type="button" data-series="ty" aria-pressed="true"><span class="legend-line"></span>This year</button><button class="legend-button" type="button" data-series="ly" aria-pressed="true"><span class="legend-line ly"></span>Last year</button></div></div><div class="chart-wrap"><svg id="revenue-chart" class="chart" role="img"></svg><div id="tooltip" class="tooltip" role="tooltip"></div></div></section>
             <section class="runway"><div class="visual-head"><div><h3 class="visual-title" id="runway-title">Monthly revenue runway</h3><p class="visual-sub" id="runway-sub">Month-to-date, projected close and goal</p></div><div class="runway-gap" id="runway-gap"></div></div><div class="runway-body" id="runway-body"></div></section>
           </div>
-          <footer class="data-note"><span id="source-note"></span><span>Weekly calculations remain sourced from the existing snapshot.</span></footer>
+          <footer class="data-note"><span class="data-note-copy"><span id="source-note"></span><span>Weekly calculations remain sourced from the existing snapshot.</span></span><button class="detail-button" id="open-detail" type="button">View market detail <span aria-hidden="true">→</span></button></footer>
         </article>
-        <section class="placeholder"><h2>What needs attention</h2><p>Losing money, RPC/CM1 fluctuations, top drops and gains continue below this headline in the next incremental slice.</p></section>
+        <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>Ranked CE-level gains and drops using the report’s existing movement clocks.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Largest negative movements</p></div></div><label class="sort-field">Sort by<select class="sort-select" data-mover-sort="drops" aria-label="Sort top drops"><option value="impact">Impact</option><option value="revenue">Revenue</option><option value="wow">WoW</option><option value="name">Name</option></select></label></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Largest positive movements</p></div></div><label class="sort-field">Sort by<select class="sort-select" data-mover-sort="gains" aria-label="Sort top gains"><option value="impact">Impact</option><option value="revenue">Revenue</option><option value="wow">WoW</option><option value="name">Name</option></select></label></header><div class="mover-list" id="gains-list"></div></article></div></section>
+        <section class="placeholder"><h2>Analysis queues</h2><p>Losing Money, RPC/CM1 fluctuations and pre-purchase remain intact for the next incremental V2 slices.</p></section>
       </div>
     </main>
   </div>
+  <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="drawer-overview"></section><section class="drawer-section"><h3>Performance diagnostics</h3><p class="drawer-section-copy">Current week versus last week, with the same 12-week this-year and last-year evidence used by the report.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Δ abs</th><th>Δ %</th><th>12-week trajectory</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div></section><section class="drawer-section" id="shapley-section"><h3>What drove the weekly revenue move</h3><p class="drawer-section-copy">Five-factor Shapley decomposition. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section"><h3>Data provenance</h3><p class="drawer-section-copy">The drawer explains the headline; it does not calculate a second version of it.</p><div class="provenance" id="drawer-provenance"></div></section></div></aside></div>
   <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
   <script>
     (() => {
@@ -176,10 +257,15 @@
         return `${sign}$${abs.toFixed(0)}`;
       };
       const pct = (value, digits=1) => value == null ? '—' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(digits)}%`;
+      const signedMoney = (value) => value == null ? '—' : `${value>0?'+':''}${money(value)}`;
+      const count = (value) => value == null ? '—' : new Intl.NumberFormat('en-US',{notation:value>=10000?'compact':'standard',maximumFractionDigits:1}).format(value);
       const movement = (value) => value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
       const tone = (value) => value > 0 ? 'positive' : value < 0 ? 'negative' : '';
       const dateLabel = (iso) => new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(`${iso}T00:00:00`));
       const monthLabel = (iso) => new Intl.DateTimeFormat('en-GB',{month:'long'}).format(new Date(`${iso}-01T00:00:00`));
+      const escapeHtml = (value) => String(value == null?'':value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      const formatMetric = (value, format) => format==='money'?money(value):format==='pct'?(value==null?'—':`${value.toFixed(2)}%`):count(value);
+      const formatDelta = (value, format) => format==='money'?signedMoney(value):format==='pct'?(value==null?'—':`${value>0?'+':''}${value.toFixed(2)}pp`):(value>0?'+':'')+count(value);
       const el = (name, attrs={}) => { const node=document.createElementNS(svgNS,name); Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,value)); return node; };
       function metric(label, value, className='') { return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${className}">${value}</div></div>`; }
       function renderRunway(item) {
@@ -190,6 +276,36 @@
         const forecast=Math.max(0,Math.min(100,monthly.forecast_attainment_pct||0));
         gap.textContent=monthly.forecast_attainment_pct == null ? '' : `${Math.abs(100-monthly.forecast_attainment_pct).toFixed(0)}% ${monthly.forecast_attainment_pct>=100?'above':'below'} goal`;
         body.innerHTML=`<div class="runway-track"><div class="runway-fill" style="width:${forecast}%"></div><div class="runway-marker" style="left:${mtd}%"></div><div class="runway-marker goal"></div><div class="runway-label mtd" style="left:${mtd}%"><strong>${money(monthly.mtd_revenue)}</strong>MTD · ${mtd.toFixed(0)}%</div><div class="runway-label forecast" style="left:${forecast}%"><strong>${money(monthly.forecast_revenue)}</strong>Run rate · ${forecast.toFixed(0)}%</div><div class="runway-label goal"><strong>${money(monthly.monthly_goal)}</strong>Goal</div></div>`;
+      }
+      function renderMovers(item, kind) {
+        const list=document.getElementById(`${kind}-list`), sort=document.querySelector(`[data-mover-sort="${kind}"]`), rows=[...(item.movers[kind]||[])];
+        const direction=kind==='drops'?-1:1, mode=sort.value;
+        rows.sort((a,b)=>{
+          if (mode==='name') return String(a.ce_name).localeCompare(String(b.ce_name));
+          if (mode==='revenue') return (b.revenue??-Infinity)-(a.revenue??-Infinity);
+          if (mode==='wow') return direction*((b.wow_abs??0)-(a.wow_abs??0));
+          return Math.abs(b.primary_delta??0)-Math.abs(a.primary_delta??0);
+        });
+        if (!rows.length) { list.innerHTML='<div class="mover-empty">No qualifying movers are available for this market and week.</div>'; return; }
+        list.innerHTML=rows.slice(0,10).map((row,index)=>`<div class="mover-row"><span class="mover-rank">${index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">Revenue ${money(row.revenue)}${row.yoy_growth==null?'':` · YoY ${pct(row.yoy_growth*100)}`}</div></div><div class="mover-value ${tone(row.primary_delta)}">${signedMoney(row.primary_delta)}<span class="mover-lens">${escapeHtml(row.primary_lens)}</span></div></div>`).join('');
+      }
+      function sparkline(metric) {
+        const data=metric.series||[], values=data.flatMap(row=>[row.ty,row.ly]).filter(value=>value!=null);
+        if (!values.length) return '<span>—</span>';
+        const width=112,height=30,min=Math.min(...values),max=Math.max(...values),span=max-min||1;
+        const points=key=>data.map((row,index)=>row[key]==null?null:`${(index/Math.max(1,data.length-1)*width).toFixed(1)},${(height-3-((row[key]-min)/span)*(height-6)).toFixed(1)}`).filter(Boolean).join(' ');
+        return `<svg class="metric-spark" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(metric.label)} 12-week trajectory"><polyline points="${points('ly')}" fill="none" stroke="#9a94a4" stroke-width="1.2" stroke-dasharray="3 3"/><polyline points="${points('ty')}" fill="none" stroke="#6d2cff" stroke-width="1.8"/></svg>`;
+      }
+      function renderDrawer(item) {
+        document.getElementById('drawer-title').textContent=item.market;
+        document.getElementById('drawer-subtitle').textContent=`Week of ${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`;
+        document.getElementById('drawer-overview').innerHTML=[metric('Weekly revenue',money(item.revenue)),metric('Versus last week',pct(item.wow_pct),tone(item.wow_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct))].join('').replaceAll('class="metric"','class="drawer-stat"');
+        document.getElementById('drawer-metrics').innerHTML=(item.detail.metrics||[]).map(row=>`<tr><td>${escapeHtml(row.label)}</td><td><strong>${formatMetric(row.w0,row.format)}</strong></td><td>${formatMetric(row.wm1,row.format)}</td><td class="${tone(row.delta_abs)}">${formatDelta(row.delta_abs,row.format)}</td><td class="${tone(row.delta_pct)}">${pct(row.delta_pct)}</td><td>${sparkline(row)}</td></tr>`).join('')||'<tr><td colspan="6">No metric diagnostics are available.</td></tr>';
+        const shapley=item.detail.shapley, section=document.getElementById('shapley-section'), list=document.getElementById('shapley-list');
+        section.hidden=!shapley||!shapley.factors.length;
+        if (shapley&&shapley.factors.length) { const max=Math.max(...shapley.factors.map(row=>Math.abs(row.value||0)),1); list.innerHTML=shapley.factors.map(row=>`<div class="shapley-row"><span>${escapeHtml(row.label)}</span><div class="shapley-track"><span class="shapley-fill ${tone(row.value)}" style="width:${Math.abs(row.value||0)/max*50}%"></span></div><span class="shapley-value ${tone(row.value)}">${signedMoney(row.value)}</span></div>`).join('')+`<div class="shapley-row"><strong>Net WoW</strong><div></div><span class="shapley-value ${tone(shapley.net_delta)}">${signedMoney(shapley.net_delta)}</span></div>`; }
+        const monthly=item.monthly, goalStatus=monthly.state==='current'?`Current · ${dateLabel(monthly.as_of)}`:monthly.state==='stale'?`Stale · ${dateLabel(monthly.as_of)}`:'Not attached';
+        document.getElementById('drawer-provenance').innerHTML=`<div class="provenance-item"><span class="metric-label">Weekly metrics</span><strong>Existing schema-v1 market snapshot</strong></div><div class="provenance-item"><span class="metric-label">Goal data</span><strong>${escapeHtml(goalStatus)}</strong></div><div class="provenance-item"><span class="metric-label">Goal source</span><strong>${escapeHtml(monthly.source||'No approved source attached')}</strong></div><div class="provenance-item"><span class="metric-label">Calculation boundary</span><strong>View-only projection; weekly engines unchanged</strong></div>`;
       }
       function drawChart(item) {
         const chart=document.getElementById('revenue-chart'), tooltip=document.getElementById('tooltip'), wrap=chart.parentElement, data=item.chart;
@@ -241,12 +357,19 @@
           metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
         }
         document.getElementById('source-note').textContent=monthly.source ? `Goal source: ${monthly.source}` : 'No monthly goal source attached.';
-        renderRunway(item); drawChart(item);
+        renderRunway(item); drawChart(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderDrawer(item);
       }
       payload.headlines.forEach((item,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`; weekSelect.appendChild(option); });
       weekSelect.value=String(Math.max(0,payload.headlines.length-1));
       weekSelect.addEventListener('change',()=>render(Number(weekSelect.value)));
+      document.querySelectorAll('[data-mover-sort]').forEach(select=>select.addEventListener('change',()=>renderMovers(payload.headlines[Number(weekSelect.value||0)],select.dataset.moverSort)));
       document.querySelectorAll('[data-series]').forEach(button=>button.addEventListener('click',()=>{ const name=button.dataset.series; seriesVisible[name]=!seriesVisible[name]; button.setAttribute('aria-pressed',String(seriesVisible[name])); drawChart(payload.headlines[Number(weekSelect.value||0)]); }));
+      const drawerRoot=document.getElementById('detail-root'), drawer=document.getElementById('detail-drawer'), openDetail=document.getElementById('open-detail'), closeDetail=document.getElementById('close-detail');
+      let returnFocus=null;
+      function openDrawer() { returnFocus=document.activeElement; drawerRoot.hidden=false; document.body.classList.add('drawer-open'); closeDetail.focus(); }
+      function closeDrawer() { drawerRoot.hidden=true; document.body.classList.remove('drawer-open'); if (returnFocus) returnFocus.focus(); }
+      openDetail.addEventListener('click',openDrawer); closeDetail.addEventListener('click',closeDrawer); document.getElementById('drawer-scrim').addEventListener('click',closeDrawer);
+      document.addEventListener('keydown',event=>{ if(drawerRoot.hidden)return; if(event.key==='Escape'){closeDrawer();return;} if(event.key==='Tab'){const controls=[...drawer.querySelectorAll('button,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled); if(!controls.length)return; const first=controls[0],last=controls[controls.length-1]; if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}} });
       new ResizeObserver(()=>drawChart(payload.headlines[Number(weekSelect.value||0)])).observe(document.querySelector('.chart-wrap'));
       render(Number(weekSelect.value));
     })();

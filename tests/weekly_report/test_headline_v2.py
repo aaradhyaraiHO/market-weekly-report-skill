@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import gzip
 import json
 import re
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REPORT_DIR = ROOT / "scripts" / "weekly_report"
 FIXTURE = Path(__file__).parent / "fixtures" / "snapshot_north_america_2026-08-02.json"
+DENSE_FIXTURE = Path(__file__).parent / "fixtures" / "captured" / "snapshot_dense_2026-08-02.json.gz"
 sys.path.insert(0, str(REPORT_DIR))
 
 import headline_v2  # noqa: E402
@@ -87,6 +89,36 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="country-select"', html)
         self.assertIn('id="week-select"', html)
         self.assertNotIn('id="market-select"', html)
+        self.assertIn('id="open-detail"', html)
+        self.assertIn('data-mover-sort="drops"', html)
+        self.assertIn('data-mover-sort="gains"', html)
+        self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
+
+    def test_existing_movers_are_normalized_without_recalculation(self):
+        view = headline_v2.build_headline_view(self.market)
+
+        self.assertEqual(view["movers"]["drops"][0]["ce_name"], "Example Museum")
+        self.assertEqual(view["movers"]["drops"][0]["primary_delta"], -30_000)
+        self.assertEqual(view["movers"]["drops"][0]["primary_lens"], "vs last week")
+        self.assertEqual(view["movers"]["gains"][0]["primary_delta"], 50_000)
+
+    def test_dense_snapshot_drives_drawer_metrics_shapley_and_rich_movers(self):
+        with gzip.open(DENSE_FIXTURE, "rt") as fixture:
+            market = json.load(fixture)
+
+        view = headline_v2.build_headline_view(market)
+        metric_keys = [metric["key"] for metric in view["detail"]["metrics"]]
+
+        self.assertEqual(metric_keys[:6], ["revenue", "gbv", "orders", "aov", "cr_pct", "tr_pct"])
+        self.assertEqual(len(view["detail"]["metrics"][0]["series"]), 12)
+        self.assertEqual(
+            [factor["key"] for factor in view["detail"]["shapley"]["factors"]],
+            ["traffic", "cvr", "aov", "cr", "tr"],
+        )
+        first_drop = view["movers"]["drops"][0]
+        self.assertEqual(first_drop["primary_delta"], -19_532)
+        self.assertEqual(first_drop["primary_lens"], "vs trailing 4w")
+        self.assertEqual(first_drop["wow_abs"], -4_858)
 
     def test_report_scope_is_one_market_with_week_history(self):
         older = copy.deepcopy(self.market)

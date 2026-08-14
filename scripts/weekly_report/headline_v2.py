@@ -10,6 +10,30 @@ import datetime as dt
 from statistics import fmean
 
 
+_METRIC_SPECS = (
+    ("revenue", "Revenue", "money", "revenue"),
+    ("gbv", "GBV", "money", "gbv"),
+    ("orders", "Orders", "count", "orders"),
+    ("aov", "AOV", "money", "aov"),
+    ("cr_pct", "CR", "pct", "cr_pct"),
+    ("tr_pct", "TR", "pct", "tr_pct"),
+    ("paid_clicks", "Paid clicks", "count", "paid_clicks"),
+    ("paid_cvr", "Paid CVR", "pct", "paid_cvr_pct"),
+    ("paid_conv_value", "Paid conversion value", "money", "paid_conv_value"),
+    ("avg_cm1", "Average CM1", "money", "avg_cm1"),
+    ("paid_roi", "Paid ROI", "pct", "roi_pct"),
+    ("roi1", "ROI 1", "pct", "roi1_pct"),
+)
+
+_SHAPLEY_LABELS = {
+    "traffic": "Traffic",
+    "cvr": "CVR",
+    "aov": "AOV",
+    "cr": "Completion",
+    "tr": "Take rate",
+}
+
+
 def _number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
@@ -34,6 +58,84 @@ def _goal_state(goal, week_end):
     except ValueError:
         return "stale"
     return "current" if as_of >= report_end else "stale"
+
+
+def _metric_views(headlines, rows, weekly_ly):
+    metrics = headlines.get("key_metrics", {})
+    ly_by_week = {row.get("week"): row for row in weekly_ly}
+    views = []
+    for key, default_label, value_format, weekly_field in _METRIC_SPECS:
+        metric = metrics.get(key)
+        if not isinstance(metric, dict):
+            continue
+        series = []
+        for row in rows[-12:]:
+            ly_row = ly_by_week.get(row.get("week"), {})
+            series.append({
+                "week": row.get("week"),
+                "ty": _number(row.get(weekly_field)),
+                "ly": _number(ly_row.get(weekly_field)),
+            })
+        views.append({
+            "key": key,
+            "label": metric.get("label") or default_label,
+            "format": value_format,
+            "w0": _number(metric.get("w0")),
+            "wm1": _number(metric.get("wm1")),
+            "delta_abs": _number(metric.get("delta_abs")),
+            "delta_pct": _number(metric.get("delta_pct")),
+            "series": series,
+        })
+    return views
+
+
+def _mover_views(headlines, direction):
+    trend = (headlines.get("week_header") or {}).get("trend") or {}
+    rich_key = "top_droppers" if direction == "drop" else "top_gainers"
+    fallback_key = "top_drops" if direction == "drop" else "top_gainers"
+    source = trend.get(rich_key) or headlines.get(fallback_key) or []
+    result = []
+    for row in source:
+        delta_4w = _number(row.get("delta_4w"))
+        wow_abs = _number(row.get("raw_wow"))
+        if wow_abs is None:
+            wow_abs = _number(row.get("delta_wow"))
+        candidates = [(delta_4w, "vs trailing 4w"), (wow_abs, "vs last week")]
+        candidates = [(value, lens) for value, lens in candidates if value is not None]
+        if direction == "drop":
+            candidates = [(value, lens) for value, lens in candidates if value < 0]
+            primary = min(candidates, default=(wow_abs or delta_4w, "movement"), key=lambda item: item[0])
+        else:
+            candidates = [(value, lens) for value, lens in candidates if value > 0]
+            primary = max(candidates, default=(wow_abs or delta_4w, "movement"), key=lambda item: item[0])
+        result.append({
+            "ce_id": row.get("ce_id"),
+            "ce_name": row.get("ce_name") or "Unnamed experience",
+            "primary_delta": _number(primary[0]),
+            "primary_lens": primary[1],
+            "delta_4w": delta_4w,
+            "wow_abs": wow_abs,
+            "revenue": _number(row.get("w0_rev")),
+            "yoy_growth": _number(row.get("yoy_growth")),
+            "tag": row.get("tag"),
+        })
+    return result
+
+
+def _shapley_view(headlines):
+    source = headlines.get("shapley_wow")
+    if not isinstance(source, dict):
+        return None
+    factors = [
+        {"key": key, "label": label, "value": _number(source.get(key))}
+        for key, label in _SHAPLEY_LABELS.items()
+        if _number(source.get(key)) is not None
+    ]
+    return {
+        "factors": factors,
+        "net_delta": _number(source.get("net_delta")),
+        "reconstructs": source.get("reconstructs") is True,
+    }
 
 
 def build_headline_view(market, goal=None):
@@ -113,6 +215,14 @@ def build_headline_view(market, goal=None):
         "paid_roi_delta_pp": paid_roi_delta_pp,
         "monthly": monthly,
         "chart": chart,
+        "movers": {
+            "drops": _mover_views(headlines, "drop"),
+            "gains": _mover_views(headlines, "gain"),
+        },
+        "detail": {
+            "metrics": _metric_views(headlines, rows, weekly_ly),
+            "shapley": _shapley_view(headlines),
+        },
     }
 
 
