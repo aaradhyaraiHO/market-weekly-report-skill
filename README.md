@@ -38,3 +38,25 @@ An optional approved goals sidecar may be supplied with `--goals`. Its top-level
 shape is `{"markets":{"market_slug":{...}}}`. A usable market record requires
 `month`, `monthly_goal`, `mtd_revenue`, `forecast_revenue`, and `as_of`; otherwise
 the report explicitly shows that the target comparison is unavailable.
+
+The V2 All-CE view reads CE weekly metrics and customer-country composition
+directly from the same snapshot. BDM and Growth regions are never inferred from
+management type or lifecycle stage. They can be attached with
+`--ce-dimensions` using this optional shape:
+
+```json
+{
+  "markets": {
+    "market_slug": {
+      "ce_id": {
+        "bdm_region": "BDM region name",
+        "growth_region": "Growth region name"
+      }
+    }
+  }
+}
+```
+
+When this approved mapping is absent, the two organizational filters remain
+disabled while snapshot-backed search, Country, metrics, sorting and CE detail
+continue to work.

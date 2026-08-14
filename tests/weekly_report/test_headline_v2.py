@@ -36,6 +36,10 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(view["yoy_pct"], 15.0)
         self.assertEqual(view["monthly"], {"state": "missing"})
         self.assertEqual(len(view["chart"]), 12)
+        self.assertEqual(len(view["all_ces"]), 2)
+        self.assertEqual(view["all_ces"][0]["ce_name"], "Example Museum")
+        self.assertEqual(view["all_ces"][0]["revenue"], 70_000)
+        self.assertEqual(view["all_ces"][0]["wow_abs"], -30_000)
 
     def test_current_goal_adds_monthly_outlook(self):
         goal = {
@@ -92,7 +96,23 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="open-detail"', html)
         self.assertIn('data-mover-sort="drops"', html)
         self.assertIn('data-mover-sort="gains"', html)
+        self.assertIn('id="all-ces-view"', html)
+        self.assertIn('data-ce-sort="revenue"', html)
+        self.assertIn('id="ce-detail-root"', html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
+
+    def test_ce_ownership_dimensions_require_an_explicit_sidecar(self):
+        ce_id = self.market["ces"][0]["ce_id"]
+        without_sidecar = headline_v2.build_headline_view(self.market)["all_ces"][0]
+        with_sidecar = headline_v2.build_headline_view(
+            self.market,
+            ce_dimensions={ce_id: {"bdm_region": "BDM West", "growth_region": "Growth Core"}},
+        )["all_ces"][0]
+
+        self.assertIsNone(without_sidecar["bdm_region"])
+        self.assertIsNone(without_sidecar["growth_region"])
+        self.assertEqual(with_sidecar["bdm_region"], "BDM West")
+        self.assertEqual(with_sidecar["growth_region"], "Growth Core")
 
     def test_existing_movers_are_normalized_without_recalculation(self):
         view = headline_v2.build_headline_view(self.market)

@@ -24,7 +24,15 @@ def load_goals(path):
     return payload.get("markets", payload)
 
 
-def render(markets, template_path=TEMPLATE, goals=None):
+def load_ce_dimensions(path):
+    if not path:
+        return {}
+    with open(path) as handle:
+        payload = json.load(handle)
+    return payload.get("markets", payload)
+
+
+def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None):
     with open(template_path) as handle:
         html = handle.read()
     first_slug = markets[0].get("meta", {}).get("market_slug")
@@ -36,7 +44,7 @@ def render(markets, template_path=TEMPLATE, goals=None):
     payload = {
         "schema_version": 2,
         "source_schema_version": markets[0].get("meta", {}).get("schema_version", 1),
-        "headlines": build_headline_payload(scoped_markets, goals),
+        "headlines": build_headline_payload(scoped_markets, goals, ce_dimensions),
     }
     data_json = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
     names = " · ".join(item["market"] for item in payload["headlines"])
@@ -54,6 +62,7 @@ def main():
     parser.add_argument("inputs", nargs="+", help="schema-v1 snapshot or bundle JSON files")
     parser.add_argument("--glob", help="additional snapshot glob")
     parser.add_argument("--goals", help="optional approved monthly-goal sidecar JSON")
+    parser.add_argument("--ce-dimensions", help="optional CE-to-BDM/Growth-region sidecar JSON")
     parser.add_argument("--out", help="output HTML path")
     args = parser.parse_args()
     paths = list(args.inputs)
@@ -63,7 +72,11 @@ def main():
     output = args.out or out_path(markets)
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, "w") as handle:
-        handle.write(render(markets, goals=load_goals(args.goals)))
+        handle.write(render(
+            markets,
+            goals=load_goals(args.goals),
+            ce_dimensions=load_ce_dimensions(args.ce_dimensions),
+        ))
     print(f"wrote: {output}")
 
 

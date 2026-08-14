@@ -138,7 +138,69 @@ def _shapley_view(headlines):
     }
 
 
-def build_headline_view(market, goal=None):
+def _ce_views(market, dimensions=None):
+    dimensions = dimensions or {}
+    views = []
+    for ce in market.get("ces", []):
+        weekly = [row for row in (ce.get("weekly") or []) if isinstance(row, dict)]
+        weekly.sort(key=lambda row: row.get("week", ""))
+        weekly_ly = {
+            row.get("week"): row
+            for row in (ce.get("weekly_ly") or [])
+            if isinstance(row, dict)
+        }
+        current = weekly[-1] if weekly else {}
+        previous = weekly[-2] if len(weekly) > 1 else {}
+        revenue = _number(current.get("revenue"))
+        previous_revenue = _number(previous.get("revenue"))
+        countries = sorted({
+            row.get("country")
+            for row in (ce.get("countries") or [])
+            if row.get("country")
+        })
+        metadata = ce.get("metadata") or {}
+        ce_dimensions = dimensions.get(str(ce.get("ce_id")), {})
+        views.append({
+            "ce_id": ce.get("ce_id"),
+            "ce_name": ce.get("ce_name") or "Unnamed experience",
+            "city": metadata.get("city"),
+            "category": metadata.get("category"),
+            "management_type": metadata.get("management_type"),
+            "growth_stage": metadata.get("evolution"),
+            "countries": countries,
+            "bdm_region": ce_dimensions.get("bdm_region"),
+            "growth_region": ce_dimensions.get("growth_region"),
+            "revenue": revenue,
+            "wow_abs": revenue - previous_revenue if revenue is not None and previous_revenue is not None else None,
+            "wow_pct": _percent_change(revenue, previous_revenue),
+            "yoy_pct": _number(current.get("yoy_pct")),
+            "orders": _number(current.get("orders")),
+            "aov": _number(current.get("aov")),
+            "rpc": _number(current.get("paid_rpc")),
+            "cm1_per_conv": _number(current.get("cm1_per_conv")),
+            "roi_pct": _number(current.get("roi_pct")),
+            "chart": [
+                {
+                    "week": row.get("week"),
+                    "revenue": _number(row.get("revenue")),
+                    "revenue_ly": _number(weekly_ly.get(row.get("week"), {}).get("revenue")),
+                }
+                for row in weekly[-12:]
+            ],
+            "country_mix": [
+                {
+                    "country": row.get("country"),
+                    "revenue": _number(row.get("rev")),
+                    "share_pct": _number(row.get("rev_share_pct")),
+                }
+                for row in (ce.get("countries") or [])
+                if row.get("country")
+            ],
+        })
+    return views
+
+
+def build_headline_view(market, goal=None, ce_dimensions=None):
     """Return the V2 headline projection without changing the source market."""
     meta = market.get("meta", {})
     summary = market.get("market_summary", {})
@@ -223,9 +285,18 @@ def build_headline_view(market, goal=None):
             "metrics": _metric_views(headlines, rows, weekly_ly),
             "shapley": _shapley_view(headlines),
         },
+        "all_ces": _ce_views(market, ce_dimensions),
     }
 
 
-def build_headline_payload(markets, goals=None):
+def build_headline_payload(markets, goals=None, ce_dimensions=None):
     goals = goals or {}
-    return [build_headline_view(market, goals.get(market.get("meta", {}).get("market_slug"))) for market in markets]
+    ce_dimensions = ce_dimensions or {}
+    return [
+        build_headline_view(
+            market,
+            goals.get(market.get("meta", {}).get("market_slug")),
+            ce_dimensions.get(market.get("meta", {}).get("market_slug")),
+        )
+        for market in markets
+    ]
