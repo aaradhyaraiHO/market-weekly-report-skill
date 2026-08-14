@@ -660,25 +660,10 @@ def build_global(week: str) -> dict:
         "_diagnostics": diag,
     }
 
-    # buckets_final (Defend/Compound/Lifecycle reorganization)
-    import buckets
-    snapshot["buckets_final"] = buckets.build_buckets(snapshot)
-
-    # PP tracking (optional — may fail if dim_pp_allotments unavailable globally)
-    try:
-        import pp
-        snapshot["prepurchase"] = pp.build_pp(snapshot)
-    except Exception as e:
-        print(f"  [pp] skipped: {e}")
-        snapshot["prepurchase"] = []
-
-    # Seasonality tags (optional)
-    try:
-        import seasonality_llm
-        n = seasonality_llm.attach(snapshot)
-        print(f"  seasonality tags attached: {n}")
-    except Exception as e:
-        print(f"  seasonality_llm.attach skipped ({e!r})")
+    # buckets_final + optional PP/seasonality enrichments. The shared finalizer
+    # preserves the existing order and fail-soft behavior.
+    import snapshot_finalize
+    snapshot_finalize.finalize_common(snapshot)
 
     # Tag bucket rows with market (for §4 Market column in the global report)
     for section_key in ("bucket1_fluctuations",):
@@ -700,12 +685,7 @@ def build_global(week: str) -> dict:
 
     # Slack digest sidecar (if a prior agent step wrote one)
     sc = CACHE / f"slack_context_headout_{config.iso(w0_start)}.json"
-    if sc.exists():
-        try:
-            snapshot["market_review_context"] = json.loads(sc.read_text())
-            print(f"  [slack] loaded {len(snapshot['market_review_context'])} context cards")
-        except Exception as e:
-            print(f"  [slack] sidecar load skipped ({e!r})")
+    snapshot_finalize.load_review_context(snapshot, sc)
 
     return _json_safe(snapshot)
 
