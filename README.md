@@ -21,3 +21,20 @@ integration:
 ```sh
 python3 scripts/weekly_report/verify_baseline.py
 ```
+
+## V2 Market Headlines preview
+
+The V2 headline is an isolated, no-publish renderer over the existing schema-v1
+snapshot. It does not change the V1 report, bucket engines, Slack payloads,
+Sheets, publishing, or sidecar loading.
+
+```sh
+python3 scripts/weekly_report/render_v2.py \
+  tests/weekly_report/fixtures/snapshot_north_america_2026-08-02.json \
+  --out /tmp/weekly-v2-headline.html
+```
+
+An optional approved goals sidecar may be supplied with `--goals`. Its top-level
+shape is `{"markets":{"market_slug":{...}}}`. A usable market record requires
+`month`, `monthly_goal`, `mtd_revenue`, `forecast_revenue`, and `as_of`; otherwise
+the report explicitly shows that the target comparison is unavailable.

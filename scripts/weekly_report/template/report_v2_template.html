@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>__TITLE__</title>
+  <style>
+    :root {
+      --canvas:#f7f7fa; --surface:#fff; --soft:#f3f0fb; --ink:#201c27; --muted:#766f80;
+      --line:#e7e2eb; --purple:#6d2cff; --purple-soft:#efe8ff; --green:#087f4f;
+      --red:#d83a57; --amber:#9b6500; --amber-soft:#fff5dc;
+      color-scheme:light; font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--ink); background:var(--canvas); -webkit-font-smoothing:antialiased;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:320px; }
+    button,select { font:inherit; color:inherit; }
+    .shell { display:grid; grid-template-columns:196px minmax(0,1fr); min-height:100vh; }
+    .rail { position:sticky; top:0; height:100vh; padding:24px 16px; border-right:1px solid var(--line); background:var(--surface); }
+    .brand { display:flex; align-items:center; gap:10px; padding:0 8px 28px; }
+    .brand-mark { display:grid; place-items:center; width:36px; height:36px; border-radius:11px; color:#fff; background:linear-gradient(145deg,#7d35ff,#5716d8); font-weight:750; box-shadow:0 9px 22px rgb(109 44 255 / .22); }
+    .brand-copy strong { display:block; font-size:14px; }
+    .brand-copy span { color:var(--muted); font-size:11px; }
+    .nav { display:grid; gap:6px; }
+    .nav-item { display:flex; align-items:center; min-height:42px; padding:0 12px; border:0; border-radius:11px; color:var(--muted); background:transparent; text-align:left; }
+    .nav-item.active { color:var(--purple); background:var(--purple-soft); font-weight:650; }
+    .main { min-width:0; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:80px; padding:16px 32px; border-bottom:1px solid var(--line); background:var(--surface); }
+    .topbar h1 { margin:0; font-size:20px; line-height:1.2; letter-spacing:-.02em; text-wrap:balance; }
+    .topbar p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .filters { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+    .filter-field { display:grid; gap:5px; }
+    .filter-label { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .filter-select { min-height:42px; min-width:150px; padding:0 34px 0 12px; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+    .filter-select:disabled { color:var(--muted); opacity:.72; cursor:not-allowed; }
+    .template-error { max-width:720px; margin:80px auto; padding:28px; border:1px solid var(--line); border-radius:18px; background:var(--surface); box-shadow:0 16px 46px rgb(31 25 40 / .07); }
+    .template-error h1 { margin:0; font-size:24px; }
+    .template-error p { margin:12px 0 0; color:var(--muted); line-height:1.6; }
+    .template-error code { color:var(--purple); }
+    .content { max-width:1220px; margin:0 auto; padding:30px 32px 80px; }
+    .section-kicker { margin-bottom:12px; color:var(--purple); font-size:11px; font-weight:750; letter-spacing:.09em; text-transform:uppercase; }
+    .headline { overflow:hidden; border:1px solid var(--line); border-radius:22px; background:var(--surface); box-shadow:0 16px 46px rgb(31 25 40 / .07); }
+    .story { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(250px,.55fr); }
+    .story-main { padding:28px 30px 25px; }
+    .eyebrow { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+    .verdict { margin:10px 0 0; max-width:760px; font-size:32px; line-height:1.12; letter-spacing:-.035em; font-weight:680; text-wrap:balance; }
+    .weekly-copy { margin:18px 0 0; max-width:780px; font-size:17px; line-height:1.55; letter-spacing:-.01em; text-wrap:pretty; }
+    .monthly-copy { margin:12px 0 0; max-width:800px; color:var(--muted); font-size:14px; line-height:1.55; text-wrap:pretty; }
+    .monthly-copy[hidden] { display:none; }
+    .outlook { display:flex; flex-direction:column; justify-content:space-between; padding:28px; border-left:1px solid var(--line); background:var(--purple-soft); }
+    .outlook-label { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+    .outlook-value { margin-top:8px; font-size:48px; line-height:1; font-weight:680; letter-spacing:-.045em; font-variant-numeric:tabular-nums; }
+    .outlook-sub { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.4; }
+    .freshness { display:inline-flex; align-items:center; gap:7px; margin-top:20px; font-size:11px; color:var(--green); }
+    .freshness::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .freshness.stale,.freshness.missing { color:var(--amber); }
+    .metrics { display:grid; grid-template-columns:repeat(var(--metric-count,3),minmax(0,1fr)); border-top:1px solid var(--line); }
+    .metric { min-width:0; padding:18px 20px; }
+    .metric + .metric { border-left:1px solid var(--line); }
+    .metric-label { color:var(--muted); font-size:10px; line-height:1.3; letter-spacing:.05em; text-transform:uppercase; }
+    .metric-value { margin-top:7px; font-size:17px; font-weight:680; font-variant-numeric:tabular-nums; }
+    .positive { color:var(--green); } .negative { color:var(--red); }
+    .visuals { border-top:1px solid var(--line); }
+    .trend { position:relative; padding:24px 26px 20px; }
+    .runway { padding:24px 26px 28px; border-top:1px solid var(--line); }
+    .visual-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+    .visual-title { margin:0; font-size:13px; font-weight:700; }
+    .visual-sub { margin:4px 0 0; color:var(--muted); font-size:10px; }
+    .chart-legend { display:flex; align-items:center; gap:15px; flex-wrap:wrap; }
+    .legend-button { display:inline-flex; align-items:center; gap:7px; min-height:40px; padding:0; border:0; color:var(--muted); background:transparent; font-size:11px; transition-property:opacity,transform; transition-duration:120ms; }
+    .legend-button[aria-pressed="false"] { opacity:.45; }
+    .legend-button:active { transform:scale(.96); }
+    .legend-line { display:inline-block; width:20px; height:3px; border-radius:2px; background:var(--purple); }
+    .legend-line.ly { height:0; border-top:2px dashed var(--muted); background:transparent; }
+    .chart-wrap { position:relative; min-height:250px; margin-top:12px; }
+    .chart { display:block; width:100%; height:250px; }
+    .chart text { fill:var(--muted); font-size:10px; }
+    .chart .grid { stroke:var(--line); stroke-width:1; }
+    .chart .series { fill:none; stroke:var(--purple); stroke-width:2.5; vector-effect:non-scaling-stroke; }
+    .chart .series-ly { fill:none; stroke:var(--muted); stroke-width:1.5; stroke-dasharray:5 5; opacity:.7; vector-effect:non-scaling-stroke; }
+    .chart .average { stroke:var(--amber); stroke-width:1; stroke-dasharray:3 4; }
+    .chart .dot { fill:var(--surface); stroke:var(--purple); stroke-width:2; }
+    .tooltip { position:absolute; z-index:3; min-width:145px; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:0 10px 30px rgb(29 24 36 / .14); font-size:10px; line-height:1.5; pointer-events:none; opacity:0; transform:translateY(4px); transition-property:opacity,transform; transition-duration:100ms; }
+    .tooltip.visible { opacity:1; transform:translateY(0); }
+    .tooltip strong,.tooltip span { display:block; }
+    .tooltip span { color:var(--muted); }
+    .runway-gap { color:var(--red); font-size:12px; font-weight:650; font-variant-numeric:tabular-nums; }
+    .runway-body { margin-top:34px; padding-bottom:48px; }
+    .runway-track { position:relative; height:14px; border-radius:7px; background:var(--purple-soft); }
+    .runway-fill { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--purple); transition-property:width; transition-duration:180ms; }
+    .runway-marker { position:absolute; top:-6px; width:2px; height:26px; background:var(--ink); }
+    .runway-marker.goal { right:0; }
+    .runway-label { position:absolute; top:28px; color:var(--muted); font-size:10px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .runway-label strong { display:block; color:var(--ink); font-size:12px; }
+    .runway-label.mtd { transform:translateX(-50%); }
+    .runway-label.forecast { color:var(--purple); transform:translateX(-50%); }
+    .runway-label.goal { right:0; text-align:right; }
+    .goal-line { margin-top:22px; padding-top:18px; border-top:1px solid rgb(109 44 255 / .16); color:var(--muted); font-size:11px; line-height:1.55; }
+    .data-note { display:flex; justify-content:space-between; gap:16px; padding:14px 26px; border-top:1px solid var(--line); color:var(--muted); background:#fcfbfd; font-size:10px; }
+    .placeholder { margin-top:28px; padding:24px 4px; border-top:1px solid var(--line); opacity:.56; }
+    .placeholder h2 { margin:0; font-size:15px; }
+    .placeholder p { margin:6px 0 0; color:var(--muted); font-size:12px; }
+    @media (max-width:900px) {
+      .shell { grid-template-columns:1fr; }
+      .rail { position:static; display:flex; align-items:center; height:auto; padding:10px 16px; border-right:0; border-bottom:1px solid var(--line); overflow:auto; }
+      .brand { padding:0 18px 0 0; } .brand-copy { display:none; } .nav { display:flex; }
+      .story { grid-template-columns:1fr; }
+      .outlook { border-left:0; border-top:1px solid var(--line); }
+      .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .metric:nth-child(odd) { border-left:0; } .metric:nth-child(n+3) { border-top:1px solid var(--line); }
+      .visual-head { flex-direction:column; }
+    }
+    @media (max-width:560px) {
+      .topbar { align-items:flex-start; flex-direction:column; padding:16px 18px; }
+      .filters,.filter-field,.filter-select { width:100%; }
+      .content { padding:20px 14px 60px; }
+      .story-main,.outlook { padding:22px 20px; }
+      .verdict { font-size:27px; } .weekly-copy { font-size:15px; }
+      .metrics { grid-template-columns:1fr; } .metric + .metric { border-left:0; border-top:1px solid var(--line); }
+      .trend,.runway { padding:20px 16px 28px; }
+      .data-note { flex-direction:column; }
+      .runway-label.mtd { left:0!important; transform:none; }
+      .runway-label.forecast { transform:translateX(-60%); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand"><div class="brand-mark">W</div><div class="brand-copy"><strong>Weekly</strong><span>Market review</span></div></div>
+      <nav class="nav" aria-label="Report sections"><button class="nav-item active" type="button">Overview</button><button class="nav-item" type="button">All CEs</button><button class="nav-item" type="button">Review</button></nav>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><h1 id="market-name">Market</h1><p id="week-label">Weekly market review</p></div><div class="filters"><label class="filter-field"><span class="filter-label">Country</span><select id="country-select" class="filter-select" aria-label="Country" disabled><option>All countries</option></select></label><label class="filter-field"><span class="filter-label">Week</span><select id="week-select" class="filter-select" aria-label="Week"></select></label></div></header>
+      <div class="content">
+        <div class="section-kicker">Market headline</div>
+        <article class="headline">
+          <div class="story">
+            <div class="story-main">
+              <div class="eyebrow">Revenue & monthly outlook</div>
+              <h2 class="verdict" id="verdict"></h2>
+              <p class="weekly-copy" id="weekly-copy"></p>
+              <p class="monthly-copy" id="monthly-copy"></p>
+            </div>
+            <aside class="outlook"><div><div class="outlook-label" id="outlook-label"></div><div class="outlook-value" id="outlook-value"></div><div class="outlook-sub" id="outlook-sub"></div></div><div class="freshness" id="freshness"></div></aside>
+          </div>
+          <div class="metrics" id="metrics"></div>
+          <div class="visuals">
+            <section class="trend"><div class="visual-head"><div><h3 class="visual-title">12-week revenue trajectory</h3><p class="visual-sub">Weekly revenue · USD</p></div><div class="chart-legend" aria-label="Revenue chart series"><button class="legend-button" type="button" data-series="ty" aria-pressed="true"><span class="legend-line"></span>This year</button><button class="legend-button" type="button" data-series="ly" aria-pressed="true"><span class="legend-line ly"></span>Last year</button></div></div><div class="chart-wrap"><svg id="revenue-chart" class="chart" role="img"></svg><div id="tooltip" class="tooltip" role="tooltip"></div></div></section>
+            <section class="runway"><div class="visual-head"><div><h3 class="visual-title" id="runway-title">Monthly revenue runway</h3><p class="visual-sub" id="runway-sub">Month-to-date, projected close and goal</p></div><div class="runway-gap" id="runway-gap"></div></div><div class="runway-body" id="runway-body"></div></section>
+          </div>
+          <footer class="data-note"><span id="source-note"></span><span>Weekly calculations remain sourced from the existing snapshot.</span></footer>
+        </article>
+        <section class="placeholder"><h2>What needs attention</h2><p>Losing money, RPC/CM1 fluctuations, top drops and gains continue below this headline in the next incremental slice.</p></section>
+      </div>
+    </main>
+  </div>
+  <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
+  <script>
+    (() => {
+      let payload;
+      try {
+        payload = JSON.parse(document.getElementById('report-data').textContent);
+      } catch (error) {
+        document.body.innerHTML='<main class="template-error"><h1>This is the V2 template, not a rendered report</h1><p>Generate a data-backed page with <code>python3 scripts/weekly_report/render_v2.py &lt;snapshot.json&gt; --out &lt;report.html&gt;</code>, then open the generated report.</p></main>';
+        return;
+      }
+      const weekSelect = document.getElementById('week-select');
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const seriesVisible = {ty:true,ly:true};
+      const money = (value, digits=1) => {
+        if (value == null) return '—';
+        const abs = Math.abs(value), sign = value < 0 ? '−' : '';
+        if (abs >= 1000000) return `${sign}$${(abs/1000000).toFixed(digits)}M`;
+        if (abs >= 1000) return `${sign}$${(abs/1000).toFixed(digits)}K`;
+        return `${sign}$${abs.toFixed(0)}`;
+      };
+      const pct = (value, digits=1) => value == null ? '—' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(digits)}%`;
+      const movement = (value) => value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
+      const tone = (value) => value > 0 ? 'positive' : value < 0 ? 'negative' : '';
+      const dateLabel = (iso) => new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(`${iso}T00:00:00`));
+      const monthLabel = (iso) => new Intl.DateTimeFormat('en-GB',{month:'long'}).format(new Date(`${iso}-01T00:00:00`));
+      const el = (name, attrs={}) => { const node=document.createElementNS(svgNS,name); Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,value)); return node; };
+      function metric(label, value, className='') { return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${className}">${value}</div></div>`; }
+      function renderRunway(item) {
+        const monthly=item.monthly, body=document.getElementById('runway-body'), gap=document.getElementById('runway-gap'), title=document.getElementById('runway-title');
+        title.textContent=monthly.month ? `${monthLabel(monthly.month)} revenue runway` : 'Monthly revenue runway';
+        if (monthly.state === 'missing') { gap.textContent=''; body.innerHTML='<div class="goal-line">No approved monthly goal is attached. The report will not infer pacing from weekly growth.</div>'; return; }
+        const mtd=Math.max(0,Math.min(100,monthly.mtd_attainment_pct||0));
+        const forecast=Math.max(0,Math.min(100,monthly.forecast_attainment_pct||0));
+        gap.textContent=monthly.forecast_attainment_pct == null ? '' : `${Math.abs(100-monthly.forecast_attainment_pct).toFixed(0)}% ${monthly.forecast_attainment_pct>=100?'above':'below'} goal`;
+        body.innerHTML=`<div class="runway-track"><div class="runway-fill" style="width:${forecast}%"></div><div class="runway-marker" style="left:${mtd}%"></div><div class="runway-marker goal"></div><div class="runway-label mtd" style="left:${mtd}%"><strong>${money(monthly.mtd_revenue)}</strong>MTD · ${mtd.toFixed(0)}%</div><div class="runway-label forecast" style="left:${forecast}%"><strong>${money(monthly.forecast_revenue)}</strong>Run rate · ${forecast.toFixed(0)}%</div><div class="runway-label goal"><strong>${money(monthly.monthly_goal)}</strong>Goal</div></div>`;
+      }
+      function drawChart(item) {
+        const chart=document.getElementById('revenue-chart'), tooltip=document.getElementById('tooltip'), wrap=chart.parentElement, data=item.chart;
+        const width=Math.max(300,wrap.getBoundingClientRect().width), height=218, margin={top:14,right:22,bottom:30,left:62}, plotW=width-margin.left-margin.right, plotH=height-margin.top-margin.bottom;
+        const values=data.flatMap(d=>[d.revenue,d.revenue_ly]).filter(v=>v!=null).concat(item.trailing_four_revenue == null ? [] : [item.trailing_four_revenue]);
+        const min=Math.min(...values), max=Math.max(...values), pad=Math.max(1,(max-min)*.12), lo=Math.max(0,min-pad), hi=max+pad;
+        const x=i=>margin.left+(i/Math.max(1,data.length-1))*plotW, y=v=>margin.top+((hi-v)/(hi-lo||1))*plotH;
+        const path=key=>data.reduce((d,row,i)=>row[key]==null?d:`${d}${d?' L':'M'} ${x(i).toFixed(1)} ${y(row[key]).toFixed(1)}`,'');
+        chart.setAttribute('viewBox',`0 0 ${width} ${height}`); chart.replaceChildren();
+        const title=el('title'); title.textContent=`${item.market} 12-week revenue trajectory`; chart.appendChild(title);
+        for (const value of [lo,(lo+hi)/2,hi]) { chart.appendChild(el('line',{x1:margin.left,x2:width-margin.right,y1:y(value),y2:y(value),class:'grid'})); const label=el('text',{x:margin.left-8,y:y(value)+4,'text-anchor':'end'}); label.textContent=money(value,0); chart.appendChild(label); }
+        [0,Math.floor((data.length-1)/2),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).forEach(i=>{ const label=el('text',{x:x(i),y:height-8,'text-anchor':i===0?'start':i===data.length-1?'end':'middle'}); label.textContent=dateLabel(data[i].week); chart.appendChild(label); });
+        if (item.trailing_four_revenue != null) { chart.appendChild(el('line',{x1:margin.left,x2:width-margin.right,y1:y(item.trailing_four_revenue),y2:y(item.trailing_four_revenue),class:'average'})); }
+        const hasLy=data.some(d=>d.revenue_ly!=null);
+        if (seriesVisible.ly && hasLy) chart.appendChild(el('path',{d:path('revenue_ly'),class:'series-ly'}));
+        if (seriesVisible.ty) chart.appendChild(el('path',{d:path('revenue'),class:'series'}));
+        if (seriesVisible.ty && data.length) chart.appendChild(el('circle',{cx:x(data.length-1),cy:y(data[data.length-1].revenue),r:4,class:'dot'}));
+        const hit=el('rect',{x:margin.left,y:margin.top,width:plotW,height:plotH,fill:'transparent','data-chart-hit':'','data-chart-hover-overlay':'cross-series'});
+        hit.addEventListener('pointermove',event=>{ const box=chart.getBoundingClientRect(), local=(event.clientX-box.left)*(width/box.width), index=Math.max(0,Math.min(data.length-1,Math.round(((local-margin.left)/plotW)*(data.length-1)))), row=data[index], prior=index>0?data[index-1]:null, wow=prior&&prior.revenue?100*(row.revenue/prior.revenue-1):null, yoy=row.revenue_ly?100*(row.revenue/row.revenue_ly-1):null; tooltip.innerHTML=`<strong>Week of ${dateLabel(row.week)}</strong>${seriesVisible.ty?`<span>This year · ${money(row.revenue)}</span><span>Weekly WoW · ${pct(wow)}</span>`:''}${seriesVisible.ly&&row.revenue_ly!=null?`<span>Last year · ${money(row.revenue_ly)}</span><span>Weekly YoY · ${pct(yoy)}</span>`:''}`; tooltip.style.left=`${Math.min(box.width-165,Math.max(0,event.clientX-box.left+10))}px`; tooltip.style.top=`${Math.max(0,event.clientY-box.top-72)}px`; tooltip.classList.add('visible'); });
+        hit.addEventListener('pointerleave',()=>tooltip.classList.remove('visible')); chart.appendChild(hit);
+      }
+      function render(index) {
+        const item=payload.headlines[index], monthly=item.monthly, month=monthly.month ? monthLabel(monthly.month) : 'Monthly';
+        document.getElementById('market-name').textContent=item.market;
+        document.getElementById('week-label').textContent=`Weekly market review · ${dateLabel(item.week_start)}–${dateLabel(item.week_end)} ${item.week_end.slice(0,4)}`;
+        const weeklyMove=`${movement(item.wow_abs)} ${money(Math.abs(item.wow_abs||0))} (${pct(item.wow_pct)}) versus the previous week`;
+        const verdict=document.getElementById('verdict'), monthlyCopy=document.getElementById('monthly-copy'), outlookLabel=document.getElementById('outlook-label'), outlookValue=document.getElementById('outlook-value'), outlookSub=document.getElementById('outlook-sub'), freshness=document.getElementById('freshness');
+        verdict.textContent=`${money(item.revenue)} weekly revenue`;
+        document.getElementById('weekly-copy').textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)} · ${weeklyMove}.`;
+        freshness.className=`freshness ${monthly.state}`;
+        const metrics=document.getElementById('metrics');
+        if (monthly.state === 'current') {
+          const attainment=monthly.forecast_attainment_pct;
+          monthlyCopy.hidden=true;
+          outlookLabel.textContent=`${month} outlook`; outlookValue.textContent=`${attainment.toFixed(0)}%`; outlookSub.textContent=`of monthly goal · ${attainment>=100?'ahead':'behind'} plan`; freshness.textContent=`Target current · ${dateLabel(monthly.as_of)}`;
+          metrics.style.setProperty('--metric-count','3');
+          metrics.innerHTML=[metric('Month to date',money(monthly.mtd_revenue)),metric(`${month} run rate vs LY`,pct(monthly.yoy_pct),tone(monthly.yoy_pct)),metric(`${month} run rate vs LM`,pct(monthly.mom_pct),tone(monthly.mom_pct))].join('');
+        } else if (monthly.state === 'stale') {
+          monthlyCopy.hidden=false;
+          monthlyCopy.textContent='The last monthly goal record is too old to support an ahead-or-behind verdict.';
+          outlookLabel.textContent='Last available outlook'; outlookValue.textContent=monthly.forecast_attainment_pct == null?'—':`${monthly.forecast_attainment_pct.toFixed(0)}%`; outlookSub.textContent='Shown as context, not used for the verdict'; freshness.textContent=`Stale · ${dateLabel(monthly.as_of)}`;
+          metrics.style.setProperty('--metric-count','3');
+          metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
+        } else {
+          monthlyCopy.hidden=false;
+          monthlyCopy.textContent='Monthly target comparison is unavailable. Existing weekly evidence remains visible without inferring pacing.';
+          outlookLabel.textContent='Forecast vs goal'; outlookValue.textContent='—'; outlookSub.textContent='Awaiting an approved goal source'; freshness.textContent='Target unavailable';
+          metrics.style.setProperty('--metric-count','3');
+          metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
+        }
+        document.getElementById('source-note').textContent=monthly.source ? `Goal source: ${monthly.source}` : 'No monthly goal source attached.';
+        renderRunway(item); drawChart(item);
+      }
+      payload.headlines.forEach((item,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`; weekSelect.appendChild(option); });
+      weekSelect.value=String(Math.max(0,payload.headlines.length-1));
+      weekSelect.addEventListener('change',()=>render(Number(weekSelect.value)));
+      document.querySelectorAll('[data-series]').forEach(button=>button.addEventListener('click',()=>{ const name=button.dataset.series; seriesVisible[name]=!seriesVisible[name]; button.setAttribute('aria-pressed',String(seriesVisible[name])); drawChart(payload.headlines[Number(weekSelect.value||0)]); }));
+      new ResizeObserver(()=>drawChart(payload.headlines[Number(weekSelect.value||0)])).observe(document.querySelector('.chart-wrap'));
+      render(Number(weekSelect.value));
+    })();
+  </script>
+</body>
+</html>
