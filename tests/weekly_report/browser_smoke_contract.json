@@ -1,0 +1,12 @@
+{
+  "artifact": "rendered weekly report artifact",
+  "checks": [
+    {"name": "boot", "selector": "#app #s1", "expect": "visible"},
+    {"name": "all_ce", "selector": "#ceTableWrap tr.cerow", "expect": "at least one row"},
+    {"name": "search", "selector": "#ceSearch", "action": "type synthetic CE name", "expect": "one or more matching rows"},
+    {"name": "drawer", "selector": "#ceTableWrap tr.cerow", "action": "click", "expect": "#drawer[aria-hidden=false]"},
+    {"name": "drawer_close", "selector": "#drClose", "action": "click", "expect": "#drawer[aria-hidden=true]"},
+    {"name": "bucket_toggle", "selector": ".bkt-head", "action": "click twice", "expect": "collapse then restore"},
+    {"name": "console", "expect": "no pageerror and no console error"}
+  ]
+}

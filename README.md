@@ -11,8 +11,10 @@ Imported 2026-07-12 from `~/analytics` safepoint branch `weekly-report-v1` (1c0b
 
 ## V2 baseline verification
 
-Phase 1 freezes the observable V1 producer/consumer boundary with a synthetic fixture,
-snapshot contract, consumer coverage, and golden outputs under `tests/weekly_report/`.
+Phase 1 freezes the observable V1 producer/consumer boundary with synthetic edge cases,
+minimized and pseudonymized sparse/dense/global snapshot shapes, snapshot contracts, downstream
+coverage, manual browser-smoke evidence, a coverage matrix, and golden outputs under
+`tests/weekly_report/`.
 The verification path is local and no-write with respect to the checkout and every production
 integration:
 
