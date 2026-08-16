@@ -185,6 +185,22 @@ NOTES_SLACK_CHANNELS = {
     "north_america": {"id": "CNSHDD2H1",   "name": "mkt-usa"},
     "italy":         {"id": "C045L2WQ79P", "name": "mkt-italy-switzerland-malta"},
     "oceania":       {"id": "CHKRLFDPU",   "name": "mkt-anz"},
+    "france":        {"id": "CH64TEB71",   "name": "mkt-france"},
+    "united_kingdom":{"id": "CKTFHT4AF",  "name": "mkt-uk"},
+    "iberia":        {"id": "CH2LRMJF2",   "name": "mkt-iberia"},
+    "csee":          {"id": "CSQ10TALA",   "name": "mkt-csee"},
+    # Multi-channel markets start discussions in the primary channel. The CE
+    # retains that channel for its persistent thread after the first post.
+    "east_asia":     {"id": "CQD6220VB",   "name": "mkt-japan"},
+    "sea":           {"id": "C5WFYN82H",   "name": "mkt-singapore"},
+    "uae":           {"id": "C046622L80Z", "name": "mkt-mena"},
+    "gcc":           {"id": "C046622L80Z", "name": "mkt-mena"},
+    "north_africa":  {"id": "C0889D22PM5", "name": "mkt-mena-expansion-internal"},
+    "rest_of_mea":   {"id": "C0889D22PM5", "name": "mkt-mena-expansion-internal"},
+    "benelux":       {"id": "CKTFHT4AF",  "name": "mkt-uk"},
+    "nordics":       {"id": "CSQ10TALA",   "name": "mkt-csee"},
+    "south_america": {"id": "CH2LRMJF2",   "name": "mkt-iberia"},
+    "mexico_central_america": {"id": "CH2LRMJF2", "name": "mkt-iberia"},
 }
 
 # --------------------------------------------------------------------------- #

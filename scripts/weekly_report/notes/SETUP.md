@@ -83,6 +83,8 @@ The Post button reuses the existing **`REVENUE_ALERT_SLACK_TOKEN`** bot
 Optional AI adapter:
 
 - Script property `REVIEW_AI_WEBHOOK_URL`
+- Script property `REVIEW_AI_WEBHOOK_SECRET` (sent as `X-Review-Secret`; must
+  match the server-side endpoint secret)
 - For weekly Slack summaries it receives `mode: weekly_thread_summary`, the CE/week
   identity, the prior summary and all source-exact replies for that week. It returns:
 
@@ -127,9 +129,11 @@ their replies return as attributed summary pointers.
 3. Set Script property `REVIEW_ENFORCE_ACCESS=true` after the allowlist is populated.
    `REVIEW_ALLOW_ACTOR_PARAM=true` exists only for controlled local/pilot diagnostics;
    never enable it in production.
-4. Run `installReviewAutomation()` once from the Apps Script editor. It installs:
+4. Run `installReviewAutomation()` once from the Apps Script editor. It creates
+   every additive review tab and installs:
    - a five-minute Slack reply sync; and
-   - a daily Slack people-directory refresh.
+   - an optional daily Slack people-directory refresh when Script property
+     `REVIEW_ENABLE_DIRECTORY_SYNC=true` and the bot has `users:read`.
 
 The directory refresh updates Slack names and membership while preserving aliases and
 market scope curated in `review_slack_people`.

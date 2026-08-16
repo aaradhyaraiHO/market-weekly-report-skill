@@ -142,6 +142,9 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("everyMinutes(5)", self.backend)
         self.assertIn("reviewSyncSlackPeople", self.backend)
         self.assertIn("ambiguous Slack mentions", self.backend)
+        self.assertIn('getProperty("REVIEW_AI_WEBHOOK_SECRET")', self.backend)
+        self.assertIn('"X-Review-Secret":secret', self.backend)
+        self.assertIn("function installReviewStorage()", self.backend)
         self.assertIn("var nextCycle=reviewRows(\"weekly\")", self.backend)
         self.assertIn("slackThreadReplies(token,channel,threadTs,oldest,latest)", self.backend)
 

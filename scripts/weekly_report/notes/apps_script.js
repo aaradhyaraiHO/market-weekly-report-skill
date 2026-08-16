@@ -947,8 +947,10 @@ function reviewAiWeeklySummary(sourceRows,state,context){
   var endpoint=PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_URL");
   if(!endpoint)return {status:"source_unavailable"};
   try{
+    var secret=PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_SECRET")||"";
     var previous=reviewJson(state.summary_json,{});
     var resp=UrlFetchApp.fetch(endpoint,{method:"post",contentType:"application/json",
+      headers:secret?{"X-Review-Secret":secret}:{},
       payload:JSON.stringify({mode:"weekly_thread_summary",identity:{market_slug:context.market_slug,
         ce_id:String(context.ce_id),week_start:ymd(context.week_start)},previous_summary:previous,
         records:sourceRows.map(function(r){return {source_ref:r.source_ref,source_url:r.source_url,
@@ -1043,11 +1045,19 @@ function installReviewSyncTrigger(){
 }
 
 function installReviewAutomation(){
+  installReviewStorage();
   installReviewSyncTrigger();
   ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==="reviewSyncSlackPeople";})
     .forEach(function(t){ScriptApp.deleteTrigger(t);});
-  ScriptApp.newTrigger("reviewSyncSlackPeople").timeBased().everyDays(1).atHour(2).create();
-  reviewSyncSlackPeople();
+  if(reviewBool(PropertiesService.getScriptProperties().getProperty("REVIEW_ENABLE_DIRECTORY_SYNC"))){
+    ScriptApp.newTrigger("reviewSyncSlackPeople").timeBased().everyDays(1).atHour(2).create();
+    reviewSyncSlackPeople();
+  }
+}
+
+function installReviewStorage(){
+  Object.keys(REVIEW_TABLES).forEach(function(kind){reviewSheet(kind);});
+  return Object.keys(REVIEW_TABLES).map(function(kind){return REVIEW_TABLES[kind].sheet;});
 }
 
 function reviewSyncSlackPeople(){
@@ -1136,7 +1146,9 @@ function reviewAiSuggestions(sourceType, sourceRows, context) {
   var endpoint=PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_URL");
   if(!endpoint)return {status:"source_unavailable",suggestions:[]};
   try{
+    var secret=PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_SECRET")||"";
     var resp=UrlFetchApp.fetch(endpoint,{method:"post",contentType:"application/json",
+      headers:secret?{"X-Review-Secret":secret}:{},
       payload:JSON.stringify({source_type:sourceType,identity:{market_slug:context.market_slug,
         ce_id:String(context.ce_id),week_start:ymd(context.week_start)},records:sourceRows}),muteHttpExceptions:true});
     var body=JSON.parse(resp.getContentText());
