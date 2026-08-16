@@ -45,6 +45,19 @@ export type MemoryWeek = {
   sourceLabel: string;
   sourceMeta?: string;
   threadSummary?: ThreadSummary;
+  meetingSummary?: {
+    body: string;
+    updatedLabel: string;
+    permalink?: string;
+  };
+};
+
+export type MeetingSource = {
+  status: 'not_matched' | 'pending' | 'matched';
+  label: string;
+  summary?: string;
+  updatedLabel?: string;
+  permalink?: string;
 };
 
 export type ReviewResource = {
@@ -55,7 +68,9 @@ export type ReviewResource = {
   treatment: ReviewTreatment;
   receiptLabel?: string;
   bgmNote?: { author: string; body: string; updatedLabel: string };
+  importedComment?: { source: 'EGER'; authors: string; body: string; weekLabel: string; sourceRef: string };
   threadSummary?: ThreadSummary;
+  meetingSource?: MeetingSource;
   workItems: WorkItem[];
   memory: MemoryWeek[];
 };
@@ -145,8 +160,8 @@ export function EeveeReviewWorkspace({
 
           <Box className={card}>
             <Box className={cardHeader}>
-              <Box><Text as='h2' textStyle='heading.regular'>Commentary &amp; observations</Text><Text color='semantic.text.grey.3'>BGM note and Slack thread summary remain separate</Text></Box>
-              <Text color='semantic.text.grey.3'>{Number(Boolean(resource.bgmNote)) + Number(Boolean(resource.threadSummary))} entries</Text>
+              <Box><Text as='h2' textStyle='heading.regular'>Commentary &amp; observations</Text><Text color='semantic.text.grey.3'>BGM note, Slack summary and meeting capture remain source-attributed</Text></Box>
+              <Text color='semantic.text.grey.3'>{Number(Boolean(resource.bgmNote)) + Number(Boolean(resource.importedComment)) + Number(Boolean(resource.threadSummary))} entries</Text>
             </Box>
             <Box className={cardBody}>
               {resource.bgmNote && (
@@ -155,6 +170,16 @@ export function EeveeReviewWorkspace({
                   <Box className={noteContent}>
                     <Box className={noteMeta}><Text as='span' textStyle='subheading.regular'>{resource.bgmNote.author}</Text><span className={statusPill}>BGM NOTE · ORIGINAL</span><Text as='span' color='semantic.text.grey.3'>{resource.bgmNote.updatedLabel}</Text></Box>
                     <Text className={note}>{resource.bgmNote.body}</Text>
+                  </Box>
+                </Box>
+              )}
+              {!resource.bgmNote && resource.importedComment && (
+                <Box className={noteRow}>
+                  <Icon iconName='History' width={20} height={20} ariaLabel='Imported commentary' />
+                  <Box className={noteContent}>
+                    <Box className={noteMeta}><Text as='span' textStyle='subheading.regular'>{resource.importedComment.authors}</Text><span className={statusPill}>IMPORTED FROM EGER</span><Text as='span' color='semantic.text.grey.3'>{resource.importedComment.weekLabel}</Text></Box>
+                    <Text className={note}>{resource.importedComment.body}</Text>
+                    <Text color='semantic.text.grey.3'>{resource.importedComment.sourceRef}</Text>
                   </Box>
                 </Box>
               )}
@@ -172,7 +197,20 @@ export function EeveeReviewWorkspace({
                   </Box>
                 </Box>
               )}
-              {!resource.bgmNote && !resource.threadSummary && <Text color='semantic.text.grey.3'>No commentary has been recorded for this week.</Text>}
+              {!resource.bgmNote && !resource.importedComment && !resource.threadSummary && <Text color='semantic.text.grey.3'>No commentary has been recorded for this week.</Text>}
+              <Box className={aiCard}>
+                <Icon iconName='Spark' width={20} height={20} ariaLabel='Meeting source' />
+                <Box minWidth='0'>
+                  <Box className={noteMeta}>
+                    <Text as='span' textStyle='subheading.regular'>Granola meeting capture</Text>
+                    <span className={statusPill}>{resource.meetingSource?.status === 'matched' ? 'MATCHED' : resource.meetingSource?.status === 'pending' ? 'PENDING REVIEW' : 'NO MATCH'}</span>
+                  </Box>
+                  <Text color='semantic.text.grey.3'>{resource.meetingSource?.label ?? 'No meeting is matched to this CE and review week.'}</Text>
+                  {resource.meetingSource?.summary && <Text>{resource.meetingSource.summary}</Text>}
+                  {resource.meetingSource?.updatedLabel && <Text color='semantic.text.grey.3'>{resource.meetingSource.updatedLabel}</Text>}
+                  {resource.meetingSource?.permalink && <a className={sourceLink} href={resource.meetingSource.permalink} target='_blank' rel='noreferrer'>Open meeting source <Icon iconName='ArrowRight' width={14} height={14} /></a>}
+                </Box>
+              </Box>
               <Box className={composer}>
                 <textarea aria-label='BGM observation or Slack discussion starter' value={noteValue} onChange={event => setNoteValue(event.target.value)} placeholder='Add a BGM observation…' />
                 <Box display='flex' gap='space.8' justifyContent='end'>
@@ -220,6 +258,24 @@ export function EeveeReviewWorkspace({
                     <Text className={eyebrow}>{week.sourceLabel}</Text>
                     <Text>{week.originalNote ?? 'No original note stored.'}</Text>
                     {week.sourceMeta && <Text color='semantic.text.grey.3'>{week.sourceMeta}</Text>}
+                    {week.threadSummary && (
+                      <Box className={aiCard}>
+                        <Text textStyle='subheading.regular'>Slack thread summary</Text>
+                        <Box as='ul' className={summaryList}>
+                          {week.threadSummary.findings.map(item => <li key={`memory-finding-${item}`}>{item}</li>)}
+                          {week.threadSummary.decisions.map(item => <li key={`memory-decision-${item}`}>{item}</li>)}
+                          {week.threadSummary.openPoints.map(item => <li key={`memory-open-${item}`}>{item}</li>)}
+                        </Box>
+                      </Box>
+                    )}
+                    {week.meetingSummary && (
+                      <Box className={aiCard}>
+                        <Text textStyle='subheading.regular'>Granola meeting summary</Text>
+                        <Text>{week.meetingSummary.body}</Text>
+                        <Text color='semantic.text.grey.3'>{week.meetingSummary.updatedLabel}</Text>
+                        {week.meetingSummary.permalink && <a className={sourceLink} href={week.meetingSummary.permalink} target='_blank' rel='noreferrer'>Open meeting source</a>}
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               ))}
