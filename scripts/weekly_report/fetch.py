@@ -144,6 +144,68 @@ def market_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataF
     )
 
 
+def market_month_comparisons(
+    market: str,
+    prior_start: dt.date,
+    prior_mtd_end: dt.date,
+    prior_end: dt.date,
+    ly_start: dt.date,
+    ly_mtd_end: dt.date,
+    ly_end: dt.date,
+) -> pd.DataFrame:
+    """Return full-month and same-elapsed-period comparison revenue."""
+    sql = f"""
+    SELECT
+        SUM(IF(report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_end AS DATE), {REV}, 0))
+            AS prior_month_revenue,
+        SUM(IF(report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_mtd_end AS DATE), {REV}, 0))
+            AS prior_mtd_revenue,
+        SUM(IF(report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_end AS DATE), {REV}, 0))
+            AS ly_month_revenue,
+        SUM(IF(report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_mtd_end AS DATE), {REV}, 0))
+            AS ly_mtd_revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE business_market = @market
+      AND (
+        report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_end AS DATE)
+        OR report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_end AS DATE)
+      )
+    """
+    return query_df(sql, "market_month_comparisons", {
+        "market": market,
+        "prior_start": config.iso(prior_start),
+        "prior_mtd_end": config.iso(prior_mtd_end),
+        "prior_end": config.iso(prior_end),
+        "ly_start": config.iso(ly_start),
+        "ly_mtd_end": config.iso(ly_mtd_end),
+        "ly_end": config.iso(ly_end),
+    })
+
+
+def market_ce_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Return CE-level canonical predicted revenue for an exact date range."""
+    sql = f"""
+    SELECT
+        CAST(combined_entity_id AS STRING) AS ce_id,
+        ANY_VALUE(combined_entity_name) AS ce_name,
+        SUM({REV}) AS revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE report_date BETWEEN CAST(@start AS DATE) AND CAST(@end AS DATE)
+      AND business_market = @market
+
+    GROUP BY 1
+    """
+    return query_df(sql, "market_ce_period_revenue", {
+        "market": market,
+        "start": config.iso(start),
+        "end": config.iso(end),
+    })
+
+
 def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
     """Return approved market and CE-roll-up goals without mixing their grains.
 
@@ -167,6 +229,29 @@ def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
     return query_df(
         sql,
         "market_monthly_goal",
+        {"market": market, "month": config.iso(month.replace(day=1))},
+    )
+
+
+def market_ce_monthly_goals(market: str, month: dt.date) -> pd.DataFrame:
+    """Return approved CE-level targets for target-gap attribution."""
+    sql = """
+    SELECT
+        CAST(entity_id AS STRING) AS ce_id,
+        ANY_VALUE(entity_name) AS ce_name,
+        SUM(target_revenue) AS monthly_goal
+
+    FROM `headout-analytics.analytics_reporting.revenue_goals`
+
+    WHERE target_month = CAST(@month AS DATE)
+      AND LOWER(market) = LOWER(@market)
+      AND entity_type = 'Combined Entity'
+
+    GROUP BY 1
+    """
+    return query_df(
+        sql,
+        "market_ce_monthly_goals",
         {"market": market, "month": config.iso(month.replace(day=1))},
     )
 

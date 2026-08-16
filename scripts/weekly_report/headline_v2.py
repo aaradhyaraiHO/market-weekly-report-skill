@@ -312,6 +312,15 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         monthly.update({key: goal.get(key) for key in (
             "month", "monthly_goal", "mtd_revenue", "forecast_revenue", "as_of", "source",
             "yoy_pct", "mom_pct", "prior_forecast_attainment_pct",
+            "expected_mtd_method", "expected_mtd_share_pct", "days_in_month", "elapsed_days", "remaining_days",
+            "expected_mtd_revenue", "mtd_gap", "mtd_pacing_pct", "forecast_gap",
+            "forecast_gap_pct", "forecast_baseline_revenue", "forecast_remaining_revenue",
+            "forecast_remaining_share_pct", "required_weekly_revenue", "current_week_revenue", "run_rate_weekly_revenue",
+            "prior_month_revenue", "prior_mtd_revenue", "ly_month_revenue", "ly_mtd_revenue",
+            "mtd_vs_last_month_pct", "mtd_vs_last_year_pct", "forecast_vs_last_month_pct",
+            "forecast_vs_last_year_pct", "ce_target_coverage_pct", "ce_gap_contributors",
+            "goal_grain", "goal_row_count", "forecast_method",
+            "retrieved_at",
         )})
         attainment = _number(goal.get("forecast_attainment_pct"))
         if attainment is None:
