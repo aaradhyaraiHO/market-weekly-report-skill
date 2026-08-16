@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "scripts" / "weekly_report" / "notes" / "apps_script.js"
 CLIENT = ROOT / "scripts" / "weekly_report" / "notes" / "review_client.js"
 INGEST = ROOT / "scripts" / "weekly_report" / "notes" / "ingest_review_sources.py"
+TEMPLATE = ROOT / "scripts" / "weekly_report" / "template" / "report_template.html"
+RENDER = ROOT / "scripts" / "weekly_report" / "render.py"
 
 
 def load_ingest():
@@ -32,8 +34,11 @@ class ReviewBackendContract(unittest.TestCase):
             "review_receipts",
             "review_set",
             "ce_threads",
+            "review_weekly_commentary",
             "review_source_suggestions",
             "review_source_inbox",
+            "bgm_access",
+            "review_slack_people",
         ):
             self.assertIn(f'sheet: "{sheet}"', self.backend)
 
@@ -99,6 +104,12 @@ class ReviewBackendContract(unittest.TestCase):
             "finishReview",
             "saveReviewSetItem",
             "memory",
+            "weeklyCommentary",
+            "saveWeeklyNote",
+            "deleteWeeklyNote",
+            "resolveMentions",
+            "startSlackDiscussion",
+            "syncWeeklyDiscussion",
             "askInSlack",
             "scanSlack",
             "decideSuggestion",
@@ -106,6 +117,56 @@ class ReviewBackendContract(unittest.TestCase):
             "reconcileSource",
         ):
             self.assertRegex(self.client, rf"\b{method}: function")
+
+    def test_weekly_commentary_is_one_ce_week_record_with_idempotent_slack_start(self):
+        for field in (
+            "weekly_id",
+            "bgm_note",
+            "slack_post_ts",
+            "summary_json",
+            "summary_upto_ts",
+            "last_post_request_id",
+            "note_deleted_at",
+        ):
+            self.assertIn(f'"{field}"', self.backend)
+        self.assertIn("function reviewWeeklyFor(market,ceId,week)", self.backend)
+        self.assertIn("current.last_post_request_id===p.request_id", self.backend)
+        self.assertIn("payload.client_msg_id=String(p.request_id)", self.backend)
+        self.assertIn('next.sync_status="post_failed"', self.backend)
+
+    def test_weekly_slack_sync_aggregates_and_fails_closed(self):
+        self.assertIn('mode:"weekly_thread_summary"', self.backend)
+        self.assertIn('rec.sync_status="summary_delayed"', self.backend)
+        self.assertIn('rec.sync_status="summary_current"', self.backend)
+        self.assertIn("reviewSyncActiveThreads", self.backend)
+        self.assertIn("everyMinutes(5)", self.backend)
+        self.assertIn("reviewSyncSlackPeople", self.backend)
+        self.assertIn("ambiguous Slack mentions", self.backend)
+        self.assertIn("var nextCycle=reviewRows(\"weekly\")", self.backend)
+        self.assertIn("slackThreadReplies(token,channel,threadTs,oldest,latest)", self.backend)
+
+    def test_slack_directory_refresh_preserves_curated_aliases(self):
+        self.assertIn('existing[String(r.slack_user_id)]=r', self.backend)
+        self.assertIn('prior.aliases||""', self.backend)
+        self.assertIn('prior.market_slug||"*"', self.backend)
+
+    def test_bgm_access_gate_is_server_side_and_opt_in_for_deployment(self):
+        self.assertIn("Session.getActiveUser().getEmail()", self.backend)
+        self.assertIn('getProperty("REVIEW_ENFORCE_ACCESS")', self.backend)
+        self.assertIn('sheet: "bgm_access"', self.backend)
+        self.assertIn("BGM is not allowed to change this market", self.backend)
+        self.assertIn("reviewMutationGate(action,payload)", self.backend)
+        self.assertIn("function reviewTrustedAuthor(p,fallback)", self.backend)
+        self.assertIn("next.bgm_author=trustedAuthor", self.backend)
+
+    def test_renderer_embeds_shared_review_client_and_commentary_ui(self):
+        template = TEMPLATE.read_text()
+        render = RENDER.read_text()
+        self.assertIn("__REVIEW_CLIENT_JS__", template)
+        self.assertIn('html.replace("__REVIEW_CLIENT_JS__", review_client)', render)
+        self.assertIn("This week’s BGM note", template)
+        self.assertIn("Thread summary", template)
+        self.assertIn("startWeeklySlack", template)
 
     def test_legacy_note_and_bucket_action_routes_remain(self):
         for route in ('action === "list"', 'action === "upsert"', 'action === "post"',

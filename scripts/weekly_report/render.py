@@ -28,6 +28,7 @@ from config import NOTES_SCRIPT_URL, NOTES_SLACK_CHANNELS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "report_template.html")
+REVIEW_CLIENT = os.path.join(HERE, "notes", "review_client.js")
 DEFAULT_INPUT = os.path.join(HERE, "sample_data.json")
 # repo root = two levels up from scripts/weekly_report/
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -108,6 +109,8 @@ def out_path(markets):
 def render(markets, template_path):
     with open(template_path) as f:
         html = f.read()
+    with open(REVIEW_CLIENT) as f:
+        review_client = f.read()
     notes_url = os.environ.get("WR_NOTES_SCRIPT_URL") or NOTES_SCRIPT_URL
     payload = {
         "schema_version": markets[0]["meta"].get("schema_version", 1),
@@ -121,6 +124,7 @@ def render(markets, template_path):
     week = markets[0]["meta"].get("week_start", "")
     title = f"Weekly Ledger — {names} — w/c {week}"
     html = html.replace("__REPORT_DATA_JSON__", data_json)
+    html = html.replace("__REVIEW_CLIENT_JS__", review_client)
     html = html.replace("__TITLE__", title)
     return html
 
