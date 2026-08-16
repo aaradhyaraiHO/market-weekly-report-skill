@@ -85,6 +85,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(first_drop["source_rank"], 1)
         self.assertEqual(first_drop["target_mtd_gap"], -12_500)
         self.assertEqual(first_drop["target_mtd_gap_pct"], -18.2)
+        self.assertEqual(first_drop["target_mtd_attainment_pct"], 81.8)
         self.assertEqual(first_drop["monthly_target"], 210_000)
 
     def test_stale_goal_cannot_drive_current_verdict(self):
@@ -151,9 +152,9 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("['wow','vs LW']", html)
         self.assertIn("['fourWeek','vs L4W']", html)
         self.assertIn("['yoy','vs LY']", html)
-        self.assertIn("['target','vs Aug target']", html)
+        self.assertIn("['target','Aug target %']", html)
         self.assertIn("rows.slice(0,5)", html)
-        self.assertIn("row.target_mtd_gap", html)
+        self.assertIn("row.target_mtd_attainment_pct", html)
         self.assertNotIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
         self.assertNotIn('class="sort-select" data-mover-sort', html)
         self.assertIn('id="all-ces-view"', html)

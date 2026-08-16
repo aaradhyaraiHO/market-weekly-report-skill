@@ -211,6 +211,11 @@ def _mover_views(headlines, direction, ce_target_pacing=None):
             "yoy_pct": yoy_growth * 100.0 if yoy_growth is not None else None,
             "target_mtd_gap": _number(target.get("mtd_gap")),
             "target_mtd_gap_pct": _number(target.get("mtd_gap_pct")),
+            "target_mtd_attainment_pct": (
+                100.0 + _number(target.get("mtd_gap_pct"))
+                if _number(target.get("mtd_gap_pct")) is not None
+                else None
+            ),
             "monthly_target": _number(target.get("monthly_goal")),
             "tag": row.get("tag"),
             # The V1 flow engine owns the seasonal classification. V2 must not
