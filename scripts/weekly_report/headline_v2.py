@@ -45,7 +45,7 @@ _CE_PERIOD_FIELDS = (
 _CE_DRAWER_METRICS = {
     "overall": (
         ("revenue", "Revenue", "money"), ("gbv", "GBV", "money"),
-        ("orders", "Orders", "count"), ("overall_cvr_pct", "Overall CVR", "pct"),
+        ("orders", "Orders", "count"), ("funnel_cvr_pct", "LP→Order CVR", "pct"),
         ("aov", "AOV", "money"), ("tr_pct", "TR", "pct"),
         ("cm2", "CM2", "money"), ("cr_pct", "CR", "pct"),
         ("roi1_pct", "ROI 1", "pct"),
@@ -203,14 +203,29 @@ def _ce_period(row):
     return {key: _number(row.get(key)) for key in _CE_PERIOD_FIELDS}
 
 
-def _ce_drawer_metrics(weekly, weekly_ly):
+def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
     current = weekly[-1] if weekly else {}
     previous = weekly[-2] if len(weekly) > 1 else {}
     ly_by_week = {row.get("week"): row for row in weekly_ly}
+    funnel_cvr = (funnel or {}).get("CVR") or {}
     result = {}
     for group, specs in _CE_DRAWER_METRICS.items():
         rows = []
         for key, label, value_format in specs:
+            if key == "funnel_cvr_pct":
+                rows.append({
+                    "key": key,
+                    "label": label,
+                    "format": value_format,
+                    "w0": _number(funnel_cvr.get("current")),
+                    "wm1": _number(funnel_cvr.get("wm1")),
+                    "delta_pct": _number(funnel_cvr.get("wow")),
+                    "delta_kind": "pp",
+                    # The live funnel query supplies W0/W-1/LY, not 12 weeks.
+                    # An empty series is an explicit unavailable state.
+                    "series": [],
+                })
+                continue
             series = [
                 {
                     "week": row.get("week"),
@@ -226,6 +241,7 @@ def _ce_drawer_metrics(weekly, weekly_ly):
                 "w0": _number(current.get(key)),
                 "wm1": _number(previous.get(key)),
                 "delta_pct": _percent_change(_number(current.get(key)), _number(previous.get(key))),
+                "delta_kind": "pct",
                 "series": series,
             })
         result[group] = rows
@@ -292,7 +308,7 @@ def _ce_views(market, dimensions=None):
                 }
                 for row in weekly[-12:]
             ],
-            "drawer_metrics": _ce_drawer_metrics(weekly, weekly_ly_rows),
+            "drawer_metrics": _ce_drawer_metrics(weekly, weekly_ly_rows, ce.get("funnel")),
             "shapley": deepcopy(ce.get("shapley_wow")) if isinstance(ce.get("shapley_wow"), dict) else None,
             "channels": deepcopy(ce.get("channels") or []),
             "funnel": deepcopy(ce.get("funnel") or {}),

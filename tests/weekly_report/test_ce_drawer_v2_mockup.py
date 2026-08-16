@@ -59,6 +59,11 @@ class CeDrawerV2MockupContract(unittest.TestCase):
         self.assertIn("Both use one shared scale", self.html)
         self.assertNotIn('class="spark"', self.html)
 
+    def test_cvr_matches_funnel_source_and_uses_pp_change(self):
+        self.assertIn("<b>LP→Order CVR</b> = LP2S × S2C × C2O", self.html)
+        self.assertIn("['LP→Order CVR','1.38%','1.52%','−0.14pp']", self.html)
+        self.assertNotIn("source-definition discrepancy", self.html)
+
     def test_trends_have_hover_and_keyboard_tooltips(self):
         self.assertIn('id="trend-tooltip"', self.html)
         self.assertIn('data-ty=', self.html)
@@ -115,7 +120,7 @@ class CeDrawerV2MockupContract(unittest.TestCase):
             "VAR-57670", "Morning harbor cruise", "VAR-44102", "<th data-band-col=\"size\">Orders</th>",
         ):
             self.assertIn(label, self.html)
-        for removed in ("Top variants", "variant-shell", "LP→Order CVR"):
+        for removed in ("Top variants", "variant-shell"):
             self.assertNotIn(removed, self.html)
         self.assertEqual(self.html.count('class="variant-detail variant-row"'), 5)
         self.assertIn('document.querySelectorAll(`[data-variant-group="${group}"]`)', self.html)
@@ -204,7 +209,7 @@ class CeDrawerV2MockupContract(unittest.TestCase):
             "Revenue headline": "Present",
             "Key metrics": "Present",
             "Metric hover evidence": "Present",
-            "Overall-CVR definition": "Missing parity",
+            "Overall-CVR definition": "Present",
             "WoW Shapley": "Present",
             "Channel mix": "Present",
             "Funnel": "Present",
@@ -229,7 +234,7 @@ class CeDrawerV2MockupContract(unittest.TestCase):
             "shared key/shape and repaint contract",
             "`ce.weekly`/`weekly_ly`",
             "`LY n/a`",
-            "Canonical source definition must be resolved upstream",
+            "Drawer CVR now uses `ce.funnel.CVR`",
             "review-mode worktree",
             "Removed following product feedback",
         ):

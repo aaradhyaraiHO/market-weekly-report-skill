@@ -23,7 +23,7 @@ Disposition vocabulary: **Present** = represented completely in the sanitized mo
 | Revenue headline | Present | W0 predicted revenue, WoW %, absolute change, and weekday-aligned `−364d` YoY. | Approved first fold shows predicted W0, W-1 amount/change, LY base, alignment, and a large TY/LY revenue trajectory. |
 | Key metrics | Present | Overall and Paid inventories; W0, W-1, delta %, and 12-week TY/LY per metric. | Both groups are projected from `ce.weekly`/`weekly_ly` into the live V2 drawer without presentation-layer metric recomputation. |
 | Metric hover evidence | Present | Pointer reveals week, TY, LY, and YoY when LY is non-zero. | Hover and keyboard focus expose all four values; expandable rows expose every week. Shared scale and TY/LY styling are explicit. |
-| Overall-CVR definition | Missing parity | Current builder injects `overall_cvr_pct = orders ÷ all-traffic clicks`; product wording has also referred to LP users. | Mock now displays the snapshot field and flags B4/B12 instead of recomputing. Canonical source definition must be resolved upstream. |
+| Overall-CVR definition | Present | The snapshot retains `overall_cvr_pct = orders ÷ all-traffic clicks`, while `ce.funnel.CVR` is LP2S × S2C × C2O and Paid CVR is paid conversions ÷ paid clicks. | The V2 drawer now uses the funnel source for its explicitly labeled “LP→Order CVR,” so its W0/W-1 values and pp change match the funnel table. Paid CVR remains separately labeled; no unavailable funnel history is synthesized. |
 | WoW Shapley | Present | Optional traffic, CVR, AOV, completion, and take-rate USD contributions plus net. | All factors, signs, attribution, and reconciliation are represented. Conditional omission remains covered by Graceful absence. |
 | Channel mix | Present | `ce.channels`: actual W0/W-1 revenue, WoW, YoY, and within-CE share. | Live V2 renders the complete snapshot-backed table and source-calculated share WoW/YoY pp. No resource history is synthesized. |
 | Funnel | Present | `ce.funnel`: LP Users, LP2S, S2C, C2O, CVR; counts use %, rates use pp. | Live V2 renders the complete snapshot-backed table with the V1 count/rate delta semantics. Proposed 12-week lines remain data extensions. |
@@ -40,9 +40,9 @@ Disposition vocabulary: **Present** = represented completely in the sanitized mo
 
 ### Verification result
 
-- **Present (9):** revenue headline, complete Overall/Paid metrics, hover evidence, Shapley, and all five V1 resource surfaces.
+- **Present (10):** revenue headline, complete Overall/Paid metrics, hover evidence, scoped CVR, Shapley, and all five V1 resource surfaces.
 - **Mock-only (3):** drawer lifecycle, identity/Omni live wiring, and shared watchlist persistence.
-- **Missing parity (3):** every production entry point, canonical Overall-CVR definition, and sparse/null/`LY n/a` behavior.
+- **Missing parity (2):** every production entry point and sparse/null/`LY n/a` behavior.
 - **Intentionally excluded (1):** CE-scoped Slack context.
 - **Delegated (5):** current note, Slack post, note history, Perf history, and action-store reconciliation.
 
@@ -54,15 +54,35 @@ The first-fold revenue chart and the proposed Channel/Funnel/Lead-time/Country h
 | --- | --- | --- | --- | --- |
 | A3 | Label WoW vs 4-week vs 12-week ranges clearly. | P1 · Planned | Ready; existing periods are already present. | Include explicit range labels throughout the mock and require them for integration. |
 | A7 | Language-breakdown table in CE drawer. | P2 · Planned | Not present in schema-v1 CE payload. | Reserved resource section only; do not show values until an approved sidecar or snapshot field exists. |
-| B4 | CVR inconsistency between headline/drawer and funnel. | P1 · Bug open | Multiple valid fields exist (`overall_cvr_pct`, `paid_cvr_pct`, funnel CVR). | Label scope and denominator beside every CVR. Investigate source discrepancy separately; no drawer-side recomputation. |
-| B11 | Restore C2O within the CE funnel. | P2 · Bug open | V1 `ce.funnel` and TGID funnel include C2O when supplied. | Full parity requirement. Do not omit from V2 projection. |
-| B12 | CVR appears twice with different definitions. | P2 · Bug open | Scope ambiguity, not necessarily a data defect. | “Overall CVR”, “Paid CVR”, and funnel “LP→Order CVR” labels plus definitions. |
+| B4 | CVR inconsistency between headline/drawer and funnel. | P1 · Done in V2 drawer | Multiple valid fields exist (`overall_cvr_pct`, `paid_cvr_pct`, funnel CVR). | Drawer headline now reads `ce.funnel.CVR`, exactly matching the funnel row. |
+| B11 | Restore C2O within the CE funnel. | P2 · Done in V2 drawer | V1 `ce.funnel` and TGID funnel include C2O when supplied. | C2O is projected and rendered at CE and TGID grain. |
+| B12 | CVR appears twice with different definitions. | P2 · Done in V2 drawer | LP→Order CVR and Paid CVR have different valid denominators. | The two metrics are explicitly named and defined; ambiguous “Overall CVR” is removed from the drawer. |
 | D5 | Split same-day availability and show comparisons. | P2 · Implemented in live drawer source | BigQuery CLI verification confirms integer `lead_time_days` supports distinct `0 days` and `1–2 days`; the production query emits five bands and matched W0/W-1/LY numerators. | Render source-calculated Orders/Revenue WoW and YoY plus Share; retain AOV in the snapshot contract. |
 | E6 | Prior-week / same-week CE comments are not visible to the GM. | P1 · Bug open | V1 list/sync/cache path exists. | Treat current note and prior history as one visible activity surface; test cache-empty then Sheet-sync repaint. |
 | E9 | CE-keyed store-backed Perf finals, four-week history, drawer Perf row. | P1 · Parked | Rendered `perf_action_hist` exists; live Apps Script deployment is pending. | Preserve rendered sidecar now. Do not introduce a new write path in this slice. |
 | A10 | “GM note” is mislabeled; BGM/BDM/Perf all contribute; support multi-owner comments. | P2 · Planned | Current record has one free-text `author` string. | Relabel to “Team note” now. Multi-owner structure requires a future backward-compatible contract; never infer owners from CE dimensions. |
 | E11 | Granola-integrated CE note history for the last 1–2 weeks. | P1 · Planned | No approved Granola sidecar in schema-v1. | Show a source-aware reserved state in the mock. Integrate only with CE-keyed, dated, attributed records. |
 | G11 | New-CE launch QA scorecard (price/product benchmark %, hero SDA). | P2 · Planned | No scorecard fields in schema-v1. | Conditional reserved section for New CEs; fail closed with “source unavailable.” |
+
+## Live roadmap reconciliation — CE drawer
+
+Checked read-only against `Roadmap!A1:K1000` on 2026-08-16. “Done” means implemented in this CE-drawer worktree; it does not alter the roadmap Sheet’s own Status column.
+
+| Roadmap ID | CE-drawer ask | Implementation state | Evidence / remaining work |
+| --- | --- | --- | --- |
+| A3 | Make WoW / 4-week / 12-week ranges legible. | **Done for drawer** | W0, W-1, WoW and 12-week TY/LY labels are explicit; unavailable histories remain visibly unavailable. |
+| A7 | Add a language-breakdown table. | **Not done** | No approved CE-language source exists in schema-v1. |
+| B4 | Fix top/drawer CVR versus funnel inconsistency. | **Done** | Drawer CVR now uses `ce.funnel.CVR`, matching the LP→Order funnel row. |
+| B11 | Restore C2O in the CE CVR funnel. | **Done** | CE and TGID funnel surfaces retain C2O. |
+| B12 | Disambiguate duplicate CVR definitions. | **Done** | Drawer uses “LP→Order CVR”; Paid uses “Paid CVR,” with denominators stated. |
+| D5 | Lead-time WoW plus finer `0d` / `1–2d` split. | **Done** | Live BQ query and snapshot emit five bands with Orders/Revenue WoW and YoY plus Share. |
+| E6 | Show prior-week / same-week CE comments. | **Not done here — delegated** | Owned by Review mode; intentionally absent from this drawer worktree. |
+| E9 | Store-backed Perf finals, four-week history and drawer row. | **Not done here — delegated** | Review-mode persistence/deployment remains pending. |
+| A10 | Relabel GM comments and support multiple owners. | **Not done here — delegated** | Review mode owns the Team-note model and backward-compatible author contract. |
+| E11 | Add CE-keyed Granola note history. | **Not done** | No approved CE-keyed Granola sidecar is available. |
+| G11 | Add New-CE launch QA scorecard. | **Not done** | Price/product benchmark and hero-SDA fields are not in schema-v1. |
+
+Adjacent roadmap rows E7/E13 concern the Review-mode comment/posting workflow, not the read-only CE evidence drawer, and remain outside this worktree.
 
 ## Iteration-2 enrichment contract
 

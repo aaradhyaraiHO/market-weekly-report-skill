@@ -592,13 +592,6 @@ def build_global(week: str) -> dict:
     _attach_resource_breakdowns(ces_capped, tgids_df, variants_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
     _attach_channels_funnel(ces_capped, chan_df, funnel_df)
 
-    # Overall CVR from funnel data (same as build_snapshot)
-    for ce in ces_capped:
-        cvr = (ce.get("funnel") or {}).get("CVR")
-        wkly = ce.get("weekly") or []
-        if cvr and len(wkly) >= 2:
-            wkly[-1]["overall_cvr_pct"] = cvr.get("current")
-            wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
     print("    drawers attached.")
 
     # ---- 12. No-bid campaigns (global: ENABLED, no tROAS, spend ≥ floor) ----
