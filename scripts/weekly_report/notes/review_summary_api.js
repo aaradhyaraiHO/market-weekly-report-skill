@@ -1,7 +1,35 @@
 import { timingSafeEqual } from "node:crypto";
 
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const MODEL = process.env.REVIEW_AI_MODEL || "gpt-5.6-luna";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const MODEL = process.env.REVIEW_AI_MODEL || "claude-haiku-4-5-20251001";
+
+const WEEKLY_SCHEMA = {
+  type: "object",
+  properties: {
+    findings: { type: "array", items: { type: "string" } },
+    decisions: { type: "array", items: { type: "string" } },
+    open_points: { type: "array", items: { type: "string" } },
+    action_suggestions: { type: "array", items: { type: "object", properties: {
+      text: { type: "string" }, due_date: { type: "string" }, confidence: { type: "string" },
+    }, required: ["text", "due_date", "confidence"], additionalProperties: false } },
+    check_suggestions: { type: "array", items: { type: "object", properties: {
+      text: { type: "string" }, due_date: { type: "string" }, confidence: { type: "string" },
+    }, required: ["text", "due_date", "confidence"], additionalProperties: false } },
+    source_refs: { type: "array", items: { type: "string" } },
+  },
+  required: ["findings", "decisions", "open_points", "action_suggestions", "check_suggestions", "source_refs"],
+  additionalProperties: false,
+};
+
+const SUGGESTIONS_SCHEMA = {
+  type: "object",
+  properties: { suggestions: { type: "array", items: { type: "object", properties: {
+    source_ref: { type: "string" }, kind: { type: "string", enum: ["comment", "action", "check"] },
+    body: { type: "string" }, proposed_due_date: { type: "string" }, confidence: { type: "string" },
+  }, required: ["source_ref", "kind", "body", "proposed_due_date", "confidence"], additionalProperties: false } } },
+  required: ["suggestions"],
+  additionalProperties: false,
+};
 
 function sameSecret(actual, expected) {
   const a = Buffer.from(String(actual || ""));
@@ -37,30 +65,30 @@ function cleanRecords(records) {
   })).filter((record) => record.source_ref && record.body);
 }
 
-async function askModel(instruction, payload) {
-  const token = process.env.OPENAI_API_KEY;
-  if (!token) throw new Error("OpenAI API authentication unavailable");
-  const response = await fetch(OPENAI_URL, {
+async function askModel(instruction, payload, schema) {
+  const token = process.env.ANTHROPIC_API_KEY;
+  if (!token) throw new Error("Anthropic API authentication unavailable");
+  const response = await fetch(ANTHROPIC_URL, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "x-api-key": token, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: instruction },
-        { role: "user", content: JSON.stringify(payload) },
-      ],
+      max_tokens: 2500,
+      system: instruction,
+      messages: [{ role: "user", content: JSON.stringify(payload) }],
+      tools: [{ name: "emit_result", description: "Return the validated review result.", input_schema: schema, strict: true }],
+      tool_choice: { type: "tool", name: "emit_result", disable_parallel_tool_use: true },
     }),
   });
   if (!response.ok) {
     const failure = await response.json().catch(() => ({}));
     const code = failure?.error?.code || failure?.error?.type || "unknown_error";
-    throw new Error(`OpenAI API returned ${response.status} (${code})`);
+    throw new Error(`Anthropic API returned ${response.status} (${code})`);
   }
   const result = await response.json();
-  const content = result?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenAI API returned no content");
-  return JSON.parse(content);
+  const output = result?.content?.find((item) => item?.type === "tool_use" && item?.name === "emit_result")?.input;
+  if (!output || typeof output !== "object") throw new Error("Anthropic API returned no structured result");
+  return output;
 }
 
 export default async function handler(req, res) {
@@ -81,6 +109,7 @@ export default async function handler(req, res) {
         "action_suggestions and check_suggestions (objects with text and optional YYYY-MM-DD due_date), " +
         "and source_refs. Preserve uncertainty, do not infer owners, and cite only supplied source_refs.",
         { identity: body.identity || {}, previous_summary: body.previous_summary || {}, records },
+        WEEKLY_SCHEMA,
       );
       const sourceRefs = strings(result.source_refs, 200).filter((ref) => allowed.has(ref));
       if (!sourceRefs.length) throw new Error("summary omitted valid source references");
@@ -99,6 +128,7 @@ export default async function handler(req, res) {
       "Return JSON {suggestions:[{source_ref,kind,body,proposed_due_date,confidence}]}. " +
       "kind must be comment, action, or check. Use only supplied text and source_refs; never infer an owner.",
       { source_type: body.source_type || "unknown", identity: body.identity || {}, records },
+      SUGGESTIONS_SCHEMA,
     );
     const allowed = new Set(records.map((record) => record.source_ref));
     const output = (Array.isArray(result.suggestions) ? result.suggestions : []).filter((item) =>

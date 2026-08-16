@@ -105,12 +105,13 @@ Optional AI adapter:
   invalid, the UI shows **summary delayed**, raw replies remain stored, and no summary is
   invented. Owners on action suggestions are never inferred.
 - The production adapter is `review_summary_api.js`. Its Vercel function reads the
-  server-only `OPENAI_API_KEY` environment variable and calls the OpenAI API directly.
-  `REVIEW_AI_MODEL` is optional; the default is `gpt-5.6-luna`.
+  server-only `ANTHROPIC_API_KEY` environment variable and calls the Anthropic Messages
+  API directly. `REVIEW_AI_MODEL` is optional; the default is the pinned
+  `claude-haiku-4-5-20251001` model. Strict tool input schemas constrain both response shapes.
 - The report login middleware must exclude only `/api/auth` and
   `/api/review-summary`; use `review_summary_middleware.js` as the matcher reference.
   The webhook itself remains protected by `X-Review-Secret`.
-- If OpenAI authentication, quota, or model access is unavailable, the endpoint fails
+- If Anthropic authentication, quota, or model access is unavailable, the endpoint fails
   closed and the report retains raw attributed Slack replies while showing the summary
   as delayed.
 
