@@ -168,7 +168,7 @@
     #ideal-wbr-review .iw-unmatched { padding: 0 10px; border: 1px solid light-dark(#ecd4aa,#68502c); border-radius: 8px; background: light-dark(#fff9ed,#2d2418); }
     #ideal-wbr-review .iw-drawer { position: absolute; inset: 0; z-index: 25; display: flex; justify-content: flex-end; background: rgba(15,10,19,.46); }
     #ideal-wbr-review .iw-drawerpanel { width: min(900px,96%); min-height: 860px; background: light-dark(#fff,#1f1a25); box-shadow: -18px 0 60px rgba(12,7,17,.28); }
-    #ideal-wbr-review .iw-memorypanel { width: min(430px,96%); min-height: 860px; overflow: auto; background: light-dark(#faf8fb,#201b25); box-shadow: -18px 0 60px rgba(12,7,17,.28); }
+    #ideal-wbr-review .iw-memorypanel { width: min(520px,96%); min-height: 860px; overflow: auto; background: light-dark(#f7f4f8,#201b25); box-shadow: -18px 0 60px rgba(12,7,17,.28); }
     #ideal-wbr-review .iw-memoryhead { position: sticky; top: 0; z-index: 2; padding: 18px; display: flex; gap: 10px; align-items: flex-start; border-bottom: 1px solid light-dark(#dfdce1,#39323f); background: light-dark(#fff,#24202a); }
     #ideal-wbr-review .iw-memoryhead > div { flex: 1; }
     #ideal-wbr-review .iw-memoryhead h2 { margin-bottom: 4px; }
@@ -184,6 +184,38 @@
     #ideal-wbr-review .iw-memoryevent::before { content: ''; position: absolute; left: -4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: #7c15f5; }
     #ideal-wbr-review .iw-memoryevent strong { display: block; color: light-dark(#28232b,#f0ebf3); font-weight: 500; }
     #ideal-wbr-review .iw-memoryevent span { display: block; margin-top: 3px; font-size: 11px; line-height: 1.45; }
+    #ideal-wbr-review .iw-memorytabs { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 11px; background: light-dark(#e9e4eb,#302936); }
+    #ideal-wbr-review .iw-memorytab { min-height: 40px; border: 0; border-radius: 8px; background: transparent; color: light-dark(#716a76,#aaa2b1); font-weight: 500; transition-property: background-color,color,box-shadow,transform; transition-duration: 140ms; }
+    #ideal-wbr-review .iw-memorytab:hover { color: light-dark(#4e0c91,#e0c5f8); }
+    #ideal-wbr-review .iw-memorytab:active { transform: scale(.96); }
+    #ideal-wbr-review .iw-memorytab.active { background: light-dark(#fff,#4a3d54); color: light-dark(#6810c7,#e6cbfb); box-shadow: 0 2px 8px rgba(30,18,37,.1); }
+    #ideal-wbr-review .iw-memorypane[hidden] { display: none; }
+    #ideal-wbr-review .iw-memorynow { padding: 14px; border-radius: 11px; background: light-dark(#211b27,#f2ecf7); color: light-dark(#fff,#211b27); }
+    #ideal-wbr-review .iw-memorynow .iw-eyebrow { color: light-dark(#c99df5,#6810c7); }
+    #ideal-wbr-review .iw-memorynow p { margin: 6px 0 0; line-height: 1.5; text-wrap: pretty; }
+    #ideal-wbr-review .iw-storyline { margin-top: 9px; overflow: hidden; border: 1px solid light-dark(#dfd9e3,#4a4251); border-radius: 10px; background: light-dark(#fff,#28222e); }
+    #ideal-wbr-review .iw-storybutton { width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: start; padding: 11px 12px; border: 0; background: transparent; color: inherit; text-align: left; }
+    #ideal-wbr-review .iw-storybutton:active { transform: scale(.99); }
+    #ideal-wbr-review .iw-storybutton strong { display: block; font-weight: 500; }
+    #ideal-wbr-review .iw-storybutton span span { display: block; margin-top: 3px; color: light-dark(#716a76,#b5adbb); font-size: 11px; line-height: 1.45; text-wrap: pretty; }
+    #ideal-wbr-review .iw-storystate { color: light-dark(#6810c7,#dbbdf7); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    #ideal-wbr-review .iw-storyevidence { padding: 0 12px 11px; color: light-dark(#625c67,#bbb4c0); font-size: 11px; line-height: 1.45; }
+    #ideal-wbr-review .iw-storyevidence[hidden] { display: none; }
+    #ideal-wbr-review .iw-storyevidence div { padding-top: 9px; border-top: 1px solid light-dark(#ebe7ed,#3d3543); }
+    #ideal-wbr-review .iw-memorywork { margin-top: 9px; padding: 11px 12px; display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 9px; border: 1px solid light-dark(#dfd9e3,#4a4251); border-radius: 10px; background: light-dark(#fff,#28222e); }
+    #ideal-wbr-review .iw-memoryworkmark { width: 18px; height: 18px; margin-top: 1px; border: 1px solid light-dark(#a9a1ad,#756b7d); border-radius: 5px; }
+    #ideal-wbr-review .iw-memoryworkmark.done { display: grid; place-items: center; border-color: #7c15f5; background: #7c15f5; color: #fff; font-size: 11px; }
+    #ideal-wbr-review .iw-memorywork strong { display: block; font-weight: 500; }
+    #ideal-wbr-review .iw-memorywork span { display: block; margin-top: 3px; color: light-dark(#716a76,#b5adbb); font-size: 11px; line-height: 1.4; }
+    #ideal-wbr-review .iw-memoryworktime { color: light-dark(#6810c7,#dbbdf7); font-size: 11px; font-weight: 500; white-space: nowrap; }
+    #ideal-wbr-review .iw-memoryweek { margin-top: 10px; overflow: hidden; border: 1px solid light-dark(#dfd9e3,#4a4251); border-radius: 10px; background: light-dark(#fff,#28222e); }
+    #ideal-wbr-review .iw-memoryweekhead { display: flex; justify-content: space-between; padding: 10px 12px; font-weight: 500; }
+    #ideal-wbr-review .iw-memoryweekhead span { color: light-dark(#817985,#aaa2b1); font-size: 11px; font-weight: 400; }
+    #ideal-wbr-review .iw-memorysource { padding: 10px 12px; border-top: 1px solid light-dark(#ebe7ed,#3d3543); }
+    #ideal-wbr-review .iw-memorysource b { display: block; font-weight: 500; }
+    #ideal-wbr-review .iw-memorysource p { margin: 4px 0 0; color: light-dark(#625c67,#bbb4c0); font-size: 11px; line-height: 1.5; text-wrap: pretty; }
+    #ideal-wbr-review .iw-memorysourcetype { color: light-dark(#6810c7,#dbbdf7); font-size: 9px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+    #ideal-wbr-review .iw-memoryrule { margin: 12px 5px 0; color: light-dark(#817985,#aaa2b1); font-size: 10px; line-height: 1.45; text-align: center; }
     #ideal-wbr-review .iw-drawerhead { padding: 17px 18px; border-bottom: 1px solid light-dark(#dfdce1,#39323f); }
     #ideal-wbr-review .iw-drawertitle { display: flex; align-items: center; gap: 10px; }
     #ideal-wbr-review .iw-drawertitle h2 { flex: 1; }
@@ -353,7 +385,74 @@
     </main>
   </div>
 
-  <section class="iw-drawer" id="iw-memory-drawer" aria-label="CE Memory" hidden><div class="iw-memorypanel"><div class="iw-memoryhead"><div><div class="iw-eyebrow">CE 3111 · North America</div><h2>Kennedy Space Center memory</h2><p>Prior reviews, persistent work and attributed evidence.</p></div><button type="button" class="iw-close" data-close aria-label="Close CE Memory">×</button></div><div class="iw-memorybody"><div class="iw-memorysummary"><div class="iw-memorymetric"><strong>4</strong>review weeks</div><div class="iw-memorymetric"><strong>3</strong>open items</div><div class="iw-memorymetric"><strong>4</strong>Slack threads</div></div><div class="iw-memorygroup"><h3>Open work across weeks</h3><div class="iw-memoryevent"><strong>Riskified escalation · follow up 17 Aug</strong><span>Awaiting a concrete resolution; original question and source thread retained.</span></div><div class="iw-memoryevent"><strong>Rocket launch content · decision after 24 Aug</strong><span>Content update requested; paid-support decision remains open.</span></div><div class="iw-memoryevent"><strong>Marketing-change recap · overdue</strong><span>Danny · originated from the current Team note.</span></div></div><div class="iw-memorygroup"><h3>Prior review receipts</h3><div class="iw-memoryevent"><strong>W32 · Monitor</strong><span>ROI healthy and improving. Continue monitoring RPC / ROI. Perf final: Skip.</span></div><div class="iw-memoryevent"><strong>W31 · tROAS intervention</strong><span>Campaign moved from 144% to 150%; negative seasonality applied for one week.</span></div><div class="iw-memoryevent"><strong>W30 · API-code transition</strong><span>New Galaxy codes mapped, pricing updated and pending bookings re-automated.</span></div></div><div class="iw-memorygroup"><h3>Attributed sources</h3><div class="iw-memoryevent"><strong>Team commentary</strong><span>BGM, BDM and Ops entries remain separate with author and timestamp.</span></div><div class="iw-memoryevent"><strong>Perf decisions</strong><span>Four-week finals remain distinct from general notes.</span></div><div class="iw-memoryevent"><strong>Slack + Granola</strong><span>Permalinks and accepted meeting suggestions are retained; no source-free summaries.</span></div></div></div></div></section>
+  <section class="iw-drawer" id="iw-memory-drawer" aria-label="CE Memory" hidden>
+    <div class="iw-memorypanel">
+      <div class="iw-memoryhead">
+        <div><div class="iw-eyebrow">CE 3111 · North America</div><h2>Kennedy Space Center memory</h2><p>The continuing story, work taken and every attributed record.</p></div>
+        <button type="button" class="iw-close" data-close aria-label="Close CE Memory">×</button>
+      </div>
+      <div class="iw-memorybody">
+        <div class="iw-memorytabs" role="tablist" aria-label="CE Memory views">
+          <button type="button" class="iw-memorytab active" role="tab" aria-selected="true" data-memory-view="story">Story</button>
+          <button type="button" class="iw-memorytab" role="tab" aria-selected="false" data-memory-view="work">Work</button>
+          <button type="button" class="iw-memorytab" role="tab" aria-selected="false" data-memory-view="sources">Sources</button>
+        </div>
+
+        <div class="iw-memorypane" data-memory-pane="story">
+          <div class="iw-memorynow"><div class="iw-eyebrow">What is happening now</div><p>ROI remains healthy. The active concern is conversion—especially C2O and Riskified—while the AAKR promotion, new commercial terms and partner discussions continue.</p></div>
+
+          <div class="iw-storyline">
+            <button type="button" class="iw-storybutton" aria-expanded="true"><span><strong>Conversion &amp; Riskified</strong><span>C2O has weakened across several weeks; the Fraud &amp; Payments response remains pending.</span></span><span class="iw-storystate">Active</span></button>
+            <div class="iw-storyevidence"><div>W31–W32 · The conversion change is concentrated in C2O and linked to increased Riskified blocks. <span class="iw-link">4 original records →</span></div></div>
+          </div>
+          <div class="iw-storyline">
+            <button type="button" class="iw-storybutton" aria-expanded="false"><span><strong>Commercial terms &amp; promotion</strong><span>32% TR is live. AAKR improved CVR, while the resulting AOV decline offset the gain.</span></span><span class="iw-storystate">Monitoring</span></button>
+            <div class="iw-storyevidence" hidden><div>W29–W32 · TR change, AAKR, price parity, B2B reselling and the marketing side-letter remain connected. <span class="iw-link">7 original records →</span></div></div>
+          </div>
+          <div class="iw-storyline">
+            <button type="button" class="iw-storybutton" aria-expanded="false"><span><strong>Paid scale &amp; efficiency</strong><span>Campaigns scaled down after CVR pressure; paid ROI subsequently returned near target.</span></span><span class="iw-storystate">Stable</span></button>
+            <div class="iw-storyevidence" hidden><div>W29–W32 · Paid scale changed in response to conversion and efficiency rather than a new traffic issue. <span class="iw-link">6 original records →</span></div></div>
+          </div>
+          <div class="iw-storyline">
+            <button type="button" class="iw-storybutton" aria-expanded="false"><span><strong>Partner relationship</strong><span>Delaware North proposed marketing changes and discussed B2B and hybrid fulfilment.</span></span><span class="iw-storystate">Active</span></button>
+            <div class="iw-storyevidence" hidden><div>W32 · The team planned a recap and follow-up after the latest partner meeting. <span class="iw-link">3 original records →</span></div></div>
+          </div>
+          <div class="iw-memoryrule">AI-organised story · every statement links to its original weekly comment, Slack reply or meeting source.</div>
+        </div>
+
+        <div class="iw-memorypane" data-memory-pane="work" hidden>
+          <div class="iw-memorysummary"><div class="iw-memorymetric"><strong>3</strong>open items</div><div class="iw-memorymetric"><strong>1</strong>scheduled check</div><div class="iw-memorymetric"><strong>4</strong>Perf records</div></div>
+          <div class="iw-memorywork"><div class="iw-memoryworkmark"></div><div><strong>Monitor RPC and ROI</strong><span>BGM follow-up · carried from W31</span></div><div class="iw-memoryworktime">23 Aug</div></div>
+          <div class="iw-memorywork"><div class="iw-memoryworkmark"></div><div><strong>Riskified C2O investigation</strong><span>Awaiting Fraud &amp; Payments response · source thread retained</span></div><div class="iw-memoryworktime">Open</div></div>
+          <div class="iw-memorywork"><div class="iw-memoryworkmark"></div><div><strong>Marketing-change recap</strong><span>Danny · originated from Team commentary</span></div><div class="iw-memoryworktime">Overdue</div></div>
+          <div class="iw-memorywork"><div class="iw-memoryworkmark done">✓</div><div><strong>Campaign scale-down</strong><span>Perf record · ROI subsequently recovered toward target</span></div><div class="iw-memoryworktime">Done</div></div>
+          <div class="iw-memorywork"><div class="iw-memoryworkmark done">✓</div><div><strong>No additional Perf change</strong><span>W30 decision · skip; CM2 decline was not ROI-led</span></div><div class="iw-memoryworktime">Record</div></div>
+          <div class="iw-memoryrule">One action lifecycle is retained across weeks; status changes do not become duplicate tasks.</div>
+        </div>
+
+        <div class="iw-memorypane" data-memory-pane="sources" hidden>
+          <div class="iw-memoryweek">
+            <div class="iw-memoryweekhead">Week 32 · 10 Aug <span>3 attributed records</span></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">BGM observation</div><b>Pari</b><p>AAKR went live. CVR improved, but the lower AOV offset the gain.</p></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Team response</div><b>Danny · BDM</b><p>Delaware North proposed three marketing changes and discussed B2B reselling and hybrid fulfilment.</p></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Slack response</div><b>Royan · Ops</b><p>Preferred-slot inventory is healthy. No Galaxy development is required. <span class="iw-link">Source thread ↗</span></p></div>
+          </div>
+          <div class="iw-memoryweek">
+            <div class="iw-memoryweekhead">Week 31 · 3 Aug <span>3 attributed records</span></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">BGM observation</div><b>Pari</b><p>The TR gain was offset by conversion deterioration concentrated in C2O.</p></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Perf response</div><b>Deeksha · Perf</b><p>Campaigns scaled down after the CVR decline; paid ROI was maintained near target.</p></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Action record</div><b>Current Sheet</b><p>Monitor RPC and ROI; no additional Perf intervention recorded.</p></div>
+          </div>
+          <div class="iw-memoryweek">
+            <div class="iw-memoryweekhead">Week 30 · 27 Jul <span>4 attributed records</span></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Commercial update</div><b>Team commentary</b><p>32% TR went live; AAKR and branded-bidding changes remained in progress.</p></div>
+            <div class="iw-memorysource"><div class="iw-memorysourcetype">Older history</div><p><span class="iw-link">Load every prior weekly comment and response →</span></p></div>
+          </div>
+          <div class="iw-memoryrule">Original wording is preserved. Accepted AI pointers remain linked to the Slack or Granola source that produced them.</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="iw-overlay" id="iw-slack-modal" aria-label="CE-scoped Slack thread" hidden>
     <div class="iw-modal"><div class="iw-modalhead"><div><h2>Ask in Slack</h2><p class="iw-why">One persistent Slack thread per CE. Start from the suggestion or write freely, tag anyone and post—the BGM is never restricted to a prescribed recipient or question.</p></div><button type="button" class="iw-close" data-close aria-label="Close">×</button></div>
@@ -407,6 +506,16 @@
       root.querySelector('#iw-cancel-check').addEventListener('click', () => { root.querySelector('#iw-check-composer').hidden = true; });
       root.querySelector('#iw-save-check').addEventListener('click', () => { const text = root.querySelector('#iw-check-text').value.trim(); const date = root.querySelector('#iw-check-date').value; if(!text || !date){ notify('Add the return question and date'); return; } const chosen = new Date(`${date}T00:00:00`); const readable = chosen.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); root.querySelector('#iw-manual-check-month').textContent = chosen.toLocaleDateString('en-GB',{month:'short'}).toUpperCase(); root.querySelector('#iw-manual-check-day').textContent = String(chosen.getDate()); root.querySelector('#iw-manual-check-copy').textContent = text; root.querySelector('#iw-manual-check-meta').textContent = `Scheduled ${readable} · manually added · returns outside signal buckets`; root.querySelector('#iw-manual-check').hidden = false; root.querySelector('#iw-check-composer').hidden = true; updateTaskCount(); notify('Scheduled check added to this CE'); });
       root.querySelector('#iw-open-memory').addEventListener('click', () => { root.querySelector('#iw-memory-drawer').hidden = false; });
+      root.querySelectorAll('.iw-memorytab').forEach(tab => tab.addEventListener('click', () => {
+        root.querySelectorAll('.iw-memorytab').forEach(item => { const selected = item === tab; item.classList.toggle('active', selected); item.setAttribute('aria-selected', String(selected)); });
+        root.querySelectorAll('.iw-memorypane').forEach(pane => { pane.hidden = pane.dataset.memoryPane !== tab.dataset.memoryView; });
+      }));
+      root.querySelectorAll('.iw-storybutton').forEach(button => button.addEventListener('click', () => {
+        const evidence = button.nextElementSibling;
+        const opening = evidence.hidden;
+        evidence.hidden = !opening;
+        button.setAttribute('aria-expanded', String(opening));
+      }));
 
       root.querySelector('#iw-ask-slack').addEventListener('click', () => { root.querySelector('#iw-slack-modal').hidden = false; });
       root.querySelector('#iw-capture-granola').addEventListener('click', () => { root.querySelector('#iw-granola-start').hidden = false; root.querySelector('#iw-granola-results').hidden = true; root.querySelector('#iw-granola-modal').hidden = false; });
