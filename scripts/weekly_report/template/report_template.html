@@ -402,6 +402,7 @@ svg.spark{display:block}
 .granola-source{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:var(--ink-faint);font-size:10px}.granola-source a{color:var(--purps);font-weight:700;text-decoration:none}
 .granola-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px}.granola-controls select,.granola-controls input{min-height:40px;padding:8px 10px;border:1px solid var(--rule-dark);border-radius:10px;background:#fff;font-family:var(--sans);font-size:11.5px}
 .granola-controls .btn{min-height:40px}.granola-accepted{padding:10px 13px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--ink-soft)}.granola-accepted b{color:var(--green)}
+.granola-attach{padding:10px 13px;border-top:1px solid var(--rule);background:#fcfbfd}.granola-attach summary{cursor:pointer;color:var(--purps);font-size:11.5px;font-weight:700;list-style:none}.granola-attach summary::-webkit-details-marker{display:none}.granola-attach summary:before{content:"＋";margin-right:6px}.granola-link-row{display:flex;gap:7px;margin-top:10px}.granola-link-row input{min-width:0;min-height:40px;flex:1;padding:8px 10px;border:1px solid var(--rule-dark);border-radius:10px;font-family:var(--sans);font-size:11.5px}.granola-link-note{margin-top:7px;color:var(--ink-faint);font-size:10px;line-height:1.45}.granola-queued{padding:10px 13px;border-top:1px solid var(--rule);color:var(--ink-soft);font-size:11px}.granola-queued b{color:var(--purps)}
 .weekly-history-pair{padding:11px 0;border-top:1px solid var(--rule)}
 .weekly-history-pair:first-child{border-top:0}
 .weekly-history-label{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--purps);margin-top:7px}
@@ -628,6 +629,7 @@ let weeklyCommentaryData = {};
 let weeklyCommentaryLoaded = {};
 let reviewSourceData = {};
 let reviewSourceLoaded = {};
+let reviewGranolaInbox = {};
 
 function slugKey(){ return MARKETS[mi].meta.market_slug; }
 function curWeek(){ return MARKETS[mi].meta.week_start || ''; }
@@ -692,9 +694,20 @@ function putSourceRows(ceId,rows){
 function pullGranolaSuggestions(ceId){
   if(!REVIEW_API)return Promise.resolve([]);
   const id=weeklyIdentity(ceId);
-  return REVIEW_API.granolaSuggestions({market_slug:id.market_slug,ce_id:id.ce_id,week:id.week_start},true).then(res=>{
-    putSourceRows(ceId,res.suggestions||[]);reviewSourceLoaded[id.market_slug+'::'+id.ce_id]=true;return res.suggestions||[];
+  return Promise.all([
+    REVIEW_API.granolaSuggestions({market_slug:id.market_slug,ce_id:id.ce_id,week:id.week_start},true),
+    REVIEW_API.sourceInbox({market_slug:id.market_slug,ce_id:id.ce_id,week:id.week_start,source_type:'granola'},false)
+  ]).then(results=>{
+    putSourceRows(ceId,results[0].suggestions||[]);
+    reviewGranolaInbox[id.market_slug+'::'+id.ce_id]=(results[1].inbox||[]).filter(r=>r.match_status==='awaiting_import');
+    reviewSourceLoaded[id.market_slug+'::'+id.ce_id]=true;return results[0].suggestions||[];
   });
+}
+function attachGranolaMeeting(ceId,url){
+  if(!REVIEW_API)return Promise.reject(new Error('Review backend unavailable'));
+  return REVIEW_API.attachGranolaMeeting(Object.assign({},weeklyIdentity(ceId),{
+    source_url:url,submitted_by:getAuthor()
+  })).then(()=>pullGranolaSuggestions(ceId));
 }
 function decideGranolaSuggestion(ceId,suggestion,decision,fields){
   if(!REVIEW_API)return Promise.reject(new Error('Review backend unavailable'));
@@ -2906,6 +2919,7 @@ function weeklyThreadHtml(row){
 function granolaSuggestionsHtml(ceId){
   const key=slugKey()+'::'+String(ceId),all=sourceRows(ceId).filter(r=>String(r.week_start)===String(curWeek()));
   const pending=all.filter(r=>r.status==='pending'),accepted=all.filter(r=>r.status==='approved');
+  const queued=(reviewGranolaInbox[key]||[]).filter(r=>String(r.week_start)===String(curWeek()));
   const loaded=!!reviewSourceLoaded[key];
   let body='';
   if(!loaded) body='<div class="granola-empty">Checking Granola for CE-linked meeting notes…</div>';
@@ -2924,8 +2938,13 @@ function granolaSuggestionsHtml(ceId){
     body+=accepted.map(s=>'<div class="granola-accepted"><b>Accepted</b> · '+esc(s.decision_destination||s.kind||'commentary')+' · '+
       esc(s.accepted_body||s.body||'')+(s.source_url?' · <a class="hist-link" href="'+esc(s.source_url)+'" target="_blank">source ↗</a>':'')+'</div>').join('');
   }
+  body+=queued.map(item=>'<div class="granola-queued"><b>Importing meeting</b> · attached by '+esc(item.source_author||'BGM')+
+    (item.source_url?' · <a class="hist-link" href="'+esc(item.source_url)+'" target="_blank">open ↗</a>':'')+'</div>').join('');
+  body+='<details class="granola-attach"><summary>Meeting not found? Add Granola link</summary><div class="granola-link-row">'+
+    '<input class="granola-link-input" type="url" inputmode="url" placeholder="https://notes.granola.ai/t/…" aria-label="Granola meeting link">'+
+    '<button class="btn btn-save granola-link-submit">Add meeting</button></div><div class="granola-link-note">Use this after the meeting only when automatic matching missed it. The meeting stays source-linked and suggestions still require your confirmation.</div></details>';
   return '<div class="granola-state" id="granolaState"><div class="granola-head"><strong>✦ Granola meeting capture</strong><span class="source-pill">AI · source-linked</span><span class="granola-meta">'+
-    (pending.length?pending.length+' pending':accepted.length?accepted.length+' accepted':loaded?'No match':'Checking')+'</span></div>'+body+'</div>';
+    (pending.length?pending.length+' pending':queued.length?queued.length+' importing':accepted.length?accepted.length+' accepted':loaded?'No match':'Checking')+'</span></div>'+body+'</div>';
 }
 function weeklyHistoryHtml(ceId){
   const rows=weeklyRows(ceId).filter(r=>String(r.week_start)!==String(curWeek())).sort((a,b)=>String(b.week_start).localeCompare(String(a.week_start)));
@@ -3190,6 +3209,18 @@ function openDrawer(ceId){
         ignore.disabled=false;ignore.textContent='Ignore';document.getElementById('cmtSaved').textContent=(err&&err.message)||'Granola suggestion could not be ignored';});
     };
   });
+  const granolaLinkButton=document.querySelector('#granolaState .granola-link-submit');
+  if(granolaLinkButton)granolaLinkButton.onclick=()=>{
+    const input=document.querySelector('#granolaState .granola-link-input');
+    setAuthor(authorIn.value);
+    if(!getAuthor().trim()){authorIn.focus();document.getElementById('cmtSaved').textContent='add your name first';return;}
+    if(!input.value.trim()){input.focus();return;}
+    granolaLinkButton.disabled=true;granolaLinkButton.textContent='Adding…';
+    attachGranolaMeeting(ceId,input.value.trim()).then(()=>openDrawer(ceId)).catch(err=>{
+      granolaLinkButton.disabled=false;granolaLinkButton.textContent='Add meeting';
+      document.getElementById('cmtSaved').textContent=(err&&err.message)||'Granola meeting could not be attached';
+    });
+  };
   updateSyncBadge();
 
   const histT=document.getElementById('histToggle');

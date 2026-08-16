@@ -419,6 +419,7 @@ function reviewMutationGate(action,p){
     "review_comment_upsert","review_comment_delete","review_work_upsert",
     "review_receipt_upsert","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
+    "review_granola_link_submit",
     "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync"];
   if(mutations.indexOf(action)<0)return null;
   var decision=reviewAccessDecision(p);
@@ -686,6 +687,29 @@ function reviewSourceReconcile(p){
   return jsonResp({ok:true,inbox_item:inbox,suggestion:result.suggestion});
 }
 
+// Manual fallback for meetings that were not matched automatically. The link
+// is stored in the existing source inbox; a trusted Granola importer hydrates
+// it later and emits the normal source-linked suggestions. Nothing enters the
+// CE commentary or work tables before that extraction and BGM confirmation.
+function reviewGranolaLinkSubmit(p){
+  var err=reviewRequired(p,["market_slug","ce_id","ce_name","week_start","source_url","submitted_by"]);if(err)return err;
+  var url=String(p.source_url||"").trim();
+  if(!/^https:\/\/([a-z0-9-]+\.)*granola\.ai\//i.test(url))
+    return jsonResp({ok:false,error:"Paste a valid Granola meeting link"});
+  var existing=reviewFind("inbox",function(r){return r.source_type==="granola"&&r.source_url===url&&
+    r.market_slug===p.market_slug&&String(r.candidate_ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start);});
+  if(existing)return jsonResp({ok:true,duplicate:true,inbox_item:existing});
+  var ref="granola-link:"+Utilities.base64EncodeWebSafe(url).slice(0,48);
+  var rec={source_item_id:reviewId("src"),source_type:"granola",source_ref:ref,source_url:url,
+    source_author:p.submitted_by,occurred_at:p.occurred_at||"",market_slug:p.market_slug,
+    week_start:ymd(p.week_start),candidate_ce_id:String(p.ce_id),candidate_ce_name:p.ce_name,
+    match_confidence:"bgm_attached",match_status:"awaiting_import",kind:"comment",
+    body:"Granola meeting attached by "+p.submitted_by+"; awaiting source extraction.",created_at:reviewNow(),
+    reconciled_by:"",reconciled_at:""};
+  reviewWrite("inbox",null,rec);
+  return jsonResp({ok:true,inbox_item:rec});
+}
+
 function reviewSuggestionDecide(p) {
   var err = reviewRequired(p, ["suggestion_id","decision","decided_by"]); if (err) return err;
   if (["approved","rejected"].indexOf(p.decision) < 0)
@@ -865,13 +889,16 @@ function doGet(e) {
     return jsonResp({ok:true,suggestions:suggestionPage.items,next_before:suggestionPage.next_before});
   }
   if (action === "review_source_inbox") {
-    var inbox=reviewFilter(reviewRows("inbox"),p);
+    var inboxFilter=Object.assign({},p);delete inboxFilter.ce_id;
+    var inbox=reviewFilter(reviewRows("inbox"),inboxFilter);
+    if(p.ce_id)inbox=inbox.filter(function(r){return String(r.candidate_ce_id)===String(p.ce_id);});
     if(!reviewBool(p.include_reconciled))inbox=inbox.filter(function(r){return !r.reconciled_at;});
     return jsonResp({ok:true,inbox:inbox});
   }
   // External source ingestion is POST-only so its shared secret is never put in a URL.
   if (action === "review_source_ingest") return jsonResp({ok:false,error:"review_source_ingest requires POST"});
   if (action === "review_source_reconcile") return reviewSourceReconcile(p);
+  if (action === "review_granola_link_submit") return reviewGranolaLinkSubmit(p);
   if (action === "review_suggestion_decide") return reviewSuggestionDecide(p);
   if (action === "review_weekly_list") {
     var weekly=reviewFilter(reviewRows("weekly"),p);
@@ -913,6 +940,7 @@ function doPost(e) {
     return jsonResp({ok:true,results:results});
   }
   if (action === "review_source_ingest") return reviewSuggestionIngest(payload);
+  if (action === "review_granola_link_submit") return reviewGranolaLinkSubmit(payload);
   if (action === "review_suggestion_decide") return reviewSuggestionDecide(payload);
   return jsonResp({ok:false,error:"unsupported POST action: " + action});
 }

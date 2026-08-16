@@ -28,6 +28,19 @@
         });
     }
 
+    function post(action, params) {
+      return fetch(baseUrl, {
+        method: "POST",
+        headers: {"content-type": "application/json"},
+        credentials: "same-origin",
+        body: JSON.stringify(Object.assign({action: action}, params || {}))
+      }).then(function(response) { return response.json(); })
+        .then(function(body) {
+          if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
+          return body;
+        });
+    }
+
     return {
       comments: function(identity, includeDeleted) {
         return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted}));
@@ -74,6 +87,11 @@
         return request("review_suggestion_list", Object.assign({}, identity, {
           source_type: "granola", include_decided: !!includeDecided
         }));
+      },
+      attachGranolaMeeting: function(link) {
+        required(link.source_url, "source_url");
+        required(link.submitted_by, "submitted_by");
+        return post("review_granola_link_submit", link);
       },
       decideSuggestion: function(decision) { return request("review_suggestion_decide", decision); },
       sourceInbox: function(identity, includeReconciled) {

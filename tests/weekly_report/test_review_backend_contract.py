@@ -121,6 +121,7 @@ class ReviewBackendContract(unittest.TestCase):
             "sourceInbox",
             "reconcileSource",
             "granolaSuggestions",
+            "attachGranolaMeeting",
         ):
             self.assertRegex(self.client, rf"\b{method}: function")
 
@@ -179,8 +180,8 @@ class ReviewBackendContract(unittest.TestCase):
         template = TEMPLATE.read_text()
         self.assertIn('jwtVerify(token', proxy)
         self.assertIn('createHmac("sha256"', proxy)
-        self.assertIn('target.searchParams.set("actor_email", actor.email)', proxy)
-        self.assertIn('target.searchParams.set("actor_sig", signature)', proxy)
+        self.assertIn('params.set("actor_email", actor.email)', proxy)
+        self.assertIn('params.set("actor_sig", signature)', proxy)
         self.assertIn('action") === "whoami"', proxy)
         self.assertIn("function reviewSignedActorEmail(p)", self.backend)
         self.assertIn("computeHmacSha256Signature(reviewActorCanonicalParams(p), secret)", self.backend)
@@ -203,6 +204,19 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("decideGranolaSuggestion", template)
         self.assertIn("Add to commentary", template)
         self.assertIn("Schedule check", template)
+        self.assertIn("Meeting not found? Add Granola link", template)
+        self.assertIn("attachGranolaMeeting", template)
+
+    def test_manual_granola_link_is_a_source_inbox_fallback(self):
+        self.assertIn("function reviewGranolaLinkSubmit(p)", self.backend)
+        self.assertIn('match_status:"awaiting_import"', self.backend)
+        self.assertIn('match_confidence:"bgm_attached"', self.backend)
+        self.assertIn('action === "review_granola_link_submit"', self.backend)
+        self.assertIn("candidate_ce_id", self.backend)
+        self.assertIn('return post("review_granola_link_submit", link)', self.client)
+        proxy = PROXY.read_text()
+        self.assertIn('["GET", "POST"].includes(req.method)', proxy)
+        self.assertIn('body: JSON.stringify(Object.fromEntries(params.entries()))', proxy)
 
     def test_granola_adapter_is_server_side_and_fails_closed(self):
         adapter = GRANOLA_ADAPTER.read_text()

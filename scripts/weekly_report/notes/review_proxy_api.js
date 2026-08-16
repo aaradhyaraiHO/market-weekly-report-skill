@@ -33,7 +33,7 @@ async function authenticatedActor(req) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "GET required" });
+  if (!["GET", "POST"].includes(req.method)) return res.status(405).json({ ok: false, error: "GET or POST required" });
 
   let actor;
   try { actor = await authenticatedActor(req); } catch (_) { actor = null; }
@@ -41,7 +41,9 @@ export default async function handler(req, res) {
 
   const base = `https://${req.headers.host || "market-notebook.vercel.app"}`;
   const incoming = new URL(req.url, base);
-  if (incoming.searchParams.get("action") === "whoami")
+  const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {})) : null;
+  const params = req.method === "POST" ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value ?? "")])) : incoming.searchParams;
+  if (params.get("action") === "whoami")
     return res.status(200).json({ ok: true, actor_email: actor.email, actor_name: actor.name });
 
   const signingSecret = process.env.REVIEW_PROXY_SECRET ||
@@ -49,16 +51,19 @@ export default async function handler(req, res) {
   if (!signingSecret) return res.status(503).json({ ok: false, error: "review proxy signing unavailable" });
 
   const target = new URL(APPS_SCRIPT_URL);
-  incoming.searchParams.forEach((value, key) => target.searchParams.set(key, value));
-  target.searchParams.set("actor_email", actor.email);
-  target.searchParams.set("actor_ts", String(Math.floor(Date.now() / 1000)));
+  params.set("actor_email", actor.email);
+  params.set("actor_ts", String(Math.floor(Date.now() / 1000)));
   const signature = createHmac("sha256", signingSecret)
-    .update(canonicalParams(target.searchParams))
+    .update(canonicalParams(params))
     .digest("hex");
-  target.searchParams.set("actor_sig", signature);
+  params.set("actor_sig", signature);
+  if (req.method === "GET") params.forEach((value, key) => target.searchParams.set(key, value));
 
   try {
-    const upstream = await fetch(target, { method: "GET", redirect: "follow" });
+    const upstream = await fetch(target, req.method === "POST" ? {
+      method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
+      body: JSON.stringify(Object.fromEntries(params.entries()))
+    } : { method: "GET", redirect: "follow" });
     const text = await upstream.text();
     res.status(upstream.status);
     res.setHeader("content-type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
