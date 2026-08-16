@@ -612,7 +612,7 @@ let syncStatus = SYNC_OK ? 'idle' : 'off';
 // notesData[slug][ce_id] = [ {week_start, note, author, updated, slack_channel,
 //                             slack_thread_ts, slack_permalink}, … ]  (any order)
 let notesData = {};
-const REVIEW_API = SYNC_OK && window.createWeeklyReviewApi ? window.createWeeklyReviewApi(NOTES_URL) : null;
+const REVIEW_API = window.createWeeklyReviewApi ? window.createWeeklyReviewApi('/api/review') : null;
 let weeklyCommentaryData = {};
 let weeklyCommentaryLoaded = {};
 

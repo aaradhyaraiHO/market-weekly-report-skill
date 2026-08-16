@@ -345,9 +345,42 @@ function reviewBool(v) { return String(v || "").toLowerCase() === "true"; }
 function reviewId(prefix) { return prefix + "_" + Utilities.getUuid(); }
 function reviewNow() { return new Date().toISOString(); }
 
+function reviewActorCanonicalParams(p) {
+  return Object.keys(p || {}).filter(function(key) { return key !== "actor_sig"; }).sort()
+    .map(function(key) { return encodeURIComponent(key) + "=" + encodeURIComponent(String(p[key] == null ? "" : p[key])); })
+    .join("\n");
+}
+
+function reviewHex(bytes) {
+  return bytes.map(function(value) {
+    return ("0" + ((value + 256) % 256).toString(16)).slice(-2);
+  }).join("");
+}
+
+function reviewSafeEqual(a, b) {
+  a = String(a || ""); b = String(b || "");
+  if (!a || a.length !== b.length) return false;
+  var mismatch = 0;
+  for (var i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+function reviewSignedActorEmail(p) {
+  var email = String(p.actor_email || "").trim().toLowerCase();
+  var timestamp = parseInt(p.actor_ts || "0", 10);
+  var signature = String(p.actor_sig || "").toLowerCase();
+  var secret = PropertiesService.getScriptProperties().getProperty("REVIEW_PROXY_SECRET") ||
+    PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_SECRET") || "";
+  if (!email || !timestamp || !signature || !secret) return "";
+  if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) return "";
+  var expected = reviewHex(Utilities.computeHmacSha256Signature(reviewActorCanonicalParams(p), secret));
+  return reviewSafeEqual(signature, expected) ? email : "";
+}
+
 function reviewActorEmail(p) {
   var email = "";
   try { email = Session.getActiveUser().getEmail() || ""; } catch (err) {}
+  if (!email) email = reviewSignedActorEmail(p);
   if (!email && reviewBool(PropertiesService.getScriptProperties().getProperty("REVIEW_ALLOW_ACTOR_PARAM")))
     email = p.actor_email || "";
   return String(email).trim().toLowerCase();

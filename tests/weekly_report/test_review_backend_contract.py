@@ -12,6 +12,7 @@ CLIENT = ROOT / "scripts" / "weekly_report" / "notes" / "review_client.js"
 INGEST = ROOT / "scripts" / "weekly_report" / "notes" / "ingest_review_sources.py"
 TEMPLATE = ROOT / "scripts" / "weekly_report" / "template" / "report_template.html"
 RENDER = ROOT / "scripts" / "weekly_report" / "render.py"
+PROXY = ROOT / "scripts" / "weekly_report" / "notes" / "review_proxy_api.js"
 
 
 def load_ingest():
@@ -167,6 +168,19 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("reviewMutationGate(action,payload)", self.backend)
         self.assertIn("function reviewTrustedAuthor(p,fallback)", self.backend)
         self.assertIn("next.bgm_author=trustedAuthor", self.backend)
+
+    def test_signed_same_origin_proxy_supplies_verified_bgm_identity(self):
+        proxy = PROXY.read_text()
+        template = TEMPLATE.read_text()
+        self.assertIn('jwtVerify(token', proxy)
+        self.assertIn('createHmac("sha256"', proxy)
+        self.assertIn('target.searchParams.set("actor_email", actor.email)', proxy)
+        self.assertIn('target.searchParams.set("actor_sig", signature)', proxy)
+        self.assertIn('action") === "whoami"', proxy)
+        self.assertIn("function reviewSignedActorEmail(p)", self.backend)
+        self.assertIn("computeHmacSha256Signature(reviewActorCanonicalParams(p), secret)", self.backend)
+        self.assertIn("if (!email) email = reviewSignedActorEmail(p);", self.backend)
+        self.assertIn("window.createWeeklyReviewApi('/api/review')", template)
 
     def test_renderer_embeds_shared_review_client_and_commentary_ui(self):
         template = TEMPLATE.read_text()
