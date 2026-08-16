@@ -41,6 +41,15 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(view["all_ces"][0]["revenue"], 70_000)
         self.assertEqual(view["all_ces"][0]["wow_abs"], -30_000)
 
+    def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
+        view = headline_v2.build_headline_view(self.market)
+        revenue = next(metric for metric in view["detail"]["metrics"] if metric["key"] == "revenue")
+
+        self.assertAlmostEqual(revenue["wm1"], 1_000_000)
+        self.assertAlmostEqual(revenue["delta_abs"], 100_000)
+        self.assertEqual(revenue["delta_pct"], 10.0)
+        self.assertTrue(all(point["ly"] is None for point in revenue["series"]))
+
     def test_current_goal_adds_monthly_outlook(self):
         goal = {
             "month": "2026-08",
@@ -127,7 +136,9 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="targets-section"', html)
         self.assertIn('id="target-summary"', html)
         self.assertIn('id="target-comparisons"', html)
-        self.assertIn('id="target-contributors"', html)
+        self.assertNotIn('id="target-contributors"', html)
+        self.assertIn('class="drawer-kpi"', html)
+        self.assertLess(html.index("Key metrics · 12-week trend"), html.index("Performance &amp; pacing"))
         self.assertIn("function renderTargets", html)
         self.assertIn("vs same week last year", html)
         self.assertIn("Projected month-end", html)
@@ -276,6 +287,9 @@ class HeadlineV2Contract(unittest.TestCase):
         )
         self.assertFalse(next(metric for metric in metrics if metric["key"] == "orders")["paid"])
         self.assertTrue(next(metric for metric in metrics if metric["key"] == "paid_clicks")["paid"])
+        revenue_metric = next(metric for metric in metrics if metric["key"] == "revenue")
+        self.assertTrue(revenue_metric["has_ly"])
+        self.assertTrue(any(point["ly"] is not None for point in revenue_metric["series"]))
 
         ce = next(row for row in view["all_ces"] if row["buckets"])
         self.assertIn("subcategory", ce)

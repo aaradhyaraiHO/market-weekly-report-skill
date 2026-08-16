@@ -134,16 +134,31 @@ def _metric_views(headlines, rows, weekly_ly):
                 "ty": row_value(row, weekly_field),
                 "ly": row_value(ly_row, weekly_field),
             })
+        w0 = _number(metric.get("w0"))
+        wm1 = _number(metric.get("wm1"))
+        delta_abs = _number(metric.get("delta_abs"))
+        delta_pct = _number(metric.get("delta_pct"))
+        # Some legacy V1 snapshots retain the authoritative WoW percentage but
+        # omit its displayed W-1 operand. Reconstruct that operand for the V2
+        # evidence table only; the source snapshot and V1 calculation remain
+        # untouched. Fail closed for the non-invertible -100% case.
+        if wm1 is None and w0 is not None:
+            if delta_abs is not None:
+                wm1 = w0 - delta_abs
+            elif delta_pct is not None and delta_pct != -100:
+                wm1 = round(w0 / (1.0 + delta_pct / 100.0), 6)
+        if delta_abs is None and w0 is not None and wm1 is not None:
+            delta_abs = w0 - wm1
         views.append({
             "key": key,
             "label": metric.get("label") or default_label,
             "format": value_format,
             "paid": key in _PAID_METRICS,
             "has_ly": metric.get("has_ly") is not False and any(row["ly"] is not None for row in series),
-            "w0": _number(metric.get("w0")),
-            "wm1": _number(metric.get("wm1")),
-            "delta_abs": _number(metric.get("delta_abs")),
-            "delta_pct": _number(metric.get("delta_pct")),
+            "w0": w0,
+            "wm1": wm1,
+            "delta_abs": delta_abs,
+            "delta_pct": delta_pct,
             "series": series,
         })
     return views
