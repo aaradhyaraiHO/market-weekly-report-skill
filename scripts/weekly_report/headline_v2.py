@@ -149,7 +149,7 @@ def _metric_views(headlines, rows, weekly_ly):
     return views
 
 
-def _mover_views(headlines, direction):
+def _mover_views(headlines, direction, ce_target_pacing=None):
     trend = (headlines.get("week_header") or {}).get("trend") or {}
     rich_key = "top_droppers" if direction == "drop" else "top_gainers"
     fallback_key = "top_drops" if direction == "drop" else "top_gainers"
@@ -166,6 +166,7 @@ def _mover_views(headlines, direction):
         else "V1 raw WoW revenue ranking"
     )
     result = []
+    ce_target_pacing = ce_target_pacing or {}
     for rank, row in enumerate(source, start=1):
         delta_4w = _number(row.get("delta_4w"))
         wow_abs = _number(row.get("raw_wow"))
@@ -179,8 +180,11 @@ def _mover_views(headlines, direction):
         else:
             candidates = [(value, lens) for value, lens in candidates if value > 0]
             primary = max(candidates, default=(wow_abs or delta_4w, "movement"), key=lambda item: item[0])
+        ce_id = row.get("ce_id")
+        target = ce_target_pacing.get(str(ce_id)) or {}
+        yoy_growth = _number(row.get("yoy_growth"))
         result.append({
-            "ce_id": row.get("ce_id"),
+            "ce_id": ce_id,
             "ce_name": row.get("ce_name") or "Unnamed experience",
             "primary_delta": _number(primary[0]),
             "primary_lens": primary[1],
@@ -188,7 +192,11 @@ def _mover_views(headlines, direction):
             "wow_abs": wow_abs,
             "ly_wow": _number(row.get("ly_wow")),
             "revenue": _number(row.get("w0_rev")),
-            "yoy_growth": _number(row.get("yoy_growth")),
+            "yoy_growth": yoy_growth,
+            "yoy_pct": yoy_growth * 100.0 if yoy_growth is not None else None,
+            "target_mtd_gap": _number(target.get("mtd_gap")),
+            "target_mtd_gap_pct": _number(target.get("mtd_gap_pct")),
+            "monthly_target": _number(target.get("monthly_goal")),
             "tag": row.get("tag"),
             # The V1 flow engine owns the seasonal classification. V2 must not
             # reproduce that threshold logic or silently change its verdict.
@@ -440,6 +448,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
             "prior_month_revenue", "prior_mtd_revenue", "ly_month_revenue", "ly_mtd_revenue",
             "mtd_vs_last_month_pct", "mtd_vs_last_year_pct", "forecast_vs_last_month_pct",
             "forecast_vs_last_year_pct", "ce_target_coverage_pct", "ce_gap_contributors",
+            "ce_target_pacing",
             "goal_grain", "goal_row_count", "forecast_method",
             "retrieved_at",
         )})
@@ -464,6 +473,9 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
                 ly = row["revenue"] / (1.0 + yoy / 100.0)
         chart.append({"week": row.get("week"), "revenue": row["revenue"], "revenue_ly": ly})
 
+    current_ly_revenue = chart[-1]["revenue_ly"] if chart else None
+    ce_target_pacing = monthly.get("ce_target_pacing") or {}
+
     return {
         "market": meta.get("market", "Unknown market"),
         "market_slug": meta.get("market_slug"),
@@ -473,6 +485,8 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         "revenue": revenue,
         "wow_abs": wow_abs,
         "wow_pct": wow_pct,
+        "yoy_abs": revenue - current_ly_revenue if current_ly_revenue is not None else None,
+        "weekly_ly_revenue": current_ly_revenue,
         "vs_trailing_four_pct": _percent_change(revenue, trailing_four),
         "trailing_four_revenue": trailing_four,
         "yoy_pct": yoy_pct,
@@ -481,8 +495,8 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         "monthly": monthly,
         "chart": chart,
         "movers": {
-            "drops": _mover_views(headlines, "drop"),
-            "gains": _mover_views(headlines, "gain"),
+            "drops": _mover_views(headlines, "drop", ce_target_pacing),
+            "gains": _mover_views(headlines, "gain", ce_target_pacing),
         },
         "detail": {
             "metrics": _metric_views(headlines, rows, weekly_ly),

@@ -162,7 +162,7 @@
     .mover-title h3 { margin:0; font-size:14px; }
     .mover-title p { margin:3px 0 0; color:var(--muted); font-size:10px; }
     .mover-list { display:grid; }
-    .mover-columns,.mover-row { display:grid; grid-template-columns:18px minmax(70px,1fr) 56px 56px 92px; align-items:center; gap:5px; }
+    .mover-columns,.mover-row { display:grid; grid-template-columns:18px minmax(88px,1.35fr) repeat(4,minmax(48px,.7fr)); align-items:center; gap:5px; }
     .mover-columns { min-height:42px; padding:0 10px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--soft); }
     .mover-column-sort { min-height:40px; padding:0; border:0; color:inherit; background:transparent; font-size:9px; font-weight:700; letter-spacing:.04em; line-height:1.15; text-align:right; text-transform:uppercase; text-wrap:balance; cursor:pointer; transition-property:color,transform; transition-duration:120ms; }
     .mover-column-sort.name { text-align:left; }
@@ -479,7 +479,16 @@
       .target-note { flex-direction:column; }
       .target-table th:nth-child(2),.target-table td:nth-child(2) { display:none; }
       .mover-head { align-items:flex-start; }
-      .mover-columns,.mover-row { grid-template-columns:18px minmax(68px,1fr) 52px 52px 82px; gap:4px; padding-inline:9px; }
+      .mover-columns { display:none; }
+      .mover-row { grid-template-columns:18px repeat(4,minmax(0,1fr)); gap:10px 6px; padding:16px 12px; }
+      .mover-row > .mover-rank { grid-column:1; grid-row:1; }
+      .mover-row > div:nth-child(2) { grid-column:2/-1; grid-row:1; }
+      .mover-row > .mover-cell { grid-row:2; padding-top:18px; position:relative; text-align:left; }
+      .mover-row > .mover-cell:nth-child(3) { grid-column:2; }
+      .mover-row > .mover-cell:nth-child(4) { grid-column:3; }
+      .mover-row > .mover-cell:nth-child(5) { grid-column:4; }
+      .mover-row > .mover-cell:nth-child(6) { grid-column:5; }
+      .mover-row > .mover-cell::before { content:attr(data-label); position:absolute; top:0; left:0; color:var(--muted); font-size:8px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
       .drawer-header,.drawer-body { padding-left:18px; padding-right:18px; }
       .drawer-overview { grid-template-columns:1fr; margin-inline:-18px; }
       .drawer-stat { padding:14px 18px; }
@@ -547,7 +556,7 @@
             <footer class="data-note"><span class="data-note-copy"><span id="source-note"></span><span>Weekly calculations remain sourced from the frozen report snapshot.</span></span></footer>
           </div></details>
         </article>
-        <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>WoW and trailing 4-week movement shown together, with last-year seasonality context.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Source ranking preserved</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Source ranking preserved</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
+        <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>V1 ranking is preserved; each move is shown against last week, recent pace, last year and August target pace.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Bottom 5 · source ranking preserved</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Top 5 · source ranking preserved</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
       </div>
       <section class="all-ce-view report-view" id="all-ces-view" hidden aria-labelledby="all-ces-title">
         <header class="all-ce-hero"><div><div class="section-kicker">Portfolio explorer</div><h2 id="all-ces-title">All combined entities</h2><p>Every V1 All-CE metric and workflow remains available. Search, group and compare the portfolio before opening a CE deep dive.</p></div><div class="ce-summary"><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-count">—</strong><span class="ce-summary-label">CEs shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-revenue">—</strong><span class="ce-summary-label">Revenue shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-share">—</strong><span class="ce-summary-label">Market share</span></div></div></header>
@@ -665,12 +674,13 @@
       }
       function renderTargets(item) {
         const monthly=item.monthly,summary=document.getElementById('target-summary'),comparisons=document.getElementById('target-comparisons'),contributors=document.getElementById('target-contributors'),method=document.getElementById('target-method'),source=document.getElementById('target-source');
+        const previousWeekRevenue=item.revenue-(item.wow_abs||0);
+        const weeklyCards=`<article class="target-card"><div class="target-card-label">vs last week</div><div class="target-card-value ${tone(item.wow_abs)}">${signedMoney(item.wow_abs)} · ${pct(item.wow_pct)}</div><p class="target-card-copy">Previous week <strong>${money(previousWeekRevenue)}</strong></p></article><article class="target-card"><div class="target-card-label">vs same week last year</div><div class="target-card-value ${tone(item.yoy_abs)}">${signedMoney(item.yoy_abs)} · ${pct(item.yoy_pct)}</div><p class="target-card-copy">Weekday-aligned LY <strong>${money(item.weekly_ly_revenue)}</strong></p></article>`;
         if(monthly.state!=='current'||monthly.expected_mtd_revenue==null){
-          summary.innerHTML='<div class="target-card" style="grid-column:1/-1"><div class="target-card-label">Target analysis unavailable</div><p class="target-card-copy">A current approved goal with pacing inputs is required. Weekly report calculations remain available.</p></div>';
+          summary.innerHTML=weeklyCards+`<article class="target-card"><div class="target-card-label">Month to date</div><div class="target-card-value">—</div><p class="target-card-copy">Current monthly revenue is unavailable.</p></article><article class="target-card"><div class="target-card-label">Projected vs target</div><div class="target-card-value">—</div><p class="target-card-copy">A current approved target is required.</p></article>`;
           comparisons.innerHTML='';contributors.innerHTML='<div class="mover-empty">No CE target-gap attribution is available.</div>';method.textContent='No target pacing inferred.';source.textContent=monthly.source||'No approved source attached.';return;
         }
-        const previousWeekRevenue=item.revenue-(item.wow_abs||0),paceDelta=monthly.run_rate_weekly_revenue-monthly.required_weekly_revenue;
-        summary.innerHTML=`<article class="target-card"><div class="target-card-label">WoW movement</div><div class="target-card-value ${tone(item.wow_abs)}">${signedMoney(item.wow_abs)} · ${pct(item.wow_pct)}</div><p class="target-card-copy">Previous week <strong>${money(previousWeekRevenue)}</strong></p></article><article class="target-card"><div class="target-card-label">${monthLabel(monthly.month)} MTD</div><div class="target-card-value">${money(monthly.mtd_revenue)}</div><p class="target-card-copy">Revenue through <strong>${dateLabel(monthly.as_of)}</strong></p></article><article class="target-card"><div class="target-card-label">MTD context</div><div class="target-card-value target-card-dual"><span class="${tone(monthly.mtd_vs_last_year_pct)}">${pct(monthly.mtd_vs_last_year_pct)} YoY</span><span class="${tone(monthly.mtd_vs_last_month_pct)}">${pct(monthly.mtd_vs_last_month_pct)} MoM</span></div><p class="target-card-copy">LY <strong>${money(monthly.ly_mtd_revenue)}</strong> · last month <strong>${money(monthly.prior_mtd_revenue)}</strong></p></article><article class="target-card"><div class="target-card-label">Weekly pace ${paceDelta>=0?'cushion':'gap'}</div><div class="target-card-value ${tone(paceDelta)}">${signedMoney(paceDelta)}/wk</div><p class="target-card-copy">Required <strong>${money(monthly.required_weekly_revenue)}</strong> · recent <strong>${money(monthly.run_rate_weekly_revenue)}</strong></p></article>`;
+        summary.innerHTML=weeklyCards+`<article class="target-card"><div class="target-card-label">${monthLabel(monthly.month)} MTD</div><div class="target-card-value">${money(monthly.mtd_revenue)}</div><p class="target-card-copy"><span class="${tone(monthly.mtd_vs_last_year_pct)}">${pct(monthly.mtd_vs_last_year_pct)} YoY</span> · through <strong>${dateLabel(monthly.as_of)}</strong></p></article><article class="target-card"><div class="target-card-label">Projected month-end</div><div class="target-card-value">${money(monthly.forecast_revenue)}</div><p class="target-card-copy"><span class="${tone(monthly.forecast_attainment_pct-100)}">${monthly.forecast_attainment_pct.toFixed(0)}% of target</span> · goal <strong>${money(monthly.monthly_goal)}</strong></p></article>`;
         comparisons.innerHTML=[['MTD vs same period last year',monthly.mtd_vs_last_year_pct],['MTD vs same period last month',monthly.mtd_vs_last_month_pct],['Projected month vs full month LY',monthly.forecast_vs_last_year_pct],['Projected month vs full last month',monthly.forecast_vs_last_month_pct]].map(([label,value])=>`<div class="target-comparison"><span>${label}</span><strong class="${tone(value)}">${pct(value)}</strong></div>`).join('');
         const rows=monthly.ce_gap_contributors||[];
         contributors.innerHTML=rows.length?`<table class="target-table"><thead><tr><th>Combined entity</th><th>MTD</th><th>Expected</th><th>Gap</th></tr></thead><tbody>${rows.map(row=>`<tr><td title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</td><td>${money(row.mtd_revenue)}</td><td>${money(row.expected_mtd_revenue)}</td><td class="negative">${signedMoney(row.mtd_gap)}</td></tr>`).join('')}</tbody></table>`:'<div class="mover-empty">No targeted CE is behind its calendar-linear MTD pace.</div>';
@@ -680,10 +690,10 @@
       }
       function renderMovers(item, kind) {
         const list=document.getElementById(`${kind}-list`),rows=[...(item.movers[kind]||[])],sort=moverSorts[kind],mode=sort.key,dir=sort.dir;
-        if(mode!=='rank')rows.sort((a,b)=>{const av=mode==='name'?String(a.ce_name):mode==='wow'?a.wow_abs:mode==='fourWeek'?a.delta_4w:String(a.seasonality_tag||''),bv=mode==='name'?String(b.ce_name):mode==='wow'?b.wow_abs:mode==='fourWeek'?b.delta_4w:String(b.seasonality_tag||'');if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
+        if(mode!=='rank')rows.sort((a,b)=>{const value=row=>mode==='name'?String(row.ce_name):mode==='wow'?row.wow_abs:mode==='fourWeek'?row.delta_4w:mode==='yoy'?row.yoy_pct:row.target_mtd_gap,av=value(a),bv=value(b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
         if (!rows.length) { list.innerHTML='<div class="mover-empty">No qualifying movers are available for this market and week.</div>'; return; }
-        const headings=[['name','CE'],['wow','WoW'],['fourWeek','4W avg'],['seasonality','vs LY']],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'',tagClass=tag=>tag==='against season'?'against':tag==='seasonal'?'seasonal':tag==='mostly TY'?'mostly-ty':'no-ly';
-        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,10).map((row,index)=>`<div class="mover-row" title="${escapeHtml(row.ranking_method||'V1 source ranking')}"><span class="mover-rank">${mode==='rank'?(row.source_rank||index+1):index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</div></div><div class="mover-cell ${tone(row.wow_abs)}">${signedMoney(row.wow_abs)}</div><div class="mover-cell ${tone(row.delta_4w)}">${signedMoney(row.delta_4w)}</div><span class="mover-seasonality ${tagClass(row.seasonality_tag)}" title="Last-year seasonality context: ${escapeHtml(row.seasonality_tag||'not available')}">${escapeHtml(row.seasonality_tag||'—')}</span></div>`).join('');
+        const headings=[['name','CE'],['wow','vs LW'],['fourWeek','vs L4W'],['yoy','vs LY'],['target','vs Aug target']],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'';
+        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,5).map((row,index)=>`<div class="mover-row" title="${escapeHtml(row.ranking_method||'V1 source ranking')}"><span class="mover-rank">${mode==='rank'?(row.source_rank||index+1):index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</div></div><div class="mover-cell ${tone(row.wow_abs)}" data-label="vs LW">${signedMoney(row.wow_abs)}</div><div class="mover-cell ${tone(row.delta_4w)}" data-label="vs L4W">${signedMoney(row.delta_4w)}</div><div class="mover-cell ${tone(row.yoy_pct)}" data-label="vs LY" title="Same-week revenue versus last year; V1 seasonality: ${escapeHtml(row.seasonality_tag||'not available')}">${pct(row.yoy_pct,0)}</div><div class="mover-cell ${row.monthly_target==null?'':tone(row.target_mtd_gap)}" data-label="vs target" title="MTD revenue versus calendar-prorated August target pace">${row.monthly_target==null?'No target':signedMoney(row.target_mtd_gap)}</div></div>`).join('');
       }
       function setSelectOptions(select, values, allLabel, unavailableLabel, selectedValue='') {
         select.innerHTML=`<option value="">${values.length?allLabel:unavailableLabel}</option>`+values.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
@@ -982,12 +992,12 @@
         const item=payload.headlines[index], monthly=item.monthly, month=monthly.month ? monthLabel(monthly.month) : 'Monthly';
         document.getElementById('market-name').textContent=item.market;
         document.getElementById('week-label').textContent=`Weekly market review · ${dateLabel(item.week_start)}–${dateLabel(item.week_end)} ${item.week_end.slice(0,4)}`;
-        const weeklyMove=`${movement(item.wow_abs)} ${money(Math.abs(item.wow_abs||0))} (${pct(item.wow_pct)}) versus the previous week`;
         const verdict=document.getElementById('verdict'), monthlyCopy=document.getElementById('monthly-copy'), outlookLabel=document.getElementById('outlook-label'), outlookValue=document.getElementById('outlook-value'), outlookSub=document.getElementById('outlook-sub'), freshness=document.getElementById('freshness');
-        verdict.textContent=`${money(item.revenue)} revenue`;
-        document.getElementById('weekly-copy').textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)} ${item.week_end.slice(0,4)} · ${weeklyMove}.`;
+        verdict.textContent=`${money(item.revenue)} weekly revenue`;
+        document.getElementById('weekly-copy').textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)} ${item.week_end.slice(0,4)}.`;
         freshness.className=`freshness ${monthly.state}`;
         const metrics=document.getElementById('metrics');
+        metrics.hidden=true;
         if (monthly.state === 'current') {
           const attainment=monthly.forecast_attainment_pct;
           metrics.hidden=true;
@@ -996,14 +1006,12 @@
           metrics.style.setProperty('--metric-count','3');
           metrics.innerHTML=[metric('Month to date',money(monthly.mtd_revenue)),metric(`${month} forecast vs LY`,pct(monthly.forecast_vs_last_year_pct),tone(monthly.forecast_vs_last_year_pct)),metric(`${month} forecast vs LM`,pct(monthly.forecast_vs_last_month_pct),tone(monthly.forecast_vs_last_month_pct))].join('');
         } else if (monthly.state === 'stale') {
-          metrics.hidden=false;
           monthlyCopy.hidden=false;
           monthlyCopy.textContent='The last monthly goal record is too old to support an ahead-or-behind verdict.';
           outlookLabel.textContent='Last available outlook'; outlookValue.textContent=monthly.forecast_attainment_pct == null?'—':`${monthly.forecast_attainment_pct.toFixed(0)}%`; outlookSub.textContent='Shown as context, not used for the verdict'; freshness.textContent=`Stale · ${dateLabel(monthly.as_of)}`;
           metrics.style.setProperty('--metric-count','3');
           metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
         } else {
-          metrics.hidden=false;
           monthlyCopy.hidden=false;
           monthlyCopy.textContent='Monthly target comparison is unavailable. Existing weekly evidence remains visible without inferring pacing.';
           outlookLabel.textContent='Forecast vs goal'; outlookValue.textContent='—'; outlookSub.textContent='Awaiting an approved goal source'; freshness.textContent='Target unavailable';
@@ -1017,7 +1025,7 @@
       weekSelect.value=String(Math.max(0,payload.headlines.length-1));
       weekSelect.addEventListener('change',()=>render(Number(weekSelect.value)));
       document.querySelectorAll('[data-report-view]').forEach(button=>button.addEventListener('click',()=>{ const view=button.dataset.reportView; document.getElementById('overview-view').hidden=view!=='overview'; document.getElementById('all-ces-view').hidden=view!=='all-ces'; document.querySelectorAll('[data-report-view]').forEach(item=>{ const active=item===button; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current'); }); }));
-      document.querySelector('.attention').addEventListener('click',event=>{const button=event.target.closest('[data-mover-sort][data-mover-kind]');if(!button)return;const kind=button.dataset.moverKind,state=moverSorts[kind],key=button.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'||key==='seasonality'?1:(kind==='drops'?1:-1);}renderMovers(currentHeadline(),kind);});
+      document.querySelector('.attention').addEventListener('click',event=>{const button=event.target.closest('[data-mover-sort][data-mover-kind]');if(!button)return;const kind=button.dataset.moverKind,state=moverSorts[kind],key=button.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'?1:(kind==='drops'?1:-1);}renderMovers(currentHeadline(),kind);});
       document.getElementById('ce-search').addEventListener('input',event=>{ceState.search=event.target.value;ceState.page=1;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.getElementById('ce-filter-toggle').addEventListener('click',()=>{ceState.filtersOpen=!ceState.filtersOpen;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.getElementById('ce-country').addEventListener('change',event=>{ceState.country=event.target.value;ceState.page=1;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});

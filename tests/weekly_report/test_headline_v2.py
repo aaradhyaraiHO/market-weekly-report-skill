@@ -59,6 +59,25 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(monthly["forecast_attainment_pct"], 70)
         self.assertAlmostEqual(monthly["mtd_attainment_pct"], 28.619375, places=5)
 
+    def test_current_goal_enriches_movers_by_cid_without_changing_rank(self):
+        goal = {
+            "month": "2026-08",
+            "monthly_goal": 1_872_857.14,
+            "mtd_revenue": 536_000,
+            "forecast_revenue": 1_311_000,
+            "as_of": "2026-08-08",
+            "ce_target_pacing": {
+                "101": {"mtd_gap": -12_500, "mtd_gap_pct": -18.2, "monthly_goal": 210_000}
+            },
+        }
+        view = headline_v2.build_headline_view(self.market, goal)
+        first_drop = view["movers"]["drops"][0]
+
+        self.assertEqual(first_drop["source_rank"], 1)
+        self.assertEqual(first_drop["target_mtd_gap"], -12_500)
+        self.assertEqual(first_drop["target_mtd_gap_pct"], -18.2)
+        self.assertEqual(first_drop["monthly_target"], 210_000)
+
     def test_stale_goal_cannot_drive_current_verdict(self):
         goal = {
             "month": "2026-08",
@@ -108,15 +127,21 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="target-comparisons"', html)
         self.assertIn('id="target-contributors"', html)
         self.assertIn("function renderTargets", html)
+        self.assertIn("vs same week last year", html)
+        self.assertIn("Projected month-end", html)
+        self.assertIn("weekly revenue`", html)
         self.assertIn('data-mover-kind="${kind}"', html)
         self.assertIn('data-mover-sort="${key}"', html)
         self.assertIn("const moverSorts", html)
         self.assertNotIn('data-mover-lens=', html)
         self.assertIn("['name','CE']", html)
-        self.assertIn("['wow','WoW']", html)
-        self.assertIn("['fourWeek','4W avg']", html)
-        self.assertIn("['seasonality','vs LY']", html)
-        self.assertIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
+        self.assertIn("['wow','vs LW']", html)
+        self.assertIn("['fourWeek','vs L4W']", html)
+        self.assertIn("['yoy','vs LY']", html)
+        self.assertIn("['target','vs Aug target']", html)
+        self.assertIn("rows.slice(0,5)", html)
+        self.assertIn("row.target_mtd_gap", html)
+        self.assertNotIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
         self.assertNotIn('class="sort-select" data-mover-sort', html)
         self.assertIn('id="all-ces-view"', html)
         self.assertIn("const CE_METRICS", html)

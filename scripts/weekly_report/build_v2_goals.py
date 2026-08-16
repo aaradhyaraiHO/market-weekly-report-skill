@@ -133,6 +133,7 @@ def build_market_goal(market):
     }
     ce_goals = fetch.market_ce_monthly_goals(market_name, month).to_dict("records")
     contributors = []
+    ce_target_pacing = {}
     ce_target_total = 0.0
     for row in ce_goals:
         ce_goal = _number(row.get("monthly_goal"))
@@ -143,15 +144,18 @@ def build_market_goal(market):
         actual = ce_revenue.get(ce_id, 0.0)
         expected = ce_goal * expected_mtd_share
         gap = actual - expected
+        pacing = {
+            "ce_id": ce_id,
+            "ce_name": row.get("ce_name") or ce_id,
+            "mtd_revenue": actual,
+            "expected_mtd_revenue": expected,
+            "mtd_gap": gap,
+            "mtd_gap_pct": _percent_change(actual, expected),
+            "monthly_goal": ce_goal,
+        }
+        ce_target_pacing[ce_id] = pacing
         if gap < 0:
-            contributors.append({
-                "ce_id": ce_id,
-                "ce_name": row.get("ce_name") or ce_id,
-                "mtd_revenue": actual,
-                "expected_mtd_revenue": expected,
-                "mtd_gap": gap,
-                "monthly_goal": ce_goal,
-            })
+            contributors.append(pacing)
     contributors.sort(key=lambda row: row["mtd_gap"])
 
     result = {
@@ -197,6 +201,7 @@ def build_market_goal(market):
         "forecast_vs_last_year_pct": _percent_change(forecast_revenue, ly_month_revenue),
         "ce_target_coverage_pct": 100.0 * ce_target_total / monthly_goal if monthly_goal else None,
         "ce_gap_contributors": contributors[:5],
+        "ce_target_pacing": ce_target_pacing,
     }
     return market_slug, result
 
