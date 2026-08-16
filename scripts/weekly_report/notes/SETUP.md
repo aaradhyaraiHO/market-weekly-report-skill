@@ -41,9 +41,10 @@ Slack #mkt-* channel  (one thread per market × CE)
   boundary for that week's replies, so replies cannot leak into two weekly summaries.
 - **Scan Slack** → imports new human replies as pending source-exact suggestions. A BGM
   must approve/edit before they become commentary or work.
-- **Granola** → sends CE-keyed suggestions through the same source-ingestion endpoint.
-  Unmatched records are rejected because `market_slug`, `ce_id`, `week_start` and source
-  identity are mandatory.
+- **Granola** → the server-side `granola_review_adapter.js` accepts a normalized meeting
+  event, extracts source-linked commentary/action/check suggestions, and sends them through
+  the same source-ingestion endpoint. Exact CE matches appear as pending BGM suggestions.
+  Ambiguous or unmatched records are held in reconciliation and cannot enter CE Memory.
 - **View thread** → the Post button becomes a deep-link once a thread exists.
 - **CE Memory** → returns new records plus labelled legacy notes/actions. Perf finals are
   not copied: the UI reads the existing read-only `ce.perf_action_hist` snapshot field.
@@ -123,6 +124,19 @@ External source ingress:
   records enter `review_source_inbox` and cannot affect CE memory until reconciled.
 - `ingest_review_sources.py` is the dry-run-first server bridge. It accepts source JSON and
   only posts with `--apply`, `WR_REVIEW_INGEST_SECRET`, and the Apps Script URL configured.
+
+Automatic Granola adapter:
+
+- Deploy `granola_review_adapter.js` as `/api/granola-review` beside `/api/review-summary`.
+- Set server-only `GRANOLA_WEBHOOK_SECRET`, `REVIEW_APPS_SCRIPT_URL`,
+  `REVIEW_INGEST_SECRET`, `REVIEW_AI_WEBHOOK_URL`, and the existing
+  `REVIEW_AI_WEBHOOK_SECRET_V2`.
+- The upstream Granola automation sends `{meeting, matches}`. A match is only exact when it
+  includes `market_slug`, `week_start`, `ce_id`, and `match_status: "exact"`.
+- No exact match fails closed into `review_source_inbox`; nothing is attached to a CE.
+- The CE drawer polls source suggestions with the normal review refresh. The BGM may edit,
+  choose Commentary / Action / Scheduled check, accept, or ignore. Owners remain blank unless
+  the BGM explicitly sets them later.
 
 Without `SLACK_BOT_TOKEN`, Save still works; Post returns an error and the
 button shows "Post failed".

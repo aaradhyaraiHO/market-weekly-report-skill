@@ -391,6 +391,17 @@ svg.spark{display:block}
 .weekly-thread-source{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:10.5px;color:var(--ink-faint)}
 .weekly-thread-source a{color:var(--purps);text-decoration:none;font-weight:700}
 .weekly-sync-state{font-size:10.5px;font-weight:700;color:var(--amber)}
+.granola-state{margin-top:10px;border:1px solid #dcc4f7;border-radius:12px;background:#fff;overflow:hidden}
+.granola-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:#faf6ff;border-bottom:1px solid #eadcf8}
+.granola-head strong{font-size:12.5px}.granola-head .source-pill{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4a154b;background:#f3e7f4;border-radius:999px;padding:3px 7px}
+.granola-head .granola-meta{margin-left:auto;font-size:10px;font-weight:600;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.granola-empty{padding:12px 13px;color:var(--ink-faint);font-size:11.5px;line-height:1.5}
+.granola-card{padding:12px 13px;border-top:1px solid var(--rule)}.granola-card:first-of-type{border-top:0}
+.granola-card textarea{width:100%;min-height:68px;padding:9px 11px;border:1px solid var(--rule-dark);border-radius:10px;resize:vertical;font-family:var(--sans);font-size:12px;line-height:1.5;color:var(--ink)}
+.granola-card textarea:focus,.granola-card select:focus,.granola-card input:focus{outline:2px solid var(--purps);outline-offset:1px}
+.granola-source{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;color:var(--ink-faint);font-size:10px}.granola-source a{color:var(--purps);font-weight:700;text-decoration:none}
+.granola-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px}.granola-controls select,.granola-controls input{min-height:40px;padding:8px 10px;border:1px solid var(--rule-dark);border-radius:10px;background:#fff;font-family:var(--sans);font-size:11.5px}
+.granola-controls .btn{min-height:40px}.granola-accepted{padding:10px 13px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--ink-soft)}.granola-accepted b{color:var(--green)}
 .weekly-history-pair{padding:11px 0;border-top:1px solid var(--rule)}
 .weekly-history-pair:first-child{border-top:0}
 .weekly-history-label{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--purps);margin-top:7px}
@@ -615,6 +626,8 @@ let notesData = {};
 const REVIEW_API = window.createWeeklyReviewApi ? window.createWeeklyReviewApi('/api/review') : null;
 let weeklyCommentaryData = {};
 let weeklyCommentaryLoaded = {};
+let reviewSourceData = {};
+let reviewSourceLoaded = {};
 
 function slugKey(){ return MARKETS[mi].meta.market_slug; }
 function curWeek(){ return MARKETS[mi].meta.week_start || ''; }
@@ -670,6 +683,23 @@ function startWeeklySlack(ceId,text){
 function syncWeeklySlack(ceId){
   if(!REVIEW_API)return Promise.resolve(null);
   return REVIEW_API.syncWeeklyDiscussion(weeklyIdentity(ceId)).then(res=>{if(res.weekly)putWeekly(res.weekly);return res;});
+}
+function sourceRows(ceId){ return ((reviewSourceData[slugKey()]||{})[String(ceId)]||[]); }
+function putSourceRows(ceId,rows){
+  const slug=slugKey();reviewSourceData[slug]=reviewSourceData[slug]||{};
+  reviewSourceData[slug][String(ceId)]=(rows||[]).filter(r=>r.source_type==='granola');
+}
+function pullGranolaSuggestions(ceId){
+  if(!REVIEW_API)return Promise.resolve([]);
+  const id=weeklyIdentity(ceId);
+  return REVIEW_API.granolaSuggestions({market_slug:id.market_slug,ce_id:id.ce_id,week:id.week_start},true).then(res=>{
+    putSourceRows(ceId,res.suggestions||[]);reviewSourceLoaded[id.market_slug+'::'+id.ce_id]=true;return res.suggestions||[];
+  });
+}
+function decideGranolaSuggestion(ceId,suggestion,decision,fields){
+  if(!REVIEW_API)return Promise.reject(new Error('Review backend unavailable'));
+  return REVIEW_API.decideSuggestion(Object.assign({suggestion_id:suggestion.suggestion_id,decision:decision,
+    decided_by:getAuthor(),actor_email:getActorEmail()},fields||{})).then(()=>pullGranolaSuggestions(ceId));
 }
 
 function cacheKey(){ return 'wr_notes::'+slugKey(); }
@@ -2873,6 +2903,30 @@ function weeklyThreadHtml(row){
       (row.slack_post_permalink?' <a href="'+esc(row.slack_post_permalink)+'" target="_blank">Open full thread ↗</a>':'')+
       '<span class="weekly-sync-state">'+esc(state)+'</span></div></div>';
 }
+function granolaSuggestionsHtml(ceId){
+  const key=slugKey()+'::'+String(ceId),all=sourceRows(ceId).filter(r=>String(r.week_start)===String(curWeek()));
+  const pending=all.filter(r=>r.status==='pending'),accepted=all.filter(r=>r.status==='approved');
+  const loaded=!!reviewSourceLoaded[key];
+  let body='';
+  if(!loaded) body='<div class="granola-empty">Checking Granola for CE-linked meeting notes…</div>';
+  else if(!all.length) body='<div class="granola-empty">No Granola meeting is matched to this CE and review week. Matching runs automatically; ambiguous mentions stay in reconciliation.</div>';
+  else {
+    body+=pending.map(s=>'<div class="granola-card" data-suggestion-id="'+esc(s.suggestion_id)+'">'+
+      '<div class="granola-source"><span>'+esc(s.source_author||'Meeting capture')+'</span><span>·</span><span>'+esc(s.kind||'comment')+' suggestion</span>'+
+      (s.source_url?' <a href="'+esc(s.source_url)+'" target="_blank" rel="noopener">Open source ↗</a>':'')+'</div>'+
+      '<textarea class="granola-edit" aria-label="Edit Granola suggestion">'+esc(s.body||'')+'</textarea>'+
+      '<div class="granola-controls"><select class="granola-destination" aria-label="Suggestion destination">'+
+        '<option value="comment"'+(s.kind==='comment'?' selected':'')+'>Add to commentary</option>'+
+        '<option value="action"'+(s.kind==='action'?' selected':'')+'>Create action</option>'+
+        '<option value="check"'+(s.kind==='check'?' selected':'')+'>Schedule check</option></select>'+
+        '<input class="granola-date" type="date" aria-label="Due or review date" value="'+esc(s.proposed_due_date||'')+'"'+(s.kind==='comment'?' style="display:none"':'')+'>'+
+        '<button class="btn btn-save granola-accept">Accept</button><button class="btn btn-clear granola-ignore">Ignore</button></div></div>').join('');
+    body+=accepted.map(s=>'<div class="granola-accepted"><b>Accepted</b> · '+esc(s.decision_destination||s.kind||'commentary')+' · '+
+      esc(s.accepted_body||s.body||'')+(s.source_url?' · <a class="hist-link" href="'+esc(s.source_url)+'" target="_blank">source ↗</a>':'')+'</div>').join('');
+  }
+  return '<div class="granola-state" id="granolaState"><div class="granola-head"><strong>✦ Granola meeting capture</strong><span class="source-pill">AI · source-linked</span><span class="granola-meta">'+
+    (pending.length?pending.length+' pending':accepted.length?accepted.length+' accepted':loaded?'No match':'Checking')+'</span></div>'+body+'</div>';
+}
 function weeklyHistoryHtml(ceId){
   const rows=weeklyRows(ceId).filter(r=>String(r.week_start)!==String(curWeek())).sort((a,b)=>String(b.week_start).localeCompare(String(a.week_start)));
   if(!rows.length)return '';
@@ -3029,6 +3083,7 @@ function openDrawer(ceId){
         '</div>'+
         '<div class="cmt-meta" style="margin-top:8px"><span id="cmtSaved" class="cmt-saved">'+esc(curWhen)+'</span></div>'+
         weeklyThreadHtml(weeklyCur)+
+        granolaSuggestionsHtml(ceId)+
         histHtml+
       '</div>'+
       actionLogHtml+
@@ -3110,6 +3165,31 @@ function openDrawer(ceId){
           console.error('post failed:', err); });
     };
   }
+  document.querySelectorAll('#granolaState .granola-card').forEach(card=>{
+    const suggestion=sourceRows(ceId).find(s=>String(s.suggestion_id)===String(card.dataset.suggestionId));
+    if(!suggestion)return;
+    const accept=card.querySelector('.granola-accept'),ignore=card.querySelector('.granola-ignore');
+    const destinationSelect=card.querySelector('.granola-destination'),dateInput=card.querySelector('.granola-date');
+    destinationSelect.onchange=()=>{dateInput.style.display=destinationSelect.value==='comment'?'none':'';};
+    accept.onclick=()=>{
+      setAuthor(authorIn.value);
+      if(!getAuthor().trim()){authorIn.focus();document.getElementById('cmtSaved').textContent='add your name first';return;}
+      accept.disabled=true;accept.textContent='Adding…';
+      const destination=destinationSelect.value;
+      decideGranolaSuggestion(ceId,suggestion,'approved',{destination:destination,
+        body:card.querySelector('.granola-edit').value,due_date:dateInput.value,
+        owner:'',work_status:destination==='check'?'scheduled':'needs_action'})
+        .then(()=>openDrawer(ceId)).catch(err=>{accept.disabled=false;accept.textContent='Accept';
+          document.getElementById('cmtSaved').textContent=(err&&err.message)||'Granola suggestion could not be added';});
+    };
+    ignore.onclick=()=>{
+      setAuthor(authorIn.value);
+      if(!getAuthor().trim()){authorIn.focus();document.getElementById('cmtSaved').textContent='add your name first';return;}
+      ignore.disabled=true;ignore.textContent='Ignoring…';
+      decideGranolaSuggestion(ceId,suggestion,'rejected',{}).then(()=>openDrawer(ceId)).catch(err=>{
+        ignore.disabled=false;ignore.textContent='Ignore';document.getElementById('cmtSaved').textContent=(err&&err.message)||'Granola suggestion could not be ignored';});
+    };
+  });
   updateSyncBadge();
 
   const histT=document.getElementById('histToggle');
@@ -3128,8 +3208,9 @@ function openDrawer(ceId){
     if(_drawerCe&&String(_drawerCe.ce_id)===String(ceId)&&live&&live.value===live.dataset.savedValue)openDrawer(ceId);
   }
   if(REVIEW_API&&!weeklyCommentaryLoaded[weeklyLoadKey])pullWeeklyCommentary(ceId).then(refreshWeeklyDrawer).catch(()=>{});
+  if(REVIEW_API&&!reviewSourceLoaded[weeklyLoadKey])pullGranolaSuggestions(ceId).then(refreshWeeklyDrawer).catch(()=>{});
   clearInterval(drawerTimer);
-  if(REVIEW_API)drawerTimer=setInterval(()=>{pullWeeklyCommentary(ceId).then(refreshWeeklyDrawer).catch(()=>{});},30000);
+  if(REVIEW_API)drawerTimer=setInterval(()=>{Promise.all([pullWeeklyCommentary(ceId),pullGranolaSuggestions(ceId)]).then(refreshWeeklyDrawer).catch(()=>{});},30000);
   } catch(err) { console.error('openDrawer wiring error:', err); }
 }
 

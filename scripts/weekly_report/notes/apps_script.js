@@ -247,7 +247,8 @@ var REVIEW_TABLES = {
     sheet: "review_source_suggestions",
     headers: ["suggestion_id","market_slug","ce_id","ce_name","week_start","source_type",
       "source_author","source_ref","source_url","kind","body","proposed_owner","proposed_due_date",
-      "confidence","status","created_at","decided_by","decided_at"]
+      "confidence","status","created_at","decided_by","decided_at","decision_destination",
+      "accepted_body","accepted_owner","accepted_due_date"]
   },
   inbox: {
     sheet: "review_source_inbox",
@@ -275,6 +276,11 @@ function reviewSheet(kind) {
     sh.getRange(1, 1, 1, def.headers.length).setValues([def.headers]);
     sh.getRange(1, 1, 1, def.headers.length).setFontWeight("bold");
     sh.setFrozenRows(1);
+  } else {
+    // Additive schema evolution: keep existing records while making newly
+    // introduced audit columns visible to Sheet operators.
+    sh.getRange(1, 1, 1, def.headers.length).setValues([def.headers]);
+    sh.getRange(1, 1, 1, def.headers.length).setFontWeight("bold");
   }
   return sh;
 }
@@ -327,6 +333,7 @@ function reviewFilter(rows, p, weekField) {
     if (p.market && r.market_slug !== p.market) return false;
     if (p.market_slug && r.market_slug !== p.market_slug) return false;
     if (p.ce_id && String(r.ce_id) !== String(p.ce_id)) return false;
+    if (p.source_type && String(r.source_type) !== String(p.source_type)) return false;
     if (p.week && ymd(r[weekField || "week_start"]) !== ymd(p.week)) return false;
     if (p.status && String(r.status) !== String(p.status)) return false;
     return true;
@@ -632,7 +639,8 @@ function reviewSuggestionRecord(p) {
     ce_name:p.ce_name || "", week_start:ymd(p.week_start), source_type:p.source_type,
     source_author:p.source_author || "", source_ref:p.source_ref, source_url:p.source_url || "", kind:p.kind, body:p.body,
     proposed_owner:p.proposed_owner || "", proposed_due_date:ymd(p.proposed_due_date || ""),
-    confidence:p.confidence || "", status:"pending", created_at:reviewNow(), decided_by:"", decided_at:""
+    confidence:p.confidence || "", status:"pending", created_at:reviewNow(), decided_by:"", decided_at:"",
+    decision_destination:"",accepted_body:"",accepted_owner:"",accepted_due_date:""
   };
   reviewWrite("suggestions", null, rec);
   return {ok:true,suggestion:rec};
@@ -684,7 +692,15 @@ function reviewSuggestionDecide(p) {
     return jsonResp({ok:false,error:"decision must be approved or rejected"});
   var existing = reviewFind("suggestions", function(r){ return r.suggestion_id === p.suggestion_id; });
   if (!existing) return jsonResp({ok:false,error:"suggestion not found"});
+  if (existing.status && existing.status !== "pending")
+    return jsonResp({ok:true,duplicate:true,suggestion:existing});
+  if (p.decision === "approved" && ["comment","action","check"].indexOf(p.destination) < 0)
+    return jsonResp({ok:false,error:"approved suggestion requires comment, action, or check destination"});
   existing.status=p.decision; existing.decided_by=p.decided_by; existing.decided_at=reviewNow();
+  existing.decision_destination=p.decision === "approved" ? p.destination : "ignored";
+  existing.accepted_body=p.body || existing.body;
+  existing.accepted_owner=p.owner || "";
+  existing.accepted_due_date=ymd(p.due_date || existing.proposed_due_date || "");
   reviewWrite("suggestions", existing, existing);
   // Approval is explicit: the caller chooses the destination and can edit the text first.
   if (p.decision === "approved" && p.destination === "comment") {

@@ -70,6 +70,11 @@
       suggestions: function(identity, includeDecided) {
         return request("review_suggestion_list", Object.assign({}, identity, {include_decided: !!includeDecided}));
       },
+      granolaSuggestions: function(identity, includeDecided) {
+        return request("review_suggestion_list", Object.assign({}, identity, {
+          source_type: "granola", include_decided: !!includeDecided
+        }));
+      },
       decideSuggestion: function(decision) { return request("review_suggestion_decide", decision); },
       sourceInbox: function(identity, includeReconciled) {
         return request("review_source_inbox", Object.assign({}, identity, {include_reconciled: !!includeReconciled}));

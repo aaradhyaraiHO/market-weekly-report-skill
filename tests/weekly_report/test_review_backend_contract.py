@@ -13,6 +13,7 @@ INGEST = ROOT / "scripts" / "weekly_report" / "notes" / "ingest_review_sources.p
 TEMPLATE = ROOT / "scripts" / "weekly_report" / "template" / "report_template.html"
 RENDER = ROOT / "scripts" / "weekly_report" / "render.py"
 PROXY = ROOT / "scripts" / "weekly_report" / "notes" / "review_proxy_api.js"
+GRANOLA_ADAPTER = ROOT / "scripts" / "weekly_report" / "notes" / "granola_review_adapter.js"
 
 
 def load_ingest():
@@ -88,6 +89,9 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('p.destination === "comment"', self.backend)
         self.assertIn('p.destination === "action"', self.backend)
         self.assertIn('p.destination === "check"', self.backend)
+        for field in ("decision_destination", "accepted_body", "accepted_owner", "accepted_due_date"):
+            self.assertIn(f'"{field}"', self.backend)
+        self.assertIn('existing.status !== "pending"', self.backend)
 
     def test_ai_fails_closed_and_perf_stays_snapshot_only(self):
         self.assertIn('status:"source_unavailable"', self.backend)
@@ -116,6 +120,7 @@ class ReviewBackendContract(unittest.TestCase):
             "decideSuggestion",
             "sourceInbox",
             "reconcileSource",
+            "granolaSuggestions",
         ):
             self.assertRegex(self.client, rf"\b{method}: function")
 
@@ -193,6 +198,21 @@ class ReviewBackendContract(unittest.TestCase):
         # Save and Slack-start must persist the visible author at click time;
         # relying only on the input's change event left valid drafts blocked.
         self.assertGreaterEqual(template.count("setAuthor(authorIn.value);"), 3)
+        self.assertIn("Granola meeting capture", template)
+        self.assertIn("granolaSuggestionsHtml", template)
+        self.assertIn("decideGranolaSuggestion", template)
+        self.assertIn("Add to commentary", template)
+        self.assertIn("Schedule check", template)
+
+    def test_granola_adapter_is_server_side_and_fails_closed(self):
+        adapter = GRANOLA_ADAPTER.read_text()
+        middleware = (ROOT / "scripts" / "weekly_report" / "notes" / "review_summary_middleware.js").read_text()
+        self.assertIn('process.env.GRANOLA_WEBHOOK_SECRET', adapter)
+        self.assertIn('process.env.REVIEW_INGEST_SECRET', adapter)
+        self.assertIn('match_status === "exact"', adapter)
+        self.assertIn('match_status: candidate.match_status || "unmatched"', adapter)
+        self.assertIn('proposed_owner: ""', adapter)
+        self.assertIn("api/granola-review", middleware)
 
     def test_legacy_note_and_bucket_action_routes_remain(self):
         for route in ('action === "list"', 'action === "upsert"', 'action === "post"',
