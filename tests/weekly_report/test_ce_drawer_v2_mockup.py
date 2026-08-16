@@ -66,10 +66,17 @@ class CeDrawerV2MockupContract(unittest.TestCase):
         self.assertIn("pointermove", self.html)
         self.assertIn("focusin", self.html)
 
+    def test_trends_use_filled_plot_and_nearest_week_cursor(self):
+        self.assertIn('class="trend-area"', self.html)
+        self.assertIn('class="trend-cursor"', self.html)
+        self.assertIn("function updateTrendCursor", self.html)
+        self.assertIn('data-hover-ty', self.html)
+        self.assertIn('data-hover-ly', self.html)
+
     def test_resource_trends_are_labeled_as_data_extensions(self):
-        self.assertEqual(self.html.count('class="data trendable-table"'), 3)
+        self.assertEqual(self.html.count('class="data trendable-table"'), 4)
         self.assertIn("12W trend · data extension", self.html)
-        self.assertIn("12-week channel, funnel and lead-time series need historical resource sidecars", self.html)
+        self.assertIn("12-week channel, funnel, lead-time and country series need historical resource sidecars", self.html)
 
     def test_slack_context_card_is_removed(self):
         self.assertNotIn("CE-scoped Slack context", self.html)
@@ -87,7 +94,6 @@ class CeDrawerV2MockupContract(unittest.TestCase):
         self.assertIn("function prepareBandFallbacks()", self.html)
         self.assertIn("cell.textContent='•••'", self.html)
         self.assertIn("prepareBandFallbacks();", self.html)
-        self.assertIn("Collapsed bands use the stable V1 ellipsis fallback", self.html)
         self.assertIn(".band-head.collapsed{width:48px}", self.html)
 
     def test_tgid_expand_restores_full_fields_and_keeps_explicit_state(self):
@@ -98,7 +104,78 @@ class CeDrawerV2MockupContract(unittest.TestCase):
         self.assertEqual(self.html.count('aria-controls="tgid-body"'), 4)
         self.assertIn("const tgidBandState={size:true,value:true,funnel:true,booking:true}", self.html)
         self.assertIn("tgidBandState[band]=!open", self.html)
-        self.assertIn("expand to restore W0, W-1 and every source delta", self.html)
+        self.assertIn("complete V1 metrics and band controls", self.html)
+
+    def test_variants_expand_under_their_source_linked_tgid(self):
+        self.assertIn("Experience / Variant", self.html)
+        self.assertIn("Expand a TGID to reveal its source-linked variants in the same columns", self.html)
+        for label in (
+            'data-variant-toggle="TG-4108"', 'data-variant-toggle="TG-7742"',
+            'id="variants-TG-4108"', 'id="variants-TG-7742"',
+            "VAR-57670", "Morning harbor cruise", "VAR-44102", "<th data-band-col=\"size\">Orders</th>",
+        ):
+            self.assertIn(label, self.html)
+        for removed in ("Top variants", "variant-shell", "LP→Order CVR"):
+            self.assertNotIn(removed, self.html)
+        self.assertEqual(self.html.count('class="variant-detail variant-row"'), 5)
+        self.assertIn('document.querySelectorAll(`[data-variant-group="${group}"]`)', self.html)
+        self.assertIn("details.forEach(detail=>{detail.hidden=open})", self.html)
+        self.assertIn('data-expanded-cols="4"', self.html)
+
+    def test_variant_rows_align_to_tgid_bands_and_fail_closed(self):
+        for label in (
+            'data-variant-group="TG-4108"', 'data-band-col="size"',
+            'data-band-col="value"', 'data-band-col="funnel"',
+            'data-band-col="booking"', "RPC requires TGID-grain funnel data",
+            "Select users are unavailable below TGID grain", "TGID only",
+        ):
+            self.assertIn(label, self.html)
+        self.assertIn("RPC and funnel remain TGID-only and render as unavailable", self.html)
+        self.assertGreaterEqual(self.html.count('class="source-na"'), 25)
+
+    def test_variant_fixture_totals_reconcile_to_tgid_parents(self):
+        for total in (
+            "Child totals: $54.2K · 1,086 orders · 42.9% share",
+            "Child totals: $39.7K · 734 orders · 31.4% share",
+        ):
+            self.assertIn(total, self.html)
+        self.assertIn("unattributed bucket when the source ID is null", self.html)
+        self.assertIn("zero Revenue and Order difference", self.matrix)
+        self.assertIn("never project TGID funnel values onto variants", self.matrix)
+
+    def test_channel_returns_to_scan_friendly_revenue_mix(self):
+        for label in (
+            "Google Search", "Bing", "Direct (App)", "Referral", "CPR",
+            "<th>Rev</th>", "<th>W-1</th>", "<th>WoW</th>",
+            "<th>YoY</th>", "<th>Share</th>", "−2pp WoW · −3pp YoY",
+        ):
+            self.assertIn(label, self.html)
+        self.assertNotIn("comparison extension", self.html)
+        self.assertNotIn("Order share", self.html)
+
+    def test_lead_time_uses_four_production_bands_and_compact_comparisons(self):
+        for band in ("0–2D", "3–4D", "5–7D", "7D+"):
+            self.assertIn(f'<td class="metric-name">{band}</td>', self.html)
+        for removed in ("Same day", "Next day", "90+ days", "requested 8-band view"):
+            self.assertNotIn(removed, self.html)
+        for label in (
+            "<th>Orders · W0</th>", "<th>Revenue · W0</th>",
+            'data-trend-value-col="4"', 'data-trend-current="$48.3K"',
+        ):
+            self.assertIn(label, self.html)
+        self.assertIn('class="lead-total"', self.html)
+
+    def test_countries_keep_v1_orders_revenue_share_and_aov_shape(self):
+        self.assertIn("Top countries</h3>", self.html)
+        self.assertIn("Orders and actual revenue with WoW movement", self.html)
+        for label in (
+            "<th>Orders</th>", "<th>Rev</th>", "<th>Share</th>",
+            "<th>AOV</th>", "Spain", "842", "$49.8K", "$59.14",
+            'data-trend-value-col="3"', 'data-trend-current="$49.8K"',
+        ):
+            self.assertIn(label, self.html)
+        self.assertNotIn("LY comparison", self.html)
+        self.assertNotIn("W-1 925 · LY 791", self.html)
 
     def test_comment_and_action_ui_is_owned_by_review_mode_worktree(self):
         for removed in ("Notes and action history", "GM note", "Note history", "Action log · Perf"):
