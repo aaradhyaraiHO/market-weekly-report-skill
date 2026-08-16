@@ -39,6 +39,20 @@ shape is `{"markets":{"market_slug":{...}}}`. A usable market record requires
 `month`, `monthly_goal`, `mtd_revenue`, `forecast_revenue`, and `as_of`; otherwise
 the report explicitly shows that the target comparison is unavailable.
 
+Build that frozen sidecar with the same canonical revenue field used by V1:
+
+```sh
+python3 scripts/weekly_report/build_v2_goals.py \
+  /path/to/snapshot_north_america_2026-08-02.json \
+  --out /tmp/weekly-v2-goals.json
+```
+
+The command is read-only against BigQuery and performs no publishing. It uses
+an approved market target when present, falls back to a CE-target roll-up only
+when the market row is absent, and never adds the two grains together. Because
+`revenue_goals` is Drive-backed, the local gcloud login must include Drive
+access (`gcloud auth login --enable-gdrive-access`).
+
 The V2 All-CE view reads the complete Overall/Paid weekly metric set,
 TY/LY trajectories, metadata, customer-country composition and current
 `buckets_final` membership directly from the same snapshot. It supports

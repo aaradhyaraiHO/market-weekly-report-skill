@@ -96,6 +96,23 @@ def _metric_views(headlines, rows, weekly_ly):
     return views
 
 
+def _seasonality_tag_view(row, delta_4w):
+    tag = str(row.get("tag") or "").strip()
+    if tag in {"seasonal", "against season", "mostly TY", "no LY"}:
+        return tag
+    ly_wow = _number(row.get("ly_wow"))
+    if ly_wow is None:
+        return "no LY"
+    if delta_4w is None or abs(delta_4w) < 200:
+        return ""
+    same_direction = (delta_4w > 0) == (ly_wow > 0)
+    if same_direction and abs(ly_wow) > abs(delta_4w) * 0.3:
+        return "seasonal"
+    if not same_direction:
+        return "against season"
+    return "mostly TY"
+
+
 def _mover_views(headlines, direction):
     trend = (headlines.get("week_header") or {}).get("trend") or {}
     rich_key = "top_droppers" if direction == "drop" else "top_gainers"
@@ -122,9 +139,11 @@ def _mover_views(headlines, direction):
             "primary_lens": primary[1],
             "delta_4w": delta_4w,
             "wow_abs": wow_abs,
+            "ly_wow": _number(row.get("ly_wow")),
             "revenue": _number(row.get("w0_rev")),
             "yoy_growth": _number(row.get("yoy_growth")),
             "tag": row.get("tag"),
+            "seasonality_tag": _seasonality_tag_view(row, delta_4w),
         })
     return result
 

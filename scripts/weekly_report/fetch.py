@@ -126,6 +126,51 @@ def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> p
     return query_df(sql, "market_weekly_revenue", params)
 
 
+def market_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Return canonical predicted revenue for one market over an exact date range."""
+    sql = f"""
+    SELECT
+        SUM({REV}) AS revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE report_date BETWEEN @start AND @end
+      AND business_market = @market
+    """
+    return query_df(
+        sql,
+        "market_period_revenue",
+        {"market": market, "start": config.iso(start), "end": config.iso(end)},
+    )
+
+
+def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
+    """Return approved market and CE-roll-up goals without mixing their grains.
+
+    ``revenue_goals`` is a Drive-backed external table. A market-level target is
+    authoritative when present. The CE total is returned separately so callers
+    can use it only as an explicit fallback for markets whose market row is
+    absent; the two values must never be added together.
+    """
+    sql = """
+    SELECT
+        COUNTIF(entity_type = 'Market') AS market_row_count,
+        SUM(IF(entity_type = 'Market', target_revenue, NULL)) AS market_goal,
+        COUNTIF(entity_type = 'Combined Entity') AS ce_row_count,
+        SUM(IF(entity_type = 'Combined Entity', target_revenue, NULL)) AS ce_goal
+
+    FROM `headout-analytics.analytics_reporting.revenue_goals`
+
+    WHERE target_month = CAST(@month AS DATE)
+      AND LOWER(market) = LOWER(@market)
+    """
+    return query_df(
+        sql,
+        "market_monthly_goal",
+        {"market": market, "month": config.iso(month.replace(day=1))},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # CE-level weekly paid performance  (ads_campaign_stats — Google + Bing)
 # --------------------------------------------------------------------------- #

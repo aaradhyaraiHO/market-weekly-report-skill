@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>__TITLE__</title>
   <style>
     :root {
@@ -118,13 +119,24 @@
     .mover-card.gain .mover-icon { color:var(--green); background:#e5f5ed; }
     .mover-title h3 { margin:0; font-size:14px; }
     .mover-title p { margin:3px 0 0; color:var(--muted); font-size:10px; }
-    .sort-field { display:grid; gap:4px; color:var(--muted); font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
-    .sort-select { min-height:40px; padding:0 28px 0 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface); font-size:11px; font-weight:600; text-transform:none; letter-spacing:0; cursor:pointer; }
     .mover-list { display:grid; }
-    .mover-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:12px; min-height:76px; padding:12px 18px; }
+    .mover-columns,.mover-row { display:grid; grid-template-columns:18px minmax(70px,1fr) 56px 56px 92px; align-items:center; gap:5px; }
+    .mover-columns { min-height:42px; padding:0 10px; border-bottom:1px solid var(--line); color:var(--muted); background:#fcfbfd; }
+    .mover-column-sort { min-height:40px; padding:0; border:0; color:inherit; background:transparent; font-size:8px; font-weight:700; letter-spacing:.04em; line-height:1.15; text-align:right; text-transform:uppercase; text-wrap:balance; cursor:pointer; transition-property:color,transform; transition-duration:120ms; }
+    .mover-column-sort.name { text-align:left; }
+    .mover-column-sort:hover,.mover-column-sort[aria-sort]:not([aria-sort="none"]) { color:var(--purple); }
+    .mover-column-sort:active { transform:scale(.96); }
+    .mover-row { min-height:76px; padding:12px 10px; }
     .mover-row + .mover-row { border-top:1px solid var(--line); }
+    .mover-cell { min-width:0; text-align:right; font-size:10px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .mover-cell .mover-lens { margin-top:4px; }
+    .mover-seasonality { justify-self:end; max-width:92px; padding:5px 7px; border-radius:8px; color:var(--muted); background:var(--soft); font-size:8px; font-weight:650; line-height:1.2; text-align:center; white-space:normal; }
+    .mover-seasonality.seasonal { color:#766b84; background:#f1edf7; }
+    .mover-seasonality.against { color:#8d6a21; background:#fbf3df; }
+    .mover-seasonality.mostly-ty { color:#477052; background:#edf5ee; }
+    .mover-seasonality.no-ly { color:#aaa3b4; background:transparent; }
     .mover-rank { color:#aaa3b4; font-size:11px; font-variant-numeric:tabular-nums; }
-    .mover-name { overflow:hidden; font-size:12px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .mover-name { display:-webkit-box; overflow:hidden; font-size:12px; font-weight:650; line-height:1.25; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
     .mover-meta { margin-top:5px; color:var(--muted); font-size:10px; }
     .mover-value { text-align:right; font-size:13px; font-weight:750; font-variant-numeric:tabular-nums; }
     .mover-lens { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:500; }
@@ -177,8 +189,24 @@
     .ce-summary-value { display:block; font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; }
     .ce-summary-label { color:var(--muted); font-size:9px; letter-spacing:.06em; text-transform:uppercase; }
     .ce-panel { overflow:hidden; border:1px solid var(--line); border-radius:20px; background:var(--surface); box-shadow:0 14px 40px rgb(31 25 40 / .055); }
-    .ce-controls { display:grid; grid-template-columns:minmax(240px,1.6fr) repeat(4,minmax(135px,.65fr)) auto; align-items:end; gap:10px; padding:18px; border-bottom:1px solid var(--line); background:#fcfbfd; }
+    .ce-primary-controls { display:grid; grid-template-columns:minmax(240px,1fr) auto auto; gap:12px; padding:18px; border-bottom:1px solid var(--line); background:#fcfbfd; }
+    .ce-search-shell { min-height:48px; display:flex; align-items:center; gap:11px; padding:0 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+    .ce-search-shell svg { flex:none; color:var(--muted); }
+    .ce-search-shell .ce-input { min-height:46px; padding:0; border:0; border-radius:0; background:transparent; outline:0; }
+    .ce-filter-toggle { min-width:122px; min-height:48px; display:inline-flex; align-items:center; justify-content:center; gap:9px; padding:0 16px; border:1px solid var(--line); border-radius:14px; color:var(--ink); background:var(--surface); font-weight:700; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .ce-filter-toggle:hover { background:var(--soft); }
+    .ce-filter-toggle[aria-expanded="true"] { color:var(--purple); border-color:rgb(109 44 255 / .3); background:var(--purple-soft); }
+    .ce-filter-toggle:active { transform:scale(.96); }
+    .ce-manage-button { min-height:48px; display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0 16px; border:1px solid rgb(109 44 255 / .26); border-radius:14px; color:var(--purple); background:var(--purple-soft); font-weight:700; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .ce-manage-button:hover { border-color:rgb(109 44 255 / .42); background:#e9ddff; }
+    .ce-manage-button:active { transform:scale(.96); }
+    .ce-filter-count { min-width:19px; height:19px; display:none; place-items:center; border-radius:10px; color:white; background:var(--purple); font-size:9px; font-variant-numeric:tabular-nums; }
+    .ce-filter-count[data-active="true"] { display:grid; }
+    .ce-filter-panel[hidden] { display:none; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .ce-context-controls { display:grid; grid-template-columns:minmax(280px,1.4fr) minmax(190px,.7fr) auto; align-items:end; gap:10px; padding:14px 18px 18px; border-bottom:1px solid var(--line); background:#fcfbfd; }
     .ce-control { display:grid; gap:6px; }
+    .ce-group-field { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
     .ce-control-label { color:var(--muted); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
     .ce-input,.ce-select { width:100%; min-height:42px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
     .ce-input { padding:0 12px; }
@@ -187,7 +215,8 @@
     .ce-reset { min-height:42px; padding:0 14px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface); font-weight:650; cursor:pointer; }
     .ce-reset:hover { color:var(--ink); background:var(--soft); }
     .ce-reset:active { transform:scale(.96); }
-    .ce-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid var(--line); }
+    .ce-table-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
+    .ce-table-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .ce-tool { min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface); font-size:10px; font-weight:680; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
     .ce-tool:hover:not(:disabled) { color:var(--ink); background:var(--soft); }
     .ce-tool[aria-pressed="true"] { color:var(--purple); border-color:rgb(109 44 255 / .3); background:var(--purple-soft); }
@@ -213,30 +242,66 @@
     .ce-contribution-fill.positive { left:50%; background:var(--green); }
     .ce-contribution-value { text-align:right; font-variant-numeric:tabular-nums; }
     .ce-contribution-value small { margin-left:7px; color:var(--muted); }
-    .ce-table-wrap { overflow:auto; }
+    .ce-table-wrap { width:100%; max-width:100%; min-width:0; overflow:auto; overscroll-behavior-inline:contain; scrollbar-gutter:stable; }
     .ce-table { width:100%; min-width:1740px; border-collapse:separate; border-spacing:0; font-size:11px; font-variant-numeric:tabular-nums; }
     .ce-table th { position:sticky; top:0; z-index:1; height:44px; padding:0 12px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--surface); font-size:9px; letter-spacing:.05em; text-align:right; text-transform:uppercase; }
-    .ce-table th:first-child { left:0; z-index:3; min-width:260px; text-align:left; }
-    .ce-table th.ce-section { color:var(--purple); background:var(--purple-soft); text-align:center; }
+    .ce-table th:first-child { text-align:left; }
+    .ce-table .ce-static-name { position:sticky; left:0; z-index:3; width:220px; min-width:220px; max-width:220px; background:var(--surface); text-align:left; }
+    .ce-table .ce-static-trend { position:sticky; left:220px; z-index:3; width:112px; min-width:112px; max-width:112px; background:var(--surface); }
+    .ce-table .ce-static-contribution { position:sticky; left:332px; z-index:3; width:100px; min-width:100px; max-width:100px; background:var(--surface); }
+    .ce-table th.ce-static-trend,.ce-table th.ce-static-contribution { border-left:1px solid var(--line); text-align:center; }
+    .ce-table th.ce-static-contribution .ce-sort { justify-content:center; white-space:normal; }
+    .ce-header-stack { display:flex; min-height:40px; flex-direction:column; align-items:center; justify-content:center; gap:2px; line-height:1.05; white-space:normal; }
+    .ce-header-stack strong { color:inherit; font:inherit; font-weight:720; }
+    .ce-header-stack small { color:var(--muted); font-size:7px; font-weight:650; letter-spacing:.04em; }
+    .ce-table th.ce-section { height:52px; color:var(--purple); background:var(--purple-soft); text-align:center; }
+    .ce-table th.ce-section .ce-metric-head { justify-content:center; }
+    .ce-table th.ce-section .ce-metric-label { justify-content:flex-end; width:auto; font-size:11px; }
+    .ce-table thead tr:nth-child(2) th { top:44px; }
     .ce-table th.ce-paid-start,.ce-table td.ce-paid-start { border-left:2px solid #d9cdef; }
-    .ce-table th.ce-subhead { height:30px; font-size:8px; }
+    .ce-table th.ce-subhead { height:44px; padding:0 4px; font-size:9px; }
+    .ce-table th.ce-subhead .ce-sub-sort { justify-content:center; }
     .ce-sort { display:inline-flex; align-items:center; justify-content:flex-end; gap:5px; width:100%; min-height:40px; padding:0; border:0; color:inherit; background:transparent; font:inherit; font-weight:700; letter-spacing:inherit; text-transform:inherit; cursor:pointer; }
+    .ce-metric-label { display:inline-flex; align-items:center; justify-content:flex-end; width:100%; min-height:40px; color:inherit; font:inherit; font-weight:700; letter-spacing:inherit; text-transform:inherit; }
     .ce-table th:first-child .ce-sort { justify-content:flex-start; }
     .ce-sort:hover { color:var(--ink); }
     .sort-arrow { width:10px; color:var(--purple); }
+    .ce-sub-sort { display:inline-flex; width:100%; min-height:40px; align-items:center; justify-content:flex-end; gap:4px; padding:0 8px; border:0; color:inherit; background:transparent; font:inherit; font-weight:700; letter-spacing:inherit; text-transform:inherit; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
+    .ce-sub-sort { white-space:nowrap; }
+    .ce-sub-sort:hover { color:var(--purple); background:var(--purple-soft); }
+    .ce-sub-sort:active { transform:scale(.96); }
+    .ce-metric-head { display:inline-flex; align-items:center; justify-content:flex-end; gap:4px; width:100%; }
+    .ce-metric-toggle { width:40px; min-width:40px; height:40px; display:inline-grid; place-items:center; padding:0; border:0; border-radius:9px; color:var(--muted); background:transparent; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
+    .ce-metric-toggle:hover { color:var(--purple); background:var(--purple-soft); }
+    .ce-metric-toggle[aria-pressed="true"] { color:var(--purple); background:var(--purple-soft); }
+    .ce-metric-toggle:active { transform:scale(.96); }
     .ce-table td { height:68px; padding:10px 12px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
-    .ce-table td:first-child { position:sticky; left:0; z-index:1; background:var(--surface); text-align:left; }
+    .ce-table td:first-child { text-align:left; }
+    .ce-table tbody .ce-static-name,.ce-table tbody .ce-static-trend,.ce-table tbody .ce-static-contribution { z-index:1; }
     .ce-table tr:hover td { background:#fbf9ff; }
     .ce-table tr.ce-total td { position:sticky; top:44px; z-index:2; height:56px; color:var(--ink); background:#f7f3ff; font-weight:700; }
+    .ce-table.ce-has-expanded tr.ce-total td { top:84px; }
     .ce-table tr.ce-total td:first-child { z-index:4; }
+    .ce-table tr.ce-total .ce-static-name,.ce-table tr.ce-total .ce-static-trend,.ce-table tr.ce-total .ce-static-contribution { z-index:4; background:#f7f3ff; }
     .ce-table tr.ce-group td { background:#fbfafc; font-weight:700; }
+    .ce-table tr.ce-group .ce-static-name,.ce-table tr.ce-group .ce-static-trend,.ce-table tr.ce-group .ce-static-contribution { background:#fbfafc; }
     .ce-group-toggle { display:inline-flex; align-items:center; gap:8px; padding:0; border:0; background:transparent; font-weight:700; cursor:pointer; }
     .ce-group-count { color:var(--muted); font-size:9px; font-weight:500; }
-    .ce-name-button { display:block; max-width:230px; overflow:hidden; padding:0; border:0; color:var(--ink); background:transparent; font-weight:680; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+    .ce-name-button { display:block; max-width:190px; overflow:hidden; padding:0; border:0; color:var(--ink); background:transparent; font-weight:680; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
     .ce-name-button:hover { color:var(--purple); }
-    .ce-identity { margin-top:4px; color:var(--muted); font-size:9px; }
+    .ce-name-line { display:flex; min-width:0; align-items:center; gap:5px; }
+    .ce-watch-star { flex:none; width:24px; height:24px; display:inline-grid; place-items:center; padding:0; border:0; border-radius:7px; color:#aaa3b4; background:transparent; font-size:15px; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
+    .ce-watch-star:hover { color:#a76800; background:#fff3d6; }
+    .ce-watch-star[aria-pressed="true"] { color:#a76800; background:#fff3d6; }
+    .ce-watch-star:active { transform:scale(.96); }
+    .ce-identity { display:block; margin:4px 0 0 29px; color:var(--muted); font-size:9px; }
+    .ce-hover-revenue { position:absolute; left:calc(100% + 8px); top:50%; z-index:8; display:flex; align-items:center; gap:6px; min-height:34px; padding:0 10px; border:1px solid rgb(109 44 255 / .14); border-radius:10px; color:var(--muted); background:var(--surface); box-shadow:0 8px 24px rgb(31 25 40 / .12); font-size:9px; opacity:0; pointer-events:none; transform:translate(4px,-50%); transition-property:opacity,transform; transition-duration:120ms; white-space:nowrap; }
+    .ce-hover-revenue strong { color:var(--ink); font-size:10px; }
+    .ce-table tbody tr:not(.ce-total):not(.ce-group):hover .ce-static-name,.ce-table tbody tr:not(.ce-total):not(.ce-group):focus-within .ce-static-name { z-index:7; }
+    .ce-table tbody tr:not(.ce-total):not(.ce-group):hover .ce-hover-revenue,.ce-name-button:focus-visible ~ .ce-hover-revenue { opacity:1; transform:translate(0,-50%); }
     .ce-badges { display:inline-flex; align-items:center; gap:4px; margin-left:6px; }
     .ce-badge { display:inline-flex; min-height:20px; align-items:center; padding:0 6px; border-radius:10px; color:var(--purple); background:var(--purple-soft); font-size:8px; font-weight:720; }
+    .ce-badge.custom { color:#125f48; background:#e4f4ec; }
     .ce-mover { font-size:9px; }
     .ce-mini-spark { display:block; width:98px; height:28px; margin-left:auto; }
     .ce-main-value { display:block; color:var(--ink); font-weight:680; }
@@ -249,9 +314,46 @@
     .ce-trend svg { display:block; width:100%; height:160px; }
     .ce-country-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .ce-country-row { display:flex; justify-content:space-between; gap:16px; padding:12px; border-radius:10px; background:var(--soft); font-size:10px; }
+    .portfolio-drawer { width:min(720px,94vw); }
+    .portfolio-tabs { position:sticky; top:91px; z-index:2; display:flex; gap:4px; padding:10px 28px; border-bottom:1px solid var(--line); background:rgb(255 255 255 / .96); backdrop-filter:blur(12px); }
+    .portfolio-tab { min-height:40px; padding:0 13px; border:0; border-radius:10px; color:var(--muted); background:transparent; font-weight:680; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
+    .portfolio-tab:hover { color:var(--ink); background:var(--soft); }
+    .portfolio-tab.active,.portfolio-tab[aria-pressed="true"] { color:var(--purple); background:var(--purple-soft); }
+    .portfolio-tab:active { transform:scale(.96); }
+    .portfolio-panel[hidden] { display:none; }
+    .portfolio-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:18px 0; }
+    .portfolio-stat { padding:14px; border-radius:12px; background:var(--soft); }
+    .portfolio-stat strong { display:block; font-size:18px; font-variant-numeric:tabular-nums; }
+    .portfolio-stat span { display:block; margin-top:3px; color:var(--muted); font-size:9px; letter-spacing:.05em; text-transform:uppercase; }
+    .portfolio-list { display:grid; gap:8px; }
+    .portfolio-row { display:flex; min-height:52px; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; }
+    .portfolio-row strong { display:block; font-size:11px; }
+    .portfolio-row span,.portfolio-row small { display:block; margin-top:3px; color:var(--muted); font-size:9px; }
+    .portfolio-empty { padding:34px 20px; border:1px dashed var(--line); border-radius:14px; color:var(--muted); font-size:11px; line-height:1.55; text-align:center; }
+    .portfolio-actions { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
+    .portfolio-button { min-height:40px; padding:0 13px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--surface); font-weight:680; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .portfolio-button.primary { color:white; border-color:var(--purple); background:var(--purple); }
+    .portfolio-button:hover:not(:disabled) { border-color:rgb(109 44 255 / .32); background:var(--purple-soft); color:var(--purple); }
+    .portfolio-button.primary:hover:not(:disabled) { color:white; background:#5b20df; }
+    .portfolio-button:active:not(:disabled) { transform:scale(.96); }
+    .portfolio-button:disabled { cursor:not-allowed; opacity:.45; }
+    .portfolio-upload { display:grid; gap:10px; padding:16px; border:1px dashed rgb(109 44 255 / .28); border-radius:14px; background:#fbf9ff; }
+    .portfolio-upload input { width:100%; min-height:40px; }
+    .portfolio-schema { padding:12px; border-radius:10px; background:var(--soft); color:var(--muted); font:10px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .portfolio-preview { margin-top:16px; }
+    .portfolio-preview-table { width:100%; border-collapse:collapse; font-size:10px; }
+    .portfolio-preview-table th,.portfolio-preview-table td { padding:9px 8px; border-bottom:1px solid var(--line); text-align:left; }
+    .portfolio-preview-table th { color:var(--muted); font-size:8px; letter-spacing:.05em; text-transform:uppercase; }
+    .portfolio-status { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .portfolio-status span { padding:5px 8px; border-radius:9px; background:var(--soft); color:var(--muted); font-size:9px; }
+    .portfolio-status .ok { color:var(--green); background:#e4f4ec; }
+    .portfolio-demo { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 18px; padding:16px; border-radius:14px; background:linear-gradient(135deg,#f4efff,#fbf9ff); box-shadow:inset 0 0 0 1px rgb(109 44 255 / .1); }
+    .portfolio-demo strong { display:block; font-size:12px; text-wrap:balance; }
+    .portfolio-demo p { margin:4px 0 0; color:var(--muted); font-size:10px; line-height:1.45; text-wrap:pretty; }
+    .portfolio-demo-actions { display:flex; flex:none; gap:8px; }
+    .portfolio-status .bad { color:var(--red); background:#fdecef; }
     @media (max-width:1200px) {
-      .ce-controls { grid-template-columns:repeat(3,minmax(0,1fr)); }
-      .ce-controls .ce-control:first-child { grid-column:span 2; }
+      .ce-context-controls { grid-template-columns:minmax(260px,1fr) minmax(180px,.65fr) auto; }
     }
     @media (max-width:900px) {
       .shell { grid-template-columns:1fr; }
@@ -264,10 +366,15 @@
       .visual-head { flex-direction:column; }
       .mover-grid { grid-template-columns:1fr; }
       .drawer { width:min(760px,100vw); }
-      .ce-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .ce-controls .ce-control:first-child { grid-column:1/-1; }
+      .ce-context-controls { grid-template-columns:1fr 1fr; }
+      .ce-context-controls .ce-reset { grid-column:1/-1; }
       .ce-contribution-row { grid-template-columns:110px minmax(140px,1fr) 150px; }
       .all-ce-hero { align-items:flex-start; flex-direction:column; }
+      .ce-table .ce-static-name { width:190px; min-width:190px; max-width:190px; }
+      .ce-table .ce-static-trend { left:190px; width:90px; min-width:90px; max-width:90px; }
+      .ce-table .ce-static-contribution { left:280px; width:84px; min-width:84px; max-width:84px; }
+      .ce-mini-spark { width:78px; }
+      .ce-name-button { max-width:164px; }
     }
     @media (max-width:560px) {
       .topbar { align-items:flex-start; flex-direction:column; padding:16px 18px; }
@@ -282,7 +389,7 @@
       .data-note { align-items:stretch; }
       .detail-button { width:100%; }
       .mover-head { align-items:flex-start; }
-      .mover-row { grid-template-columns:22px minmax(0,1fr) auto; padding-inline:14px; }
+      .mover-columns,.mover-row { grid-template-columns:18px minmax(68px,1fr) 52px 52px 82px; gap:4px; padding-inline:9px; }
       .drawer-header,.drawer-body { padding-left:18px; padding-right:18px; }
       .drawer-overview { grid-template-columns:1fr; margin-inline:-18px; }
       .drawer-stat { padding:14px 18px; }
@@ -291,10 +398,17 @@
       .metric-spark { width:78px; }
       .shapley-row { grid-template-columns:72px minmax(0,1fr) 62px; }
       .provenance { grid-template-columns:1fr; }
-      .ce-controls { grid-template-columns:1fr; padding:14px; }
-      .ce-controls .ce-control:first-child { grid-column:auto; }
+      .ce-context-controls { grid-template-columns:1fr; padding:12px 14px 14px; }
+      .ce-context-controls .ce-reset { grid-column:auto; }
+      .ce-group-field { grid-template-columns:1fr; }
       .ce-reset { width:100%; }
       .ce-summary { width:100%; justify-content:space-between; }
+      .ce-primary-controls { grid-template-columns:1fr 1fr; }
+      .ce-search-shell { grid-column:1/-1; }
+      .ce-manage-button,.ce-filter-toggle { width:100%; }
+      .portfolio-tabs { top:89px; padding-inline:18px; overflow:auto; }
+      .portfolio-summary { grid-template-columns:1fr; }
+      .portfolio-demo { align-items:stretch; flex-direction:column; }
       .ce-country-list { grid-template-columns:1fr; }
       .ce-filter-label { width:100%; }
       .ce-contribution-row { grid-template-columns:1fr; gap:5px; }
@@ -332,13 +446,29 @@
           </div>
           <footer class="data-note"><span class="data-note-copy"><span id="source-note"></span><span>Weekly calculations remain sourced from the existing snapshot.</span></span><button class="detail-button" id="open-detail" type="button">View market detail <span aria-hidden="true">→</span></button></footer>
         </article>
-        <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>Ranked CE-level gains and drops using the report’s existing movement clocks.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Largest negative movements</p></div></div><label class="sort-field">Sort by<select class="sort-select" data-mover-sort="drops" aria-label="Sort top drops"><option value="impact">Impact</option><option value="revenue">Revenue</option><option value="wow">WoW</option><option value="name">Name</option></select></label></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Largest positive movements</p></div></div><label class="sort-field">Sort by<select class="sort-select" data-mover-sort="gains" aria-label="Sort top gains"><option value="impact">Impact</option><option value="revenue">Revenue</option><option value="wow">WoW</option><option value="name">Name</option></select></label></header><div class="mover-list" id="gains-list"></div></article></div></section>
+        <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>WoW and trailing 4-week movement shown together, with last-year seasonality context.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Source ranking preserved</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Source ranking preserved</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
         <section class="placeholder"><h2>Analysis queues</h2><p>Losing Money, RPC/CM1 fluctuations and pre-purchase remain intact for the next incremental V2 slices.</p></section>
       </div>
-      <section class="all-ce-view report-view" id="all-ces-view" hidden aria-labelledby="all-ces-title"><header class="all-ce-hero"><div><div class="section-kicker">Portfolio explorer</div><h2 id="all-ces-title">All combined entities</h2><p>Every CE with the report’s Overall and Paid evidence. Filter, group, compare and expand the weekly movement before opening the CE deep dive.</p></div><div class="ce-summary"><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-count">—</strong><span class="ce-summary-label">CEs shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-revenue">—</strong><span class="ce-summary-label">Revenue shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-share">—</strong><span class="ce-summary-label">Market share</span></div></div></header><div class="ce-panel"><div class="ce-controls"><label class="ce-control"><span class="ce-control-label">Search</span><input class="ce-input" id="ce-search" type="search" placeholder="Name, ID, city, category or subcategory"></label><label class="ce-control"><span class="ce-control-label">Group by</span><select class="ce-select" id="ce-group"><option value="">No grouping</option><option value="category">Category</option><option value="subcategory">Subcategory</option><option value="city">City</option><option value="management_type">Management type</option><option value="growth_stage">Evolution</option><option value="lifecycle">Lifecycle</option><option value="tier">Tier</option><option value="bucket">Diagnostic bucket</option></select></label><label class="ce-control"><span class="ce-control-label">Country</span><select class="ce-select" id="ce-country"><option value="">All countries</option></select></label><label class="ce-control"><span class="ce-control-label">BDM region</span><select class="ce-select" id="ce-bdm"><option value="">All BDM regions</option></select></label><label class="ce-control"><span class="ce-control-label">Growth region</span><select class="ce-select" id="ce-growth"><option value="">All Growth regions</option></select></label><button class="ce-reset" id="ce-reset" type="button">Reset</button></div><div class="ce-toolbar"><button class="ce-tool" id="ce-top-movers" type="button" aria-pressed="false">↕ Top movers</button><button class="ce-tool" id="ce-expand-metrics" type="button" aria-pressed="false">⇔ Expand W0 / W-1 / Δ / YoY</button><button class="ce-tool" id="ce-collapse-groups" type="button" disabled>▸ Collapse groups</button><span class="ce-control-label">Overall metrics first · Paid metrics after divider · nulls sort last</span></div><div class="ce-filter-chips" id="ce-filter-chips"></div><div class="filter-boundary" id="ce-filter-boundary"></div><div class="ce-contribution" id="ce-contribution"></div><div class="ce-table-wrap"><table class="ce-table"><thead id="ce-table-head"></thead><tbody id="ce-table-body"></tbody></table></div><footer class="ce-results"><span id="ce-results-copy"></span><span>Click a CE name for detail · horizontal scroll reveals all metrics</span></footer></div></section>
+      <section class="all-ce-view report-view" id="all-ces-view" hidden aria-labelledby="all-ces-title">
+        <header class="all-ce-hero"><div><div class="section-kicker">Portfolio explorer</div><h2 id="all-ces-title">All combined entities</h2><p>Every V1 All-CE metric and workflow remains available. Search, group and compare the portfolio before opening a CE deep dive.</p></div><div class="ce-summary"><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-count">—</strong><span class="ce-summary-label">CEs shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-revenue">—</strong><span class="ce-summary-label">Revenue shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-share">—</strong><span class="ce-summary-label">Market share</span></div></div></header>
+        <div class="ce-panel">
+          <div class="ce-primary-controls"><label class="ce-search-shell"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.7"></circle><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg><span class="sr-only">Search combined entities</span><input class="ce-input" id="ce-search" type="search" placeholder="Search CE, city, CID, category…"></label><button class="ce-filter-toggle" id="ce-filter-toggle" type="button" aria-expanded="false" aria-controls="ce-filter-panel"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span>Filters</span><span class="ce-filter-count" id="ce-filter-count">0</span></button><button class="ce-manage-button" id="ce-manage-portfolio" type="button"><span aria-hidden="true">✦</span><span>Manage portfolio</span></button></div>
+          <div class="ce-context-controls">
+            <label class="ce-control"><span class="ce-control-label">Group by</span><span class="ce-group-field"><select class="ce-select" id="ce-group"><option value="">No grouping</option><option value="category">Category</option><option value="subcategory">Subcategory</option><option value="city">City</option><option value="management_type">Management type</option><option value="growth_stage">Evolution</option><option value="lifecycle">Lifecycle</option><option value="tier">Tier</option><option value="bucket">Diagnostic bucket</option><option value="__custom_group">Custom group</option></select><button class="ce-tool" id="ce-collapse-groups" type="button" disabled>▸ Collapse all</button></span></label>
+            <label class="ce-control"><span class="ce-control-label">Country</span><select class="ce-select" id="ce-country"><option value="">All countries</option></select></label>
+            <button class="ce-reset" id="ce-reset" type="button">Reset</button>
+          </div>
+          <div class="ce-filter-panel" id="ce-filter-panel" hidden><div class="ce-filter-chips" id="ce-filter-chips"></div><div class="filter-boundary" id="ce-filter-boundary"></div></div>
+          <div class="ce-contribution" id="ce-contribution"></div>
+          <div class="ce-table-toolbar"><div class="ce-table-actions"><button class="ce-tool" id="ce-watch-only" type="button" aria-pressed="false">★ Watchlist only</button><button class="ce-tool" id="ce-top-movers" type="button" aria-pressed="false">↕ Top movers</button><button class="ce-tool" id="ce-expand-metrics" type="button" aria-pressed="false">⇔ Expand all metrics</button></div><span class="ce-control-label">Metric tools · expand individually for W0 · W-1 · Δ abs · WoW · YoY</span></div>
+          <div class="ce-table-wrap"><table class="ce-table"><thead id="ce-table-head"></thead><tbody id="ce-table-body"></tbody></table></div>
+          <footer class="ce-results"><span id="ce-results-copy"></span><span>Click a CE name for detail · horizontal scroll reveals all metrics</span></footer>
+        </div>
+      </section>
     </main>
   </div>
   <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="drawer-overview"></section><section class="drawer-section"><h3>Performance diagnostics</h3><p class="drawer-section-copy">Current week versus last week, with the same 12-week this-year and last-year evidence used by the report.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Δ abs</th><th>Δ %</th><th>12-week trajectory</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div></section><section class="drawer-section" id="shapley-section"><h3>What drove the weekly revenue move</h3><p class="drawer-section-copy">Five-factor Shapley decomposition. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section"><h3>Data provenance</h3><p class="drawer-section-copy">The drawer explains the headline; it does not calculate a second version of it.</p><div class="provenance" id="drawer-provenance"></div></section></div></aside></div>
+  <div class="drawer-root" id="portfolio-root" hidden><button class="drawer-scrim" id="portfolio-scrim" type="button" aria-label="Dismiss portfolio manager"></button><aside class="drawer portfolio-drawer" id="portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-title"><header class="drawer-header"><div><div class="drawer-kicker">All CE workspace</div><h2 class="drawer-title" id="portfolio-title">Manage portfolio</h2><p class="drawer-subtitle">CID-keyed context layered over the weekly snapshot.</p></div><button class="drawer-close" id="portfolio-close" type="button" aria-label="Close portfolio manager">×</button></header><nav class="portfolio-tabs" aria-label="Portfolio manager sections"><button class="portfolio-tab active" type="button" data-portfolio-tab="watchlist" aria-pressed="true">Watchlist</button><button class="portfolio-tab" type="button" data-portfolio-tab="groups" aria-pressed="false">Groups &amp; tags</button><button class="portfolio-tab" type="button" data-portfolio-tab="import" aria-pressed="false">Upload metadata</button></nav><div class="drawer-body"><section class="portfolio-panel" id="portfolio-watchlist-panel"><div id="portfolio-watchlist-body"></div></section><section class="portfolio-panel" id="portfolio-groups-panel" hidden><div id="portfolio-groups-body"></div></section><section class="portfolio-panel" id="portfolio-import-panel" hidden><h3>Upload CE metadata</h3><p class="drawer-section-copy">Use CID as the stable key. The upload only changes portfolio context; it never changes weekly calculations.</p><div class="portfolio-schema"><strong>Required:</strong> ce_id<br><strong>Optional:</strong> ce_name, primary_group, tags, watchlist<br>Separate multiple tags with a semicolon.</div><div class="portfolio-upload"><button class="portfolio-button" id="portfolio-download-template" type="button">Download CSV template</button><label class="portfolio-button primary" for="portfolio-file">Choose CSV</label><input class="sr-only" id="portfolio-file" type="file" accept=".csv,text/csv"></div><div class="portfolio-preview" id="portfolio-preview"><div class="portfolio-empty">Choose a CSV to preview matches, unknown CIDs and duplicates before applying.</div></div><div class="portfolio-actions"><button class="portfolio-button primary" id="portfolio-apply" type="button" disabled>Apply locally</button></div><p class="portfolio-status">Prototype storage is local to this browser and market. A shared Sheet adapter can replace storage without changing this CID-keyed contract.</p></section></div></aside></div>
   <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><h2 class="drawer-title" id="ce-drawer-title"></h2><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week revenue trajectory</h3><p class="drawer-section-copy">Solid = current year; dashed = last year, using the existing CE series.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section"><h3>Customer-country mix</h3><p class="drawer-section-copy">Countries present in the current CE composition payload.</p><div class="ce-country-list" id="ce-country-list"></div></section><section class="drawer-section"><h3>Scope boundary</h3><p class="drawer-section-copy">This foundation carries the CE identity, weekly metrics and country mix. Funnel, channels, TGIDs, lead time, notes and actions remain in the existing V1 drawer until their V2 migration slice.</p></section></div></aside></div>
   <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
   <script>
@@ -353,7 +483,9 @@
       const weekSelect = document.getElementById('week-select');
       const svgNS = 'http://www.w3.org/2000/svg';
       const seriesVisible = {ty:true,ly:true};
-      const ceState = {search:'',country:'',bdm_region:'',growth_region:'',group:'',filters:{},collapsed:{},expanded:false,topMovers:false,sortKey:'revenue',sortDir:-1};
+      const moverSorts = {drops:{key:'rank',dir:1},gains:{key:'rank',dir:1}};
+      const ceState = {search:'',country:'',group:'',filters:{},collapsed:{},expanded:{},filtersOpen:false,watchOnly:false,topMovers:false,sortKey:'revenue',sortDir:-1};
+      let portfolioMetadata={},portfolioLoadedKey='',portfolioPreview=null,portfolioTab='watchlist';
       const CE_METRICS = [
         {key:'revenue',label:'Revenue',field:'revenue',format:'money',group:'overall'},
         {key:'orders',label:'Orders',field:'orders',format:'count',group:'overall'},
@@ -369,6 +501,34 @@
         {key:'cm2',label:'CM2',field:'paid_cm2',format:'money',group:'paid'},
         {key:'roi',label:'ROI',field:'roi_pct',format:'pct0',group:'paid'},
       ];
+      const CE_SUB_SORTS = [
+        {key:'w0',label:'W0'},
+        {key:'w1',label:'W-1'},
+        {key:'delta',label:'Change'},
+        {key:'wow',label:'WoW %'},
+        {key:'yoy',label:'YoY %'},
+      ];
+      const currentHeadline = () => payload.headlines[Number(weekSelect.value||0)];
+      const portfolioStorageKey = item => `wr_v2_portfolio::${String(item.market_slug||item.market||'market').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`;
+      function normalizePortfolioRecord(row={}) {
+        const tags=Array.isArray(row.tags)?row.tags:String(row.tags||'').split(/[;|]/);
+        const rawWatch=row.watchlist;
+        return {primary_group:String(row.primary_group||'').trim(),tags:[...new Set(tags.map(tag=>String(tag).trim()).filter(Boolean))],watchlist:rawWatch===true||['true','yes','1','y'].includes(String(rawWatch||'').trim().toLowerCase()),demo:row.demo===true};
+      }
+      function ensurePortfolioMetadata(item) {
+        const key=portfolioStorageKey(item);if(portfolioLoadedKey===key)return;
+        portfolioLoadedKey=key;
+        try{const stored=JSON.parse(localStorage.getItem(key)||'{}');portfolioMetadata=stored&&typeof stored==='object'?stored:{};}catch(error){portfolioMetadata={};}
+        Object.keys(portfolioMetadata).forEach(ceId=>portfolioMetadata[ceId]=normalizePortfolioRecord(portfolioMetadata[ceId]));
+      }
+      function savePortfolioMetadata(item) { try{localStorage.setItem(portfolioStorageKey(item),JSON.stringify(portfolioMetadata));}catch(error){} }
+      function portfolioFor(ceId) { return portfolioMetadata[String(ceId)]||{primary_group:'',tags:[],watchlist:false}; }
+      function toggleWatchlist(ceId) {
+        const item=currentHeadline();ensurePortfolioMetadata(item);const key=String(ceId),meta=normalizePortfolioRecord(portfolioMetadata[key]);meta.watchlist=!meta.watchlist;portfolioMetadata[key]=meta;savePortfolioMetadata(item);renderAllCes(item);renderPortfolioDrawer();
+        const openTitle=document.getElementById('ce-drawer-title');if(!document.getElementById('ce-detail-root').hidden&&openTitle.textContent){const ce=(item.all_ces||[]).find(row=>String(row.ce_id)===key);if(ce)renderCeDrawer(ce);}
+      }
+      const ceMetricExpanded = metric => Boolean(ceState.expanded[metric.key]);
+      const ceAnyMetricExpanded = () => CE_METRICS.some(ceMetricExpanded);
       const money = (value, digits=1) => {
         if (value == null) return '—';
         const abs = Math.abs(value), sign = value < 0 ? '−' : '';
@@ -392,22 +552,19 @@
         const monthly=item.monthly, body=document.getElementById('runway-body'), gap=document.getElementById('runway-gap'), title=document.getElementById('runway-title');
         title.textContent=monthly.month ? `${monthLabel(monthly.month)} revenue runway` : 'Monthly revenue runway';
         if (monthly.state === 'missing') { gap.textContent=''; body.innerHTML='<div class="goal-line">No approved monthly goal is attached. The report will not infer pacing from weekly growth.</div>'; return; }
-        const mtd=Math.max(0,Math.min(100,monthly.mtd_attainment_pct||0));
-        const forecast=Math.max(0,Math.min(100,monthly.forecast_attainment_pct||0));
+        const mtdActual=monthly.mtd_attainment_pct||0,forecastActual=monthly.forecast_attainment_pct||0;
+        const mtd=Math.max(0,Math.min(100,mtdActual));
+        const forecast=Math.max(0,Math.min(100,forecastActual));
+        const forecastLabel=forecastActual>=100?82:forecast;
         gap.textContent=monthly.forecast_attainment_pct == null ? '' : `${Math.abs(100-monthly.forecast_attainment_pct).toFixed(0)}% ${monthly.forecast_attainment_pct>=100?'above':'below'} goal`;
-        body.innerHTML=`<div class="runway-track"><div class="runway-fill" style="width:${forecast}%"></div><div class="runway-marker" style="left:${mtd}%"></div><div class="runway-marker goal"></div><div class="runway-label mtd" style="left:${mtd}%"><strong>${money(monthly.mtd_revenue)}</strong>MTD · ${mtd.toFixed(0)}%</div><div class="runway-label forecast" style="left:${forecast}%"><strong>${money(monthly.forecast_revenue)}</strong>Run rate · ${forecast.toFixed(0)}%</div><div class="runway-label goal"><strong>${money(monthly.monthly_goal)}</strong>Goal</div></div>`;
+        body.innerHTML=`<div class="runway-track"><div class="runway-fill" style="width:${forecast}%"></div><div class="runway-marker" style="left:${mtd}%"></div><div class="runway-marker goal"></div><div class="runway-label mtd" style="left:${mtd}%"><strong>${money(monthly.mtd_revenue)}</strong>MTD · ${mtdActual.toFixed(0)}%</div><div class="runway-label forecast" style="left:${forecastLabel}%"><strong>${money(monthly.forecast_revenue)}</strong>Run rate · ${forecastActual.toFixed(0)}%</div><div class="runway-label goal"><strong>${money(monthly.monthly_goal)}</strong>Goal</div></div>`;
       }
       function renderMovers(item, kind) {
-        const list=document.getElementById(`${kind}-list`), sort=document.querySelector(`[data-mover-sort="${kind}"]`), rows=[...(item.movers[kind]||[])];
-        const direction=kind==='drops'?-1:1, mode=sort.value;
-        rows.sort((a,b)=>{
-          if (mode==='name') return String(a.ce_name).localeCompare(String(b.ce_name));
-          if (mode==='revenue') return (b.revenue??-Infinity)-(a.revenue??-Infinity);
-          if (mode==='wow') return direction*((b.wow_abs??0)-(a.wow_abs??0));
-          return Math.abs(b.primary_delta??0)-Math.abs(a.primary_delta??0);
-        });
+        const list=document.getElementById(`${kind}-list`),rows=[...(item.movers[kind]||[])],sort=moverSorts[kind],mode=sort.key,dir=sort.dir;
+        if(mode!=='rank')rows.sort((a,b)=>{const av=mode==='name'?String(a.ce_name):mode==='wow'?a.wow_abs:mode==='fourWeek'?a.delta_4w:String(a.seasonality_tag||''),bv=mode==='name'?String(b.ce_name):mode==='wow'?b.wow_abs:mode==='fourWeek'?b.delta_4w:String(b.seasonality_tag||'');if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
         if (!rows.length) { list.innerHTML='<div class="mover-empty">No qualifying movers are available for this market and week.</div>'; return; }
-        list.innerHTML=rows.slice(0,10).map((row,index)=>`<div class="mover-row"><span class="mover-rank">${index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">Revenue ${money(row.revenue)}${row.yoy_growth==null?'':` · YoY ${pct(row.yoy_growth*100)}`}</div></div><div class="mover-value ${tone(row.primary_delta)}">${signedMoney(row.primary_delta)}<span class="mover-lens">${escapeHtml(row.primary_lens)}</span></div></div>`).join('');
+        const headings=[['name','CE'],['wow','WoW'],['fourWeek','4W avg'],['seasonality','vs LY']],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'',tagClass=tag=>tag==='against season'?'against':tag==='seasonal'?'seasonal':tag==='mostly TY'?'mostly-ty':'no-ly';
+        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,10).map((row,index)=>`<div class="mover-row"><span class="mover-rank">${index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</div></div><div class="mover-cell ${tone(row.wow_abs)}">${signedMoney(row.wow_abs)}</div><div class="mover-cell ${tone(row.delta_4w)}">${signedMoney(row.delta_4w)}</div><span class="mover-seasonality ${tagClass(row.seasonality_tag)}" title="Last-year seasonality context: ${escapeHtml(row.seasonality_tag||'not available')}">${escapeHtml(row.seasonality_tag||'—')}</span></div>`).join('');
       }
       function setSelectOptions(select, values, allLabel, unavailableLabel, selectedValue='') {
         select.innerHTML=`<option value="">${values.length?allLabel:unavailableLabel}</option>`+values.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
@@ -441,13 +598,13 @@
       function ceAbsoluteChange(current, baseline) { return current==null||baseline==null?null:current-baseline; }
       function ceMetricCells(periods, metric, paidStart=false) {
         const current=periods.w0[metric.field], previous=periods.w1[metric.field], lastYear=periods.ly[metric.field], wow=ceChange(current,previous),yoy=ceChange(current,lastYear),delta=ceAbsoluteChange(current,previous),start=paidStart?' ce-paid-start':'';
-        if(!ceState.expanded) return `<td class="${start}"><span class="ce-main-value">${ceMetricFormat(current,metric.format)}</span><span class="ce-sub-value ${tone(wow)}">${pct(wow,0)} WoW</span></td>`;
+        if(!ceMetricExpanded(metric)) return `<td class="${start}"><span class="ce-main-value">${ceMetricFormat(current,metric.format)}</span><span class="ce-sub-value ${tone(wow)}">${pct(wow,0)} WoW</span></td>`;
         const deltaText=metric.format==='money'?signedMoney(delta):metric.format==='decimalMoney'?(delta==null?'—':`${delta>0?'+':delta<0?'−':''}$${Math.abs(delta).toFixed(2)}`):metric.format.startsWith('pct')?(delta==null?'—':`${delta>0?'+':delta<0?'−':''}${Math.abs(delta).toFixed(1)}pp`):(delta==null?'—':`${delta>0?'+':''}${count(delta)}`);
         return `<td class="${start}">${ceMetricFormat(current,metric.format)}</td><td>${ceMetricFormat(previous,metric.format)}</td><td class="${tone(delta)}">${deltaText}</td><td class="${tone(wow)}">${pct(wow,0)}</td><td class="${tone(yoy)}">${pct(yoy,0)}</td>`;
       }
       function ceAggregatePeriods(rows) { return {w0:ceAggregate(rows,'w0'),w1:ceAggregate(rows,'w1'),ly:ceAggregate(rows,'ly')}; }
       function ceBucketValue(ce) { return ce.buckets&&ce.buckets.length?ce.buckets.map(bucket=>bucket.label).join(' + '):'Not flagged'; }
-      function ceGroupValue(ce) { return ceState.group==='bucket'?ceBucketValue(ce):(ce[ceState.group]||'Unavailable'); }
+      function ceGroupValue(ce) { if(ceState.group==='bucket')return ceBucketValue(ce);if(ceState.group==='__custom_group')return portfolioFor(ce.ce_id).primary_group||'Unassigned';return ce[ceState.group]||'Unavailable'; }
       function ceMiniSpark(ce) {
         const data=ce.chart||[],values=data.flatMap(row=>[row.revenue,row.revenue_ly]).filter(value=>value!=null);
         if(!values.length)return '—';
@@ -457,31 +614,60 @@
       function ceFilteredRows(item) {
         const query=ceState.search.trim().toLowerCase();
         return (item.all_ces||[]).filter(ce=>{
-          const hay=[ce.ce_name,ce.ce_id,ce.city,ce.category,ce.subcategory,ce.management_type,ce.growth_stage,ce.lifecycle,ce.tier,...ce.countries].filter(Boolean).join(' ').toLowerCase();
-          const chipMatch=Object.entries(ceState.filters).every(([key,selected])=>!selected.length||(key==='bucket'?selected.some(value=>(ce.buckets||[]).some(bucket=>bucket.key===value)):selected.includes(ce[key])));
-          return (!query||hay.includes(query))&&chipMatch&&(!ceState.country||ce.countries.includes(ceState.country))&&(!ceState.bdm_region||ce.bdm_region===ceState.bdm_region)&&(!ceState.growth_region||ce.growth_region===ceState.growth_region);
+          const custom=portfolioFor(ce.ce_id),hay=[ce.ce_name,ce.ce_id,ce.city,ce.category,ce.subcategory,ce.management_type,ce.growth_stage,ce.lifecycle,ce.tier,custom.primary_group,...custom.tags,...ce.countries].filter(Boolean).join(' ').toLowerCase();
+          const chipMatch=Object.entries(ceState.filters).every(([key,selected])=>!selected.length||(key==='bucket'?selected.some(value=>(ce.buckets||[]).some(bucket=>bucket.key===value)):key==='__tag'?selected.some(value=>custom.tags.includes(value)):selected.includes(ce[key])));
+          return (!query||hay.includes(query))&&chipMatch&&(!ceState.country||ce.countries.includes(ceState.country))&&(!ceState.watchOnly||custom.watchlist);
         });
       }
       function renderCeFilters(all) {
+        const customTags=[...new Set(all.flatMap(ce=>portfolioFor(ce.ce_id).tags))].sort().map(tag=>({value:tag,label:tag}));
         const specs=[
           {key:'bucket',label:'Bucket',values:[...new Map(all.flatMap(ce=>ce.buckets||[]).map(bucket=>[bucket.key,bucket])).values()].map(bucket=>({value:bucket.key,label:bucket.label}))},
-          {key:'management_type',label:'Management'},{key:'growth_stage',label:'Evolution'},{key:'lifecycle',label:'Lifecycle'},{key:'tier',label:'Tier'},
+          {key:'management_type',label:'Management'},{key:'growth_stage',label:'Evolution'},{key:'lifecycle',label:'Lifecycle'},{key:'tier',label:'Tier'},{key:'__tag',label:'Custom tags',values:customTags},
         ];
         const box=document.getElementById('ce-filter-chips');
-        box.innerHTML=specs.map(spec=>{const values=spec.values||[...new Set(all.map(ce=>ce[spec.key]).filter(Boolean))].sort().map(value=>({value,label:value}));if(!values.length)return '';const counts={};values.forEach(entry=>counts[entry.value]=all.filter(ce=>spec.key==='bucket'?(ce.buckets||[]).some(bucket=>bucket.key===entry.value):ce[spec.key]===entry.value).length);return `<div class="ce-filter-group"><span class="ce-filter-label">${spec.label}</span>${values.map(entry=>`<button class="ce-chip-filter ${(ceState.filters[spec.key]||[]).includes(entry.value)?'active':''}" type="button" data-ce-filter="${spec.key}" data-ce-filter-value="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}<span class="ce-chip-count">${counts[entry.value]}</span></button>`).join('')}</div>`;}).join('');
+        box.innerHTML=specs.map(spec=>{const values=spec.values||[...new Set(all.map(ce=>ce[spec.key]).filter(Boolean))].sort().map(value=>({value,label:value}));if(!values.length)return '';const counts={};values.forEach(entry=>counts[entry.value]=all.filter(ce=>spec.key==='bucket'?(ce.buckets||[]).some(bucket=>bucket.key===entry.value):spec.key==='__tag'?portfolioFor(ce.ce_id).tags.includes(entry.value):ce[spec.key]===entry.value).length);return `<div class="ce-filter-group"><span class="ce-filter-label">${spec.label}</span>${values.map(entry=>`<button class="ce-chip-filter ${(ceState.filters[spec.key]||[]).includes(entry.value)?'active':''}" type="button" data-ce-filter="${spec.key}" data-ce-filter-value="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}<span class="ce-chip-count">${counts[entry.value]}</span></button>`).join('')}</div>`;}).join('');
       }
       function ceTableHeader() {
-        const metricHeads=CE_METRICS.map((metric,index)=>ceState.expanded?`<th class="ce-section ${metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid'?'ce-paid-start':''}" colspan="5"><button class="ce-sort" type="button" data-ce-sort="${metric.key}">${metric.label}<span class="sort-arrow"></span></button></th>`:`<th class="${metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid'?'ce-paid-start':''}" rowspan="2"><button class="ce-sort" type="button" data-ce-sort="${metric.key}">${metric.label}<span class="sort-arrow"></span></button></th>`).join('');
-        const sub=ceState.expanded?`<tr>${CE_METRICS.map(()=>'<th class="ce-subhead">W0</th><th class="ce-subhead">W-1</th><th class="ce-subhead">Δ abs</th><th class="ce-subhead">WoW</th><th class="ce-subhead">YoY</th>').join('')}</tr>`:'';
-        return `<tr><th rowspan="2"><button class="ce-sort" type="button" data-ce-sort="ce_name">Combined entity<span class="sort-arrow"></span></button></th><th rowspan="2">12-week TY / LY</th><th rowspan="2"><button class="ce-sort" type="button" data-ce-sort="contribution">Contribution<span class="sort-arrow"></span></button></th>${metricHeads}</tr>${sub}`;
+        const anyExpanded=ceAnyMetricExpanded(),staticRowspan=anyExpanded?2:1;
+        const metricHeads=CE_METRICS.map((metric,index)=>{
+          const expanded=ceMetricExpanded(metric),paidStart=metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid'?'ce-paid-start':'';
+          const sort=expanded?`<span class="ce-metric-label">${metric.label}</span>`:`<button class="ce-sort" type="button" data-ce-sort="${metric.key}" aria-label="Sort by ${metric.label} W0">${metric.label}<span class="sort-arrow"></span></button>`;
+          const toggle=`<button class="ce-metric-toggle" type="button" data-ce-expand="${metric.key}" aria-pressed="${expanded}" aria-label="${expanded?'Collapse':'Expand'} ${metric.label} W0, W-1, delta, WoW and YoY" title="${expanded?'Collapse':'Expand'} ${metric.label}">${expanded?'&gt;&lt;':'&lt;&gt;'}</button>`;
+          return expanded?`<th class="ce-section ${paidStart}" colspan="5"><span class="ce-metric-head">${sort}${toggle}</span></th>`:`<th class="${paidStart}" rowspan="${staticRowspan}"><span class="ce-metric-head">${sort}${toggle}</span></th>`;
+        }).join('');
+        const sub=anyExpanded?`<tr>${CE_METRICS.map(metric=>ceMetricExpanded(metric)?CE_SUB_SORTS.map(spec=>`<th class="ce-subhead"><button class="ce-sub-sort" type="button" data-ce-sort="${metric.key}:${spec.key}" aria-label="Sort ${metric.label} by ${spec.label}">${spec.label}<span class="sort-arrow"></span></button></th>`).join(''):'').join('')}</tr>`:'';
+        return `<tr><th class="ce-static-name" rowspan="${staticRowspan}"><button class="ce-sort" type="button" data-ce-sort="ce_name">Combined entity<span class="sort-arrow"></span></button></th><th class="ce-static-trend" rowspan="${staticRowspan}"><span class="ce-header-stack"><strong>12-week trend</strong><small>TY / LY</small></span></th><th class="ce-static-contribution" rowspan="${staticRowspan}"><button class="ce-sort" type="button" data-ce-sort="contribution"><span class="ce-header-stack"><strong>Contribution</strong><small>Revenue share</small></span><span class="sort-arrow"></span></button></th>${metricHeads}</tr>${sub}`;
+      }
+      function ceRevealMetric(key) {
+        requestAnimationFrame(()=>{
+          const wrap=document.querySelector('.ce-table-wrap'),header=document.querySelector(`[data-ce-expand="${key}"]`)?.closest('th');
+          if(!wrap||!header)return;
+          const stickyWidth=[...document.querySelectorAll('#ce-table-head .ce-static-name,#ce-table-head .ce-static-trend,#ce-table-head .ce-static-contribution')].reduce((sum,cell)=>sum+cell.getBoundingClientRect().width,0);
+          const desiredLeft=wrap.getBoundingClientRect().left+stickyWidth,currentLeft=header.getBoundingClientRect().left;
+          wrap.scrollLeft=Math.max(0,wrap.scrollLeft+currentLeft-desiredLeft);
+        });
+      }
+      function ceSortValue(ce, key) {
+        if(key==='contribution')return ce.revenue;
+        if(key==='ce_name')return ce.ce_name;
+        if(key==='__mover')return Math.abs(ce.wow_abs||0);
+        const [metricKey,comparison='w0']=key.split(':'),metric=CE_METRICS.find(candidate=>candidate.key===metricKey);
+        if(!metric)return null;
+        const current=cePeriodValue(ce,'w0',metric),previous=cePeriodValue(ce,'w1',metric),lastYear=cePeriodValue(ce,'ly',metric);
+        if(comparison==='w1')return previous;
+        if(comparison==='delta')return ceAbsoluteChange(current,previous);
+        if(comparison==='wow')return ceChange(current,previous);
+        if(comparison==='yoy')return ceChange(current,lastYear);
+        return current;
       }
       function ceRowCells(ce, filteredRevenue, topMovers) {
-        const periods=ce.periods||{w0:{},w1:{},ly:{}},contribution=filteredRevenue&&ce.revenue!=null?100*ce.revenue/filteredRevenue:null,mover=topMovers[ce.ce_id],badges=(ce.buckets||[]).slice(0,2).map(bucket=>`<span class="ce-badge">${escapeHtml(bucket.label)}</span>`).join('');
-        return `<td><button class="ce-name-button" type="button" data-ce-open="${escapeHtml(ce.ce_id)}" title="Open ${escapeHtml(ce.ce_name)} detail">${mover?`<span class="ce-mover ${mover==='up'?'positive':'negative'}">${mover==='up'?'▲':'▼'}</span> `:''}${escapeHtml(ce.ce_name)}<span class="ce-badges">${badges}</span></button><span class="ce-identity">${escapeHtml(ce.ce_id)} · ${escapeHtml(ce.city||'City unavailable')} · ${escapeHtml(ce.category||'Category unavailable')} · ${escapeHtml(ce.tier||'Tier unavailable')}</span></td><td>${ceMiniSpark(ce)}</td><td>${contribution==null?'—':`${contribution.toFixed(1)}%`}</td>${CE_METRICS.map((metric,index)=>ceMetricCells(periods,metric,metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid')).join('')}`;
+        const periods=ce.periods||{w0:{},w1:{},ly:{}},contribution=filteredRevenue&&ce.revenue!=null?100*ce.revenue/filteredRevenue:null,mover=topMovers[ce.ce_id],custom=portfolioFor(ce.ce_id),standard=(ce.buckets||[]).slice(0,2).map(bucket=>`<span class="ce-badge">${escapeHtml(bucket.label)}</span>`),customBadges=[custom.primary_group,...custom.tags.slice(0,1)].filter(Boolean).map(value=>`<span class="ce-badge custom">${escapeHtml(value)}</span>`),badges=[...standard,...customBadges].join('');
+        return `<td class="ce-static-name"><span class="ce-name-line"><button class="ce-watch-star" type="button" data-ce-watch="${escapeHtml(ce.ce_id)}" aria-pressed="${custom.watchlist}" aria-label="${custom.watchlist?'Remove from':'Add to'} watchlist">${custom.watchlist?'★':'☆'}</button><button class="ce-name-button" type="button" data-ce-open="${escapeHtml(ce.ce_id)}" title="Open ${escapeHtml(ce.ce_name)} detail">${mover?`<span class="ce-mover ${mover==='up'?'positive':'negative'}">${mover==='up'?'▲':'▼'}</span> `:''}${escapeHtml(ce.ce_name)}<span class="ce-badges">${badges}</span></button></span><span class="ce-identity">${escapeHtml(ce.ce_id)} · ${escapeHtml(ce.city||'City unavailable')} · ${escapeHtml(ce.category||'Category unavailable')} · ${escapeHtml(ce.tier||'Tier unavailable')}</span><span class="ce-hover-revenue" aria-hidden="true"><strong>${money(ce.revenue)}</strong> revenue · <span class="${tone(ce.wow_pct)}">${pct(ce.wow_pct,0)} WoW</span></span></td><td class="ce-static-trend">${ceMiniSpark(ce)}</td><td class="ce-static-contribution">${contribution==null?'—':`${contribution.toFixed(1)}%`}</td>${CE_METRICS.map((metric,index)=>ceMetricCells(periods,metric,metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid')).join('')}`;
       }
       function ceSummaryCells(rows, marketRevenue, label, isGroup=false) {
         const periods=ceAggregatePeriods(rows),contribution=marketRevenue?100*periods.w0.revenue/marketRevenue:null;
-        return `<td>${isGroup?`<button class="ce-group-toggle" type="button" data-ce-group-toggle="${escapeHtml(label)}"><span>${ceState.collapsed[label]?'▸':'▾'}</span>${escapeHtml(label)}<span class="ce-group-count">${rows.length} CEs</span></button>`:`TOTAL · ${rows.length} CEs`}</td><td></td><td>${contribution==null?'—':`${contribution.toFixed(1)}%`}</td>${CE_METRICS.map((metric,index)=>ceMetricCells(periods,metric,metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid')).join('')}`;
+        return `<td class="ce-static-name">${isGroup?`<button class="ce-group-toggle" type="button" data-ce-group-toggle="${escapeHtml(label)}"><span>${ceState.collapsed[label]?'▸':'▾'}</span>${escapeHtml(label)}<span class="ce-group-count">${rows.length} CEs</span></button>`:`TOTAL · ${rows.length} CEs`}</td><td class="ce-static-trend"></td><td class="ce-static-contribution">${contribution==null?'—':`${contribution.toFixed(1)}%`}</td>${CE_METRICS.map((metric,index)=>ceMetricCells(periods,metric,metric.group==='paid'&&CE_METRICS[index-1]?.group!=='paid')).join('')}`;
       }
       function renderCeContribution(rows) {
         const box=document.getElementById('ce-contribution');if(!ceState.group){box.innerHTML='';return;}
@@ -491,34 +677,36 @@
         box.innerHTML=`<div class="ce-contribution-head"><strong>What drove the week · ${escapeHtml(ceState.group.replaceAll('_',' '))}</strong><span>WoW revenue movement and share of filtered revenue</span></div><div class="ce-contribution-list">${stats.sort((a,b)=>Math.abs(b.move)-Math.abs(a.move)).slice(0,10).map(row=>`<div class="ce-contribution-row"><strong>${escapeHtml(row.label)}</strong><span class="ce-contribution-track"><span class="ce-contribution-fill ${tone(row.move)}" style="width:${Math.abs(row.move)/max*50}%"></span></span><span class="ce-contribution-value ${tone(row.move)}">${signedMoney(row.move)}<small>${(100*row.revenue/total).toFixed(1)}% revenue</small></span></div>`).join('')}</div>`;
       }
       function renderAllCes(item) {
-        const all=item.all_ces||[], country=document.getElementById('ce-country'), bdm=document.getElementById('ce-bdm'), growth=document.getElementById('ce-growth');
+        const all=item.all_ces||[], country=document.getElementById('ce-country');
+        ensurePortfolioMetadata(item);
         const distinct=values=>[...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
         setSelectOptions(country,distinct(all.flatMap(ce=>ce.countries||[])),'All countries','Country unavailable',ceState.country);
-        setSelectOptions(bdm,distinct(all.map(ce=>ce.bdm_region)),'All BDM regions','BDM mapping unavailable',ceState.bdm_region);
-        setSelectOptions(growth,distinct(all.map(ce=>ce.growth_region)),'All Growth regions','Growth mapping unavailable',ceState.growth_region);
-        ceState.country=country.value; ceState.bdm_region=bdm.value; ceState.growth_region=growth.value;
+        ceState.country=country.value;
         renderCeFilters(all);
         let rows=ceFilteredRows(item);
         const key=ceState.sortKey,dir=ceState.sortDir;
         const filteredRevenue=rows.reduce((sum,ce)=>sum+(ce.revenue||0),0),totalRevenue=all.reduce((sum,ce)=>sum+(ce.revenue||0),0);
-        const sortValue=ce=>key==='contribution'?ce.revenue:key==='ce_name'?ce.ce_name:key==='__mover'?Math.abs(ce.wow_abs||0):cePeriodValue(ce,'w0',CE_METRICS.find(metric=>metric.key===key)||CE_METRICS[0]);
-        rows.sort((a,b)=>{ const av=sortValue(a),bv=sortValue(b),an=av==null,bn=bv==null; if(an&&bn)return 0;if(an)return 1;if(bn)return -1;if(typeof av==='string')return dir*av.localeCompare(bv);return dir*(av-bv); });
+        rows.sort((a,b)=>{ const av=ceSortValue(a,key),bv=ceSortValue(b,key),an=av==null,bn=bv==null; if(an&&bn)return 0;if(an)return 1;if(bn)return -1;if(typeof av==='string')return dir*av.localeCompare(bv);return dir*(av-bv); });
         const topMovers={};[...all].sort((a,b)=>Math.abs(b.wow_abs||0)-Math.abs(a.wow_abs||0)).slice(0,10).forEach(ce=>topMovers[ce.ce_id]=(ce.wow_abs||0)>=0?'up':'down');
-        document.getElementById('ce-table-head').innerHTML=ceTableHeader();
+        const anyExpanded=ceAnyMetricExpanded();document.querySelector('.ce-table').classList.toggle('ce-has-expanded',anyExpanded);document.getElementById('ce-table-head').innerHTML=ceTableHeader();
         document.querySelectorAll('[data-ce-sort]').forEach(button=>{ const active=button.dataset.ceSort===key; button.querySelector('.sort-arrow').textContent=active?(dir<0?'↓':'↑'):''; button.closest('th').setAttribute('aria-sort',active?(dir<0?'descending':'ascending'):'none'); });
         const body=document.getElementById('ce-table-body');
-        const cellCount=3+CE_METRICS.length*(ceState.expanded?5:1);
+        const cellCount=3+CE_METRICS.reduce((sum,metric)=>sum+(ceMetricExpanded(metric)?5:1),0);
         if(!rows.length) body.innerHTML=`<tr><td class="ce-empty" colspan="${cellCount}">No combined entities match the current filters.</td></tr>`;
         else {let html=`<tr class="ce-total">${ceSummaryCells(rows,totalRevenue,'Total')}</tr>`;if(ceState.group){const groups={};rows.forEach(ce=>{const value=ceGroupValue(ce);(groups[value]=groups[value]||[]).push(ce);});Object.entries(groups).sort((a,b)=>b[1].reduce((s,ce)=>s+(ce.revenue||0),0)-a[1].reduce((s,ce)=>s+(ce.revenue||0),0)).forEach(([label,members])=>{html+=`<tr class="ce-group">${ceSummaryCells(members,filteredRevenue,label,true)}</tr>`;if(!ceState.collapsed[label])html+=members.map(ce=>`<tr>${ceRowCells(ce,filteredRevenue,topMovers)}</tr>`).join('');});}else html+=rows.map(ce=>`<tr>${ceRowCells(ce,filteredRevenue,topMovers)}</tr>`).join('');body.innerHTML=html;}
         document.getElementById('ce-summary-count').textContent=count(rows.length);
         document.getElementById('ce-summary-revenue').textContent=money(filteredRevenue);
         document.getElementById('ce-summary-share').textContent=totalRevenue?`${(100*filteredRevenue/totalRevenue).toFixed(1)}%`:'—';
-        document.getElementById('ce-results-copy').textContent=`Showing ${rows.length} of ${all.length} CEs · filtered revenue ${money(filteredRevenue)}${ceState.topMovers?' · sorted by |revenue Δ WoW|':''}${ceState.group?` · grouped by ${ceState.group.replaceAll('_',' ')}`:''}`;
+        document.getElementById('ce-results-copy').textContent=`Showing ${rows.length} of ${all.length} CEs · filtered revenue ${money(filteredRevenue)}${ceState.watchOnly?' · watchlist only':''}${ceState.topMovers?' · sorted by |revenue Δ WoW|':''}${ceState.group?` · grouped by ${ceState.group==='__custom_group'?'custom group':ceState.group.replaceAll('_',' ')}`:''}`;
         renderCeContribution(rows);
-        const collapse=document.getElementById('ce-collapse-groups');collapse.disabled=!ceState.group;collapse.textContent=ceState.group&&Object.values(ceState.collapsed).some(Boolean)?'▾ Expand groups':'▸ Collapse groups';
-        document.getElementById('ce-top-movers').setAttribute('aria-pressed',String(ceState.topMovers));document.getElementById('ce-expand-metrics').setAttribute('aria-pressed',String(ceState.expanded));
-        const missing=[]; if(!distinct(all.map(ce=>ce.bdm_region)).length) missing.push('BDM region'); if(!distinct(all.map(ce=>ce.growth_region)).length) missing.push('Growth region');
-        const cap=item.ce_cap;document.getElementById('ce-filter-boundary').textContent=(cap?`Capped Headout view: showing ${cap.shown} of ${cap.total} CEs under the existing inclusion rules. `:'')+(missing.length?`Country and portfolio filters are snapshot-backed. ${missing.join(' and ')} require an approved CE-dimensions sidecar and are disabled.`:'Country and portfolio filters are snapshot-backed; BDM and Growth region use the approved CE-dimensions sidecar.');
+        const collapse=document.getElementById('ce-collapse-groups');collapse.disabled=!ceState.group;collapse.textContent=ceState.group&&Object.values(ceState.collapsed).some(Boolean)?'▾ Expand all':'▸ Collapse all';
+        const expandAll=document.getElementById('ce-expand-metrics');
+        const watched=all.filter(ce=>portfolioFor(ce.ce_id).watchlist).length,watchOnly=document.getElementById('ce-watch-only');watchOnly.setAttribute('aria-pressed',String(ceState.watchOnly));watchOnly.textContent=`★ Watchlist only${watched?` · ${watched}`:''}`;
+        document.getElementById('ce-top-movers').setAttribute('aria-pressed',String(ceState.topMovers));expandAll.setAttribute('aria-pressed',String(anyExpanded));expandAll.textContent=anyExpanded?'⇔ Collapse all metrics':'⇔ Expand all metrics';
+        const activeFilterCount=Object.values(ceState.filters).reduce((sum,values)=>sum+values.length,0);
+        const filterCount=document.getElementById('ce-filter-count');filterCount.textContent=String(activeFilterCount);filterCount.dataset.active=String(activeFilterCount>0);
+        const filterPanel=document.getElementById('ce-filter-panel'),filterToggle=document.getElementById('ce-filter-toggle');filterPanel.hidden=!ceState.filtersOpen;filterToggle.setAttribute('aria-expanded',String(ceState.filtersOpen));
+        const cap=item.ce_cap;document.getElementById('ce-filter-boundary').textContent=(cap?`Capped Headout view: showing ${cap.shown} of ${cap.total} CEs under the existing inclusion rules. `:'')+'Country and portfolio filters use the current weekly snapshot.';
       }
       function ceChart(ce) {
         const data=ce.chart||[], width=760,height=160,margin={top:10,right:12,bottom:24,left:52},values=data.flatMap(row=>[row.revenue,row.revenue_ly]).filter(value=>value!=null);
@@ -528,13 +716,57 @@
         return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} 12-week revenue trajectory"><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(lo)}" y2="${y(lo)}" stroke="#e7e2eb"/><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(hi)}" y2="${y(hi)}" stroke="#e7e2eb"/><text x="${margin.left-8}" y="${y(lo)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(lo,0)}</text><text x="${margin.left-8}" y="${y(hi)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(hi,0)}</text><polyline points="${points('revenue_ly')}" fill="none" stroke="#9a94a4" stroke-width="1.4" stroke-dasharray="5 5"/><polyline points="${points('revenue')}" fill="none" stroke="#6d2cff" stroke-width="2.4"/><text x="${margin.left}" y="${height-5}" fill="#766f80" font-size="10">${data[0]?dateLabel(data[0].week):''}</text><text x="${width-margin.right}" y="${height-5}" text-anchor="end" fill="#766f80" font-size="10">${data.length?dateLabel(data[data.length-1].week):''}</text></svg>`;
       }
       function renderCeDrawer(ce) {
+        const custom=portfolioFor(ce.ce_id);
         document.getElementById('ce-drawer-title').textContent=ce.ce_name;
         document.getElementById('ce-drawer-subtitle').textContent=`${ce.ce_id} · ${ce.city||'City unavailable'}`;
-        document.getElementById('ce-drawer-chips').innerHTML=[ce.category,ce.management_type,ce.growth_stage,ce.bdm_region,ce.growth_region].filter(Boolean).map(value=>`<span class="ce-chip">${escapeHtml(value)}</span>`).join('');
+        document.getElementById('ce-drawer-chips').innerHTML=`<button class="portfolio-button" type="button" data-ce-watch="${escapeHtml(ce.ce_id)}" aria-pressed="${custom.watchlist}">${custom.watchlist?'★ Watchlisted':'☆ Add to watchlist'}</button>`+[ce.category,ce.management_type,ce.growth_stage,custom.primary_group,...custom.tags].filter(Boolean).map(value=>`<span class="ce-chip">${escapeHtml(value)}</span>`).join('');
         document.getElementById('ce-drawer-overview').innerHTML=[metric('Weekly revenue',money(ce.revenue)),metric('Versus last week',pct(ce.wow_pct),tone(ce.wow_pct)),metric('Weekly YoY',pct(ce.yoy_pct),tone(ce.yoy_pct))].join('').replaceAll('class="metric"','class="drawer-stat"');
         document.getElementById('ce-drawer-chart').innerHTML=ceChart(ce);
         const countries=[...(ce.country_mix||[])].sort((a,b)=>(b.revenue||0)-(a.revenue||0));
         document.getElementById('ce-country-list').innerHTML=countries.length?countries.slice(0,10).map(row=>`<div class="ce-country-row"><span>${escapeHtml(row.country)}</span><strong>${money(row.revenue)} · ${row.share_pct==null?'—':`${row.share_pct.toFixed(0)}%`}</strong></div>`).join(''):'<div class="mover-empty">Country composition is unavailable.</div>';
+      }
+      function portfolioCounts(all) {
+        const groups={},tags={};all.forEach(ce=>{const meta=portfolioFor(ce.ce_id);if(meta.primary_group)groups[meta.primary_group]=(groups[meta.primary_group]||0)+1;meta.tags.forEach(tag=>tags[tag]=(tags[tag]||0)+1);});return {groups,tags};
+      }
+      function loadPortfolioExample() {
+        const item=currentHeadline(),groups=['Leadership focus','Growth bets','Core portfolio'],tags=['Weekly audit','New launch','Seasonal','Needs owner'];ensurePortfolioMetadata(item);
+        (item.all_ces||[]).slice(0,12).forEach((ce,index)=>{const current=portfolioFor(ce.ce_id),hasContext=current.primary_group||current.tags.length||current.watchlist;if(hasContext)return;portfolioMetadata[String(ce.ce_id)]={primary_group:groups[index%groups.length],tags:[tags[index%tags.length],...(index%3===0?['Leadership review']:[])],watchlist:index<5,demo:true};});
+        savePortfolioMetadata(item);portfolioTab='groups';renderAllCes(item);renderPortfolioDrawer();
+      }
+      function clearPortfolioExample() {
+        const item=currentHeadline();Object.keys(portfolioMetadata).forEach(ceId=>{if(portfolioMetadata[ceId]?.demo)delete portfolioMetadata[ceId];});savePortfolioMetadata(item);renderAllCes(item);renderPortfolioDrawer();
+      }
+      function renderPortfolioDrawer() {
+        const item=currentHeadline(),all=item.all_ces||[];ensurePortfolioMetadata(item);
+        document.querySelectorAll('[data-portfolio-tab]').forEach(button=>{const active=button.dataset.portfolioTab===portfolioTab;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+        ['watchlist','groups','import'].forEach(name=>document.getElementById(`portfolio-${name}-panel`).hidden=name!==portfolioTab);
+        const watched=all.filter(ce=>portfolioFor(ce.ce_id).watchlist),counts=portfolioCounts(all);
+        document.getElementById('portfolio-watchlist-body').innerHTML=`<div class="portfolio-summary"><div class="portfolio-stat"><strong>${watched.length}</strong><span>Watchlisted CEs</span></div><div class="portfolio-stat"><strong>${money(watched.reduce((sum,ce)=>sum+(ce.revenue||0),0))}</strong><span>Weekly revenue</span></div></div>${watched.length?`<div class="portfolio-list">${watched.map(ce=>`<div class="portfolio-row"><div><strong>${escapeHtml(ce.ce_name)}</strong><span>${escapeHtml(ce.ce_id)} · ${escapeHtml(portfolioFor(ce.ce_id).primary_group||'No custom group')}</span></div><button class="ce-watch-star" type="button" data-ce-watch="${escapeHtml(ce.ce_id)}" aria-label="Remove ${escapeHtml(ce.ce_name)} from watchlist">★</button></div>`).join('')}</div>`:'<div class="portfolio-empty">No CEs are watchlisted yet. Use the star beside a CE to build a durable review set.</div>'}`;
+        const groupRows=Object.entries(counts.groups).sort((a,b)=>b[1]-a[1]),tagRows=Object.entries(counts.tags).sort((a,b)=>b[1]-a[1]),demoCount=Object.values(portfolioMetadata).filter(record=>record.demo).length;
+        document.getElementById('portfolio-groups-body').innerHTML=`<div class="portfolio-demo"><div><strong>See a populated portfolio</strong><p>Load removable sample groups, tags and watchlists against real CIDs in this report. Weekly metrics remain unchanged.</p></div><div class="portfolio-demo-actions">${demoCount?'<button class="portfolio-button" type="button" data-portfolio-demo="clear">Clear example</button>':'<button class="portfolio-button primary" type="button" data-portfolio-demo="load">Load example</button>'}</div></div><div class="portfolio-summary"><div class="portfolio-stat"><strong>${groupRows.length}</strong><span>Primary groups</span></div><div class="portfolio-stat"><strong>${tagRows.length}</strong><span>Reusable tags</span></div></div><h3>Primary groups</h3>${groupRows.length?`<div class="portfolio-list">${groupRows.map(([name,total])=>`<div class="portfolio-row"><strong>${escapeHtml(name)}</strong><span>${total} CEs</span></div>`).join('')}</div>`:'<div class="portfolio-empty">Upload metadata to add one primary group per CE. Primary groups become a subtotal option in Group by.</div>'}<h3>Tags</h3>${tagRows.length?`<div class="portfolio-list">${tagRows.map(([name,total])=>`<div class="portfolio-row"><strong>${escapeHtml(name)}</strong><span>${total} CEs</span></div>`).join('')}</div>`:'<div class="portfolio-empty">Tags are multi-value filters for cohorts such as launches, ownership or strategic themes.</div>'}`;
+        renderPortfolioPreview();
+      }
+      function parseCsv(text) {
+        const rows=[],row=[];let field='',quoted=false;
+        for(let index=0;index<text.length;index++){const char=text[index],next=text[index+1];if(char==='"'&&quoted&&next==='"'){field+='"';index++;}else if(char==='"'){quoted=!quoted;}else if(char===','&&!quoted){row.push(field);field='';}else if((char==='\n'||char==='\r')&&!quoted){if(char==='\r'&&next==='\n')index++;row.push(field);if(row.some(value=>value.trim()))rows.push([...row]);row.length=0;field='';}else field+=char;}
+        row.push(field);if(row.some(value=>value.trim()))rows.push(row);return rows;
+      }
+      function buildPortfolioPreview(text,item) {
+        const rows=parseCsv(text);if(!rows.length)return {error:'The CSV is empty.',records:[],unknown:[],duplicates:[]};
+        const headers=rows[0].map(value=>value.trim().toLowerCase()),idIndex=headers.indexOf('ce_id');if(idIndex<0)return {error:'Missing required ce_id column.',records:[],unknown:[],duplicates:[]};
+        const known=new Set((item.all_ces||[]).map(ce=>String(ce.ce_id))),seen=new Set(),unknown=[],duplicates=[],records=[];
+        rows.slice(1).forEach(values=>{const raw={};headers.forEach((header,index)=>raw[header]=values[index]||'');const ceId=String(raw.ce_id||'').trim();if(!ceId)return;if(seen.has(ceId)){duplicates.push(ceId);return;}seen.add(ceId);if(!known.has(ceId)){unknown.push(ceId);return;}records.push({ce_id:ceId,...normalizePortfolioRecord(raw)});});
+        return {records,unknown,duplicates,total:rows.length-1};
+      }
+      function renderPortfolioPreview() {
+        const box=document.getElementById('portfolio-preview'),apply=document.getElementById('portfolio-apply');if(!box||!apply)return;
+        if(!portfolioPreview){apply.disabled=true;box.innerHTML='<div class="portfolio-empty">Choose a CSV to preview matches, unknown CIDs and duplicates before applying.</div>';return;}
+        if(portfolioPreview.error){apply.disabled=true;box.innerHTML=`<div class="portfolio-empty">${escapeHtml(portfolioPreview.error)}</div>`;return;}
+        apply.disabled=!portfolioPreview.records.length;box.innerHTML=`<div class="portfolio-summary"><div class="portfolio-stat"><strong>${portfolioPreview.records.length}</strong><span>Matched CIDs</span></div><div class="portfolio-stat"><strong>${portfolioPreview.unknown.length}</strong><span>Unknown CIDs</span></div><div class="portfolio-stat"><strong>${portfolioPreview.duplicates.length}</strong><span>Duplicates</span></div></div>${portfolioPreview.records.length?`<div class="portfolio-preview-table"><table><thead><tr><th>CID</th><th>Primary group</th><th>Tags</th><th>Watchlist</th></tr></thead><tbody>${portfolioPreview.records.slice(0,8).map(row=>`<tr><td>${escapeHtml(row.ce_id)}</td><td>${escapeHtml(row.primary_group||'—')}</td><td>${escapeHtml(row.tags.join(', ')||'—')}</td><td>${row.watchlist?'Yes':'No'}</td></tr>`).join('')}</tbody></table></div>`:''}${portfolioPreview.unknown.length?`<p class="portfolio-status">Unknown CIDs skipped: ${escapeHtml(portfolioPreview.unknown.slice(0,6).join(', '))}${portfolioPreview.unknown.length>6?'…':''}</p>`:''}${portfolioPreview.duplicates.length?`<p class="portfolio-status">Duplicate CIDs skipped: ${escapeHtml(portfolioPreview.duplicates.slice(0,6).join(', '))}${portfolioPreview.duplicates.length>6?'…':''}</p>`:''}`;
+      }
+      function escapeCsv(value) { const text=String(value==null?'':value);return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text; }
+      function downloadPortfolioTemplate() {
+        const item=currentHeadline(),lines=['ce_id,ce_name,primary_group,tags,watchlist',...(item.all_ces||[]).map(ce=>[ce.ce_id,ce.ce_name,'','',''].map(escapeCsv).join(','))],blob=new Blob([lines.join('\n')],{type:'text/csv'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`${String(item.market||'market').toLowerCase().replace(/[^a-z0-9]+/g,'-')}-ce-metadata.csv`;anchor.click();URL.revokeObjectURL(url);
       }
       function sparkline(metric) {
         const data=metric.series||[], values=data.flatMap(row=>[row.ty,row.ly]).filter(value=>value!=null);
@@ -610,15 +842,17 @@
       weekSelect.value=String(Math.max(0,payload.headlines.length-1));
       weekSelect.addEventListener('change',()=>render(Number(weekSelect.value)));
       document.querySelectorAll('[data-report-view]').forEach(button=>button.addEventListener('click',()=>{ const view=button.dataset.reportView; document.getElementById('overview-view').hidden=view!=='overview'; document.getElementById('all-ces-view').hidden=view!=='all-ces'; document.querySelectorAll('[data-report-view]').forEach(item=>{ const active=item===button; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current'); }); }));
-      document.querySelectorAll('[data-mover-sort]').forEach(select=>select.addEventListener('change',()=>renderMovers(payload.headlines[Number(weekSelect.value||0)],select.dataset.moverSort)));
+      document.querySelector('.attention').addEventListener('click',event=>{const button=event.target.closest('[data-mover-sort][data-mover-kind]');if(!button)return;const state=moverSorts[button.dataset.moverKind],key=button.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'||key==='seasonality'?1:-1;}renderMovers(currentHeadline(),button.dataset.moverKind);});
       document.getElementById('ce-search').addEventListener('input',event=>{ceState.search=event.target.value;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
-      [['ce-country','country'],['ce-bdm','bdm_region'],['ce-growth','growth_region']].forEach(([id,key])=>document.getElementById(id).addEventListener('change',event=>{ceState[key]=event.target.value;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);}));
+      document.getElementById('ce-filter-toggle').addEventListener('click',()=>{ceState.filtersOpen=!ceState.filtersOpen;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
+      document.getElementById('ce-country').addEventListener('change',event=>{ceState.country=event.target.value;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.getElementById('ce-group').addEventListener('change',event=>{ceState.group=event.target.value;ceState.collapsed={};renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
-      document.getElementById('ce-reset').addEventListener('click',()=>{Object.assign(ceState,{search:'',country:'',bdm_region:'',growth_region:'',group:'',filters:{},collapsed:{},expanded:false,topMovers:false,sortKey:'revenue',sortDir:-1});document.getElementById('ce-search').value='';document.getElementById('ce-group').value='';renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
-      document.getElementById('ce-table-head').addEventListener('click',event=>{const button=event.target.closest('[data-ce-sort]');if(!button)return;const key=button.dataset.ceSort;ceState.topMovers=false;if(ceState.sortKey===key)ceState.sortDir*=-1;else{ceState.sortKey=key;ceState.sortDir=key==='ce_name'?1:-1;}renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
+      document.getElementById('ce-reset').addEventListener('click',()=>{Object.assign(ceState,{search:'',country:'',group:'',filters:{},collapsed:{},expanded:{},watchOnly:false,topMovers:false,sortKey:'revenue',sortDir:-1});document.getElementById('ce-search').value='';document.getElementById('ce-group').value='';renderAllCes(currentHeadline());});
+      document.getElementById('ce-table-head').addEventListener('click',event=>{const expand=event.target.closest('[data-ce-expand]');if(expand){const key=expand.dataset.ceExpand;ceState.expanded[key]=!ceState.expanded[key];renderAllCes(payload.headlines[Number(weekSelect.value||0)]);ceRevealMetric(key);return;}const button=event.target.closest('[data-ce-sort]');if(!button)return;const key=button.dataset.ceSort;ceState.topMovers=false;if(ceState.sortKey===key)ceState.sortDir*=-1;else{ceState.sortKey=key;ceState.sortDir=key==='ce_name'?1:-1;}renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.getElementById('ce-filter-chips').addEventListener('click',event=>{const button=event.target.closest('[data-ce-filter]');if(!button)return;const key=button.dataset.ceFilter,value=button.dataset.ceFilterValue,selected=ceState.filters[key]||[];ceState.filters[key]=selected.includes(value)?selected.filter(item=>item!==value):[...selected,value];renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.getElementById('ce-top-movers').addEventListener('click',()=>{ceState.topMovers=!ceState.topMovers;if(ceState.topMovers){ceState.sortKey='__mover';ceState.sortDir=-1;}else{ceState.sortKey='revenue';ceState.sortDir=-1;}renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
-      document.getElementById('ce-expand-metrics').addEventListener('click',()=>{ceState.expanded=!ceState.expanded;renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
+      document.getElementById('ce-watch-only').addEventListener('click',()=>{ceState.watchOnly=!ceState.watchOnly;renderAllCes(currentHeadline());});
+      document.getElementById('ce-expand-metrics').addEventListener('click',()=>{const collapse=ceAnyMetricExpanded();ceState.expanded={};if(!collapse)CE_METRICS.forEach(metric=>ceState.expanded[metric.key]=true);renderAllCes(payload.headlines[Number(weekSelect.value||0)]);document.querySelector('.ce-table-wrap').scrollLeft=0;});
       document.getElementById('ce-collapse-groups').addEventListener('click',()=>{if(!ceState.group)return;const rows=ceFilteredRows(payload.headlines[Number(weekSelect.value||0)]),labels=[...new Set(rows.map(ce=>ceGroupValue(ce)))],shouldCollapse=labels.some(label=>!ceState.collapsed[label]);labels.forEach(label=>ceState.collapsed[label]=shouldCollapse);renderAllCes(payload.headlines[Number(weekSelect.value||0)]);});
       document.querySelectorAll('[data-series]').forEach(button=>button.addEventListener('click',()=>{ const name=button.dataset.series; seriesVisible[name]=!seriesVisible[name]; button.setAttribute('aria-pressed',String(seriesVisible[name])); drawChart(payload.headlines[Number(weekSelect.value||0)]); }));
       const drawerRoot=document.getElementById('detail-root'), drawer=document.getElementById('detail-drawer'), openDetail=document.getElementById('open-detail'), closeDetail=document.getElementById('close-detail');
@@ -631,9 +865,21 @@
       let ceReturnFocus=null;
       function openCeDrawer(ceId){const item=payload.headlines[Number(weekSelect.value||0)],ce=(item.all_ces||[]).find(row=>String(row.ce_id)===String(ceId));if(!ce)return;renderCeDrawer(ce);ceReturnFocus=document.activeElement;ceDrawerRoot.hidden=false;document.body.classList.add('drawer-open');ceClose.focus();}
       function closeCeDrawer(){ceDrawerRoot.hidden=true;document.body.classList.remove('drawer-open');if(ceReturnFocus)ceReturnFocus.focus();}
-      document.getElementById('ce-table-body').addEventListener('click',event=>{const group=event.target.closest('[data-ce-group-toggle]');if(group){const label=group.dataset.ceGroupToggle;ceState.collapsed[label]=!ceState.collapsed[label];renderAllCes(payload.headlines[Number(weekSelect.value||0)]);return;}const button=event.target.closest('[data-ce-open]');if(button)openCeDrawer(button.dataset.ceOpen);});
+      document.getElementById('ce-table-body').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch){toggleWatchlist(watch.dataset.ceWatch);return;}const group=event.target.closest('[data-ce-group-toggle]');if(group){const label=group.dataset.ceGroupToggle;ceState.collapsed[label]=!ceState.collapsed[label];renderAllCes(currentHeadline());return;}const button=event.target.closest('[data-ce-open]');if(button)openCeDrawer(button.dataset.ceOpen);});
+      document.getElementById('ce-drawer-chips').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch)toggleWatchlist(watch.dataset.ceWatch);});
       ceClose.addEventListener('click',closeCeDrawer);document.getElementById('ce-drawer-scrim').addEventListener('click',closeCeDrawer);
       document.addEventListener('keydown',event=>{if(ceDrawerRoot.hidden)return;if(event.key==='Escape'){closeCeDrawer();return;}if(event.key==='Tab'){const controls=[...ceDrawer.querySelectorAll('button,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
+      const portfolioRoot=document.getElementById('portfolio-root'),portfolioDrawer=document.getElementById('portfolio-drawer'),portfolioClose=document.getElementById('portfolio-close');let portfolioReturnFocus=null;
+      function openPortfolioDrawer(){portfolioReturnFocus=document.activeElement;portfolioRoot.hidden=false;document.body.classList.add('drawer-open');renderPortfolioDrawer();portfolioClose.focus();}
+      function closePortfolioDrawer(){portfolioRoot.hidden=true;document.body.classList.remove('drawer-open');if(portfolioReturnFocus)portfolioReturnFocus.focus();}
+      document.getElementById('ce-manage-portfolio').addEventListener('click',openPortfolioDrawer);portfolioClose.addEventListener('click',closePortfolioDrawer);document.getElementById('portfolio-scrim').addEventListener('click',closePortfolioDrawer);
+      document.querySelectorAll('[data-portfolio-tab]').forEach(button=>button.addEventListener('click',()=>{portfolioTab=button.dataset.portfolioTab;renderPortfolioDrawer();}));
+      document.getElementById('portfolio-watchlist-body').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch)toggleWatchlist(watch.dataset.ceWatch);});
+      document.getElementById('portfolio-groups-body').addEventListener('click',event=>{const action=event.target.closest('[data-portfolio-demo]')?.dataset.portfolioDemo;if(action==='load')loadPortfolioExample();if(action==='clear')clearPortfolioExample();});
+      document.getElementById('portfolio-download-template').addEventListener('click',downloadPortfolioTemplate);
+      document.getElementById('portfolio-file').addEventListener('change',async event=>{const file=event.target.files&&event.target.files[0];portfolioPreview=file?buildPortfolioPreview(await file.text(),currentHeadline()):null;renderPortfolioPreview();});
+      document.getElementById('portfolio-apply').addEventListener('click',()=>{if(!portfolioPreview||!portfolioPreview.records.length)return;const item=currentHeadline();portfolioPreview.records.forEach(row=>portfolioMetadata[String(row.ce_id)]=normalizePortfolioRecord(row));savePortfolioMetadata(item);portfolioPreview=null;document.getElementById('portfolio-file').value='';renderAllCes(item);renderPortfolioDrawer();});
+      document.addEventListener('keydown',event=>{if(portfolioRoot.hidden)return;if(event.key==='Escape'){closePortfolioDrawer();return;}if(event.key==='Tab'){const controls=[...portfolioDrawer.querySelectorAll('button,input,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
       new ResizeObserver(()=>drawChart(payload.headlines[Number(weekSelect.value||0)])).observe(document.querySelector('.chart-wrap'));
       render(Number(weekSelect.value));
     })();
