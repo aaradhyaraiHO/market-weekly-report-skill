@@ -1,8 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { getVercelOidcToken } from "@vercel/oidc";
 
-const GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
-const MODEL = process.env.REVIEW_AI_MODEL || "openai/gpt-5.4";
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const MODEL = process.env.REVIEW_AI_MODEL || "gpt-5.6-luna";
 
 function sameSecret(actual, expected) {
   const a = Buffer.from(String(actual || ""));
@@ -38,24 +37,29 @@ function cleanRecords(records) {
   })).filter((record) => record.source_ref && record.body);
 }
 
-async function askGateway(instruction, payload, token) {
-  if (!token) throw new Error("AI gateway authentication unavailable");
-  const response = await fetch(GATEWAY_URL, {
+async function askModel(instruction, payload) {
+  const token = process.env.OPENAI_API_KEY;
+  if (!token) throw new Error("OpenAI API authentication unavailable");
+  const response = await fetch(OPENAI_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
-      temperature: 0.1,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: instruction },
         { role: "user", content: JSON.stringify(payload) },
       ],
     }),
   });
-  if (!response.ok) throw new Error(`AI gateway returned ${response.status}`);
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
+    const code = failure?.error?.code || failure?.error?.type || "unknown_error";
+    throw new Error(`OpenAI API returned ${response.status} (${code})`);
+  }
   const result = await response.json();
   const content = result?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("AI gateway returned no content");
+  if (!content) throw new Error("OpenAI API returned no content");
   return JSON.parse(content);
 }
 
@@ -68,18 +72,15 @@ export default async function handler(req, res) {
   const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
   const records = cleanRecords(body.records);
   if (!records.length) return res.status(400).json({ error: "source records required" });
-  const gatewayToken = process.env.AI_GATEWAY_API_KEY || await getVercelOidcToken();
-
   try {
     if (body.mode === "weekly_thread_summary") {
       const allowed = new Set(records.map((record) => record.source_ref));
-      const result = await askGateway(
+      const result = await askModel(
         "Summarize an internal weekly CE Slack discussion. Use only supplied records. " +
         "Return JSON with arrays: findings, decisions, open_points (concise strings), " +
         "action_suggestions and check_suggestions (objects with text and optional YYYY-MM-DD due_date), " +
         "and source_refs. Preserve uncertainty, do not infer owners, and cite only supplied source_refs.",
         { identity: body.identity || {}, previous_summary: body.previous_summary || {}, records },
-        gatewayToken,
       );
       const sourceRefs = strings(result.source_refs, 200).filter((ref) => allowed.has(ref));
       if (!sourceRefs.length) throw new Error("summary omitted valid source references");
@@ -93,12 +94,11 @@ export default async function handler(req, res) {
       }});
     }
 
-    const result = await askGateway(
+    const result = await askModel(
       "Extract concise commentary, action, or dated-check suggestions from internal source records. " +
       "Return JSON {suggestions:[{source_ref,kind,body,proposed_due_date,confidence}]}. " +
       "kind must be comment, action, or check. Use only supplied text and source_refs; never infer an owner.",
       { source_type: body.source_type || "unknown", identity: body.identity || {}, records },
-      gatewayToken,
     );
     const allowed = new Set(records.map((record) => record.source_ref));
     const output = (Array.isArray(result.suggestions) ? result.suggestions : []).filter((item) =>
@@ -114,6 +114,7 @@ export default async function handler(req, res) {
     }));
     return res.status(200).json({ suggestions: output });
   } catch (error) {
+    console.error("review-summary failed:", error instanceof Error ? error.message : "unknown error");
     return res.status(502).json({ error: "summary unavailable" });
   }
 }
