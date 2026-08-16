@@ -385,6 +385,17 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertNotIn("#6d2cff", template.lower())
         self.assertIsNone(re.search(r"transition\s*:\s*all\b", template, re.I))
 
+    def test_v2_weekly_comparisons_use_relative_percentages_everywhere(self):
+        template = Path(render_v2.TEMPLATE).read_text()
+
+        self.assertIn("const relativePct =", template)
+        self.assertIn("const relativePctFromPoints =", template)
+        self.assertIn("every comparison is relative percentage change", template)
+        self.assertNotIn("const cePp=", template)
+        self.assertNotIn("percentage points", template)
+        self.assertNotIn("Snapshot-backed", template)
+        self.assertNotIn("ce-live-badge", template)
+
     def test_report_scope_is_one_market_with_week_history(self):
         older = copy.deepcopy(self.market)
         older["meta"]["week_start"] = "2026-07-26"
