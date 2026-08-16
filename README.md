@@ -21,3 +21,65 @@ integration:
 ```sh
 python3 scripts/weekly_report/verify_baseline.py
 ```
+
+## V2 Market Headlines preview
+
+The V2 headline is an isolated, no-publish renderer over the existing schema-v1
+snapshot. It does not change the V1 report, bucket engines, Slack payloads,
+Sheets, publishing, or sidecar loading.
+
+```sh
+python3 scripts/weekly_report/render_v2.py \
+  tests/weekly_report/fixtures/snapshot_north_america_2026-08-02.json \
+  --out /tmp/weekly-v2-headline.html
+```
+
+An optional approved goals sidecar may be supplied with `--goals`. Its top-level
+shape is `{"markets":{"market_slug":{...}}}`. A usable market record requires
+`month`, `monthly_goal`, `mtd_revenue`, `forecast_revenue`, and `as_of`; otherwise
+the report explicitly shows that the target comparison is unavailable.
+
+Build that frozen sidecar with the same canonical revenue field used by V1:
+
+```sh
+python3 scripts/weekly_report/build_v2_goals.py \
+  /path/to/snapshot_north_america_2026-08-02.json \
+  --out /tmp/weekly-v2-goals.json
+```
+
+The command is read-only against BigQuery and performs no publishing. It uses
+an approved market target when present, falls back to a CE-target roll-up only
+when the market row is absent, and never adds the two grains together. Because
+`revenue_goals` is Drive-backed, the local gcloud login must include Drive
+access (`gcloud auth login --enable-gdrive-access`).
+
+The V2 All-CE view reads the complete Overall/Paid weekly metric set,
+TY/LY trajectories, metadata, customer-country composition and current
+`buckets_final` membership directly from the same snapshot. It supports
+snapshot-backed search and multi-select filters, sorting, top-mover order,
+grouping, ratio-safe subtotals, contribution context and expandable
+W0/W-1/change/WoW/YoY evidence. BDM and Growth regions are never inferred from
+management type or lifecycle stage. They can be attached with
+`--ce-dimensions` using this optional shape:
+
+```json
+{
+  "markets": {
+    "market_slug": {
+      "ce_id": {
+        "bdm_region": "BDM region name",
+        "growth_region": "Growth region name"
+      }
+    }
+  }
+}
+```
+
+When this approved mapping is absent, the two organizational filters remain
+disabled while all snapshot-backed portfolio controls, evidence and CE detail
+continue to work. The V2 CE drawer consumes the live schema-v1 Overall/Paid
+series, Shapley result, channels, funnel, TGIDs, booking-grain variants,
+five-band lead-time mix, and customer-country mix. Missing blocks omit cleanly;
+resource trendlines are not synthesized when a historical sidecar is absent.
+Saved views, watchlists, custom groups, notes and action persistence remain
+separate migration slices.

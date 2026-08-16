@@ -27,3 +27,23 @@ python3 scripts/weekly_report/verify_baseline.py
 Generated files exist only inside an OS temporary directory. The verifier does not build snapshots,
 query BigQuery, open a browser, read or write Sheets, post to Slack, publish the Ledger, touch
 `.cache`, or write under `thoughts/`.
+
+## V2 visual and engine boundaries
+
+Every V2 surface must use the Oak/Eevee foundation defined in
+`scripts/weekly_report/template/report_v2_template.html`: Halyard text/display families, the Eevee
+semantic color variables, the 8/16/20 px radius scale, and the shared elevation tokens. New V2
+components should extend these variables instead of introducing a second font, palette, or shadow
+system. The automated contract rejects the previous one-off purple and unrestricted
+`transition: all` declarations.
+
+V2 is a consumer of the existing V1 weekly engine. Mover order and last-year seasonality tags come
+from `market_summary.headlines.week_header`; V2 preserves them without independently recalculating
+their thresholds. Older snapshots use the existing raw WoW mover lists as a documented fallback.
+Internal dual-clock, structural-flow, concentration, and provenance evidence is deliberately not
+shown in the market drawer because it does not help the weekly reader decide what to investigate.
+
+The V2 market-detail drawer preserves the V1 evidence contract: the ordered 12-metric table,
+legacy Orders/AOV/Avg-CM1 backfills, W0/W-1/absolute/percentage deltas, aligned TY/LY sparklines
+with weekly hover values, and the five-factor WoW Shapley result. Monthly target pacing stays on
+the overview because repeating it in the evidence drawer would create two competing summaries.

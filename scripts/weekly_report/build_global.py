@@ -37,6 +37,7 @@ import shapley
 from build_snapshot import (
     _apply_cascade,
     _attach_channels_funnel,
+    _attach_resource_histories,
     _attach_resource_breakdowns,
     _ce_levels,
     _enrich_b1_sparklines,
@@ -576,27 +577,45 @@ def build_global(week: str) -> dict:
     tgids_df = fetch.ce_tgids(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    tgid_funnel (Mixpanel, CE-filtered)...")
     tgid_funnel_df = fetch.ce_tgid_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end, max_bytes=MIXPANEL_GLOBAL_CAP)
+    print("    variants (fct_bookings + fct_orders, global)...")
+    try:
+        variants_df = fetch.ce_variants(
+            None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end
+        )
+    except Exception as exc:
+        variants_df = pd.DataFrame()
+        print(f"    variants skipped (optional V2 enrichment): {exc}")
     print("    tgid_leadtime (fct_bookings, global)...")
     tgid_lt_df = fetch.ce_tgid_leadtime(None, w0_start, w0_end, wm1_start, wm1_end)
     print("    leadtime (fct_bookings, global)...")
-    lead_df = fetch.ce_leadtime(None, w0_start, w0_end, wm1_start, wm1_end)
+    lead_df = fetch.ce_leadtime(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    countries (fct_orders, global)...")
-    ctry_df = fetch.ce_countries(None, w0_start, w0_end, wm1_start, wm1_end)
+    ctry_df = fetch.ce_countries(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    channels (fct_orders, global)...")
     chan_df = fetch.ce_channels(None, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end)
     print("    funnel (Mixpanel, CE-filtered)...")
     funnel_df = fetch.ce_funnel(surfaced_ids, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end, max_bytes=MIXPANEL_GLOBAL_CAP)
 
-    _attach_resource_breakdowns(ces_capped, tgids_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
+    _attach_resource_breakdowns(ces_capped, tgids_df, variants_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
     _attach_channels_funnel(ces_capped, chan_df, funnel_df)
 
-    # Overall CVR from funnel data (same as build_snapshot)
-    for ce in ces_capped:
-        cvr = (ce.get("funnel") or {}).get("CVR")
-        wkly = ce.get("weekly") or []
-        if cvr and len(wkly) >= 2:
-            wkly[-1]["overall_cvr_pct"] = cvr.get("current")
-            wkly[-2]["overall_cvr_pct"] = cvr.get("wm1")
+    history_start = w0_start - dt.timedelta(weeks=11)
+    history_ly_start = history_start - dt.timedelta(days=config.YOY_LAG_DAYS)
+    history_ly_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
+    try:
+        print("    resource histories (BQ, CE-filtered)...")
+        _attach_resource_histories(
+            ces_capped,
+            fetch.ce_leadtime_history(None, history_start, w0_end,
+                                      history_ly_start, history_ly_end, surfaced_ids),
+            fetch.ce_country_history(None, history_start, w0_end,
+                                     history_ly_start, history_ly_end, surfaced_ids),
+            fetch.ce_channel_history(None, history_start, w0_end,
+                                     history_ly_start, history_ly_end, surfaced_ids),
+        )
+    except Exception as exc:
+        print(f"    resource histories skipped (optional V2 enrichment): {exc}")
+
     print("    drawers attached.")
 
     # ---- 12. No-bid campaigns (global: ENABLED, no tROAS, spend ≥ floor) ----

@@ -126,6 +126,136 @@ def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> p
     return query_df(sql, "market_weekly_revenue", params)
 
 
+def market_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Return canonical predicted revenue for one market over an exact date range."""
+    sql = f"""
+    SELECT
+        SUM({REV}) AS revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE report_date BETWEEN @start AND @end
+      AND business_market = @market
+    """
+    return query_df(
+        sql,
+        "market_period_revenue",
+        {"market": market, "start": config.iso(start), "end": config.iso(end)},
+    )
+
+
+def market_month_comparisons(
+    market: str,
+    prior_start: dt.date,
+    prior_mtd_end: dt.date,
+    prior_end: dt.date,
+    ly_start: dt.date,
+    ly_mtd_end: dt.date,
+    ly_end: dt.date,
+) -> pd.DataFrame:
+    """Return full-month and same-elapsed-period comparison revenue."""
+    sql = f"""
+    SELECT
+        SUM(IF(report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_end AS DATE), {REV}, 0))
+            AS prior_month_revenue,
+        SUM(IF(report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_mtd_end AS DATE), {REV}, 0))
+            AS prior_mtd_revenue,
+        SUM(IF(report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_end AS DATE), {REV}, 0))
+            AS ly_month_revenue,
+        SUM(IF(report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_mtd_end AS DATE), {REV}, 0))
+            AS ly_mtd_revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE business_market = @market
+      AND (
+        report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_end AS DATE)
+        OR report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_end AS DATE)
+      )
+    """
+    return query_df(sql, "market_month_comparisons", {
+        "market": market,
+        "prior_start": config.iso(prior_start),
+        "prior_mtd_end": config.iso(prior_mtd_end),
+        "prior_end": config.iso(prior_end),
+        "ly_start": config.iso(ly_start),
+        "ly_mtd_end": config.iso(ly_mtd_end),
+        "ly_end": config.iso(ly_end),
+    })
+
+
+def market_ce_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Return CE-level canonical predicted revenue for an exact date range."""
+    sql = f"""
+    SELECT
+        CAST(combined_entity_id AS STRING) AS ce_id,
+        ANY_VALUE(combined_entity_name) AS ce_name,
+        SUM({REV}) AS revenue
+
+    FROM {config.CE_STATS}
+
+    WHERE report_date BETWEEN CAST(@start AS DATE) AND CAST(@end AS DATE)
+      AND business_market = @market
+
+    GROUP BY 1
+    """
+    return query_df(sql, "market_ce_period_revenue", {
+        "market": market,
+        "start": config.iso(start),
+        "end": config.iso(end),
+    })
+
+
+def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
+    """Return approved market and CE-roll-up goals without mixing their grains.
+
+    ``revenue_goals`` is a Drive-backed external table. A market-level target is
+    authoritative when present. The CE total is returned separately so callers
+    can use it only as an explicit fallback for markets whose market row is
+    absent; the two values must never be added together.
+    """
+    sql = """
+    SELECT
+        COUNTIF(entity_type = 'Market') AS market_row_count,
+        SUM(IF(entity_type = 'Market', target_revenue, NULL)) AS market_goal,
+        COUNTIF(entity_type = 'Combined Entity') AS ce_row_count,
+        SUM(IF(entity_type = 'Combined Entity', target_revenue, NULL)) AS ce_goal
+
+    FROM `headout-analytics.analytics_reporting.revenue_goals`
+
+    WHERE target_month = CAST(@month AS DATE)
+      AND LOWER(market) = LOWER(@market)
+    """
+    return query_df(
+        sql,
+        "market_monthly_goal",
+        {"market": market, "month": config.iso(month.replace(day=1))},
+    )
+
+
+def market_ce_monthly_goals(market: str, month: dt.date) -> pd.DataFrame:
+    """Return approved CE-level targets for target-gap attribution."""
+    sql = """
+    SELECT
+        CAST(entity_id AS STRING) AS ce_id,
+        ANY_VALUE(entity_name) AS ce_name,
+        SUM(target_revenue) AS monthly_goal
+
+    FROM `headout-analytics.analytics_reporting.revenue_goals`
+
+    WHERE target_month = CAST(@month AS DATE)
+      AND LOWER(market) = LOWER(@market)
+      AND entity_type = 'Combined Entity'
+
+    GROUP BY 1
+    """
+    return query_df(
+        sql,
+        "market_ce_monthly_goals",
+        {"market": market, "month": config.iso(month.replace(day=1))},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # CE-level weekly paid performance  (ads_campaign_stats — Google + Bing)
 # --------------------------------------------------------------------------- #
@@ -353,7 +483,9 @@ def ce_tgids(
 
     FROM {tbl}
 
-    WHERE DATE(created_at) BETWEEN @ly_s AND @w0_e
+    WHERE (DATE(created_at) BETWEEN @w0_s AND @w0_e
+           OR DATE(created_at) BETWEEN @wm1_s AND @wm1_e
+           OR DATE(created_at) BETWEEN @ly_s AND @ly_e)
           {mkt}
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
@@ -373,6 +505,112 @@ def ce_tgids(
     if market:
         params["market"] = market
     return query_df(sql, "ce_tgids", params)
+
+
+def ce_variants(
+    market: str | None,
+    w0_start: dt.date, w0_end: dt.date,
+    wm1_start: dt.date, wm1_end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+) -> pd.DataFrame:
+    """Booking-grain variant children with order economics allocated exactly once.
+
+    `fct_orders` has the canonical TGID revenue but no variant key.  The join to
+    `fct_bookings` allocates each order's economics across its bookings by
+    payable-value share (equal share when the denominator is zero).  Order
+    credit is split across distinct variants on an order so child totals remain
+    additive.  Null variant IDs are retained as an explicit unattributed bucket.
+    """
+    mkt = "AND o.business_market = @market" if market else ""
+    sql = """
+    WITH booking_rows AS (
+        SELECT
+            o.combined_entity_id,
+            CAST(o.experience_id AS STRING)                         AS tgid,
+            COALESCE(CAST(b.variant_id AS STRING), '__UNATTRIBUTED__') AS variant_id,
+            COALESCE(b.variant_name, 'Unattributed variant')        AS variant_name,
+            b.booking_id,
+            o.order_id,
+            b.lead_time_days,
+            CASE
+                WHEN DATE(o.created_at) BETWEEN @w0_s AND @w0_e   THEN 'w0'
+                WHEN DATE(o.created_at) BETWEEN @wm1_s AND @wm1_e THEN 'wm1'
+                WHEN DATE(o.created_at) BETWEEN @ly_s AND @ly_e   THEN 'ly'
+            END                                                     AS period,
+            SAFE_DIVIDE(
+                COALESCE(b.price_payable_usd, 0),
+                NULLIF(SUM(COALESCE(b.price_payable_usd, 0)) OVER (PARTITION BY o.order_id), 0)
+            )                                                       AS payable_weight,
+            COUNT(*) OVER (PARTITION BY o.order_id)                 AS booking_count,
+            o.amount_revenue_usd,
+            o.order_value_usd,
+            o.order_status
+        FROM {bookings} b
+        JOIN {orders} o USING (order_id)
+        WHERE (DATE(o.created_at) BETWEEN @w0_s AND @w0_e
+               OR DATE(o.created_at) BETWEEN @wm1_s AND @wm1_e
+               OR DATE(o.created_at) BETWEEN @ly_s AND @ly_e)
+              {mkt}
+              AND o.order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+              AND o.user_type = 'Customer'
+              AND o.experience_id IS NOT NULL
+              AND CAST(b.experience_id AS STRING) = CAST(o.experience_id AS STRING)
+    ), allocated AS (
+        SELECT *, COALESCE(payable_weight, SAFE_DIVIDE(1, booking_count)) AS weight
+        FROM booking_rows WHERE period IS NOT NULL
+    ), variant_orders AS (
+        SELECT DISTINCT combined_entity_id, tgid, variant_id, period, order_id
+        FROM allocated
+    ), order_credit AS (
+        SELECT *, SAFE_DIVIDE(1, COUNT(*) OVER (
+            PARTITION BY combined_entity_id, tgid, period, order_id
+        )) AS credit
+        FROM variant_orders
+    ), order_totals AS (
+        SELECT combined_entity_id, tgid, variant_id,
+            SUM(IF(period = 'w0', credit, 0))  AS orders,
+            SUM(IF(period = 'wm1', credit, 0)) AS orders_wm1,
+            SUM(IF(period = 'ly', credit, 0))  AS orders_ly
+        FROM order_credit GROUP BY 1, 2, 3
+    )
+    SELECT
+        a.combined_entity_id,
+        a.tgid,
+        a.variant_id,
+        ANY_VALUE(a.variant_name) AS variant_name,
+        SUM(IF(a.period = 'w0', a.amount_revenue_usd * a.weight, 0))  AS rev,
+        SUM(IF(a.period = 'wm1', a.amount_revenue_usd * a.weight, 0)) AS rev_wm1,
+        SUM(IF(a.period = 'ly', a.amount_revenue_usd * a.weight, 0))  AS rev_ly,
+        o.orders, o.orders_wm1, o.orders_ly,
+        SUM(IF(a.period = 'w0', a.order_value_usd * a.weight, 0))     AS gbv,
+        SUM(IF(a.period = 'wm1', a.order_value_usd * a.weight, 0))    AS gbv_wm1,
+        SUM(IF(a.period = 'ly', a.order_value_usd * a.weight, 0))     AS gbv_ly,
+        SUM(IF(a.period = 'w0' AND a.order_status = 'Completed',
+            a.order_value_usd * a.weight, 0))                         AS completed_gbv,
+        SUM(IF(a.period = 'wm1' AND a.order_status = 'Completed',
+            a.order_value_usd * a.weight, 0))                         AS completed_gbv_wm1,
+        SUM(IF(a.period = 'ly' AND a.order_status = 'Completed',
+            a.order_value_usd * a.weight, 0))                         AS completed_gbv_ly,
+        SAFE_DIVIDE(COUNT(DISTINCT IF(a.period = 'w0' AND a.lead_time_days = 0,
+            a.booking_id, NULL)), COUNT(DISTINCT IF(a.period = 'w0', a.booking_id, NULL))) AS lt_0d,
+        SAFE_DIVIDE(COUNT(DISTINCT IF(a.period = 'w0' AND a.lead_time_days BETWEEN 1 AND 2,
+            a.booking_id, NULL)), COUNT(DISTINCT IF(a.period = 'w0', a.booking_id, NULL))) AS lt_12d,
+        SAFE_DIVIDE(COUNT(DISTINCT IF(a.period = 'w0' AND a.lead_time_days BETWEEN 3 AND 7,
+            a.booking_id, NULL)), COUNT(DISTINCT IF(a.period = 'w0', a.booking_id, NULL))) AS lt_37d,
+        SAFE_DIVIDE(COUNT(DISTINCT IF(a.period = 'w0' AND a.lead_time_days > 7,
+            a.booking_id, NULL)), COUNT(DISTINCT IF(a.period = 'w0', a.booking_id, NULL))) AS lt_7p
+    FROM allocated a
+    JOIN order_totals o USING (combined_entity_id, tgid, variant_id)
+    GROUP BY 1, 2, 3, o.orders, o.orders_wm1, o.orders_ly
+    """.format(bookings=config.FCT_BOOKINGS, orders=config.FCT_ORDERS, mkt=mkt)
+    params = {
+        "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
+        "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
+    }
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_variants", params)
 
 
 def ce_tgid_funnel(
@@ -513,14 +751,16 @@ def ce_leadtime(
     market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
 ) -> pd.DataFrame:
-    """Bookings/revenue by lead-time band per CE for W0 + W-1, from fct_bookings."""
+    """Bookings/economics by five lead-time bands for W0 / W-1 / LY."""
     mkt = "AND business_market = @market" if market else ""
     sql = """
     SELECT
         combined_entity_id,
         CASE
-            WHEN lead_time_days BETWEEN 0 AND 2 THEN '0-2D'
+            WHEN lead_time_days = 0             THEN '0D'
+            WHEN lead_time_days BETWEEN 1 AND 2 THEN '1-2D'
             WHEN lead_time_days BETWEEN 3 AND 4 THEN '3-4D'
             WHEN lead_time_days BETWEEN 5 AND 7 THEN '5-7D'
             WHEN lead_time_days > 7           THEN '7D+'
@@ -529,14 +769,25 @@ def ce_leadtime(
             booking_id, NULL))              AS bookings,
         COUNT(DISTINCT IF(DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e,
             booking_id, NULL))              AS bookings_wm1,
+        COUNT(DISTINCT IF(DATE(date_created_at_et) BETWEEN @ly_s AND @ly_e,
+            booking_id, NULL))              AS bookings_ly,
         SUM(IF(DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e,
             price_net_usd, 0))              AS rev,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e,
+            price_net_usd, 0))              AS rev_wm1,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @ly_s AND @ly_e,
+            price_net_usd, 0))              AS rev_ly,
         SUM(IF(DATE(date_created_at_et) BETWEEN @w0_s AND @w0_e,
-            price_payable_usd, 0))          AS order_value
+            price_payable_usd, 0))          AS order_value,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @wm1_s AND @wm1_e,
+            price_payable_usd, 0))          AS order_value_wm1,
+        SUM(IF(DATE(date_created_at_et) BETWEEN @ly_s AND @ly_e,
+            price_payable_usd, 0))          AS order_value_ly
 
     FROM {tbl}
 
-    WHERE DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+    WHERE (DATE(date_created_at_et) BETWEEN @wm1_s AND @w0_e
+           OR DATE(date_created_at_et) BETWEEN @ly_s AND @ly_e)
           {mkt}
           AND lead_time_days IS NOT NULL
           AND lead_time_days >= 0
@@ -546,6 +797,7 @@ def ce_leadtime(
     params = {
         "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
         "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
     }
     if market:
         params["market"] = market
@@ -556,8 +808,9 @@ def ce_countries(
     market: str | None,
     w0_start: dt.date, w0_end: dt.date,
     wm1_start: dt.date, wm1_end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
 ) -> pd.DataFrame:
-    """Orders/revenue by customer country per CE for W0 + W-1, from fct_orders."""
+    """Orders/revenue/AOV by customer country for W0 / W-1 / LY."""
     mkt = "AND business_market = @market" if market else ""
     sql = """
     SELECT
@@ -567,16 +820,25 @@ def ce_countries(
             order_id, NULL))                AS orders,
         COUNT(DISTINCT IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
             order_id, NULL))                AS orders_wm1,
+        COUNT(DISTINCT IF(DATE(created_at) BETWEEN @ly_s AND @ly_e,
+            order_id, NULL))                AS orders_ly,
         SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
             amount_revenue_usd, 0))         AS rev,
         SUM(IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
             amount_revenue_usd, 0))         AS rev_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @ly_s AND @ly_e,
+            amount_revenue_usd, 0))         AS rev_ly,
         SUM(IF(DATE(created_at) BETWEEN @w0_s AND @w0_e,
-            order_value_usd, 0))            AS order_value
+            order_value_usd, 0))            AS order_value,
+        SUM(IF(DATE(created_at) BETWEEN @wm1_s AND @wm1_e,
+            order_value_usd, 0))            AS order_value_wm1,
+        SUM(IF(DATE(created_at) BETWEEN @ly_s AND @ly_e,
+            order_value_usd, 0))            AS order_value_ly
 
     FROM {tbl}
 
-    WHERE DATE(created_at) BETWEEN @wm1_s AND @w0_e
+    WHERE (DATE(created_at) BETWEEN @wm1_s AND @w0_e
+           OR DATE(created_at) BETWEEN @ly_s AND @ly_e)
           {mkt}
           AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
           AND user_type = 'Customer'
@@ -587,10 +849,87 @@ def ce_countries(
     params = {
         "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
         "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
+        "ly_s": config.iso(ly_start), "ly_e": config.iso(ly_end),
     }
     if market:
         params["market"] = market
     return query_df(sql, "ce_countries", params)
+
+
+def ce_leadtime_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week revenue points by CE and lead-time band."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH base AS (
+        SELECT combined_entity_id,
+            CASE
+                WHEN lead_time_days = 0             THEN '0D'
+                WHEN lead_time_days BETWEEN 1 AND 2 THEN '1-2D'
+                WHEN lead_time_days BETWEEN 3 AND 4 THEN '3-4D'
+                WHEN lead_time_days BETWEEN 5 AND 7 THEN '5-7D'
+                WHEN lead_time_days > 7             THEN '7D+'
+            END AS band,
+            IF(DATE(date_created_at_et) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(date_created_at_et), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(date_created_at_et), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(date_created_at_et) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            price_net_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(date_created_at_et) BETWEEN @start AND @end
+               OR DATE(date_created_at_et) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND lead_time_days IS NOT NULL AND lead_time_days >= 0
+    )
+    SELECT combined_entity_id, band, week, period, SUM(revenue) AS rev
+    FROM base WHERE band IS NOT NULL GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_leadtime_history", params)
+
+
+def ce_country_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week revenue points by CE and customer country."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH base AS (
+        SELECT combined_entity_id, card_issuing_country AS country,
+            IF(DATE(created_at) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(created_at) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            amount_revenue_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(created_at) BETWEEN @start AND @end
+               OR DATE(created_at) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+              AND user_type = 'Customer' AND card_issuing_country IS NOT NULL
+    )
+    SELECT combined_entity_id, country, week, period, SUM(revenue) AS rev
+    FROM base GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_country_history", params)
 
 
 # --------------------------------------------------------------------------- #
@@ -682,6 +1021,65 @@ def ce_channels(
     if market:
         params["market"] = market
     return query_df(sql, "ce_channels", params)
+
+
+def ce_channel_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week actual-revenue points by CE and channel."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH classified AS (
+        SELECT combined_entity_id,
+            CASE
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
+                    THEN 'Google Search'
+                WHEN channel_name = 'Google Ads' AND campaign_name LIKE '1 - %' THEN 'Bing'
+                WHEN channel_name = 'Bing Ads'
+                    AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
+                    THEN 'Bing'
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance.max')
+                    THEN 'Google PMax'
+                WHEN channel_name = 'Google Ads' THEN 'Google Cross-sell'
+                WHEN channel_name = 'Bing Ads' THEN 'Bing Cross-sell'
+                WHEN channel_name = 'Things to Do (Ads)' THEN 'TTD (Paid)'
+                WHEN channel_name = 'Things to Do (Organic)' THEN 'TTD (Organic)'
+                WHEN channel_name = 'Confirmation Page Recommendations' THEN 'CPR'
+                WHEN channel_name = 'Organic Search' THEN 'Organic'
+                WHEN channel_grouping = 'Direct (App)' THEN 'Direct (App)'
+                WHEN channel_grouping = 'Direct' THEN 'Direct'
+                WHEN channel_grouping = 'Affiliates' THEN 'Affiliates'
+                WHEN channel_grouping = 'Email' THEN 'Email'
+                WHEN channel_grouping = 'Referral' THEN 'Referral'
+                ELSE 'Other'
+            END AS channel,
+            IF(DATE(created_at) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(created_at) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            amount_revenue_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(created_at) BETWEEN @start AND @end
+               OR DATE(created_at) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+              AND user_type = 'Customer'
+    )
+    SELECT combined_entity_id, channel, week, period, SUM(revenue) AS rev
+    FROM classified GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_channel_history", params)
 
 
 def ce_funnel(
