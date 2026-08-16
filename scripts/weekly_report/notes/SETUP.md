@@ -104,6 +104,15 @@ Optional AI adapter:
 - Every summary must cite at least one ingested `source_ref`. If the adapter is absent or
   invalid, the UI shows **summary delayed**, raw replies remain stored, and no summary is
   invented. Owners on action suggestions are never inferred.
+- The production adapter is `review_summary_api.js`. Its Vercel function requires
+  `@vercel/oidc`, reads the short-lived OIDC token with `getVercelOidcToken()`, and
+  calls Vercel AI Gateway without a persistent model-provider key.
+- The report login middleware must exclude only `/api/auth` and
+  `/api/review-summary`; use `review_summary_middleware.js` as the matcher reference.
+  The webhook itself remains protected by `X-Review-Secret`.
+- Vercel AI Gateway must be enabled for the owning team. If its billing prerequisite
+  is unavailable, the endpoint fails closed and the report retains raw attributed
+  Slack replies while showing the summary as delayed.
 
 External source ingress:
 

@@ -145,6 +145,10 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('getProperty("REVIEW_AI_WEBHOOK_SECRET")', self.backend)
         self.assertIn('"X-Review-Secret":secret', self.backend)
         self.assertIn("function installReviewStorage()", self.backend)
+        summary_api = (ROOT / "scripts" / "weekly_report" / "notes" / "review_summary_api.js").read_text()
+        self.assertIn("getVercelOidcToken", summary_api)
+        self.assertIn("REVIEW_AI_WEBHOOK_SECRET_V2", summary_api)
+        self.assertNotIn("response_format", summary_api)
         self.assertIn("var nextCycle=reviewRows(\"weekly\")", self.backend)
         self.assertIn("slackThreadReplies(token,channel,threadTs,oldest,latest)", self.backend)
 

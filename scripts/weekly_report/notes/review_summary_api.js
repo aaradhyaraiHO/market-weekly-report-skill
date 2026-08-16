@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { getVercelOidcToken } from "@vercel/oidc";
 
 const GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 const MODEL = process.env.REVIEW_AI_MODEL || "openai/gpt-5.4";
@@ -37,8 +38,7 @@ function cleanRecords(records) {
   })).filter((record) => record.source_ref && record.body);
 }
 
-async function askGateway(instruction, payload) {
-  const token = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+async function askGateway(instruction, payload, token) {
   if (!token) throw new Error("AI gateway authentication unavailable");
   const response = await fetch(GATEWAY_URL, {
     method: "POST",
@@ -46,7 +46,6 @@ async function askGateway(instruction, payload) {
     body: JSON.stringify({
       model: MODEL,
       temperature: 0.1,
-      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: instruction },
         { role: "user", content: JSON.stringify(payload) },
@@ -62,12 +61,14 @@ async function askGateway(instruction, payload) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST required" });
-  if (!sameSecret(req.headers["x-review-secret"], process.env.REVIEW_AI_WEBHOOK_SECRET))
+  const expectedSecret = process.env.REVIEW_AI_WEBHOOK_SECRET_V2 || process.env.REVIEW_AI_WEBHOOK_SECRET;
+  if (!sameSecret(req.headers["x-review-secret"], expectedSecret))
     return res.status(401).json({ error: "unauthorized" });
 
   const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
   const records = cleanRecords(body.records);
   if (!records.length) return res.status(400).json({ error: "source records required" });
+  const gatewayToken = process.env.AI_GATEWAY_API_KEY || await getVercelOidcToken();
 
   try {
     if (body.mode === "weekly_thread_summary") {
@@ -78,6 +79,7 @@ export default async function handler(req, res) {
         "action_suggestions and check_suggestions (objects with text and optional YYYY-MM-DD due_date), " +
         "and source_refs. Preserve uncertainty, do not infer owners, and cite only supplied source_refs.",
         { identity: body.identity || {}, previous_summary: body.previous_summary || {}, records },
+        gatewayToken,
       );
       const sourceRefs = strings(result.source_refs, 200).filter((ref) => allowed.has(ref));
       if (!sourceRefs.length) throw new Error("summary omitted valid source references");
@@ -96,6 +98,7 @@ export default async function handler(req, res) {
       "Return JSON {suggestions:[{source_ref,kind,body,proposed_due_date,confidence}]}. " +
       "kind must be comment, action, or check. Use only supplied text and source_refs; never infer an owner.",
       { source_type: body.source_type || "unknown", identity: body.identity || {}, records },
+      gatewayToken,
     );
     const allowed = new Set(records.map((record) => record.source_ref));
     const output = (Array.isArray(result.suggestions) ? result.suggestions : []).filter((item) =>
