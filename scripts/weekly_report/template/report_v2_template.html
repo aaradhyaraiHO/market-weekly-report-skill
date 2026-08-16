@@ -377,8 +377,13 @@
     .ce-chart-tooltip.visible { opacity:1; transform:translateY(0); }
     .ce-chart-tooltip strong,.ce-chart-tooltip span { display:block; }
     .ce-chart-tooltip span { color:var(--muted); }
-    .ce-metric-open { display:inline-flex; align-items:center; gap:6px; min-height:40px; padding:0; border:0; color:inherit; background:transparent; font-weight:600; cursor:pointer; }
-    .ce-metric-open span { color:var(--purple); font-size:10px; }
+    .ce-metric-label { font-weight:600; }
+    .ce-metric-trend-button { position:relative; display:flex; align-items:center; justify-content:flex-end; width:100%; min-width:112px; min-height:40px; margin-left:auto; padding:5px 0; border:0; border-radius:7px; color:inherit; background:transparent; cursor:pointer; transition-property:background-color,box-shadow,transform; transition-duration:120ms; }
+    .ce-metric-trend-button:hover { background:var(--purple-soft); }
+    .ce-metric-trend-button:focus-visible { outline:0; box-shadow:0 0 0 2px rgb(128 0 255 / .24); }
+    .ce-metric-trend-button:active { transform:scale(.96); }
+    .ce-metric-trend-button[aria-expanded="true"] { background:var(--purple-soft); box-shadow:inset 0 -2px 0 var(--purple); }
+    .ce-metric-trend-button .metric-spark { pointer-events:none; }
     .ce-metric-detail td { padding:14px 12px; background:var(--soft); text-align:left!important; }
     .ce-history { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
     .ce-history-item { padding:9px 10px; border-radius:8px; background:var(--surface); }
@@ -922,7 +927,7 @@
       function renderCeMetrics(ce) {
         document.querySelectorAll('[data-ce-metric-group]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.ceMetricGroup===ceMetricGroup)));
         const rows=((ce.drawer_metrics||{})[ceMetricGroup]||[]);
-        document.getElementById('ce-metric-rows').innerHTML=rows.map(row=>{const key=`${ceMetricGroup}:${row.key}`,open=ceExpandedMetrics[key]===true,wow=row.wow_kind==='pp'?ceRateDelta(row.w0,row.wm1,row.delta_pct):row.delta_pct;return `<tr><td><button class="ce-metric-open" type="button" data-ce-metric-detail="${escapeHtml(key)}" aria-expanded="${open}">${escapeHtml(row.label)} <span>${open?'Hide trend':'View trend'} ${open?'⌃':'›'}</span></button></td><td>${ceValue(row.w0,row.format)}</td><td>${ceValue(row.wm1,row.format)}</td><td class="${tone(row.format==='pct'?wow:row.delta_abs)}">${ceDelta(row)}</td><td class="${tone(wow)}">${pct(wow)}</td><td>${sparkline(row)}</td></tr><tr class="ce-metric-detail" ${open?'':'hidden'}><td colspan="6"><div class="ce-history">${ceHistory(row)}</div></td></tr>`;}).join('')||'<tr><td colspan="6">No metrics are available for this source group.</td></tr>';
+        document.getElementById('ce-metric-rows').innerHTML=rows.map(row=>{const key=`${ceMetricGroup}:${row.key}`,open=ceExpandedMetrics[key]===true,wow=row.wow_kind==='pp'?ceRateDelta(row.w0,row.wm1,row.delta_pct):row.delta_pct;return `<tr><td><span class="ce-metric-label">${escapeHtml(row.label)}</span></td><td>${ceValue(row.w0,row.format)}</td><td>${ceValue(row.wm1,row.format)}</td><td class="${tone(row.format==='pct'?wow:row.delta_abs)}">${ceDelta(row)}</td><td class="${tone(wow)}">${pct(wow)}</td><td><button class="ce-metric-trend-button" type="button" data-ce-metric-detail="${escapeHtml(key)}" aria-expanded="${open}" aria-label="${open?'Hide':'View'} ${escapeHtml(row.label)} 12-week trend">${sparkline(row,false)}<span class="sr-only">${open?'Hide':'View'} trend</span></button></td></tr><tr class="ce-metric-detail" ${open?'':'hidden'}><td colspan="6"><div class="ce-history">${ceHistory(row)}</div></td></tr>`;}).join('')||'<tr><td colspan="6">No metrics are available for this source group.</td></tr>';
         wireCeSparklines('#ce-metric-rows',new Map(rows.map(row=>[row.key,row])));
       }
       function renderCeShapley(ce) {
@@ -1015,18 +1020,18 @@
       function downloadPortfolioTemplate() {
         const item=currentHeadline(),lines=['ce_id,ce_name,primary_group,tags,watchlist',...(item.all_ces||[]).map(ce=>[ce.ce_id,ce.ce_name,'','',''].map(escapeCsv).join(','))],blob=new Blob([lines.join('\n')],{type:'text/csv'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=`${String(item.market||'market').toLowerCase().replace(/[^a-z0-9]+/g,'-')}-ce-metadata.csv`;anchor.click();URL.revokeObjectURL(url);
       }
-      function sparkline(metric) {
+      function sparkline(metric,focusable=true) {
         const data=metric.series||[], values=data.flatMap(row=>[row.ty,row.ly]).filter(value=>value!=null);
         if (!values.length) return '<span>—</span>';
         const width=112,height=30,min=Math.min(...values),max=Math.max(...values),span=max-min||1;
         const points=key=>data.map((row,index)=>row[key]==null?null:`${(index/Math.max(1,data.length-1)*width).toFixed(1)},${(height-3-((row[key]-min)/span)*(height-6)).toFixed(1)}`).filter(Boolean).join(' ');
         const ty=data.map(row=>row.ty).filter(value=>value!=null),stroke=ty.length>1?(ty[ty.length-1]>=ty[0]?'var(--green)':'var(--red)'):'var(--purple)';
-        return `<svg class="metric-spark" data-metric-key="${escapeHtml(metric.key)}" viewBox="0 0 ${width} ${height}" role="img" tabindex="0" aria-label="${escapeHtml(metric.label)} 12-week trajectory. Focus and use arrow keys for weekly values."><polyline points="${points('ly')}" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="3 3"/><polyline points="${points('ty')}" fill="none" stroke="${stroke}" stroke-width="1.8"/><line class="metric-cursor" x1="0" x2="0" y1="0" y2="${height}" stroke="var(--ink)" stroke-width="1" opacity="0"/></svg>`;
+        return `<svg class="metric-spark" data-metric-key="${escapeHtml(metric.key)}" viewBox="0 0 ${width} ${height}" role="img" ${focusable?'tabindex="0"':`tabindex="-1" aria-hidden="true"`} aria-label="${focusable?`${escapeHtml(metric.label)} 12-week trajectory. Focus and use arrow keys for weekly values.`:''}"><polyline points="${points('ly')}" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="3 3"/><polyline points="${points('ty')}" fill="none" stroke="${stroke}" stroke-width="1.8"/><line class="metric-cursor" x1="0" x2="0" y1="0" y2="${height}" stroke="var(--ink)" stroke-width="1" opacity="0"/></svg>`;
       }
       function wireCeSparklines(selector,metrics) {
         const tooltip=document.getElementById('ce-metric-tooltip');
         document.querySelectorAll(`${selector} .metric-spark`).forEach(svg=>{
-          const metric=metrics.get(svg.dataset.metricKey),cursor=svg.querySelector('.metric-cursor'),data=metric&&metric.series||[];
+          const metric=metrics.get(svg.dataset.metricKey),cursor=svg.querySelector('.metric-cursor'),data=metric&&metric.series||[],interactionTarget=svg.closest('.ce-metric-trend-button')||svg;
           if(!metric||!data.length)return;
           let activeIndex=data.length-1;
           const show=(index,event)=>{
@@ -1039,11 +1044,11 @@
             tooltip.style.left=`${Math.min(window.innerWidth-190,clientX+14)}px`;tooltip.style.top=`${Math.max(12,clientY-24)}px`;tooltip.classList.add('visible');
           };
           const hide=()=>{cursor.setAttribute('opacity','0');tooltip.classList.remove('visible');};
-          svg.addEventListener('pointermove',event=>{const box=svg.getBoundingClientRect(),relative=Math.max(0,Math.min(1,(event.clientX-box.left)/box.width));show(Math.round(relative*Math.max(0,data.length-1)),event);});
-          svg.addEventListener('pointerleave',hide);
-          svg.addEventListener('focus',()=>show(activeIndex));
-          svg.addEventListener('blur',hide);
-          svg.addEventListener('keydown',event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();show(activeIndex+(event.key==='ArrowRight'?1:-1));});
+          interactionTarget.addEventListener('pointermove',event=>{const box=svg.getBoundingClientRect(),relative=Math.max(0,Math.min(1,(event.clientX-box.left)/box.width));show(Math.round(relative*Math.max(0,data.length-1)),event);});
+          interactionTarget.addEventListener('pointerleave',hide);
+          interactionTarget.addEventListener('focus',()=>show(activeIndex));
+          interactionTarget.addEventListener('blur',hide);
+          interactionTarget.addEventListener('keydown',event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();show(activeIndex+(event.key==='ArrowRight'?1:-1));});
         });
       }
       function wireMetricSparklines(item) {
