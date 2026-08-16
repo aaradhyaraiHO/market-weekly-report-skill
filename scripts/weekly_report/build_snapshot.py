@@ -632,6 +632,36 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
         ce["funnel"] = funnel
 
 
+def _attach_resource_histories(ces, lead_df, country_df, channel_df) -> None:
+    """Attach real TY/weekday-aligned-LY weekly revenue arrays to resource rows."""
+    def _index(frame, key_column):
+        result = {}
+        if frame is None or frame.empty:
+            return result
+        frame = frame.copy()
+        frame["combined_entity_id"] = frame["combined_entity_id"].astype(str)
+        for (ce_id, resource), group in frame.groupby(["combined_entity_id", key_column]):
+            by_week = {}
+            for _, row in group.iterrows():
+                week = config.iso(_to_date(row["week"]))
+                point = by_week.setdefault(week, {"week": week, "ty": None, "ly": None})
+                point[str(row["period"])] = _num(row["rev"])
+            result[(str(ce_id), str(resource))] = [by_week[week] for week in sorted(by_week)]
+        return result
+
+    lead = _index(lead_df, "band")
+    countries = _index(country_df, "country")
+    channels = _index(channel_df, "channel")
+    for ce in ces:
+        cid = str(ce["ce_id"])
+        for row in ce.get("leadtime", []):
+            row["history"] = lead.get((cid, str(row.get("band"))), [])
+        for row in ce.get("countries", []):
+            row["history"] = countries.get((cid, str(row.get("country"))), [])
+        for row in ce.get("channels", []):
+            row["history"] = channels.get((cid, str(row.get("channel"))), [])
+
+
 # --------------------------------------------------------------------------- #
 # Cross-bucket cascade (spec §5) — one home per CE (B1>B2>B3>B4), dedup,
 # (also in …) chips, hard cap of 10 narrative rows by $ at stake.
@@ -1116,6 +1146,22 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         if not _is_cap_error(exc):
             raise
         print(f"  ⚠ [{market}] channel/funnel drawers SKIPPED — query exceeded the byte cap.")
+    history_start = w0_start - dt.timedelta(weeks=11)
+    history_ly_start = history_start - dt.timedelta(days=config.YOY_LAG_DAYS)
+    history_ly_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
+    try:
+        _attach_resource_histories(
+            ces,
+            fetch.ce_leadtime_history(market, history_start, w0_end,
+                                      history_ly_start, history_ly_end),
+            fetch.ce_country_history(market, history_start, w0_end,
+                                     history_ly_start, history_ly_end),
+            fetch.ce_channel_history(market, history_start, w0_end,
+                                     history_ly_start, history_ly_end),
+        )
+    except Exception as exc:
+        reason = "query exceeded the byte cap" if _is_cap_error(exc) else f"optional query failed: {exc}"
+        print(f"  ⚠ [{market}] resource history SKIPPED — {reason}; current/W-1/LY rows remain available.")
     # Overall CVR = orders / clicks (all-traffic, from BQ — already in every
     # weekly record, so the 12-week sparkline renders with no extra query).
     # (Replaces the Mixpanel-funnel order-users÷LP-users CVR, which needed a

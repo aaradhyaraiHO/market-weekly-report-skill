@@ -856,6 +856,82 @@ def ce_countries(
     return query_df(sql, "ce_countries", params)
 
 
+def ce_leadtime_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week revenue points by CE and lead-time band."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH base AS (
+        SELECT combined_entity_id,
+            CASE
+                WHEN lead_time_days = 0             THEN '0D'
+                WHEN lead_time_days BETWEEN 1 AND 2 THEN '1-2D'
+                WHEN lead_time_days BETWEEN 3 AND 4 THEN '3-4D'
+                WHEN lead_time_days BETWEEN 5 AND 7 THEN '5-7D'
+                WHEN lead_time_days > 7             THEN '7D+'
+            END AS band,
+            IF(DATE(date_created_at_et) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(date_created_at_et), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(date_created_at_et), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(date_created_at_et) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            price_net_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(date_created_at_et) BETWEEN @start AND @end
+               OR DATE(date_created_at_et) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND lead_time_days IS NOT NULL AND lead_time_days >= 0
+    )
+    SELECT combined_entity_id, band, week, period, SUM(revenue) AS rev
+    FROM base WHERE band IS NOT NULL GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_leadtime_history", params)
+
+
+def ce_country_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week revenue points by CE and customer country."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH base AS (
+        SELECT combined_entity_id, card_issuing_country AS country,
+            IF(DATE(created_at) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(created_at) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            amount_revenue_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(created_at) BETWEEN @start AND @end
+               OR DATE(created_at) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+              AND user_type = 'Customer' AND card_issuing_country IS NOT NULL
+    )
+    SELECT combined_entity_id, country, week, period, SUM(revenue) AS rev
+    FROM base GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_country_history", params)
+
+
 # --------------------------------------------------------------------------- #
 # RE-SOURCE tier (A2, "hard") — channel mix + funnel, ported to weekly grain
 # --------------------------------------------------------------------------- #
@@ -945,6 +1021,65 @@ def ce_channels(
     if market:
         params["market"] = market
     return query_df(sql, "ce_channels", params)
+
+
+def ce_channel_history(
+    market: str | None, start: dt.date, end: dt.date,
+    ly_start: dt.date, ly_end: dt.date,
+    ce_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Twelve matched Sunday-week actual-revenue points by CE and channel."""
+    mkt = "AND business_market = @market" if market else ""
+    cid_filter = "AND CAST(combined_entity_id AS STRING) IN UNNEST(@ce_ids)" if ce_ids else ""
+    sql = """
+    WITH classified AS (
+        SELECT combined_entity_id,
+            CASE
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
+                    THEN 'Google Search'
+                WHEN channel_name = 'Google Ads' AND campaign_name LIKE '1 - %' THEN 'Bing'
+                WHEN channel_name = 'Bing Ads'
+                    AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
+                    THEN 'Bing'
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance.max')
+                    THEN 'Google PMax'
+                WHEN channel_name = 'Google Ads' THEN 'Google Cross-sell'
+                WHEN channel_name = 'Bing Ads' THEN 'Bing Cross-sell'
+                WHEN channel_name = 'Things to Do (Ads)' THEN 'TTD (Paid)'
+                WHEN channel_name = 'Things to Do (Organic)' THEN 'TTD (Organic)'
+                WHEN channel_name = 'Confirmation Page Recommendations' THEN 'CPR'
+                WHEN channel_name = 'Organic Search' THEN 'Organic'
+                WHEN channel_grouping = 'Direct (App)' THEN 'Direct (App)'
+                WHEN channel_grouping = 'Direct' THEN 'Direct'
+                WHEN channel_grouping = 'Affiliates' THEN 'Affiliates'
+                WHEN channel_grouping = 'Email' THEN 'Email'
+                WHEN channel_grouping = 'Referral' THEN 'Referral'
+                ELSE 'Other'
+            END AS channel,
+            IF(DATE(created_at) BETWEEN @start AND @end,
+               DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)),
+               DATE_ADD(DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)), INTERVAL 364 DAY)) AS week,
+            IF(DATE(created_at) BETWEEN @start AND @end, 'ty', 'ly') AS period,
+            amount_revenue_usd AS revenue
+        FROM {tbl}
+        WHERE (DATE(created_at) BETWEEN @start AND @end
+               OR DATE(created_at) BETWEEN @ly_start AND @ly_end)
+              {mkt} {cid_filter}
+              AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+              AND user_type = 'Customer'
+    )
+    SELECT combined_entity_id, channel, week, period, SUM(revenue) AS rev
+    FROM classified GROUP BY 1, 2, 3, 4
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt, cid_filter=cid_filter)
+    params = {"start": config.iso(start), "end": config.iso(end),
+              "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
+    if market:
+        params["market"] = market
+    if ce_ids:
+        params["ce_ids"] = [str(value) for value in ce_ids]
+    return query_df(sql, "ce_channel_history", params)
 
 
 def ce_funnel(

@@ -33,6 +33,9 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
             fetch.ce_variants("North America", *windows)
             fetch.ce_leadtime("North America", *windows)
             fetch.ce_countries("North America", *windows)
+            fetch.ce_leadtime_history("North America", windows[0], windows[1], windows[4], windows[5], ["CE-1"])
+            fetch.ce_country_history("North America", windows[0], windows[1], windows[4], windows[5], ["CE-1"])
+            fetch.ce_channel_history("North America", windows[0], windows[1], windows[4], windows[5], ["CE-1"])
 
         by_label = {label: (sql, params) for label, sql, params in captured}
         variant_sql, variant_params = by_label["ce_variants"]
@@ -53,6 +56,13 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
         self.assertIn("orders_ly", country_sql)
         self.assertIn("rev_ly", country_sql)
         self.assertIn("order_value_ly", country_sql)
+
+        for label in ("ce_leadtime_history", "ce_country_history", "ce_channel_history"):
+            history_sql, history_params = by_label[label]
+            self.assertIn("DATE_TRUNC", history_sql)
+            self.assertIn("INTERVAL 364 DAY", history_sql)
+            self.assertIn("UNNEST(@ce_ids)", history_sql)
+            self.assertEqual(history_params["ce_ids"], ["CE-1"])
 
     def test_snapshot_projects_reconciled_variant_children_and_five_lead_bands(self):
         ces = [{"ce_id": "CE-1"}]
@@ -104,6 +114,28 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
                          ["0D", "1-2D", "3-4D", "5-7D", "7D+"])
         self.assertEqual(ces[0]["leadtime"][0]["bookings_wow"], 25.0)
         self.assertEqual(ces[0]["leadtime"][0]["bookings_yoy"], 100.0)
+
+    def test_snapshot_attaches_real_resource_history_by_cid_and_key(self):
+        ces = [{
+            "ce_id": "CE-1",
+            "leadtime": [{"band": "0D"}],
+            "countries": [{"country": "US"}],
+            "channels": [{"channel": "Direct"}],
+        }]
+        def frame(key, value):
+            return pd.DataFrame([
+                {"combined_entity_id": "CE-1", key: value, "week": "2026-08-02", "period": "ty", "rev": 120.0},
+                {"combined_entity_id": "CE-1", key: value, "week": "2026-08-02", "period": "ly", "rev": 90.0},
+            ])
+
+        build_snapshot._attach_resource_histories(
+            ces, frame("band", "0D"), frame("country", "US"), frame("channel", "Direct")
+        )
+
+        expected = [{"week": "2026-08-02", "ty": 120.0, "ly": 90.0}]
+        self.assertEqual(ces[0]["leadtime"][0]["history"], expected)
+        self.assertEqual(ces[0]["countries"][0]["history"], expected)
+        self.assertEqual(ces[0]["channels"][0]["history"], expected)
 
 
 if __name__ == "__main__":

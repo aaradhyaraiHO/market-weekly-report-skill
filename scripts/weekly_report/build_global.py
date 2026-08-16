@@ -37,6 +37,7 @@ import shapley
 from build_snapshot import (
     _apply_cascade,
     _attach_channels_funnel,
+    _attach_resource_histories,
     _attach_resource_breakdowns,
     _ce_levels,
     _enrich_b1_sparklines,
@@ -597,6 +598,23 @@ def build_global(week: str) -> dict:
 
     _attach_resource_breakdowns(ces_capped, tgids_df, variants_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df)
     _attach_channels_funnel(ces_capped, chan_df, funnel_df)
+
+    history_start = w0_start - dt.timedelta(weeks=11)
+    history_ly_start = history_start - dt.timedelta(days=config.YOY_LAG_DAYS)
+    history_ly_end = w0_end - dt.timedelta(days=config.YOY_LAG_DAYS)
+    try:
+        print("    resource histories (BQ, CE-filtered)...")
+        _attach_resource_histories(
+            ces_capped,
+            fetch.ce_leadtime_history(None, history_start, w0_end,
+                                      history_ly_start, history_ly_end, surfaced_ids),
+            fetch.ce_country_history(None, history_start, w0_end,
+                                     history_ly_start, history_ly_end, surfaced_ids),
+            fetch.ce_channel_history(None, history_start, w0_end,
+                                     history_ly_start, history_ly_end, surfaced_ids),
+        )
+    except Exception as exc:
+        print(f"    resource histories skipped (optional V2 enrichment): {exc}")
 
     print("    drawers attached.")
 

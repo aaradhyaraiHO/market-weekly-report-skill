@@ -289,14 +289,18 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
         rows = []
         for key, label, value_format in specs:
             if key == "funnel_cvr_pct":
+                funnel_w0 = _number(funnel_cvr.get("current"))
+                funnel_wm1 = _number(funnel_cvr.get("wm1"))
                 rows.append({
                     "key": key,
                     "label": label,
                     "format": value_format,
-                    "w0": _number(funnel_cvr.get("current")),
-                    "wm1": _number(funnel_cvr.get("wm1")),
+                    "w0": funnel_w0,
+                    "wm1": funnel_wm1,
+                    "delta_abs": funnel_w0 - funnel_wm1 if funnel_w0 is not None and funnel_wm1 is not None else None,
                     "delta_pct": _number(funnel_cvr.get("wow")),
                     "delta_kind": "pp",
+                    "wow_kind": "pp",
                     # The live funnel query supplies W0/W-1/LY, not 12 weeks.
                     # An empty series is an explicit unavailable state.
                     "series": [],
@@ -310,14 +314,18 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
                 }
                 for row in weekly[-12:]
             ]
+            w0 = _number(current.get(key))
+            wm1 = _number(previous.get(key))
             rows.append({
                 "key": key,
                 "label": label,
                 "format": value_format,
-                "w0": _number(current.get(key)),
-                "wm1": _number(previous.get(key)),
-                "delta_pct": _percent_change(_number(current.get(key)), _number(previous.get(key))),
-                "delta_kind": "pct",
+                "w0": w0,
+                "wm1": wm1,
+                "delta_abs": w0 - wm1 if w0 is not None and wm1 is not None else None,
+                "delta_pct": _percent_change(w0, wm1),
+                "delta_kind": "pp" if value_format == "pct" else "abs",
+                "wow_kind": "pct",
                 "series": series,
             })
         result[group] = rows
@@ -326,6 +334,7 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
 
 def _ce_views(market, dimensions=None):
     dimensions = dimensions or {}
+    meta = market.get("meta") or {}
     bucket_memberships = _ce_bucket_memberships(market)
     views = []
     for ce in market.get("ces", []):
@@ -351,6 +360,9 @@ def _ce_views(market, dimensions=None):
         views.append({
             "ce_id": ce.get("ce_id"),
             "ce_name": ce.get("ce_name") or "Unnamed experience",
+            "market": meta.get("market"),
+            "week_start": meta.get("week_start"),
+            "week_end": meta.get("week_end"),
             "city": metadata.get("city"),
             "category": metadata.get("category"),
             "subcategory": metadata.get("subcategory"),
@@ -362,9 +374,11 @@ def _ce_views(market, dimensions=None):
             "bdm_region": ce_dimensions.get("bdm_region"),
             "growth_region": ce_dimensions.get("growth_region"),
             "revenue": revenue,
+            "previous_revenue": previous_revenue,
             "wow_abs": revenue - previous_revenue if revenue is not None and previous_revenue is not None else None,
             "wow_pct": _percent_change(revenue, previous_revenue),
             "yoy_pct": _number(current.get("yoy_pct")),
+            "weekly_ly_revenue": _number(ly.get("revenue")),
             "orders": _number(current.get("orders")),
             "aov": _number(current.get("aov")),
             "rpc": _number(current.get("paid_rpc")),
@@ -404,6 +418,7 @@ def _ce_views(market, dimensions=None):
                     "aov": _number(row.get("aov")),
                     "aov_wm1": _number(row.get("aov_wm1")),
                     "aov_ly": _number(row.get("aov_ly")),
+                    "history": deepcopy(row.get("history") or []),
                 }
                 for row in (ce.get("countries") or [])
                 if row.get("country")

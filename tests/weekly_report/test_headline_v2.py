@@ -40,6 +40,9 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(view["all_ces"][0]["ce_name"], "Example Museum")
         self.assertEqual(view["all_ces"][0]["revenue"], 70_000)
         self.assertEqual(view["all_ces"][0]["wow_abs"], -30_000)
+        self.assertEqual(view["all_ces"][0]["previous_revenue"], 100_000)
+        self.assertEqual(view["all_ces"][0]["market"], "North America")
+        self.assertEqual(view["all_ces"][0]["week_end"], "2026-08-08")
 
     def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
         view = headline_v2.build_headline_view(self.market)
@@ -49,6 +52,14 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertAlmostEqual(revenue["delta_abs"], 100_000)
         self.assertEqual(revenue["delta_pct"], 10.0)
         self.assertTrue(all(point["ly"] is None for point in revenue["series"]))
+
+    def test_ce_drawer_projects_absolute_delta_from_v1_operands(self):
+        view = headline_v2.build_headline_view(self.market)
+        revenue = next(row for row in view["all_ces"][0]["drawer_metrics"]["overall"] if row["key"] == "revenue")
+
+        self.assertEqual(revenue["w0"], 70_000)
+        self.assertEqual(revenue["wm1"], 100_000)
+        self.assertEqual(revenue["delta_abs"], -30_000)
 
     def test_current_goal_adds_monthly_outlook(self):
         goal = {
@@ -197,9 +208,31 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("{key:'yoy',label:'YoY %'}", html)
         self.assertIn('Apply locally', html)
         self.assertIn('id="ce-weekly-evidence"', html)
+        self.assertIn("Weekly evidence · V1 baseline", html)
+        self.assertIn("Predicted weekly revenue", html)
+        self.assertIn('id="ce-drawer-omni"', html)
+        self.assertIn("function wireCeChart", html)
+        self.assertIn("data-ce-metric-detail", html)
+        self.assertIn("Open in Omni", html)
         self.assertIn('id="ce-resource-sections"', html)
         self.assertIn("Top experiences · TGIDs", html)
+        self.assertIn('class="ce-tgid-identity"', html)
+        self.assertIn('class="ce-variant-kind">Variant', html)
+        self.assertIn('class="ce-variant-reconcile"', html)
+        self.assertIn("View trend", html)
+        self.assertIn("resourceTrend", html)
+        self.assertIn("sumResourceHistory", html)
+        self.assertIn("12W · TY / LY", html)
+        self.assertIn("ce-resource-trend", html)
+        self.assertIn("font-size:12px", html)
+        self.assertIn('[data-ce-band-col]:not([data-ce-band-secondary])', html)
+        self.assertIn('data-ce-band="${key}"', html)
+        self.assertIn('data-ce-band-col="${key}"', html)
+        self.assertIn("ceTgidBands={size:true,value:true,funnel:true,booking:true}", html)
         self.assertIn("Lead-time bands", html)
+        for band in ("0 days", "1–2 days", "3–4D", "5–7D", "7D+"):
+            self.assertIn(band, html)
+        self.assertIn('class="ce-lead-total"', html)
         self.assertNotIn("remain in the existing V1 drawer", html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
 
