@@ -207,7 +207,16 @@
     .metric-table th:first-child,.metric-table td:first-child { text-align:left; }
     .metric-table td { height:58px; padding:8px 10px; border-bottom:1px solid var(--line); text-align:right; }
     .metric-table td:first-child { font-weight:500; }
+    .metric-table tr.paid-first td { border-top:2px solid var(--line-dark); }
+    .metric-table tr.paid td { background:color-mix(in srgb,var(--purple-soft) 28%,var(--surface)); }
     .metric-spark { display:block; width:112px; height:30px; margin-left:auto; }
+    .metric-ly-na { display:block; margin-top:3px; color:var(--muted); font-size:9px; font-style:italic; text-align:right; }
+    .metric-footnote { margin:14px 0 0; color:var(--muted); font-size:10px; line-height:1.6; text-wrap:pretty; }
+    .metric-tooltip { position:fixed; z-index:24; min-width:166px; padding:10px 12px; border-radius:var(--radius-control); color:white; background:var(--ink); box-shadow:var(--shadow-3); font-size:10px; line-height:16px; pointer-events:none; opacity:0; transform:translateY(4px); transition-property:opacity,transform; transition-duration:100ms; }
+    .metric-tooltip.visible { opacity:1; transform:translateY(0); }
+    .metric-tooltip strong,.metric-tooltip span { display:block; }
+    .metric-tooltip span { color:#d2d2d2; }
+    .metric-tooltip .metric-tooltip-yoy { margin-top:5px; padding-top:5px; border-top:1px solid rgb(255 255 255 / .16); color:white; font-weight:500; }
     .shapley-list { display:grid; gap:10px; }
     .shapley-row { display:grid; grid-template-columns:92px minmax(0,1fr) 76px; align-items:center; gap:12px; font-size:11px; }
     .shapley-track { position:relative; height:16px; border-radius:6px; background:linear-gradient(90deg,#fbe7eb 0 49.8%,var(--line) 49.8% 50.2%,#e4f4ec 50.2% 100%); }
@@ -215,9 +224,6 @@
     .shapley-fill.negative { right:50%; background:var(--red); }
     .shapley-fill.positive { left:50%; background:var(--green); }
     .shapley-value { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
-    .provenance { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .provenance-item { min-height:70px; padding:14px; border-radius:12px; background:var(--soft); }
-    .provenance-item strong { display:block; margin-top:5px; font-size:11px; }
     .placeholder { margin-top:28px; padding:24px 4px; border-top:1px solid var(--line); opacity:.56; }
     .placeholder h2 { margin:0; font-size:15px; }
     .placeholder p { margin:6px 0 0; color:var(--muted); font-size:12px; }
@@ -254,22 +260,22 @@
     .ce-input { padding:0 12px; }
     .ce-select { padding:0 32px 0 10px; }
     .ce-select:disabled { color:var(--muted); cursor:not-allowed; opacity:.62; }
-    .ce-reset { min-height:42px; padding:0 14px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface); font-weight:650; cursor:pointer; }
+    .ce-reset { min-height:42px; padding:0 14px; border:1px solid var(--line-dark); border-radius:var(--radius-control); color:var(--muted); background:var(--surface); font-weight:500; cursor:pointer; }
     .ce-reset:hover { color:var(--ink); background:var(--soft); }
     .ce-reset:active { transform:scale(.96); }
     .ce-table-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--surface); }
     .ce-table-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .ce-tool { min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface); font-size:10px; font-weight:680; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .ce-tool { min-height:40px; padding:0 12px; border:1px solid var(--line-dark); border-radius:var(--radius-control); color:var(--muted); background:var(--surface); font-size:10px; font-weight:500; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
     .ce-tool:hover:not(:disabled) { color:var(--ink); background:var(--soft); }
-    .ce-tool[aria-pressed="true"] { color:var(--purple); border-color:rgb(109 44 255 / .3); background:var(--purple-soft); }
+    .ce-tool[aria-pressed="true"] { color:var(--purple-dark); border-color:var(--purple); background:var(--purple-soft); }
     .ce-tool:active:not(:disabled) { transform:scale(.96); }
     .ce-tool:disabled { cursor:not-allowed; opacity:.46; }
     .ce-filter-chips { display:grid; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); background:var(--soft); }
     .ce-filter-group { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-    .ce-filter-label { width:82px; color:var(--muted); font-size:9px; font-weight:720; letter-spacing:.06em; text-transform:uppercase; }
+    .ce-filter-label { width:82px; color:var(--muted); font-size:9px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
     .ce-chip-filter { min-height:32px; padding:0 10px; border:1px solid var(--line); border-radius:16px; color:var(--muted); background:var(--surface); font-size:9px; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
-    .ce-chip-filter:hover { color:var(--ink); border-color:rgb(109 44 255 / .25); }
-    .ce-chip-filter.active { color:var(--purple); border-color:rgb(109 44 255 / .3); background:var(--purple-soft); font-weight:700; }
+    .ce-chip-filter:hover { color:var(--ink); border-color:var(--purple); }
+    .ce-chip-filter.active { color:var(--purple-dark); border-color:var(--purple); background:var(--purple-soft); font-weight:500; }
     .ce-chip-filter:active { transform:scale(.96); }
     .ce-chip-count { margin-left:5px; opacity:.65; font-variant-numeric:tabular-nums; }
     .filter-boundary { padding:10px 18px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--purple-soft); font-size:10px; line-height:1.45; }
@@ -294,8 +300,8 @@
     .ce-table th.ce-static-trend,.ce-table th.ce-static-contribution { border-left:1px solid var(--line); text-align:center; }
     .ce-table th.ce-static-contribution .ce-sort { justify-content:center; white-space:normal; }
     .ce-header-stack { display:flex; min-height:40px; flex-direction:column; align-items:center; justify-content:center; gap:2px; line-height:1.05; white-space:normal; }
-    .ce-header-stack strong { color:inherit; font:inherit; font-weight:720; }
-    .ce-header-stack small { color:var(--muted); font-size:7px; font-weight:650; letter-spacing:.04em; }
+    .ce-header-stack strong { color:inherit; font:inherit; font-weight:500; }
+    .ce-header-stack small { color:var(--muted); font-size:7px; font-weight:500; letter-spacing:.4px; }
     .ce-table th.ce-section { height:52px; color:var(--purple); background:var(--purple-soft); text-align:center; }
     .ce-table th.ce-section .ce-metric-head { justify-content:center; }
     .ce-table th.ce-section .ce-metric-label { justify-content:flex-end; width:auto; font-size:11px; }
@@ -342,11 +348,11 @@
     .ce-table tbody tr:not(.ce-total):not(.ce-group):hover .ce-static-name,.ce-table tbody tr:not(.ce-total):not(.ce-group):focus-within .ce-static-name { z-index:7; }
     .ce-table tbody tr:not(.ce-total):not(.ce-group):hover .ce-hover-revenue,.ce-name-button:focus-visible ~ .ce-hover-revenue { opacity:1; transform:translate(0,-50%); }
     .ce-badges { display:inline-flex; align-items:center; gap:4px; margin-left:6px; }
-    .ce-badge { display:inline-flex; min-height:20px; align-items:center; padding:0 6px; border-radius:10px; color:var(--purple); background:var(--purple-soft); font-size:8px; font-weight:720; }
+    .ce-badge { display:inline-flex; min-height:20px; align-items:center; padding:0 6px; border-radius:8px; color:var(--purple-dark); background:var(--purple-soft); font-size:8px; font-weight:500; }
     .ce-badge.custom { color:#125f48; background:#e4f4ec; }
     .ce-mover { font-size:9px; }
     .ce-mini-spark { display:block; width:98px; height:28px; margin-left:auto; }
-    .ce-main-value { display:block; color:var(--ink); font-weight:680; }
+    .ce-main-value { display:block; color:var(--ink); font-weight:500; }
     .ce-sub-value { display:block; margin-top:4px; font-size:9px; }
     .ce-results { display:flex; justify-content:space-between; gap:16px; padding:13px 18px; color:var(--muted); background:var(--soft); font-size:10px; }
     .ce-empty { padding:54px 24px!important; color:var(--muted); text-align:center!important; }
@@ -358,7 +364,7 @@
     .ce-country-row { display:flex; justify-content:space-between; gap:16px; padding:12px; border-radius:10px; background:var(--soft); font-size:10px; }
     .portfolio-drawer { width:min(720px,94vw); }
     .portfolio-tabs { position:sticky; top:91px; z-index:2; display:flex; gap:4px; padding:10px 28px; border-bottom:1px solid var(--line); background:rgb(255 255 255 / .96); backdrop-filter:blur(12px); }
-    .portfolio-tab { min-height:40px; padding:0 13px; border:0; border-radius:10px; color:var(--muted); background:transparent; font-weight:680; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
+    .portfolio-tab { min-height:40px; padding:0 13px; border:0; border-radius:var(--radius-control); color:var(--muted); background:transparent; font-weight:500; cursor:pointer; transition-property:color,background-color,transform; transition-duration:120ms; }
     .portfolio-tab:hover { color:var(--ink); background:var(--soft); }
     .portfolio-tab.active,.portfolio-tab[aria-pressed="true"] { color:var(--purple); background:var(--purple-soft); }
     .portfolio-tab:active { transform:scale(.96); }
@@ -373,13 +379,13 @@
     .portfolio-row span,.portfolio-row small { display:block; margin-top:3px; color:var(--muted); font-size:9px; }
     .portfolio-empty { padding:34px 20px; border:1px dashed var(--line); border-radius:14px; color:var(--muted); font-size:11px; line-height:1.55; text-align:center; }
     .portfolio-actions { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
-    .portfolio-button { min-height:40px; padding:0 13px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--surface); font-weight:680; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .portfolio-button { min-height:40px; padding:0 13px; border:1px solid var(--line-dark); border-radius:var(--radius-control); color:var(--ink); background:var(--surface); font-weight:500; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
     .portfolio-button.primary { color:white; border-color:var(--purple); background:var(--purple); }
-    .portfolio-button:hover:not(:disabled) { border-color:rgb(109 44 255 / .32); background:var(--purple-soft); color:var(--purple); }
+    .portfolio-button:hover:not(:disabled) { border-color:var(--purple); background:var(--purple-soft); color:var(--purple-dark); }
     .portfolio-button.primary:hover:not(:disabled) { color:white; background:#5b20df; }
     .portfolio-button:active:not(:disabled) { transform:scale(.96); }
     .portfolio-button:disabled { cursor:not-allowed; opacity:.45; }
-    .portfolio-upload { display:grid; gap:10px; padding:16px; border:1px dashed rgb(109 44 255 / .28); border-radius:14px; background:#fbf9ff; }
+    .portfolio-upload { display:grid; gap:10px; padding:16px; border:1px dashed var(--purple); border-radius:12px; background:var(--purple-soft); }
     .portfolio-upload input { width:100%; min-height:40px; }
     .portfolio-schema { padding:12px; border-radius:10px; background:var(--soft); color:var(--muted); font:10px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
     .portfolio-preview { margin-top:16px; }
@@ -389,7 +395,7 @@
     .portfolio-status { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
     .portfolio-status span { padding:5px 8px; border-radius:9px; background:var(--soft); color:var(--muted); font-size:9px; }
     .portfolio-status .ok { color:var(--green); background:#e4f4ec; }
-    .portfolio-demo { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 18px; padding:16px; border-radius:14px; background:linear-gradient(135deg,#f4efff,#fbf9ff); box-shadow:inset 0 0 0 1px rgb(109 44 255 / .1); }
+    .portfolio-demo { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 18px; padding:16px; border-radius:12px; background:var(--purple-soft); box-shadow:inset 0 0 0 1px #ecd9ff; }
     .portfolio-demo strong { display:block; font-size:12px; text-wrap:balance; }
     .portfolio-demo p { margin:4px 0 0; color:var(--muted); font-size:10px; line-height:1.45; text-wrap:pretty; }
     .portfolio-demo-actions { display:flex; flex:none; gap:8px; }
@@ -451,7 +457,6 @@
       .metric-table th:nth-child(3),.metric-table td:nth-child(3),.metric-table th:nth-child(5),.metric-table td:nth-child(5) { display:none; }
       .metric-spark { width:78px; }
       .shapley-row { grid-template-columns:72px minmax(0,1fr) 62px; }
-      .provenance { grid-template-columns:1fr; }
       .ce-context-controls { grid-template-columns:1fr; padding:12px 14px 14px; }
       .ce-context-controls .ce-reset { grid-column:auto; }
       .ce-group-field { grid-template-columns:1fr; }
@@ -532,7 +537,7 @@
       </section>
     </main>
   </div>
-  <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="drawer-overview"></section><section class="drawer-section"><h3>Performance diagnostics</h3><p class="drawer-section-copy">Current week versus last week, with the same 12-week this-year and last-year evidence used by the report.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Δ abs</th><th>Δ %</th><th>12-week trajectory</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div></section><section class="drawer-section" id="shapley-section"><h3>What drove the weekly revenue move</h3><p class="drawer-section-copy">Five-factor Shapley decomposition. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section"><h3>Data provenance</h3><p class="drawer-section-copy">The drawer explains the headline; it does not calculate a second version of it.</p><div class="provenance" id="drawer-provenance"></div></section></div></aside></div>
+  <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market performance · detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-section"><h3>Key metrics · 12-week trend</h3><p class="drawer-section-copy">W0 versus W-1, with solid this-year and dashed last-year trajectories on a shared scale per metric. Hover a sparkline for weekly values.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th><th>12-wk · TY vs LY</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div><p class="metric-footnote">* Paid metrics—Clicks, CVR, conversion value, average CM1 and Paid ROI—use Google Ads and Bing Search campaigns only; PMax, Display and Video are excluded. ROI 1 is broader: business CM1 divided by total marketing cost across all paid channels.</p></section><section class="drawer-section" id="shapley-section"><h3 id="shapley-title">WoW Shapley</h3><p class="drawer-section-copy">Five-factor decomposition of the V1 weekly revenue movement. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section></div><div class="metric-tooltip" id="metric-tooltip" role="status" aria-live="polite"></div></aside></div>
   <div class="drawer-root" id="portfolio-root" hidden><button class="drawer-scrim" id="portfolio-scrim" type="button" aria-label="Dismiss portfolio manager"></button><aside class="drawer portfolio-drawer" id="portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-title"><header class="drawer-header"><div><div class="drawer-kicker">All CE workspace</div><h2 class="drawer-title" id="portfolio-title">Manage portfolio</h2><p class="drawer-subtitle">CID-keyed context layered over the weekly snapshot.</p></div><button class="drawer-close" id="portfolio-close" type="button" aria-label="Close portfolio manager">×</button></header><nav class="portfolio-tabs" aria-label="Portfolio manager sections"><button class="portfolio-tab active" type="button" data-portfolio-tab="watchlist" aria-pressed="true">Watchlist</button><button class="portfolio-tab" type="button" data-portfolio-tab="groups" aria-pressed="false">Groups &amp; tags</button><button class="portfolio-tab" type="button" data-portfolio-tab="import" aria-pressed="false">Upload metadata</button></nav><div class="drawer-body"><section class="portfolio-panel" id="portfolio-watchlist-panel"><div id="portfolio-watchlist-body"></div></section><section class="portfolio-panel" id="portfolio-groups-panel" hidden><div id="portfolio-groups-body"></div></section><section class="portfolio-panel" id="portfolio-import-panel" hidden><h3>Upload CE metadata</h3><p class="drawer-section-copy">Use CID as the stable key. The upload only changes portfolio context; it never changes weekly calculations.</p><div class="portfolio-schema"><strong>Required:</strong> ce_id<br><strong>Optional:</strong> ce_name, primary_group, tags, watchlist<br>Separate multiple tags with a semicolon.</div><div class="portfolio-upload"><button class="portfolio-button" id="portfolio-download-template" type="button">Download CSV template</button><label class="portfolio-button primary" for="portfolio-file">Choose CSV</label><input class="sr-only" id="portfolio-file" type="file" accept=".csv,text/csv"></div><div class="portfolio-preview" id="portfolio-preview"><div class="portfolio-empty">Choose a CSV to preview matches, unknown CIDs and duplicates before applying.</div></div><div class="portfolio-actions"><button class="portfolio-button primary" id="portfolio-apply" type="button" disabled>Apply locally</button></div><p class="portfolio-status">Prototype storage is local to this browser and market. A shared Sheet adapter can replace storage without changing this CID-keyed contract.</p></section></div></aside></div>
   <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><h2 class="drawer-title" id="ce-drawer-title"></h2><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week revenue trajectory</h3><p class="drawer-section-copy">Solid = current year; dashed = last year, using the existing CE series.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section"><h3>Customer-country mix</h3><p class="drawer-section-copy">Countries present in the current CE composition payload.</p><div class="ce-country-list" id="ce-country-list"></div></section><section class="drawer-section"><h3>Scope boundary</h3><p class="drawer-section-copy">This foundation carries the CE identity, weekly metrics and country mix. Funnel, channels, TGIDs, lead time, notes and actions remain in the existing V1 drawer until their V2 migration slice.</p></section></div></aside></div>
   <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
@@ -610,7 +615,7 @@
       const monthLabel = (iso) => new Intl.DateTimeFormat('en-GB',{month:'long'}).format(new Date(`${iso}-01T00:00:00`));
       const escapeHtml = (value) => String(value == null?'':value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
       const formatMetric = (value, format) => format==='money'?money(value):format==='pct'?(value==null?'—':`${value.toFixed(2)}%`):count(value);
-      const formatDelta = (value, format) => format==='money'?signedMoney(value):format==='pct'?(value==null?'—':`${value>0?'+':''}${value.toFixed(2)}pp`):(value>0?'+':'')+count(value);
+      const formatDelta = (value, format) => format==='money'?signedMoney(value):format==='pct'?(value==null?'—':`${value>0?'+':value<0?'−':''}${Math.abs(value).toFixed(2)}pp`):(value==null?'—':`${value>0?'+':value<0?'−':''}${count(Math.abs(value))}`);
       const el = (name, attrs={}) => { const node=document.createElementNS(svgNS,name); Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,value)); return node; };
       function metric(label, value, className='') { return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${className}">${value}</div></div>`; }
       function renderRunway(item) {
@@ -645,7 +650,7 @@
         if(mode!=='rank')rows.sort((a,b)=>{const av=mode==='name'?String(a.ce_name):mode==='wow'?a.wow_abs:mode==='fourWeek'?a.delta_4w:String(a.seasonality_tag||''),bv=mode==='name'?String(b.ce_name):mode==='wow'?b.wow_abs:mode==='fourWeek'?b.delta_4w:String(b.seasonality_tag||'');if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
         if (!rows.length) { list.innerHTML='<div class="mover-empty">No qualifying movers are available for this market and week.</div>'; return; }
         const headings=[['name','CE'],['wow','WoW'],['fourWeek','4W avg'],['seasonality','vs LY']],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'',tagClass=tag=>tag==='against season'?'against':tag==='seasonal'?'seasonal':tag==='mostly TY'?'mostly-ty':'no-ly';
-        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,10).map((row,index)=>`<div class="mover-row"><span class="mover-rank">${index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</div></div><div class="mover-cell ${tone(row.wow_abs)}">${signedMoney(row.wow_abs)}</div><div class="mover-cell ${tone(row.delta_4w)}">${signedMoney(row.delta_4w)}</div><span class="mover-seasonality ${tagClass(row.seasonality_tag)}" title="Last-year seasonality context: ${escapeHtml(row.seasonality_tag||'not available')}">${escapeHtml(row.seasonality_tag||'—')}</span></div>`).join('');
+        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,10).map((row,index)=>`<div class="mover-row" title="${escapeHtml(row.ranking_method||'V1 source ranking')}"><span class="mover-rank">${mode==='rank'?(row.source_rank||index+1):index+1}</span><div><div class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</div><div class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</div></div><div class="mover-cell ${tone(row.wow_abs)}">${signedMoney(row.wow_abs)}</div><div class="mover-cell ${tone(row.delta_4w)}">${signedMoney(row.delta_4w)}</div><span class="mover-seasonality ${tagClass(row.seasonality_tag)}" title="Last-year seasonality context: ${escapeHtml(row.seasonality_tag||'not available')}">${escapeHtml(row.seasonality_tag||'—')}</span></div>`).join('');
       }
       function setSelectOptions(select, values, allLabel, unavailableLabel, selectedValue='') {
         select.innerHTML=`<option value="">${values.length?allLabel:unavailableLabel}</option>`+values.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
@@ -690,7 +695,7 @@
         const data=ce.chart||[],values=data.flatMap(row=>[row.revenue,row.revenue_ly]).filter(value=>value!=null);
         if(!values.length)return '—';
         const width=98,height=28,min=Math.min(...values),max=Math.max(...values),span=max-min||1,points=key=>data.map((row,index)=>row[key]==null?null:`${(index/Math.max(1,data.length-1)*width).toFixed(1)},${(height-3-(row[key]-min)/span*(height-6)).toFixed(1)}`).filter(Boolean).join(' ');
-        return `<svg class="ce-mini-spark" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} revenue trajectory"><polyline points="${points('revenue_ly')}" fill="none" stroke="#9a94a4" stroke-width="1.1" stroke-dasharray="3 3"/><polyline points="${points('revenue')}" fill="none" stroke="#6d2cff" stroke-width="1.8"/></svg>`;
+        return `<svg class="ce-mini-spark" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} revenue trajectory"><polyline points="${points('revenue_ly')}" fill="none" stroke="var(--muted)" stroke-width="1.1" stroke-dasharray="3 3"/><polyline points="${points('revenue')}" fill="none" stroke="var(--purple)" stroke-width="1.8"/></svg>`;
       }
       function ceFilteredRows(item) {
         const query=ceState.search.trim().toLowerCase();
@@ -794,7 +799,7 @@
         if(!values.length)return '<div class="mover-empty">No weekly series is available.</div>';
         const min=Math.min(...values),max=Math.max(...values),pad=Math.max(1,(max-min)*.12),lo=Math.max(0,min-pad),hi=max+pad,x=index=>margin.left+(index/Math.max(1,data.length-1))*(width-margin.left-margin.right),y=value=>margin.top+((hi-value)/(hi-lo||1))*(height-margin.top-margin.bottom);
         const points=key=>data.map((row,index)=>row[key]==null?null:`${x(index).toFixed(1)},${y(row[key]).toFixed(1)}`).filter(Boolean).join(' ');
-        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} 12-week revenue trajectory"><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(lo)}" y2="${y(lo)}" stroke="#e7e2eb"/><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(hi)}" y2="${y(hi)}" stroke="#e7e2eb"/><text x="${margin.left-8}" y="${y(lo)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(lo,0)}</text><text x="${margin.left-8}" y="${y(hi)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(hi,0)}</text><polyline points="${points('revenue_ly')}" fill="none" stroke="#9a94a4" stroke-width="1.4" stroke-dasharray="5 5"/><polyline points="${points('revenue')}" fill="none" stroke="#6d2cff" stroke-width="2.4"/><text x="${margin.left}" y="${height-5}" fill="#766f80" font-size="10">${data[0]?dateLabel(data[0].week):''}</text><text x="${width-margin.right}" y="${height-5}" text-anchor="end" fill="#766f80" font-size="10">${data.length?dateLabel(data[data.length-1].week):''}</text></svg>`;
+        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} 12-week revenue trajectory"><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(lo)}" y2="${y(lo)}" stroke="var(--line-dark)"/><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(hi)}" y2="${y(hi)}" stroke="var(--line-dark)"/><text x="${margin.left-8}" y="${y(lo)+4}" text-anchor="end" fill="var(--muted)" font-size="10">${money(lo,0)}</text><text x="${margin.left-8}" y="${y(hi)+4}" text-anchor="end" fill="var(--muted)" font-size="10">${money(hi,0)}</text><polyline points="${points('revenue_ly')}" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="5 5"/><polyline points="${points('revenue')}" fill="none" stroke="var(--purple)" stroke-width="2.4"/><text x="${margin.left}" y="${height-5}" fill="var(--muted)" font-size="10">${data[0]?dateLabel(data[0].week):''}</text><text x="${width-margin.right}" y="${height-5}" text-anchor="end" fill="var(--muted)" font-size="10">${data.length?dateLabel(data[data.length-1].week):''}</text></svg>`;
       }
       function renderCeDrawer(ce) {
         const custom=portfolioFor(ce.ce_id);
@@ -854,18 +859,31 @@
         if (!values.length) return '<span>—</span>';
         const width=112,height=30,min=Math.min(...values),max=Math.max(...values),span=max-min||1;
         const points=key=>data.map((row,index)=>row[key]==null?null:`${(index/Math.max(1,data.length-1)*width).toFixed(1)},${(height-3-((row[key]-min)/span)*(height-6)).toFixed(1)}`).filter(Boolean).join(' ');
-        return `<svg class="metric-spark" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(metric.label)} 12-week trajectory"><polyline points="${points('ly')}" fill="none" stroke="#9a94a4" stroke-width="1.2" stroke-dasharray="3 3"/><polyline points="${points('ty')}" fill="none" stroke="#6d2cff" stroke-width="1.8"/></svg>`;
+        const ty=data.map(row=>row.ty).filter(value=>value!=null),stroke=ty.length>1?(ty[ty.length-1]>=ty[0]?'var(--green)':'var(--red)'):'var(--purple)';
+        return `<svg class="metric-spark" data-metric-key="${escapeHtml(metric.key)}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(metric.label)} 12-week trajectory"><polyline points="${points('ly')}" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="3 3"/><polyline points="${points('ty')}" fill="none" stroke="${stroke}" stroke-width="1.8"/><line class="metric-cursor" x1="0" x2="0" y1="0" y2="${height}" stroke="var(--ink)" stroke-width="1" opacity="0"/></svg>`;
+      }
+      function wireMetricSparklines(item) {
+        const tooltip=document.getElementById('metric-tooltip'),metrics=new Map((item.detail.metrics||[]).map(row=>[row.key,row]));
+        document.querySelectorAll('#drawer-metrics .metric-spark').forEach(svg=>{
+          const metric=metrics.get(svg.dataset.metricKey),cursor=svg.querySelector('.metric-cursor');
+          if(!metric)return;
+          svg.addEventListener('pointermove',event=>{
+            const box=svg.getBoundingClientRect(),data=metric.series||[],relative=Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),index=Math.round(relative*Math.max(0,data.length-1)),row=data[index]||{},x=relative*112,yoy=row.ty!=null&&row.ly?100*(row.ty/row.ly-1):null;
+            cursor.setAttribute('x1',x.toFixed(1));cursor.setAttribute('x2',x.toFixed(1));cursor.setAttribute('opacity','.32');
+            tooltip.innerHTML=`<strong>Week of ${dateLabel(row.week)}</strong><span>${escapeHtml(metric.label)} TY · ${formatMetric(row.ty,metric.format)}</span><span>Last year · ${metric.has_ly?formatMetric(row.ly,metric.format):'n/a'}</span>${yoy==null?'':`<span class="metric-tooltip-yoy">YoY · ${pct(yoy)}</span>`}`;
+            tooltip.style.left=`${Math.min(window.innerWidth-190,event.clientX+14)}px`;tooltip.style.top=`${Math.max(12,event.clientY-24)}px`;tooltip.classList.add('visible');
+          });
+          svg.addEventListener('pointerleave',()=>{cursor.setAttribute('opacity','0');tooltip.classList.remove('visible');});
+        });
       }
       function renderDrawer(item) {
         document.getElementById('drawer-title').textContent=item.market;
         document.getElementById('drawer-subtitle').textContent=`Week of ${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`;
-        document.getElementById('drawer-overview').innerHTML=[metric('Weekly revenue',money(item.revenue)),metric('Versus last week',pct(item.wow_pct),tone(item.wow_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct))].join('').replaceAll('class="metric"','class="drawer-stat"');
-        document.getElementById('drawer-metrics').innerHTML=(item.detail.metrics||[]).map(row=>`<tr><td>${escapeHtml(row.label)}</td><td><strong>${formatMetric(row.w0,row.format)}</strong></td><td>${formatMetric(row.wm1,row.format)}</td><td class="${tone(row.delta_abs)}">${formatDelta(row.delta_abs,row.format)}</td><td class="${tone(row.delta_pct)}">${pct(row.delta_pct)}</td><td>${sparkline(row)}</td></tr>`).join('')||'<tr><td colspan="6">No metric diagnostics are available.</td></tr>';
+        document.getElementById('drawer-metrics').innerHTML=(item.detail.metrics||[]).map((row,index,rows)=>`<tr class="${row.paid?'paid':''} ${row.paid&&!(rows[index-1]||{}).paid?'paid-first':''}"><td>${escapeHtml(row.label)}${row.paid?' *':''}</td><td><strong>${formatMetric(row.w0,row.format)}</strong></td><td>${formatMetric(row.wm1,row.format)}</td><td class="${tone(row.delta_abs)}">${formatDelta(row.delta_abs,row.format)}</td><td class="${tone(row.delta_pct)}">${pct(row.delta_pct)}</td><td>${sparkline(row)}${row.has_ly?'':'<span class="metric-ly-na">LY n/a</span>'}</td></tr>`).join('')||'<tr><td colspan="6">No metric diagnostics are available.</td></tr>';
+        wireMetricSparklines(item);
         const shapley=item.detail.shapley, section=document.getElementById('shapley-section'), list=document.getElementById('shapley-list');
         section.hidden=!shapley||!shapley.factors.length;
-        if (shapley&&shapley.factors.length) { const max=Math.max(...shapley.factors.map(row=>Math.abs(row.value||0)),1); list.innerHTML=shapley.factors.map(row=>`<div class="shapley-row"><span>${escapeHtml(row.label)}</span><div class="shapley-track"><span class="shapley-fill ${tone(row.value)}" style="width:${Math.abs(row.value||0)/max*50}%"></span></div><span class="shapley-value ${tone(row.value)}">${signedMoney(row.value)}</span></div>`).join('')+`<div class="shapley-row"><strong>Net WoW</strong><div></div><span class="shapley-value ${tone(shapley.net_delta)}">${signedMoney(shapley.net_delta)}</span></div>`; }
-        const monthly=item.monthly, goalStatus=monthly.state==='current'?`Current · ${dateLabel(monthly.as_of)}`:monthly.state==='stale'?`Stale · ${dateLabel(monthly.as_of)}`:'Not attached';
-        document.getElementById('drawer-provenance').innerHTML=`<div class="provenance-item"><span class="metric-label">Weekly metrics</span><strong>Existing schema-v1 market snapshot</strong></div><div class="provenance-item"><span class="metric-label">Goal data</span><strong>${escapeHtml(goalStatus)}</strong></div><div class="provenance-item"><span class="metric-label">Goal source</span><strong>${escapeHtml(monthly.source||'No approved source attached')}</strong></div><div class="provenance-item"><span class="metric-label">Calculation boundary</span><strong>View-only projection; weekly engines unchanged</strong></div>`;
+        if (shapley&&shapley.factors.length) { const max=Math.max(...shapley.factors.map(row=>Math.abs(row.value||0)),1); document.getElementById('shapley-title').textContent=`WoW Shapley · what drove the ${signedMoney(shapley.net_delta)}`; list.innerHTML=shapley.factors.map(row=>`<div class="shapley-row"><span>${escapeHtml(row.label)}</span><div class="shapley-track"><span class="shapley-fill ${tone(row.value)}" style="width:${Math.abs(row.value||0)/max*50}%"></span></div><span class="shapley-value ${tone(row.value)}">${signedMoney(row.value)}</span></div>`).join('')+`<div class="shapley-row"><strong>Net WoW</strong><div></div><span class="shapley-value ${tone(shapley.net_delta)}">${signedMoney(shapley.net_delta)}</span></div>`; }
       }
       function drawChart(item) {
         const chart=document.getElementById('revenue-chart'), tooltip=document.getElementById('tooltip'), wrap=chart.parentElement, data=item.chart;

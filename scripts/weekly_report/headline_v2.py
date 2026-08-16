@@ -33,6 +33,8 @@ _SHAPLEY_LABELS = {
     "tr": "Take rate",
 }
 
+_PAID_METRICS = frozenset({"paid_clicks", "paid_cvr", "paid_conv_value", "avg_cm1", "paid_roi"})
+
 _CE_PERIOD_FIELDS = (
     "revenue", "orders", "aov", "tr_pct", "cr_pct", "clicks", "paid_clicks",
     "cvr_pct", "paid_cvr_pct", "cpc", "paid_rpc", "spend", "cm1", "paid_cm2",
@@ -70,23 +72,51 @@ def _goal_state(goal, week_end):
 def _metric_views(headlines, rows, weekly_ly):
     metrics = headlines.get("key_metrics", {})
     ly_by_week = {row.get("week"): row for row in weekly_ly}
+
+    def row_value(row, field):
+        value = _number(row.get(field))
+        if value is None and field == "avg_cm1":
+            cm1 = _number(row.get("cm1"))
+            conversions = _number(row.get("paid_conversions"))
+            if cm1 is not None and conversions not in (None, 0):
+                value = cm1 / conversions
+        return value
+
     views = []
     for key, default_label, value_format, weekly_field in _METRIC_SPECS:
         metric = metrics.get(key)
         if not isinstance(metric, dict):
-            continue
+            # V1's market drawer backfills these three fields for snapshots that
+            # predate the complete key_metrics block. Keep the same fallback,
+            # but build a view instead of mutating the source snapshot.
+            if key not in {"orders", "aov", "avg_cm1"} or not rows:
+                continue
+            w0 = row_value(rows[-1], weekly_field)
+            wm1 = row_value(rows[-2], weekly_field) if len(rows) > 1 else None
+            if w0 is None:
+                continue
+            metric = {
+                "label": default_label,
+                "w0": w0,
+                "wm1": wm1,
+                "delta_abs": w0 - wm1 if wm1 is not None else None,
+                "delta_pct": _percent_change(w0, wm1),
+                "has_ly": True,
+            }
         series = []
         for row in rows[-12:]:
             ly_row = ly_by_week.get(row.get("week"), {})
             series.append({
                 "week": row.get("week"),
-                "ty": _number(row.get(weekly_field)),
-                "ly": _number(ly_row.get(weekly_field)),
+                "ty": row_value(row, weekly_field),
+                "ly": row_value(ly_row, weekly_field),
             })
         views.append({
             "key": key,
             "label": metric.get("label") or default_label,
             "format": value_format,
+            "paid": key in _PAID_METRICS,
+            "has_ly": metric.get("has_ly") is not False and any(row["ly"] is not None for row in series),
             "w0": _number(metric.get("w0")),
             "wm1": _number(metric.get("wm1")),
             "delta_abs": _number(metric.get("delta_abs")),
@@ -96,30 +126,24 @@ def _metric_views(headlines, rows, weekly_ly):
     return views
 
 
-def _seasonality_tag_view(row, delta_4w):
-    tag = str(row.get("tag") or "").strip()
-    if tag in {"seasonal", "against season", "mostly TY", "no LY"}:
-        return tag
-    ly_wow = _number(row.get("ly_wow"))
-    if ly_wow is None:
-        return "no LY"
-    if delta_4w is None or abs(delta_4w) < 200:
-        return ""
-    same_direction = (delta_4w > 0) == (ly_wow > 0)
-    if same_direction and abs(ly_wow) > abs(delta_4w) * 0.3:
-        return "seasonal"
-    if not same_direction:
-        return "against season"
-    return "mostly TY"
-
-
 def _mover_views(headlines, direction):
     trend = (headlines.get("week_header") or {}).get("trend") or {}
     rich_key = "top_droppers" if direction == "drop" else "top_gainers"
     fallback_key = "top_drops" if direction == "drop" else "top_gainers"
-    source = trend.get(rich_key) or headlines.get(fallback_key) or []
+    rich_source = trend.get(rich_key)
+    source = rich_source or headlines.get(fallback_key) or []
+    source_path = (
+        f"market_summary.headlines.week_header.trend.{rich_key}"
+        if rich_source
+        else f"market_summary.headlines.{fallback_key}"
+    )
+    ranking_method = (
+        "V1 dual-lens ranking: the larger directional movement across WoW and trailing 4-week average"
+        if rich_source
+        else "V1 raw WoW revenue ranking"
+    )
     result = []
-    for row in source:
+    for rank, row in enumerate(source, start=1):
         delta_4w = _number(row.get("delta_4w"))
         wow_abs = _number(row.get("raw_wow"))
         if wow_abs is None:
@@ -143,7 +167,12 @@ def _mover_views(headlines, direction):
             "revenue": _number(row.get("w0_rev")),
             "yoy_growth": _number(row.get("yoy_growth")),
             "tag": row.get("tag"),
-            "seasonality_tag": _seasonality_tag_view(row, delta_4w),
+            # The V1 flow engine owns the seasonal classification. V2 must not
+            # reproduce that threshold logic or silently change its verdict.
+            "seasonality_tag": row.get("tag") if rich_source else "no LY",
+            "source_rank": rank,
+            "source_path": source_path,
+            "ranking_method": ranking_method,
         })
     return result
 
@@ -159,7 +188,7 @@ def _shapley_view(headlines):
     ]
     return {
         "factors": factors,
-        "net_delta": _number(source.get("net_delta")),
+        "net_delta": _number(source.get("net_delta")) if _number(source.get("net_delta")) is not None else _number(source.get("total")),
         "reconstructs": source.get("reconstructs") is True,
     }
 
@@ -284,15 +313,24 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
     trailing_four = fmean(prior_four) if prior_four else None
 
     headlines = summary.get("headlines", {})
+    week_header = headlines.get("week_header") or {}
+    engine_raw = week_header.get("raw") if isinstance(week_header.get("raw"), dict) else {}
     metrics = headlines.get("key_metrics", {})
     revenue = _number(headlines.get("revenue_w0"))
+    if revenue is None:
+        revenue = _number(engine_raw.get("revenue_w0"))
     if revenue is None:
         revenue = _number(current.get("revenue"))
     previous_revenue = _number(previous.get("revenue"))
     wow_abs = revenue - previous_revenue if revenue is not None and previous_revenue is not None else None
     wow_pct = _number(headlines.get("wow_pct"))
     if wow_pct is None:
+        wow_pct = _number(engine_raw.get("wow_pct"))
+    if wow_pct is None:
         wow_pct = _percent_change(revenue, previous_revenue)
+    yoy_pct = _number(headlines.get("yoy_pct"))
+    if yoy_pct is None:
+        yoy_pct = _number(engine_raw.get("yoy_pct"))
 
     paid_roi = metrics.get("paid_roi", {})
     paid_roi_w0 = _number(paid_roi.get("w0"))
@@ -338,7 +376,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
     for row in rows[-12:]:
         ly = ly_by_week.get(row.get("week"))
         if ly is None and row is current:
-            yoy = _number(headlines.get("yoy_pct"))
+            yoy = yoy_pct
             if yoy is not None and yoy != -100:
                 ly = row["revenue"] / (1.0 + yoy / 100.0)
         chart.append({"week": row.get("week"), "revenue": row["revenue"], "revenue_ly": ly})
@@ -354,7 +392,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         "wow_pct": wow_pct,
         "vs_trailing_four_pct": _percent_change(revenue, trailing_four),
         "trailing_four_revenue": trailing_four,
-        "yoy_pct": _number(headlines.get("yoy_pct")),
+        "yoy_pct": yoy_pct,
         "paid_roi_pct": paid_roi_w0,
         "paid_roi_delta_pp": paid_roi_delta_pp,
         "monthly": monthly,

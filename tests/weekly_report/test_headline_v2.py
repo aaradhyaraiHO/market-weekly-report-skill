@@ -95,6 +95,13 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertNotIn('id="market-select"', html)
         self.assertIn('id="open-detail"', html)
         self.assertEqual(html.count('id="open-detail"'), 1)
+        self.assertNotIn('id="weekly-engine-section"', html)
+        self.assertNotIn('id="weekly-engine-context"', html)
+        self.assertNotIn('id="drawer-overview"', html)
+        self.assertIn('id="metric-tooltip"', html)
+        self.assertIn("function wireMetricSparklines", html)
+        self.assertIn("Key metrics · 12-week trend", html)
+        self.assertNotIn("Data provenance", html)
         self.assertIn('<details class="pacing-details" id="pacing-details">', html)
         self.assertIn('id="targets-section"', html)
         self.assertIn('id="target-summary"', html)
@@ -169,7 +176,12 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(view["movers"]["drops"][0]["ce_name"], "Example Museum")
         self.assertEqual(view["movers"]["drops"][0]["primary_delta"], -30_000)
         self.assertEqual(view["movers"]["drops"][0]["primary_lens"], "vs last week")
-        self.assertEqual(view["movers"]["drops"][0]["seasonality_tag"], "no LY")
+        self.assertIsNone(view["movers"]["drops"][0]["seasonality_tag"])
+        self.assertEqual(view["movers"]["drops"][0]["source_rank"], 1)
+        self.assertEqual(
+            view["movers"]["drops"][0]["source_path"],
+            "market_summary.headlines.week_header.trend.top_droppers",
+        )
         self.assertEqual(view["movers"]["gains"][0]["primary_delta"], 50_000)
 
     def test_dense_snapshot_drives_drawer_metrics_shapley_and_rich_movers(self):
@@ -186,10 +198,29 @@ class HeadlineV2Contract(unittest.TestCase):
             ["traffic", "cvr", "aov", "cr", "tr"],
         )
         first_drop = view["movers"]["drops"][0]
+        source_header = market["market_summary"]["headlines"]["week_header"]
+        source_drop = source_header["trend"]["top_droppers"][0]
         self.assertEqual(first_drop["primary_delta"], -19_532)
         self.assertEqual(first_drop["primary_lens"], "vs trailing 4w")
-        self.assertEqual(first_drop["seasonality_tag"], "against season")
+        self.assertEqual(first_drop["seasonality_tag"], source_drop["tag"])
         self.assertEqual(first_drop["wow_abs"], -4_858)
+        self.assertEqual(first_drop["source_rank"], 1)
+        self.assertEqual(
+            first_drop["source_path"],
+            "market_summary.headlines.week_header.trend.top_droppers",
+        )
+        self.assertIn("V1 dual-lens ranking", first_drop["ranking_method"])
+
+        metrics = view["detail"]["metrics"]
+        self.assertEqual(
+            [metric["key"] for metric in metrics],
+            [
+                "revenue", "gbv", "orders", "aov", "cr_pct", "tr_pct",
+                "paid_clicks", "paid_cvr", "paid_conv_value", "avg_cm1", "paid_roi", "roi1",
+            ],
+        )
+        self.assertFalse(next(metric for metric in metrics if metric["key"] == "orders")["paid"])
+        self.assertTrue(next(metric for metric in metrics if metric["key"] == "paid_clicks")["paid"])
 
         ce = next(row for row in view["all_ces"] if row["buckets"])
         self.assertIn("subcategory", ce)
@@ -198,6 +229,47 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(set(ce["periods"]), {"w0", "w1", "ly"})
         self.assertIn("revenue", ce["periods"]["w0"])
         self.assertTrue(all(set(bucket) == {"key", "label", "family"} for bucket in ce["buckets"]))
+
+    def test_current_v1_seasonality_tag_is_passed_through_without_reclassification(self):
+        with gzip.open(DENSE_FIXTURE, "rt") as fixture:
+            market = json.load(fixture)
+        source = market["market_summary"]["headlines"]["week_header"]["trend"]["top_droppers"][0]
+        source["tag"] = ""
+        source["ly_wow"] = 999_999
+
+        first_drop = headline_v2.build_headline_view(market)["movers"]["drops"][0]
+
+        self.assertEqual(first_drop["seasonality_tag"], "")
+
+    def test_v1_market_drawer_backfills_legacy_orders_aov_and_average_cm1(self):
+        market = copy.deepcopy(self.market)
+        metrics = market["market_summary"]["headlines"]["key_metrics"]
+        metrics.pop("aov", None)
+        for index, row in enumerate(market["market_summary"]["weekly"]):
+            row.update({"orders": 100 + index, "aov": 80 + index, "cm1": 2_000 + index * 100, "paid_conversions": 40})
+
+        view = headline_v2.build_headline_view(market)
+        by_key = {metric["key"]: metric for metric in view["detail"]["metrics"]}
+
+        self.assertEqual(by_key["orders"]["w0"], 111)
+        self.assertEqual(by_key["aov"]["w0"], 91)
+        self.assertEqual(by_key["avg_cm1"]["w0"], 77.5)
+        self.assertNotIn("orders", metrics)
+        self.assertNotIn("avg_cm1", metrics)
+
+    def test_v2_template_uses_oak_eevee_foundation(self):
+        template = Path(render_v2.TEMPLATE).read_text()
+
+        self.assertIn("--font-display:halyard-display", template)
+        self.assertIn("--font-text:halyard-text", template)
+        self.assertIn("--purple:#8000ff", template)
+        self.assertIn("--purple-soft:#f3e9ff", template)
+        self.assertIn("--radius-control:8px", template)
+        self.assertIn("--radius-card:16px", template)
+        self.assertIn("--radius-hero:20px", template)
+        self.assertNotIn("Hanken Grotesk", template)
+        self.assertNotIn("#6d2cff", template.lower())
+        self.assertIsNone(re.search(r"transition\s*:\s*all\b", template, re.I))
 
     def test_report_scope_is_one_market_with_week_history(self):
         older = copy.deepcopy(self.market)
