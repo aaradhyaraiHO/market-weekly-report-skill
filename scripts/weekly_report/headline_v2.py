@@ -10,6 +10,8 @@ import datetime as dt
 from copy import deepcopy
 from statistics import fmean
 
+import flows
+
 
 _METRIC_SPECS = (
     ("revenue", "Revenue", "money", "revenue"),
@@ -361,6 +363,8 @@ def _ce_views(market, dimensions=None):
             "ce_id": ce.get("ce_id"),
             "ce_name": ce.get("ce_name") or "Unnamed experience",
             "market": meta.get("market"),
+            "business_country": metadata.get("country"),
+            "business_region": metadata.get("region"),
             "week_start": meta.get("week_start"),
             "week_end": meta.get("week_end"),
             "city": metadata.get("city"),
@@ -427,7 +431,183 @@ def _ce_views(market, dimensions=None):
     return views
 
 
-def build_headline_view(market, goal=None, ce_dimensions=None):
+_ADDITIVE_FIELDS = (
+    "revenue", "gbv", "orders", "clicks", "spend", "cm1", "cm2",
+    "cm1_business", "gross_marketing_cost", "paid_impressions", "paid_clicks",
+    "paid_conv_value", "paid_conversions", "paid_revenue", "paid_cm2",
+    "sis_impr", "sis_elig", "organic_gbv", "gbv_completed", "ad_conversions",
+)
+
+
+def _aggregate_weekly(ces, series_key):
+    """Aggregate CE weekly facts using the V1 sum-then-divide metric canon."""
+    weeks = sorted({
+        row.get("week")
+        for ce in ces for row in (ce.get(series_key) or [])
+        if row.get("week")
+    })
+    by_ce = {
+        str(ce.get("ce_id")): {row.get("week"): row for row in (ce.get(series_key) or [])}
+        for ce in ces
+    }
+    result = []
+    for week in weeks:
+        rows = [lookup.get(week, {}) for lookup in by_ce.values()]
+        row = {"week": week}
+        for field in _ADDITIVE_FIELDS:
+            values = [_number(item.get(field)) for item in rows]
+            present = [value for value in values if value is not None]
+            row[field] = sum(present) if present else None
+        revenue, gbv = row.get("revenue"), row.get("gbv")
+        orders, clicks = row.get("orders"), row.get("clicks")
+        completed = row.get("gbv_completed")
+        paid_clicks, paid_conversions = row.get("paid_clicks"), row.get("paid_conversions")
+        spend, cm1 = row.get("spend"), row.get("cm1")
+        row.update({
+            "aov": gbv / orders if gbv is not None and orders else None,
+            "cvr_pct": 100.0 * (row.get("ad_conversions") or 0) / clicks if clicks else None,
+            "cr_pct": 100.0 * completed / gbv if gbv and completed is not None else None,
+            "tr_pct": 100.0 * revenue / completed if completed and revenue is not None else None,
+            "roi_pct": 100.0 * cm1 / spend if spend and cm1 is not None else None,
+            "roi1_pct": (
+                100.0 * row["cm1_business"] / row["gross_marketing_cost"]
+                if row.get("gross_marketing_cost") and row.get("cm1_business") is not None else None
+            ),
+            "paid_cvr_pct": 100.0 * paid_conversions / paid_clicks if paid_clicks else None,
+            "avg_cm1": cm1 / paid_conversions if paid_conversions and cm1 is not None else None,
+            "cpc": spend / paid_clicks if paid_clicks and spend is not None else None,
+            "paid_rpc": row.get("paid_revenue") / paid_clicks if paid_clicks and row.get("paid_revenue") is not None else None,
+            "paid_sis_pct": 100.0 * row["sis_impr"] / row["sis_elig"] if row.get("sis_elig") else None,
+        })
+        result.append(row)
+    return result
+
+
+def _metric_blocks(rows, weekly_ly):
+    ly_by_week = {row.get("week"): row for row in weekly_ly}
+    current = rows[-1] if rows else {}
+    previous = rows[-2] if len(rows) > 1 else {}
+    blocks = {}
+    for key, label, _fmt, field in _METRIC_SPECS:
+        w0, wm1 = _number(current.get(field)), _number(previous.get(field))
+        if w0 is None:
+            continue
+        blocks[key] = {
+            "label": label,
+            "w0": w0,
+            "wm1": wm1,
+            "delta_abs": w0 - wm1 if wm1 is not None else None,
+            "delta_pct": _percent_change(w0, wm1),
+            "has_ly": any(_number(row.get(field)) is not None for row in ly_by_week.values()),
+        }
+    return blocks
+
+
+def _country_goal(goal, ces, rows, weekly_ly):
+    if not isinstance(goal, dict):
+        return None
+    pacing = goal.get("ce_target_pacing") or {}
+    ids = {str(ce.get("ce_id")) for ce in ces}
+    records = [pacing[ce_id] for ce_id in ids if ce_id in pacing]
+    monthly_goal = sum(_number(row.get("monthly_goal")) or 0.0 for row in records)
+    mtd = sum(_number(row.get("mtd_revenue")) or 0.0 for row in records)
+    if monthly_goal <= 0:
+        return None
+    remaining_days = int(goal.get("remaining_days") or 0)
+    recent = [_number(row.get("revenue")) for row in rows[-4:]]
+    recent = [value for value in recent if value is not None]
+    run_rate = fmean(recent) if recent else None
+    forecast_remaining = run_rate * remaining_days / 7.0 if run_rate is not None else None
+    forecast = mtd + forecast_remaining if forecast_remaining is not None else None
+    prior_mtd = sum(_number(row.get("prior_mtd_revenue")) or 0.0 for row in records)
+    ly_mtd = sum(_number(row.get("ly_mtd_revenue")) or 0.0 for row in records)
+    prior_month = sum(_number(row.get("prior_month_revenue")) or 0.0 for row in records)
+    ly_month = sum(_number(row.get("ly_month_revenue")) or 0.0 for row in records)
+    expected_share = (_number(goal.get("expected_mtd_share_pct")) or 0.0) / 100.0
+    expected_mtd = monthly_goal * expected_share
+    result = {key: goal.get(key) for key in (
+        "month", "as_of", "retrieved_at", "days_in_month", "elapsed_days",
+        "remaining_days", "expected_mtd_method", "expected_mtd_share_pct",
+    )}
+    result.update({
+        "monthly_goal": monthly_goal,
+        "mtd_revenue": mtd,
+        "forecast_revenue": forecast,
+        "source": "revenue_goals (Combined Entity roll-up); V1 CE weekly facts",
+        "goal_grain": "Combined Entity country roll-up",
+        "goal_row_count": len(records),
+        "forecast_method": goal.get("forecast_method"),
+        "forecast_remaining_revenue": forecast_remaining,
+        "expected_mtd_revenue": expected_mtd,
+        "mtd_gap": mtd - expected_mtd,
+        "mtd_pacing_pct": 100.0 * mtd / expected_mtd if expected_mtd else None,
+        "forecast_gap": forecast - monthly_goal if forecast is not None else None,
+        "forecast_gap_pct": _percent_change(forecast, monthly_goal),
+        "run_rate_weekly_revenue": run_rate,
+        "required_weekly_revenue": (
+            max(0.0, monthly_goal - mtd) / remaining_days * 7.0 if remaining_days else 0.0
+        ),
+        "prior_mtd_revenue": prior_mtd,
+        "prior_month_revenue": prior_month,
+        "ly_mtd_revenue": ly_mtd,
+        "ly_month_revenue": ly_month,
+        "mtd_vs_last_month_pct": _percent_change(mtd, prior_mtd),
+        "mtd_vs_last_year_pct": _percent_change(mtd, ly_mtd),
+        "forecast_vs_last_month_pct": _percent_change(forecast, prior_month),
+        "forecast_vs_last_year_pct": _percent_change(forecast, ly_month),
+        "ce_target_coverage_pct": None,
+        "ce_target_pacing": {ce_id: pacing[ce_id] for ce_id in ids if ce_id in pacing},
+    })
+    return result
+
+
+def _country_market(market, country, ces):
+    rows = _aggregate_weekly(ces, "weekly")
+    weekly_ly = _aggregate_weekly(ces, "weekly_ly")
+    ly_by_week = {row.get("week"): row for row in weekly_ly}
+    for row in rows:
+        ly = ly_by_week.get(row.get("week"), {}).get("revenue")
+        row["yoy_pct"] = _percent_change(row.get("revenue"), ly)
+    trend = flows.per_ce_trend(ces)
+    drops = sorted(
+        [row for row in trend if row["delta_4w"] < 0 or row["raw_wow"] < -flows.WOW_DROP_FLOOR],
+        key=lambda row: min(row["raw_wow"], row["delta_4w"]),
+    )[:10]
+    drop_ids = {str(row.get("ce_id")) for row in drops}
+    gains = sorted(
+        [row for row in trend if str(row.get("ce_id")) not in drop_ids and (row["delta_4w"] > 0 or row["raw_wow"] > 0)],
+        key=lambda row: -max(row["raw_wow"], row["delta_4w"]),
+    )[:10]
+    current = rows[-1] if rows else {}
+    previous = rows[-2] if len(rows) > 1 else {}
+    shapley_rows = [ce.get("shapley_wow") for ce in ces if isinstance(ce.get("shapley_wow"), dict)]
+    shapley = None
+    if shapley_rows:
+        factors = ("traffic", "cvr", "aov", "cr", "tr")
+        shapley = {
+            key: sum(_number(row.get(key)) or 0.0 for row in shapley_rows)
+            for key in factors
+        }
+        shapley["total"] = sum(shapley.values())
+        shapley["net_delta"] = shapley["total"]
+        shapley["reconstructs"] = all(row.get("reconstructs") is not False for row in shapley_rows)
+        shapley["labels"] = deepcopy(shapley_rows[0].get("labels") or {})
+    headlines = {
+        "revenue_w0": current.get("revenue"),
+        "wow_pct": _percent_change(current.get("revenue"), previous.get("revenue")),
+        "yoy_pct": current.get("yoy_pct"),
+        "key_metrics": _metric_blocks(rows, weekly_ly),
+        "shapley_wow": shapley,
+        "week_header": {"trend": {"top_droppers": drops, "top_gainers": gains}},
+    }
+    scoped = deepcopy(market)
+    scoped["ces"] = ces
+    scoped["market_summary"] = {"weekly": rows, "weekly_ly": weekly_ly, "headlines": headlines}
+    scoped["meta"] = {**(market.get("meta") or {}), "country": country}
+    return scoped
+
+
+def build_headline_view(market, goal=None, ce_dimensions=None, include_country_views=True):
     """Return the V2 headline projection without changing the source market."""
     meta = market.get("meta", {})
     summary = market.get("market_summary", {})
@@ -511,7 +691,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
     current_ly_revenue = chart[-1]["revenue_ly"] if chart else None
     ce_target_pacing = monthly.get("ce_target_pacing") or {}
 
-    return {
+    result = {
         "market": meta.get("market", "Unknown market"),
         "market_slug": meta.get("market_slug"),
         "week_start": meta.get("week_start"),
@@ -539,6 +719,27 @@ def build_headline_view(market, goal=None, ce_dimensions=None):
         },
         "all_ces": _ce_views(market, ce_dimensions),
     }
+    result["country"] = meta.get("country")
+    result["country_views"] = {}
+    if include_country_views:
+        grouped = {}
+        for ce in market.get("ces", []):
+            country = (ce.get("metadata") or {}).get("country")
+            if country:
+                grouped.setdefault(str(country), []).append(ce)
+        for country, country_ces in sorted(grouped.items()):
+            scoped = _country_market(market, country, country_ces)
+            scoped_rows = scoped["market_summary"]["weekly"]
+            country_goal = _country_goal(goal, country_ces, scoped_rows, scoped["market_summary"]["weekly_ly"])
+            country_view = build_headline_view(
+                scoped, country_goal, ce_dimensions, include_country_views=False
+            )
+            # Keep the static artifact compact: the base view already contains
+            # every CE drawer payload. The browser filters that canonical list
+            # by business_country instead of embedding it a second time.
+            country_view.pop("all_ces", None)
+            result["country_views"][country] = country_view
+    return result
 
 
 def build_headline_payload(markets, goals=None, ce_dimensions=None):

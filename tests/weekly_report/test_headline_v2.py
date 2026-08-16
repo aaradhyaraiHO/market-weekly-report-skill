@@ -44,6 +44,28 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(view["all_ces"][0]["market"], "North America")
         self.assertEqual(view["all_ces"][0]["week_end"], "2026-08-08")
 
+    def test_business_country_views_scope_the_entire_report_without_duplicating_ce_payloads(self):
+        market = copy.deepcopy(self.market)
+        market["ces"][0].setdefault("metadata", {}).update(
+            {"country": "Canada", "region": "North America"}
+        )
+        market["ces"][1].setdefault("metadata", {}).update(
+            {"country": "United States", "region": "North America"}
+        )
+        source = copy.deepcopy(market)
+
+        view = headline_v2.build_headline_view(market)
+
+        self.assertEqual(market, source)
+        self.assertEqual(set(view["country_views"]), {"Canada", "United States"})
+        self.assertEqual(view["all_ces"][0]["business_country"], "Canada")
+        self.assertEqual(view["all_ces"][1]["business_country"], "United States")
+        canada = view["country_views"]["Canada"]
+        self.assertEqual(canada["country"], "Canada")
+        self.assertNotIn("all_ces", canada)
+        self.assertEqual(canada["revenue"], market["ces"][0]["weekly"][-1]["revenue"])
+        self.assertEqual(canada["movers"]["drops"][0]["ce_id"], market["ces"][0]["ce_id"])
+
     def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
         view = headline_v2.build_headline_view(self.market)
         revenue = next(metric for metric in view["detail"]["metrics"] if metric["key"] == "revenue")
@@ -131,6 +153,11 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("Weekly WoW", html)
         self.assertIn("Weekly YoY", html)
         self.assertIn('id="country-select"', html)
+        self.assertNotIn('aria-label="Country" disabled', html)
+        self.assertIn("base.country_views", html)
+        self.assertIn("ce.business_country===selectedCountry", html)
+        self.assertIn("countrySelect.addEventListener('change'", html)
+        self.assertIn("renderAllCes(currentHeadline())", html)
         self.assertIn('id="week-select"', html)
         self.assertNotIn('id="market-select"', html)
         self.assertIn('id="open-detail"', html)

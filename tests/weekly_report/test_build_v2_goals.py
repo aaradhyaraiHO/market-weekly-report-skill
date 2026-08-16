@@ -85,6 +85,10 @@ class BuildV2GoalsContract(unittest.TestCase):
         self.assertAlmostEqual(goal["forecast_vs_last_month_pct"], 100 * (expected_forecast / 4_500_000 - 1))
         self.assertEqual(goal["ce_gap_contributors"][0]["ce_id"], "CE-001")
         self.assertEqual(goal["ce_target_pacing"]["CE-001"]["monthly_goal"], 1_000_000.0)
+        self.assertEqual(goal["ce_target_pacing"]["CE-001"]["prior_mtd_revenue"], 70_000.0)
+        self.assertEqual(goal["ce_target_pacing"]["CE-001"]["prior_month_revenue"], 70_000.0)
+        self.assertEqual(goal["ce_target_pacing"]["CE-001"]["ly_mtd_revenue"], 70_000.0)
+        self.assertEqual(goal["ce_target_pacing"]["CE-001"]["ly_month_revenue"], 70_000.0)
         self.assertAlmostEqual(
             goal["ce_target_pacing"]["CE-001"]["mtd_gap_pct"],
             100 * (70_000 / (1_000_000 * 8 / 31) - 1),

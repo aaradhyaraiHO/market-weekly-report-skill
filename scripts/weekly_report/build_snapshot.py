@@ -858,6 +858,11 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "ce_id": ce_id,
             "ce_name": names.get(ce_id, ce_id),
             "metadata": {
+                # Business-country / region come from dim_combined_entities.
+                # Keep these separate from ce["countries"], which is the
+                # customer card-issuing-country resource used in the CE drawer.
+                "country": md.get("country"),
+                "region": md.get("region"),
                 "category": md.get("category"),
                 "subcategory": md.get("subcategory"),
                 "city": md.get("city"),
@@ -1427,7 +1432,9 @@ def validate_na(snapshot: dict) -> bool:
     rev_pred = snapshot["market_summary"]["headlines"]["revenue_w0"]
     print(f"Market revenue W0    : ${rev_pred:,.0f} (predicted) vs ${ref['market_revenue_actuals']:,.0f} "
           f"(actuals ref; predicted expected ~5% lower — informational, not a gate)")
-    print(f"RPC alerts: {diag['rpc_alert_count']} | CVR-drop alerts: {diag['cvr_alert_count']}")
+    # The current fluctuation engine exposes one RPC alert count; the legacy
+    # standalone CVR count was removed from its diagnostics contract.
+    print(f"RPC alerts: {diag['rpc_alert_count']}")
     print(f"RESULT: {'PASS' if ok else 'FAIL'}")
     return ok
 

@@ -131,6 +131,30 @@ def build_market_goal(market):
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
         for row in fetch.market_ce_period_revenue(market_name, month, week_end).to_dict("records")
     }
+    ce_prior_mtd_revenue = {
+        str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
+        for row in fetch.market_ce_period_revenue(
+            market_name, prior_start, prior_mtd_end
+        ).to_dict("records")
+    }
+    ce_prior_month_revenue = {
+        str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
+        for row in fetch.market_ce_period_revenue(
+            market_name, prior_start, prior_end
+        ).to_dict("records")
+    }
+    ce_ly_mtd_revenue = {
+        str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
+        for row in fetch.market_ce_period_revenue(
+            market_name, ly_start, ly_mtd_end
+        ).to_dict("records")
+    }
+    ce_ly_month_revenue = {
+        str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
+        for row in fetch.market_ce_period_revenue(
+            market_name, ly_start, ly_end
+        ).to_dict("records")
+    }
     ce_goals = fetch.market_ce_monthly_goals(market_name, month).to_dict("records")
     contributors = []
     ce_target_pacing = {}
@@ -152,6 +176,16 @@ def build_market_goal(market):
             "mtd_gap": gap,
             "mtd_gap_pct": _percent_change(actual, expected),
             "monthly_goal": ce_goal,
+            "prior_mtd_revenue": ce_prior_mtd_revenue.get(ce_id, 0.0),
+            "prior_month_revenue": ce_prior_month_revenue.get(ce_id, 0.0),
+            "ly_mtd_revenue": ce_ly_mtd_revenue.get(ce_id, 0.0),
+            "ly_month_revenue": ce_ly_month_revenue.get(ce_id, 0.0),
+            "mtd_vs_last_month_pct": _percent_change(
+                actual, ce_prior_mtd_revenue.get(ce_id)
+            ),
+            "mtd_vs_last_year_pct": _percent_change(
+                actual, ce_ly_mtd_revenue.get(ce_id)
+            ),
         }
         ce_target_pacing[ce_id] = pacing
         if gap < 0:
