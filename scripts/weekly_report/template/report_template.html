@@ -3065,6 +3065,7 @@ function openDrawer(ceId){
   authorIn.addEventListener('change',()=>{ setAuthor(authorIn.value); });
 
   document.getElementById('cmtSave').onclick=()=>{
+    setAuthor(authorIn.value);
     if(!getAuthor().trim()){ authorIn.focus(); document.getElementById('cmtSaved').textContent='add your name first'; return; }
     const btn=document.getElementById('cmtSave');
     btn.textContent='Saving…'; btn.classList.add('saved');
@@ -3097,6 +3098,7 @@ function openDrawer(ceId){
   if(postBtn && postBtn.classList.contains('btn-post')){
     postBtn.onclick=()=>{
       if(!ta.value.trim()){ ta.focus(); return; }
+      setAuthor(authorIn.value);
       if(!getAuthor().trim()){ authorIn.focus(); document.getElementById('cmtSaved').textContent='add your name first'; return; }
       postBtn.textContent='Posting…'; postBtn.classList.add('posting');
       // One idempotent server operation saves the BGM note first and then posts

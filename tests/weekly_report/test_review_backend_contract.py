@@ -176,6 +176,9 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("This week’s BGM note", template)
         self.assertIn("Thread summary", template)
         self.assertIn("startWeeklySlack", template)
+        # Save and Slack-start must persist the visible author at click time;
+        # relying only on the input's change event left valid drafts blocked.
+        self.assertGreaterEqual(template.count("setAuthor(authorIn.value);"), 3)
 
     def test_legacy_note_and_bucket_action_routes_remain(self):
         for route in ('action === "list"', 'action === "upsert"', 'action === "post"',
