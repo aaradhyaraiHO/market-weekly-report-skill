@@ -153,16 +153,19 @@ class CeDrawerV2MockupContract(unittest.TestCase):
         self.assertNotIn("comparison extension", self.html)
         self.assertNotIn("Order share", self.html)
 
-    def test_lead_time_uses_four_production_bands_and_compact_comparisons(self):
-        for band in ("0–2D", "3–4D", "5–7D", "7D+"):
-            self.assertIn(f'<td class="metric-name">{band}</td>', self.html)
+    def test_lead_time_splits_same_day_and_keeps_compact_comparisons(self):
+        for band in ("0 days", "1–2 days", "3–4D", "5–7D", "7D+"):
+            self.assertIn(f'<td class="metric-name">{band}', self.html)
         for removed in ("Same day", "Next day", "90+ days", "requested 8-band view"):
             self.assertNotIn(removed, self.html)
         for label in (
             "<th>Orders · W0</th>", "<th>Revenue · W0</th>",
-            'data-trend-value-col="4"', 'data-trend-current="$48.3K"',
+            'data-trend-value-col="4"', 'data-trend-current="$20.8K"',
+            "Same-day availability", "Near-term availability",
         ):
             self.assertIn(label, self.html)
+        self.assertNotIn('<td class="metric-name">0–2D</td>', self.html)
+        self.assertIn("integer `lead_time_days` supports distinct `0 days` and `1–2 days`", self.matrix)
         self.assertIn('class="lead-total"', self.html)
 
     def test_countries_keep_v1_orders_revenue_share_and_aov_shape(self):

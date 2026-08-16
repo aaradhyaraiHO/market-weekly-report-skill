@@ -232,7 +232,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
 # --------------------------------------------------------------------------- #
 # RE-SOURCE tier (A1) — attach per-CE composition breakdowns to the drawer
 # --------------------------------------------------------------------------- #
-_LEADTIME_ORDER = ["0-2D", "3-4D", "5-7D", "7D+"]
+_LEADTIME_ORDER = ["0D", "1-2D", "3-4D", "5-7D", "7D+"]
 _TGIDS_TOP_N = 8
 _COUNTRIES_TOP_N = 10   # render shows top 6; a few extra ride along for export
 
@@ -260,19 +260,20 @@ def _safe(v, default=0.0):
 
 
 def _attach_resource_breakdowns(
-    ces, tgids_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df
+    ces, tgids_df, variants_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df
 ) -> None:
     """
     Attach composition tables to each CE for the drawer. TGIDs are enriched
     with the full ce_health column set (15 columns + WoW/YoY deltas).
     """
-    for df in (tgids_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df):
+    for df in (tgids_df, variants_df, tgid_funnel_df, tgid_lt_df, lead_df, ctry_df):
         if not df.empty and "combined_entity_id" in df:
             df["combined_entity_id"] = df["combined_entity_id"].astype(str)
         if not df.empty and "tgid" in df:
             df["tgid"] = df["tgid"].astype(str)
 
     tg_by_ce = dict(tuple(tgids_df.groupby("combined_entity_id"))) if not tgids_df.empty else {}
+    var_by_ce = dict(tuple(variants_df.groupby("combined_entity_id"))) if not variants_df.empty else {}
     lt_by_ce = dict(tuple(lead_df.groupby("combined_entity_id"))) if not lead_df.empty else {}
     ct_by_ce = dict(tuple(ctry_df.groupby("combined_entity_id"))) if not ctry_df.empty else {}
 
@@ -308,6 +309,10 @@ def _attach_resource_breakdowns(
             total_sel = sum(_safe(fn_idx.get((cid, str(r["tgid"])), {}).get("select_users"))
                             for _, r in g.iterrows())
 
+            variant_rows = var_by_ce.get(cid)
+            variants_by_tgid = (
+                dict(tuple(variant_rows.groupby("tgid"))) if variant_rows is not None else {}
+            )
             for _, r in g.sort_values("rev", ascending=False).head(_TGIDS_TOP_N).iterrows():
                 rev = _safe(r["rev"])
                 orders = _safe(r["orders"])
@@ -355,6 +360,58 @@ def _attach_resource_breakdowns(
                 share_wm1 = 100.0 * rev_wm1 / total_rev_wm1 if total_rev_wm1 else None
                 share_ly = 100.0 * rev_ly / total_rev_ly if total_rev_ly else None
 
+                variants = []
+                vg = variants_by_tgid.get(tid)
+                if vg is not None:
+                    for _, vr in vg.sort_values("rev", ascending=False).iterrows():
+                        vrev = _safe(vr.get("rev"))
+                        vrev_wm1 = _safe(vr.get("rev_wm1"))
+                        vorders = _safe(vr.get("orders"))
+                        vorders_wm1 = _safe(vr.get("orders_wm1"))
+                        vgbv = _safe(vr.get("gbv"))
+                        vgbv_wm1 = _safe(vr.get("gbv_wm1"))
+                        vcompleted = _safe(vr.get("completed_gbv"))
+                        vcompleted_wm1 = _safe(vr.get("completed_gbv_wm1"))
+                        vaov = vgbv / vorders if vorders else None
+                        vaov_wm1 = vgbv_wm1 / vorders_wm1 if vorders_wm1 else None
+                        vcr = 100.0 * vcompleted / vgbv if vgbv else None
+                        vcr_wm1 = 100.0 * vcompleted_wm1 / vgbv_wm1 if vgbv_wm1 else None
+                        vtr = 100.0 * vrev / vcompleted if vcompleted else None
+                        vtr_wm1 = 100.0 * vrev_wm1 / vcompleted_wm1 if vcompleted_wm1 else None
+                        def _optional_pct(value):
+                            parsed = _num(value)
+                            return _num(100.0 * parsed) if parsed is not None else None
+                        lt_0d = _optional_pct(vr.get("lt_0d"))
+                        lt_12d = _optional_pct(vr.get("lt_12d"))
+                        variants.append({
+                            "variant_id": str(vr.get("variant_id")),
+                            "variant_name": vr.get("variant_name") or "Unattributed variant",
+                            "rev": _num(vrev),
+                            "rev_wm1": _num(vrev_wm1),
+                            "rev_wow": _dp(vrev, vrev_wm1),
+                            "orders": _num(vorders),
+                            "orders_wm1": _num(vorders_wm1),
+                            "orders_wow": _dp(vorders, vorders_wm1),
+                            "share_pct": _num(100.0 * vrev / total_rev) if total_rev else None,
+                            "aov": _num(vaov),
+                            "aov_wow": _dp(vaov, vaov_wm1),
+                            "cr_pct": _num(vcr),
+                            "cr_wow_pp": _dpp(vcr, vcr_wm1),
+                            "tr_pct": _num(vtr),
+                            "tr_wow_pp": _dpp(vtr, vtr_wm1),
+                            "lt_0d": lt_0d,
+                            "lt_12d": lt_12d,
+                            "lt_02d": (_num((lt_0d or 0) + (lt_12d or 0))
+                                       if lt_0d is not None or lt_12d is not None else None),
+                            "lt_37d": _optional_pct(vr.get("lt_37d")),
+                            "lt_7p": _optional_pct(vr.get("lt_7p")),
+                            "rpc": None,
+                            "sel_users": None,
+                            "traffic_pct": None,
+                            "s2c_pct": None,
+                            "c2o_pct": None,
+                        })
+
                 tgids.append({
                     "tgid": tid,
                     "experience": r["experience"] or tid,
@@ -389,6 +446,7 @@ def _attach_resource_breakdowns(
                     "lt_7p": (_num(100.0 * lt["7D+"]["pct"]) if lt.get("7D+") else None),
                     "lt_7p_wow": (_dpp(100.0 * lt["7D+"]["pct"], 100.0 * lt["7D+"]["wm1"])
                                   if (lt.get("7D+") and lt["7D+"]["wm1"] is not None) else None),
+                    "variants": variants,
                 })
         ce["tgids"] = tgids
 
@@ -398,6 +456,8 @@ def _attach_resource_breakdowns(
         if g is not None:
             g = g[g["band"].notna()]
             total_bk = float(g["bookings"].sum())
+            total_bk_wm1 = float(g["bookings_wm1"].sum()) if "bookings_wm1" in g else 0.0
+            total_bk_ly = float(g["bookings_ly"].sum()) if "bookings_ly" in g else 0.0
             band_map = {r["band"]: r for _, r in g.iterrows()}
             for band in _LEADTIME_ORDER:
                 r = band_map.get(band)
@@ -405,14 +465,34 @@ def _attach_resource_breakdowns(
                     continue
                 bk = float(r["bookings"] or 0)
                 bk_wm1 = float(r.get("bookings_wm1") or 0)
+                bk_ly = float(r.get("bookings_ly") or 0)
                 ov = float(r["order_value"] or 0)
+                ov_wm1 = float(r.get("order_value_wm1") or 0)
+                ov_ly = float(r.get("order_value_ly") or 0)
+                rev = float(r.get("rev") or 0)
+                rev_wm1 = float(r.get("rev_wm1") or 0)
+                rev_ly = float(r.get("rev_ly") or 0)
+                share = 100.0 * bk / total_bk if total_bk else None
+                share_wm1 = 100.0 * bk_wm1 / total_bk_wm1 if total_bk_wm1 else None
+                share_ly = 100.0 * bk_ly / total_bk_ly if total_bk_ly else None
                 leadtime.append({
                     "band": band,
                     "bookings": _num(bk),
                     "bookings_wm1": _num(bk_wm1),
-                    "share_pct": _share(bk, total_bk),
-                    "rev": _num(r["rev"]),
+                    "bookings_ly": _num(bk_ly),
+                    "bookings_wow": _dp(bk, bk_wm1),
+                    "bookings_yoy": _dp(bk, bk_ly),
+                    "share_pct": _num(share),
+                    "share_wow_pp": _dpp(share, share_wm1),
+                    "share_yoy_pp": _dpp(share, share_ly),
+                    "rev": _num(rev),
+                    "rev_wm1": _num(rev_wm1),
+                    "rev_ly": _num(rev_ly),
+                    "rev_wow": _dp(rev, rev_wm1),
+                    "rev_yoy": _dp(rev, rev_ly),
                     "aov": _num(ov / bk) if bk else None,
+                    "aov_wm1": _num(ov_wm1 / bk_wm1) if bk_wm1 else None,
+                    "aov_ly": _num(ov_ly / bk_ly) if bk_ly else None,
                 })
         ce["leadtime"] = leadtime
 
@@ -425,19 +505,27 @@ def _attach_resource_breakdowns(
             for _, r in g.sort_values("orders", ascending=False).head(_COUNTRIES_TOP_N).iterrows():
                 od = float(r["orders"] or 0)
                 od_wm1 = float(r.get("orders_wm1") or 0)
+                od_ly = float(r.get("orders_ly") or 0)
                 rev = float(r["rev"] or 0)
                 rev_wm1 = float(r.get("rev_wm1") or 0)
+                rev_ly = float(r.get("rev_ly") or 0)
                 ov = float(r["order_value"] or 0)
+                ov_wm1 = float(r.get("order_value_wm1") or 0)
+                ov_ly = float(r.get("order_value_ly") or 0)
                 countries.append({
                     "country": r["country"],
                     "orders": _num(od),
                     "orders_wow": _dp(od, od_wm1),
+                    "orders_yoy": _dp(od, od_ly),
                     "order_share_pct": _share(od, total_ord),
                     "rev": _num(rev),
                     "rev_wm1": _num(rev_wm1),
                     "rev_wow": _dp(rev, rev_wm1),
+                    "rev_yoy": _dp(rev, rev_ly),
                     "rev_share_pct": _share(rev, total_rev),
                     "aov": _num(ov / od) if od else None,
+                    "aov_wm1": _num(ov_wm1 / od_wm1) if od_wm1 else None,
+                    "aov_ly": _num(ov_ly / od_ly) if od_ly else None,
                 })
         ce["countries"] = countries
 
@@ -484,18 +572,25 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
             for _, r in g.iterrows():
                 pivot.setdefault(r["channel"], {})[r["period"]] = float(r["rev"] or 0)
             total_w0 = sum(p.get("w0", 0.0) for p in pivot.values())
+            total_wm1 = sum(p.get("wm1", 0.0) for p in pivot.values())
+            total_ly = sum(p.get("ly", 0.0) for p in pivot.values())
             ranked = sorted(pivot.items(), key=lambda kv: kv[1].get("w0", 0.0), reverse=True)
             for channel, per in ranked[:_CHANNELS_TOP_N]:
                 w0 = per.get("w0", 0.0)
                 if w0 <= 0:
                     continue
+                share_w0 = 100.0 * w0 / total_w0 if total_w0 else None
+                share_wm1 = 100.0 * per.get("wm1", 0.0) / total_wm1 if total_wm1 else None
+                share_ly = 100.0 * per.get("ly", 0.0) / total_ly if total_ly else None
                 channels.append({
                     "channel": channel,
                     "rev": _num(w0),
                     "rev_wm1": _num(per.get("wm1", 0.0)),
                     "wow_pct": _chg(w0, per.get("wm1")),
                     "yoy_pct": _chg(w0, per.get("ly")),
-                    "share_pct": _num(round(100.0 * w0 / total_w0, 1)) if total_w0 else None,
+                    "share_pct": _num(round(share_w0, 1)) if share_w0 is not None else None,
+                    "share_wow_pp": _dpp(share_w0, share_wm1),
+                    "share_yoy_pp": _dpp(share_w0, share_ly),
                 })
         ce["channels"] = channels
 
@@ -987,13 +1082,24 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         m = str(exc).lower()
         return "bytesbilled" in m or "bytes billed" in m or "exceeded limit for bytes" in m
     try:
+        variants_df = fetch.ce_variants(
+            market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end
+        )
+    except Exception as exc:
+        if not _is_cap_error(exc):
+            raise
+        variants_df = pd.DataFrame()
+        print(f"  ⚠ [{market}] variant children SKIPPED — query exceeded the byte cap; "
+              "existing TGID/resource drawer data remains available.")
+    try:
         _attach_resource_breakdowns(
             ces,
             fetch.ce_tgids(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+            variants_df,
             fetch.ce_tgid_funnel([c["ce_id"] for c in ces], w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
             fetch.ce_tgid_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-            fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end),
-            fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end),
+            fetch.ce_leadtime(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
+            fetch.ce_countries(market, w0_start, w0_end, wm1_start, wm1_end, ly_w0_start, ly_w0_end),
         )
     except Exception as exc:
         if not _is_cap_error(exc):

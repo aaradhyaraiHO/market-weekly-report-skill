@@ -249,6 +249,29 @@
     .ce-trend svg { display:block; width:100%; height:160px; }
     .ce-country-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .ce-country-row { display:flex; justify-content:space-between; gap:16px; padding:12px; border-radius:10px; background:var(--soft); font-size:10px; }
+    .ce-resource { padding:28px 0; border-top:1px solid var(--line); }
+    .ce-resource:first-child { border-top:0; }
+    .ce-resource-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:14px; }
+    .ce-resource-head h3 { margin:0 0 5px; font-size:17px; }
+    .ce-resource-head p,.ce-source-note { margin:0; color:var(--muted); font-size:10px; line-height:1.55; }
+    .ce-live-badge { flex:none; padding:5px 8px; border-radius:12px; color:var(--green); background:#e8f6ef; font-size:8px; font-weight:760; letter-spacing:.06em; text-transform:uppercase; }
+    .ce-resource-table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+    .ce-resource-table { width:100%; min-width:760px; border-collapse:collapse; font-size:10px; font-variant-numeric:tabular-nums; }
+    .ce-resource-table th,.ce-resource-table td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+    .ce-resource-table th { color:var(--muted); background:#fbfafc; font-size:8px; letter-spacing:.07em; text-transform:uppercase; }
+    .ce-resource-table th:first-child,.ce-resource-table td:first-child { text-align:left; }
+    .ce-resource-table tr:last-child td { border-bottom:0; }
+    .ce-resource-table tbody tr:hover td { background:#fbf9ff; }
+    .ce-cell-main { display:block; color:var(--ink); font-weight:680; }
+    .ce-cell-sub { display:block; margin-top:3px; color:var(--muted); font-size:8px; }
+    .ce-metric-tabs { display:inline-flex; padding:3px; border-radius:12px; background:var(--soft); }
+    .ce-metric-tab { min-height:36px; padding:0 14px; border:0; border-radius:9px; color:var(--muted); background:transparent; font-weight:680; cursor:pointer; }
+    .ce-metric-tab[aria-pressed="true"] { color:var(--purple); background:var(--surface); box-shadow:0 2px 8px rgb(39 24 51 / .08); }
+    .ce-tgid-toggle { display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:0; border:0; color:var(--ink); background:transparent; font-weight:700; cursor:pointer; }
+    .ce-variant-row td { background:#fbfafc; }
+    .ce-variant-name { padding-left:30px!important; }
+    .ce-unavailable { color:var(--muted); }
+    .ce-shapley-list { display:grid; gap:9px; }
     @media (max-width:1200px) {
       .ce-controls { grid-template-columns:repeat(3,minmax(0,1fr)); }
       .ce-controls .ce-control:first-child { grid-column:span 2; }
@@ -296,6 +319,7 @@
       .ce-reset { width:100%; }
       .ce-summary { width:100%; justify-content:space-between; }
       .ce-country-list { grid-template-columns:1fr; }
+      .ce-resource-head { align-items:flex-start; flex-direction:column; }
       .ce-filter-label { width:100%; }
       .ce-contribution-row { grid-template-columns:1fr; gap:5px; }
       .ce-contribution-value { text-align:left; }
@@ -339,7 +363,7 @@
     </main>
   </div>
   <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="drawer-overview"></section><section class="drawer-section"><h3>Performance diagnostics</h3><p class="drawer-section-copy">Current week versus last week, with the same 12-week this-year and last-year evidence used by the report.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Δ abs</th><th>Δ %</th><th>12-week trajectory</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div></section><section class="drawer-section" id="shapley-section"><h3>What drove the weekly revenue move</h3><p class="drawer-section-copy">Five-factor Shapley decomposition. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section"><h3>Data provenance</h3><p class="drawer-section-copy">The drawer explains the headline; it does not calculate a second version of it.</p><div class="provenance" id="drawer-provenance"></div></section></div></aside></div>
-  <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><h2 class="drawer-title" id="ce-drawer-title"></h2><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week revenue trajectory</h3><p class="drawer-section-copy">Solid = current year; dashed = last year, using the existing CE series.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section"><h3>Customer-country mix</h3><p class="drawer-section-copy">Countries present in the current CE composition payload.</p><div class="ce-country-list" id="ce-country-list"></div></section><section class="drawer-section"><h3>Scope boundary</h3><p class="drawer-section-copy">This foundation carries the CE identity, weekly metrics and country mix. Funnel, channels, TGIDs, lead time, notes and actions remain in the existing V1 drawer until their V2 migration slice.</p></section></div></aside></div>
+  <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><h2 class="drawer-title" id="ce-drawer-title"></h2><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week revenue trajectory</h3><p class="drawer-section-copy">Solid = current year; dashed = last year, using the existing CE weekly series.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section" id="ce-weekly-evidence"><div class="ce-resource-head"><div><h3>Weekly evidence</h3><p>W0 and W-1 values with the existing 12-week TY/LY series.</p></div><div class="ce-metric-tabs" role="group" aria-label="Metric group"><button class="ce-metric-tab" type="button" data-ce-metric-group="overall" aria-pressed="true">Overall</button><button class="ce-metric-tab" type="button" data-ce-metric-group="paid" aria-pressed="false">Paid</button></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>WoW</th><th>12-week TY / LY</th></tr></thead><tbody id="ce-metric-rows"></tbody></table></div></section><section class="drawer-section" id="ce-shapley-section"><h3>Revenue movement drivers</h3><p class="drawer-section-copy">Existing five-factor Shapley decomposition for W0 versus W-1.</p><div class="ce-shapley-list" id="ce-shapley-list"></div></section><div id="ce-resource-sections"></div><section class="drawer-section"><h3>Data provenance</h3><p class="drawer-section-copy">Live drawer sections are projected from the schema-v1 snapshot. Missing source blocks are omitted; no browser-side metric is substituted. Notes/actions remain in Review mode and Slack context is intentionally excluded.</p></section></div></aside></div>
   <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
   <script>
     (() => {
@@ -354,6 +378,8 @@
       const svgNS = 'http://www.w3.org/2000/svg';
       const seriesVisible = {ty:true,ly:true};
       const ceState = {search:'',country:'',bdm_region:'',growth_region:'',group:'',filters:{},collapsed:{},expanded:false,topMovers:false,sortKey:'revenue',sortDir:-1};
+      let activeCe=null, ceMetricGroup='overall';
+      const ceExpandedTgids={};
       const CE_METRICS = [
         {key:'revenue',label:'Revenue',field:'revenue',format:'money',group:'overall'},
         {key:'orders',label:'Orders',field:'orders',format:'count',group:'overall'},
@@ -527,14 +553,51 @@
         const points=key=>data.map((row,index)=>row[key]==null?null:`${x(index).toFixed(1)},${y(row[key]).toFixed(1)}`).filter(Boolean).join(' ');
         return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ce.ce_name)} 12-week revenue trajectory"><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(lo)}" y2="${y(lo)}" stroke="#e7e2eb"/><line x1="${margin.left}" x2="${width-margin.right}" y1="${y(hi)}" y2="${y(hi)}" stroke="#e7e2eb"/><text x="${margin.left-8}" y="${y(lo)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(lo,0)}</text><text x="${margin.left-8}" y="${y(hi)+4}" text-anchor="end" fill="#766f80" font-size="10">${money(hi,0)}</text><polyline points="${points('revenue_ly')}" fill="none" stroke="#9a94a4" stroke-width="1.4" stroke-dasharray="5 5"/><polyline points="${points('revenue')}" fill="none" stroke="#6d2cff" stroke-width="2.4"/><text x="${margin.left}" y="${height-5}" fill="#766f80" font-size="10">${data[0]?dateLabel(data[0].week):''}</text><text x="${width-margin.right}" y="${height-5}" text-anchor="end" fill="#766f80" font-size="10">${data.length?dateLabel(data[data.length-1].week):''}</text></svg>`;
       }
+      const cePp=value=>value==null?'—':`${value>0?'+':value<0?'−':''}${Math.abs(value).toFixed(1)}pp`;
+      const ceValue=(value,format)=>format==='money'?money(value):format==='cpc'?(value==null?'—':`$${value.toFixed(2)}`):format==='pct'?(value==null?'—':`${value.toFixed(2)}%`):count(value);
+      const ceSub=(primary,secondary,secondaryClass='')=>`<span class="ce-cell-main">${primary}</span>${secondary?`<span class="ce-cell-sub ${secondaryClass}">${secondary}</span>`:''}`;
+      const ceSection=(title,copy,headers,rows,minWidth='760px')=>rows?`<section class="ce-resource"><div class="ce-resource-head"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(copy)}</p></div><span class="ce-live-badge">Snapshot-backed</span></div><div class="ce-resource-table-wrap"><table class="ce-resource-table" style="min-width:${minWidth}"><thead><tr>${headers.map(header=>`<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`:'';
+      function renderCeMetrics(ce) {
+        document.querySelectorAll('[data-ce-metric-group]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.ceMetricGroup===ceMetricGroup)));
+        const rows=((ce.drawer_metrics||{})[ceMetricGroup]||[]);
+        document.getElementById('ce-metric-rows').innerHTML=rows.map(row=>`<tr><td><strong>${escapeHtml(row.label)}</strong></td><td>${ceValue(row.w0,row.format)}</td><td>${ceValue(row.wm1,row.format)}</td><td class="${tone(row.delta_pct)}">${pct(row.delta_pct)}</td><td>${sparkline(row)}</td></tr>`).join('')||'<tr><td colspan="5">No metrics are available for this source group.</td></tr>';
+      }
+      function renderCeShapley(ce) {
+        const source=ce.shapley, section=document.getElementById('ce-shapley-section'), keys=[['traffic','Traffic'],['cvr','CVR'],['aov','AOV'],['cr','Completion'],['tr','Take rate']];
+        const factors=source?keys.map(([key,label])=>({key,label,value:source[key]})).filter(row=>row.value!=null):[];
+        section.hidden=!factors.length;
+        if(!factors.length)return;
+        const max=Math.max(...factors.map(row=>Math.abs(row.value)),1);
+        document.getElementById('ce-shapley-list').innerHTML=factors.map(row=>`<div class="shapley-row"><span>${escapeHtml(row.label)}</span><div class="shapley-track"><span class="shapley-fill ${tone(row.value)}" style="width:${Math.abs(row.value)/max*50}%"></span></div><span class="shapley-value ${tone(row.value)}">${signedMoney(row.value)}</span></div>`).join('')+`<div class="shapley-row"><strong>Net WoW</strong><div></div><span class="shapley-value ${tone(source.net_delta)}">${signedMoney(source.net_delta)}</span></div>`;
+      }
+      function renderCeResources(ce) {
+        const channels=(ce.channels||[]).map(row=>`<tr><td><strong>${escapeHtml(row.channel)}</strong></td><td>${money(row.rev)}</td><td>${money(row.rev_wm1)}</td><td class="${tone(row.wow_pct)}">${pct(row.wow_pct)}</td><td class="${tone(row.yoy_pct)}">${pct(row.yoy_pct)}</td><td>${ceSub(row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`,`${cePp(row.share_wow_pp)} WoW · ${cePp(row.share_yoy_pp)} YoY`)}</td></tr>`).join('');
+        const funnel=Object.entries(ce.funnel||{}).map(([stage,row])=>`<tr><td><strong>${escapeHtml(stage)}</strong></td><td>${stage==='LP Users'?count(row.current):(row.current==null?'—':`${row.current.toFixed(2)}%`)}</td><td>${stage==='LP Users'?count(row.wm1):(row.wm1==null?'—':`${row.wm1.toFixed(2)}%`)}</td><td class="${tone(row.wow)}">${stage==='LP Users'?pct(row.wow):cePp(row.wow)}</td><td class="${tone(row.yoy)}">${stage==='LP Users'?pct(row.yoy):cePp(row.yoy)}</td></tr>`).join('');
+        let tgids='';
+        (ce.tgids||[]).forEach(row=>{
+          const key=`${ce.ce_id}:${row.tgid}`, expanded=ceExpandedTgids[key]===true, variants=row.variants||[];
+          tgids+=`<tr><td><button class="ce-tgid-toggle" type="button" data-ce-tgid="${escapeHtml(key)}" aria-expanded="${expanded}" ${variants.length?'':'disabled'}><span aria-hidden="true">${variants.length?(expanded?'▾':'▸'):'·'}</span><span>${escapeHtml(row.experience)}<span class="ce-cell-sub">TG-${escapeHtml(row.tgid)}${variants.length?` · ${variants.length} variants`:''}</span></span></button></td><td>${ceSub(money(row.rev),pct(row.rev_wow),tone(row.rev_wow))}</td><td>${money(row.rev_wm1)}</td><td>${ceSub(count(row.orders),pct(row.orders_wow),tone(row.orders_wow))}</td><td>${ceSub(row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`,`${cePp(row.share_wow_pp)} / ${cePp(row.share_yoy_pp)}`)}</td><td>${ceSub(money(row.rpc),pct(row.rpc_wow),tone(row.rpc_wow))}</td><td>${ceSub(money(row.aov),pct(row.aov_wow),tone(row.aov_wow))}</td><td>${ceSub(row.cr_pct==null?'—':`${row.cr_pct.toFixed(1)}%`,cePp(row.cr_wow_pp),tone(row.cr_wow_pp))}</td><td>${ceSub(row.tr_pct==null?'—':`${row.tr_pct.toFixed(1)}%`,cePp(row.tr_wow_pp),tone(row.tr_wow_pp))}</td><td>${count(row.sel_users)}</td><td>${row.traffic_pct==null?'—':`${row.traffic_pct.toFixed(1)}%`}</td><td>${row.s2c_pct==null?'—':`${row.s2c_pct.toFixed(1)}%`}</td><td>${row.c2o_pct==null?'—':`${row.c2o_pct.toFixed(1)}%`}</td><td>${row.lt_02d==null?'—':`${row.lt_02d.toFixed(0)}%`}</td><td>${row.lt_37d==null?'—':`${row.lt_37d.toFixed(0)}%`}</td><td>${row.lt_7p==null?'—':`${row.lt_7p.toFixed(0)}%`}</td></tr>`;
+          if(expanded)variants.forEach(variant=>{tgids+=`<tr class="ce-variant-row"><td class="ce-variant-name"><span class="ce-cell-main">${escapeHtml(variant.variant_name)}</span><span class="ce-cell-sub">${variant.variant_id==='__UNATTRIBUTED__'?'Unattributed variant':`VAR-${escapeHtml(variant.variant_id)}`}</span></td><td>${ceSub(money(variant.rev),pct(variant.rev_wow),tone(variant.rev_wow))}</td><td>${money(variant.rev_wm1)}</td><td>${ceSub(count(variant.orders),pct(variant.orders_wow),tone(variant.orders_wow))}</td><td>${variant.share_pct==null?'—':`${variant.share_pct.toFixed(1)}%`}</td><td class="ce-unavailable">—</td><td>${ceSub(money(variant.aov),pct(variant.aov_wow),tone(variant.aov_wow))}</td><td>${ceSub(variant.cr_pct==null?'—':`${variant.cr_pct.toFixed(1)}%`,cePp(variant.cr_wow_pp),tone(variant.cr_wow_pp))}</td><td>${ceSub(variant.tr_pct==null?'—':`${variant.tr_pct.toFixed(1)}%`,cePp(variant.tr_wow_pp),tone(variant.tr_wow_pp))}</td><td class="ce-unavailable">—</td><td class="ce-unavailable">—</td><td class="ce-unavailable">—</td><td class="ce-unavailable">—</td><td>${variant.lt_02d==null?'—':`${variant.lt_02d.toFixed(0)}%`}</td><td>${variant.lt_37d==null?'—':`${variant.lt_37d.toFixed(0)}%`}</td><td>${variant.lt_7p==null?'—':`${variant.lt_7p.toFixed(0)}%`}</td></tr>`;});
+        });
+        const lead=(ce.leadtime||[]).map(row=>`<tr><td><strong>${escapeHtml(row.band)}</strong></td><td>${count(row.bookings)}</td><td class="${tone(row.bookings_wow)}">${pct(row.bookings_wow)}</td><td class="${tone(row.bookings_yoy)}">${pct(row.bookings_yoy)}</td><td>${money(row.rev)}</td><td class="${tone(row.rev_wow)}">${pct(row.rev_wow)}</td><td class="${tone(row.rev_yoy)}">${pct(row.rev_yoy)}</td><td>${ceSub(row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`,`${cePp(row.share_wow_pp)} WoW · ${cePp(row.share_yoy_pp)} YoY`)}</td></tr>`).join('');
+        const countries=(ce.country_mix||[]).map(row=>`<tr><td><strong>${escapeHtml(row.country)}</strong></td><td>${count(row.orders)}</td><td class="${tone(row.orders_wow)}">${pct(row.orders_wow)}</td><td class="${tone(row.orders_yoy)}">${pct(row.orders_yoy)}</td><td>${money(row.revenue)}</td><td class="${tone(row.revenue_wow)}">${pct(row.revenue_wow)}</td><td class="${tone(row.revenue_yoy)}">${pct(row.revenue_yoy)}</td><td>${row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`}</td><td>${ceSub(money(row.aov),row.aov_ly==null?'LY —':`LY ${money(row.aov_ly)}`)}</td></tr>`).join('');
+        document.getElementById('ce-resource-sections').innerHTML=
+          ceSection('Channel mix','Actual revenue by acquisition channel; share movement is percentage points.',['Channel','Revenue','W-1','WoW','YoY','Share (WoW / YoY)'],channels)+
+          ceSection('Funnel · LP → order','LP Users changes are percentages; rate changes are percentage points.',['Stage','W0','W-1','WoW','YoY'],funnel)+
+          ceSection('Top experiences · TGIDs','Expand a TGID to reveal reconciled booking-grain variants. Variant funnel and RPC remain unavailable because their sources are TGID-grain.',['Experience · TGID','Revenue / WoW','W-1','Orders / WoW','Share Δ','RPC','AOV','CR','TR','Select users','Traffic','S2C','C2O','0–2d','3–7d','7d+'],tgids,'1500px')+
+          ceSection('Lead-time bands','Availability windows split same-day from 1–2 days; all comparisons use matched weekly windows.',['Band','Orders W0','WoW','YoY','Revenue W0','WoW','YoY','Share (WoW / YoY)'],lead,'900px')+
+          ceSection('Top countries','Customer-country orders and revenue with W0/W1/LY comparisons.',['Country','Orders','WoW','YoY','Revenue','WoW','YoY','Share','AOV / LY'],countries,'920px');
+      }
       function renderCeDrawer(ce) {
+        activeCe=ce;
         document.getElementById('ce-drawer-title').textContent=ce.ce_name;
         document.getElementById('ce-drawer-subtitle').textContent=`${ce.ce_id} · ${ce.city||'City unavailable'}`;
         document.getElementById('ce-drawer-chips').innerHTML=[ce.category,ce.management_type,ce.growth_stage,ce.bdm_region,ce.growth_region].filter(Boolean).map(value=>`<span class="ce-chip">${escapeHtml(value)}</span>`).join('');
         document.getElementById('ce-drawer-overview').innerHTML=[metric('Weekly revenue',money(ce.revenue)),metric('Versus last week',pct(ce.wow_pct),tone(ce.wow_pct)),metric('Weekly YoY',pct(ce.yoy_pct),tone(ce.yoy_pct))].join('').replaceAll('class="metric"','class="drawer-stat"');
         document.getElementById('ce-drawer-chart').innerHTML=ceChart(ce);
-        const countries=[...(ce.country_mix||[])].sort((a,b)=>(b.revenue||0)-(a.revenue||0));
-        document.getElementById('ce-country-list').innerHTML=countries.length?countries.slice(0,10).map(row=>`<div class="ce-country-row"><span>${escapeHtml(row.country)}</span><strong>${money(row.revenue)} · ${row.share_pct==null?'—':`${row.share_pct.toFixed(0)}%`}</strong></div>`).join(''):'<div class="mover-empty">Country composition is unavailable.</div>';
+        renderCeMetrics(ce);
+        renderCeShapley(ce);
+        renderCeResources(ce);
       }
       function sparkline(metric) {
         const data=metric.series||[], values=data.flatMap(row=>[row.ty,row.ly]).filter(value=>value!=null);
@@ -632,6 +695,7 @@
       function openCeDrawer(ceId){const item=payload.headlines[Number(weekSelect.value||0)],ce=(item.all_ces||[]).find(row=>String(row.ce_id)===String(ceId));if(!ce)return;renderCeDrawer(ce);ceReturnFocus=document.activeElement;ceDrawerRoot.hidden=false;document.body.classList.add('drawer-open');ceClose.focus();}
       function closeCeDrawer(){ceDrawerRoot.hidden=true;document.body.classList.remove('drawer-open');if(ceReturnFocus)ceReturnFocus.focus();}
       document.getElementById('ce-table-body').addEventListener('click',event=>{const group=event.target.closest('[data-ce-group-toggle]');if(group){const label=group.dataset.ceGroupToggle;ceState.collapsed[label]=!ceState.collapsed[label];renderAllCes(payload.headlines[Number(weekSelect.value||0)]);return;}const button=event.target.closest('[data-ce-open]');if(button)openCeDrawer(button.dataset.ceOpen);});
+      document.getElementById('ce-detail-drawer').addEventListener('click',event=>{const metricTab=event.target.closest('[data-ce-metric-group]');if(metricTab&&activeCe){ceMetricGroup=metricTab.dataset.ceMetricGroup;renderCeMetrics(activeCe);return;}const tgid=event.target.closest('[data-ce-tgid]');if(tgid&&activeCe){ceExpandedTgids[tgid.dataset.ceTgid]=tgid.getAttribute('aria-expanded')!=='true';renderCeResources(activeCe);}});
       ceClose.addEventListener('click',closeCeDrawer);document.getElementById('ce-drawer-scrim').addEventListener('click',closeCeDrawer);
       document.addEventListener('keydown',event=>{if(ceDrawerRoot.hidden)return;if(event.key==='Escape'){closeCeDrawer();return;}if(event.key==='Tab'){const controls=[...ceDrawer.querySelectorAll('button,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
       new ResizeObserver(()=>drawChart(payload.headlines[Number(weekSelect.value||0)])).observe(document.querySelector('.chart-wrap'));

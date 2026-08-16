@@ -103,6 +103,11 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="ce-filter-chips"', html)
         self.assertIn('id="ce-group"', html)
         self.assertIn('id="ce-detail-root"', html)
+        self.assertIn('id="ce-weekly-evidence"', html)
+        self.assertIn('id="ce-resource-sections"', html)
+        self.assertIn("Top experiences · TGIDs", html)
+        self.assertIn("Lead-time bands", html)
+        self.assertNotIn("remain in the existing V1 drawer", html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
 
     def test_ce_ownership_dimensions_require_an_explicit_sidecar(self):
@@ -150,6 +155,12 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("lifecycle", ce)
         self.assertEqual(set(ce["periods"]), {"w0", "w1", "ly"})
         self.assertIn("revenue", ce["periods"]["w0"])
+        self.assertIn("drawer_metrics", ce)
+        self.assertIn("channels", ce)
+        self.assertIn("funnel", ce)
+        self.assertIn("tgids", ce)
+        self.assertIn("leadtime", ce)
+        self.assertIn("country_mix", ce)
         self.assertTrue(all(set(bucket) == {"key", "label", "family"} for bucket in ce["buckets"]))
 
     def test_report_scope_is_one_market_with_week_history(self):

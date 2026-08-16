@@ -7,6 +7,7 @@ Monthly goal data is optional and must come from an explicit sidecar.
 from __future__ import annotations
 
 import datetime as dt
+from copy import deepcopy
 from statistics import fmean
 
 
@@ -37,8 +38,30 @@ _CE_PERIOD_FIELDS = (
     "revenue", "orders", "aov", "tr_pct", "cr_pct", "clicks", "paid_clicks",
     "cvr_pct", "paid_cvr_pct", "cpc", "paid_rpc", "spend", "cm1", "paid_cm2",
     "roi_pct", "coupon_wallet", "gbv", "gbv_completed", "ad_conversions",
-    "organic_gbv", "paid_revenue",
+    "organic_gbv", "paid_revenue", "overall_cvr_pct", "paid_ctr_pct",
+    "paid_sis_pct", "paid_conversions", "cm2", "cm1_per_conv", "roi1_pct",
 )
+
+_CE_DRAWER_METRICS = {
+    "overall": (
+        ("revenue", "Revenue", "money"), ("gbv", "GBV", "money"),
+        ("orders", "Orders", "count"), ("overall_cvr_pct", "Overall CVR", "pct"),
+        ("aov", "AOV", "money"), ("tr_pct", "TR", "pct"),
+        ("cm2", "CM2", "money"), ("cr_pct", "CR", "pct"),
+        ("roi1_pct", "ROI 1", "pct"),
+    ),
+    "paid": (
+        ("paid_clicks", "Paid clicks", "count"),
+        ("paid_ctr_pct", "Paid CTR", "pct"),
+        ("paid_sis_pct", "Paid SIS · Google", "pct"),
+        ("spend", "Paid ads spend", "money"), ("cpc", "Paid CPC", "cpc"),
+        ("paid_rpc", "Paid RPC", "cpc"),
+        ("paid_conversions", "Paid conversions", "count"),
+        ("paid_cvr_pct", "Paid CVR", "pct"), ("cm1", "Paid CM1", "money"),
+        ("paid_cm2", "Paid CM2", "money"), ("roi_pct", "Paid ROI", "pct"),
+        ("cm1_per_conv", "Paid average CM1", "money"),
+    ),
+}
 
 
 def _number(value):
@@ -180,6 +203,35 @@ def _ce_period(row):
     return {key: _number(row.get(key)) for key in _CE_PERIOD_FIELDS}
 
 
+def _ce_drawer_metrics(weekly, weekly_ly):
+    current = weekly[-1] if weekly else {}
+    previous = weekly[-2] if len(weekly) > 1 else {}
+    ly_by_week = {row.get("week"): row for row in weekly_ly}
+    result = {}
+    for group, specs in _CE_DRAWER_METRICS.items():
+        rows = []
+        for key, label, value_format in specs:
+            series = [
+                {
+                    "week": row.get("week"),
+                    "ty": _number(row.get(key)),
+                    "ly": _number(ly_by_week.get(row.get("week"), {}).get(key)),
+                }
+                for row in weekly[-12:]
+            ]
+            rows.append({
+                "key": key,
+                "label": label,
+                "format": value_format,
+                "w0": _number(current.get(key)),
+                "wm1": _number(previous.get(key)),
+                "delta_pct": _percent_change(_number(current.get(key)), _number(previous.get(key))),
+                "series": series,
+            })
+        result[group] = rows
+    return result
+
+
 def _ce_views(market, dimensions=None):
     dimensions = dimensions or {}
     bucket_memberships = _ce_bucket_memberships(market)
@@ -187,10 +239,10 @@ def _ce_views(market, dimensions=None):
     for ce in market.get("ces", []):
         weekly = [row for row in (ce.get("weekly") or []) if isinstance(row, dict)]
         weekly.sort(key=lambda row: row.get("week", ""))
+        weekly_ly_rows = [row for row in (ce.get("weekly_ly") or []) if isinstance(row, dict)]
         weekly_ly = {
             row.get("week"): row
-            for row in (ce.get("weekly_ly") or [])
-            if isinstance(row, dict)
+            for row in weekly_ly_rows
         }
         current = weekly[-1] if weekly else {}
         previous = weekly[-2] if len(weekly) > 1 else {}
@@ -203,7 +255,7 @@ def _ce_views(market, dimensions=None):
         })
         metadata = ce.get("metadata") or {}
         ce_dimensions = dimensions.get(str(ce.get("ce_id")), {})
-        ly = (ce.get("weekly_ly") or [])[-1] if ce.get("weekly_ly") else {}
+        ly = weekly_ly_rows[-1] if weekly_ly_rows else {}
         views.append({
             "ce_id": ce.get("ce_id"),
             "ce_name": ce.get("ce_name") or "Unnamed experience",
@@ -240,11 +292,26 @@ def _ce_views(market, dimensions=None):
                 }
                 for row in weekly[-12:]
             ],
+            "drawer_metrics": _ce_drawer_metrics(weekly, weekly_ly_rows),
+            "shapley": deepcopy(ce.get("shapley_wow")) if isinstance(ce.get("shapley_wow"), dict) else None,
+            "channels": deepcopy(ce.get("channels") or []),
+            "funnel": deepcopy(ce.get("funnel") or {}),
+            "tgids": deepcopy(ce.get("tgids") or []),
+            "leadtime": deepcopy(ce.get("leadtime") or []),
             "country_mix": [
                 {
                     "country": row.get("country"),
+                    "orders": _number(row.get("orders")),
+                    "orders_wow": _number(row.get("orders_wow")),
+                    "orders_yoy": _number(row.get("orders_yoy")),
                     "revenue": _number(row.get("rev")),
+                    "revenue_wm1": _number(row.get("rev_wm1")),
+                    "revenue_wow": _number(row.get("rev_wow")),
+                    "revenue_yoy": _number(row.get("rev_yoy")),
                     "share_pct": _number(row.get("rev_share_pct")),
+                    "aov": _number(row.get("aov")),
+                    "aov_wm1": _number(row.get("aov_wm1")),
+                    "aov_ly": _number(row.get("aov_ly")),
                 }
                 for row in (ce.get("countries") or [])
                 if row.get("country")
