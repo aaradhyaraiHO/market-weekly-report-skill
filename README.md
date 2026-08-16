@@ -77,6 +77,9 @@ management type or lifecycle stage. They can be attached with
 
 When this approved mapping is absent, the two organizational filters remain
 disabled while all snapshot-backed portfolio controls, evidence and CE detail
-continue to work. Saved views, watchlists, custom groups, notes and action
-persistence remain separate migration slices and continue to live in V1 until
-their V2 contracts are implemented.
+continue to work. The V2 CE drawer consumes the live schema-v1 Overall/Paid
+series, Shapley result, channels, funnel, TGIDs, booking-grain variants,
+five-band lead-time mix, and customer-country mix. Missing blocks omit cleanly;
+resource trendlines are not synthesized when a historical sidecar is absent.
+Saved views, watchlists, custom groups, notes and action persistence remain
+separate migration slices.

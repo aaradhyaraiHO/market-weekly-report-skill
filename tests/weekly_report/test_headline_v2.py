@@ -138,6 +138,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="ce-filter-chips"', html)
         self.assertIn('id="ce-group"', html)
         self.assertIn('id="ce-detail-root"', html)
+        self.assertIn('id="ce-pagination"', html)
+        self.assertIn('pageSize:50', html)
         self.assertIn('id="ce-manage-portfolio"', html)
         self.assertIn('id="portfolio-root"', html)
         self.assertIn('id="portfolio-file"', html)
@@ -155,6 +157,11 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("{key:'wow',label:'WoW %'}", html)
         self.assertIn("{key:'yoy',label:'YoY %'}", html)
         self.assertIn('Apply locally', html)
+        self.assertIn('id="ce-weekly-evidence"', html)
+        self.assertIn('id="ce-resource-sections"', html)
+        self.assertIn("Top experiences · TGIDs", html)
+        self.assertIn("Lead-time bands", html)
+        self.assertNotIn("remain in the existing V1 drawer", html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
 
     def test_ce_ownership_dimensions_require_an_explicit_sidecar(self):
@@ -169,6 +176,27 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIsNone(without_sidecar["growth_region"])
         self.assertEqual(with_sidecar["bdm_region"], "BDM West")
         self.assertEqual(with_sidecar["growth_region"], "Growth Core")
+
+    def test_ce_drawer_cvr_uses_the_same_lp_to_order_source_as_funnel(self):
+        market = copy.deepcopy(self.market)
+        ce = market["ces"][0]
+        ce["funnel"] = {
+            "CVR": {"current": 1.42, "wm1": 1.17, "wow": 0.25, "yoy": -0.08}
+        }
+        ce["weekly"][-1]["overall_cvr_pct"] = 8.8
+
+        projected = headline_v2.build_headline_view(market)["all_ces"][0]
+        cvr = next(
+            row for row in projected["drawer_metrics"]["overall"]
+            if row["key"] == "funnel_cvr_pct"
+        )
+
+        self.assertEqual(cvr["label"], "LP→Order CVR")
+        self.assertEqual(cvr["w0"], 1.42)
+        self.assertEqual(cvr["wm1"], 1.17)
+        self.assertEqual(cvr["delta_pct"], 0.25)
+        self.assertEqual(cvr["delta_kind"], "pp")
+        self.assertEqual(cvr["series"], [])
 
     def test_existing_movers_are_normalized_without_recalculation(self):
         view = headline_v2.build_headline_view(self.market)
@@ -228,6 +256,12 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("lifecycle", ce)
         self.assertEqual(set(ce["periods"]), {"w0", "w1", "ly"})
         self.assertIn("revenue", ce["periods"]["w0"])
+        self.assertIn("drawer_metrics", ce)
+        self.assertIn("channels", ce)
+        self.assertIn("funnel", ce)
+        self.assertIn("tgids", ce)
+        self.assertIn("leadtime", ce)
+        self.assertIn("country_mix", ce)
         self.assertTrue(all(set(bucket) == {"key", "label", "family"} for bucket in ce["buckets"]))
 
     def test_current_v1_seasonality_tag_is_passed_through_without_reclassification(self):

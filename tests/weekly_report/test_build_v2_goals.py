@@ -67,7 +67,7 @@ class BuildV2GoalsContract(unittest.TestCase):
         recent = [row["revenue"] for row in self.market["market_summary"]["weekly"][-4:]]
         expected_run_rate_weekly = sum(recent) / len(recent)
         expected_baseline = expected_run_rate_weekly * 4.345
-        expected_remaining = expected_baseline * (23 / 31)
+        expected_remaining = expected_run_rate_weekly * 23 / 7
         expected_forecast = 536_000.0 + expected_remaining
         self.assertEqual(goal["forecast_revenue"], expected_forecast)
         self.assertEqual(goal["run_rate_weekly_revenue"], expected_run_rate_weekly)

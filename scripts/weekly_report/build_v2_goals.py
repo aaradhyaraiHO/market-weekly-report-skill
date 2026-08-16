@@ -114,7 +114,10 @@ def build_market_goal(market):
     expected_mtd_share = elapsed_days / days_in_month
     expected_mtd_method = "calendar-linear target pacing"
     remaining_month_share = max(0.0, 1.0 - expected_mtd_share) if remaining_days else 0.0
-    forecast_remaining_revenue = run_rate_monthly_revenue * remaining_month_share
+    # Forecast the unelapsed calendar days at the observed trailing-four-week
+    # daily pace. Do not prorate a synthetic 4.345-week month: that makes the
+    # displayed "actual MTD + recent pace" method disagree with its numbers.
+    forecast_remaining_revenue = run_rate_weekly_revenue * remaining_days / 7.0
     forecast_revenue = mtd_revenue + forecast_remaining_revenue
     expected_mtd_revenue = monthly_goal * expected_mtd_share
     mtd_gap = mtd_revenue - expected_mtd_revenue
