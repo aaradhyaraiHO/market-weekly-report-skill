@@ -181,6 +181,40 @@
     .mover-value { text-align:right; font-family:var(--font-display); font-size:14px; font-weight:500; font-variant-numeric:tabular-nums; }
     .mover-lens { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:500; }
     .mover-empty { min-height:152px; padding:40px 24px; color:var(--muted); font-size:12px; line-height:1.5; text-align:center; }
+    .diagnostic-buckets { display:grid; gap:30px; margin-top:34px; }
+    .bucket-card { overflow:hidden; border:1px solid var(--line); border-radius:var(--radius-card); background:var(--surface); box-shadow:var(--shadow-1); }
+    .bucket-card-head { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding:20px 22px; border-bottom:1px solid var(--line); }
+    .bucket-card-head h2 { margin:0; font-size:19px; letter-spacing:-.02em; }
+    .bucket-card-head p { max-width:720px; margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
+    .bucket-count { flex:0 0 auto; padding:6px 9px; border-radius:999px; color:var(--purple-dark); background:var(--purple-soft); font-size:10px; font-weight:600; font-variant-numeric:tabular-nums; }
+    .bucket-subsection + .bucket-subsection { border-top:1px solid var(--line-dark); }
+    .bucket-subhead { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 22px 11px; }
+    .bucket-subhead h3 { margin:0; font-size:14px; }
+    .bucket-subhead p { margin:3px 0 0; color:var(--muted); font-size:10px; }
+    .bucket-table-wrap { overflow:auto; border-top:1px solid var(--line); }
+    .bucket-table { width:100%; min-width:1020px; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
+    .bucket-table th { height:42px; padding:0 13px; color:var(--muted); background:var(--soft); font-size:9px; font-weight:600; letter-spacing:.05em; text-align:right; text-transform:uppercase; white-space:nowrap; }
+    .bucket-table th:first-child,.bucket-table td:first-child { position:sticky; left:0; z-index:1; text-align:left; }
+    .bucket-table th:first-child { z-index:2; }
+    .bucket-table td { min-height:62px; padding:11px 13px; border-top:1px solid var(--line); text-align:right; vertical-align:middle; }
+    .bucket-table td:first-child { min-width:225px; background:var(--surface); }
+    .bucket-table tr:hover td { background:var(--soft); }
+    .bucket-table .bucket-left { text-align:left; }
+    .bucket-ce { padding:0; border:0; color:var(--ink); background:transparent; font-size:11px; font-weight:600; line-height:1.35; text-align:left; cursor:pointer; }
+    .bucket-ce:hover { color:var(--purple-dark); text-decoration:underline; text-underline-offset:3px; }
+    .bucket-ce-meta { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:400; }
+    .bucket-pill { display:inline-flex; align-items:center; min-height:23px; padding:4px 8px; border-radius:999px; color:var(--muted); background:var(--soft); font-size:9px; font-weight:600; white-space:nowrap; }
+    .bucket-pill.negative { color:var(--red); background:var(--red-soft); }
+    .bucket-pill.positive { color:var(--green); background:var(--green-soft); }
+    .bucket-pill.amber { color:var(--amber); background:var(--amber-soft); }
+    .bucket-subvalue { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:500; }
+    .bucket-driver { color:var(--ink); font-weight:600; }
+    .bucket-empty { padding:30px 22px; color:var(--muted); font-size:12px; text-align:center; }
+    .bucket-footnote { padding:12px 22px; border-top:1px solid var(--line); color:var(--muted); background:var(--soft); font-size:10px; line-height:1.5; }
+    .bucket-weekly { margin:8px 0 0; }
+    .bucket-weekly summary { color:var(--purple-dark); font-size:9px; font-weight:600; cursor:pointer; }
+    .bucket-week-grid { display:grid; grid-template-columns:repeat(4,minmax(68px,1fr)); gap:5px; margin-top:7px; }
+    .bucket-week { padding:6px; border:1px solid var(--line); border-radius:7px; color:var(--muted); background:var(--surface); font-size:8px; line-height:1.35; text-align:left; }
     .post-diagnostic { display:grid; gap:30px; margin-top:34px; }
     .legacy-card { overflow:hidden; border:1px solid var(--line); border-radius:var(--radius-card); background:var(--surface); box-shadow:var(--shadow-1); }
     .legacy-card-head { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding:20px 22px; border-bottom:1px solid var(--line); }
@@ -632,6 +666,10 @@
           </div>
         </article>
         <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>V1 ranking is preserved; each move is shown against last week, recent pace, last year and August target pace.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Bottom 5 · source ranking preserved</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Top 5 · source ranking preserved</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
+        <div class="diagnostic-buckets" id="diagnostic-buckets" aria-label="V1 diagnostic buckets">
+          <section id="losing-money-section"></section>
+          <section id="fluctuations-section"></section>
+        </div>
         <div class="post-diagnostic" id="post-diagnostic-sections" aria-label="V1 post-diagnostic report sections">
           <section id="seasonality-section"></section>
           <section id="levers-section"></section>
@@ -812,6 +850,41 @@
         const ppBody=!pp.length?'<div class="legacy-empty">No active prepurchase allotments for this market.</div>':`<div class="legacy-summary">PP CEs: <strong>${pp.length}</strong> · dated <strong>${count(dated)}</strong> · open <strong>${count(openCount)}</strong> · dated loss-liab <strong>${money(liability)}</strong> · unsold expiring this mo <strong>${count(expiring)}</strong></div>`+legacyTable(ppHeaders,pp.map(row=>{const pace=row.needed_wk==null?`${count(row.sold_last_wk)} / —`:`${count(row.sold_last_wk)} / ${count(row.needed_wk)}`;return `<tr><td>${legacyCe(row,'ce')}</td><td>${count(row.dated)} / ${count(row.open_ct)}</td><td class="${row.str_nt==null?'':row.str_nt>=95?'negative':row.str_nt<60?'negative':'positive'}">${row.str_nt==null?'—':`${row.str_nt}%`}</td><td class="${row.expiring_unsold>0?'negative':''}">${row.expiring_unsold?count(row.expiring_unsold):'—'}</td><td>${money(row.loss_liab_dated)}</td><td class="${row.needed_wk!=null&&row.sold_last_wk<row.needed_wk?'negative':''}">${pace}</td><td>${row.net_roi==null?'—':`${row.net_roi}%`}</td><td>${row.cvr==null?'—':`${Number(row.cvr).toFixed(1)}% <span class="${tone(row.cvr_wow)}">${pct(row.cvr_wow)}</span>`}</td></tr>`;}))+`<details class="legacy-note"><summary>Source &amp; definitions</summary><p>Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry. Net ROI = (CM1 − realized loss) ÷ cost. No verdict — reviewer decides.</p></details>`;
         root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">V1 visibility</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) no-bid · (c) prepurchase</p></div></header><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) No-bid campaigns</h3></div>${noBidBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(c) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></article>`;
       }
+      function bucketRelative(current,previous) {
+        return current==null||previous==null||Number(previous)===0?null:(Number(current)/Number(previous)-1)*100;
+      }
+      function bucketDelta(current,previous,format='pct') {
+        const value=bucketRelative(current,previous);
+        if(value==null)return '<span class="bucket-subvalue">vs LW —</span>';
+        return `<span class="bucket-subvalue ${tone(value)}">${format==='money'?money(Number(current)-Number(previous)):pct(value)} vs LW</span>`;
+      }
+      function bucketWeeks(row,metrics) {
+        const weeks=(row.weeks||[]).slice(0,4);if(!weeks.length)return '';
+        return `<details class="bucket-weekly"><summary>4-week evidence</summary><div class="bucket-week-grid">${weeks.map(week=>`<div class="bucket-week"><strong>${escapeHtml(String(week.label||'').toUpperCase())}</strong>${week.week?` · ${escapeHtml(dateLabel(week.week))}`:''}<br>${metrics.map(metric=>`${metric.label} ${metric.format(week[metric.key])}`).join(' · ')}</div>`).join('')}</div></details>`;
+      }
+      function bucketCe(row,weekly='') {
+        return `<button class="bucket-ce" type="button" data-bucket-ce="${escapeHtml(String(row.ce_id||''))}">${escapeHtml(row.ce_name||'Unknown CE')}<span class="bucket-ce-meta">${escapeHtml(String(row.ce_id||''))}${row.tier?` · ${escapeHtml(row.tier)}`:''}</span></button>${weekly}`;
+      }
+      function losingMoneyTable(rows,kind) {
+        if(!rows.length)return '<div class="bucket-empty">No CEs in this cohort this week. ✅</div>';
+        return `<div class="bucket-table-wrap"><table class="bucket-table"><thead><tr><th>Combined entity</th><th>Status</th><th>Criteria</th><th>CM2 · W0</th><th>Revenue · W0</th><th>ROI · W0</th><th>tROAS</th><th>Driver</th></tr></thead><tbody>${rows.map(row=>{const weeks=row.weeks||[],w0=weeks[0]||{},w1=weeks[1]||{},label=String(row.label||'').replaceAll('_',' '),criteria=(row.criteria||[]).join(' · ')||'—';return `<tr><td>${bucketCe(row,bucketWeeks(row,[{key:'cm2',label:'CM2',format:money},{key:'cm1',label:'Rev',format:money},{key:'roi',label:'ROI',format:value=>value==null?'—':`${Number(value).toFixed(0)}%`},{key:'troas',label:'tROAS',format:value=>value==null?'—':`${Number(value).toFixed(0)}%`}]))}</td><td><span class="bucket-pill ${row.label==='recovering'?'positive':row.label==='eroding'?'amber':'negative'}">${escapeHtml(label||'flagged')}</span><span class="bucket-subvalue">${row.flag_streak||1} wk streak</span></td><td>${escapeHtml(criteria)}</td><td>${money(w0.cm2)}${bucketDelta(w0.cm2,w1.cm2,'money')}</td><td>${money(w0.cm1)}${bucketDelta(w0.cm1,w1.cm1,'money')}</td><td>${w0.roi==null?'—':`${Number(w0.roi).toFixed(0)}%`}${bucketDelta(w0.roi,w1.roi)}</td><td>${w0.troas==null?'—':`${Number(w0.troas).toFixed(0)}%`}${kind==='new'&&row.troas_now!=null?`<span class="bucket-subvalue">now ${Number(row.troas_now).toFixed(0)}%</span>`:''}</td><td class="bucket-left"><span class="bucket-driver">${escapeHtml(row.driver||'—')}</span>${row.drivers&&row.driver&&row.drivers[row.driver]!=null?`<span class="bucket-subvalue ${tone(row.drivers[row.driver])}">${money(row.drivers[row.driver])}</span>`:''}</td></tr>`;}).join('')}</tbody></table></div>`;
+      }
+      function renderLosingMoney(item) {
+        const root=document.getElementById('losing-money-section'),data=item.diagnostic_buckets?.losing_money||{},existing=data.existing||[],newRows=data.new||[],total=existing.length+newRows.length,burn=data.burn_line||{},paused=data.paused||[],gap=data.tracking_gap||[];
+        const content=!total?'<div class="bucket-empty">No CEs flagged on the Losing Money criteria this week. ✅</div>':`<section class="bucket-subsection"><div class="bucket-subhead"><div><h3>Existing CEs</h3><p>V1 order · biggest qualifying CM2 drop first</p></div><span class="bucket-count">${existing.length}</span></div>${losingMoneyTable(existing,'existing')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>New CEs</h3><p>Includes launch and trailing-90-day context from V1</p></div><span class="bucket-count">${newRows.length}</span></div>${losingMoneyTable(newRows,'new')}</section>`;
+        const notes=[];if(paused.length)notes.push(`${paused.length} paused / low-spend CEs`);if(gap.length)notes.push(`${gap.length} tracking gaps`);if(burn.count)notes.push(`${burn.count} sub-$1K-spend losses · ${money(burn.bleed_wk)} weekly burn`);
+        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Defend</div><h2>Losing Money</h2><p>V1 criteria, membership and source ordering are preserved. W0 evidence is visible first; expand a row for its W0–W3 values.</p></div><span class="bucket-count">${total} flagged</span></header>${content}${notes.length?`<div class="bucket-footnote">${notes.join(' · ')}</div>`:''}</article>`;
+      }
+      function fluctuationTable(rows,direction) {
+        if(!rows.length)return `<div class="bucket-empty">${direction==='down'?'No revenue-quality drops this week on a CE returning ≤180% ROI. ✅':'No revenue-quality spikes this week on a CE above break-even.'}</div>`;
+        const metrics=[{key:'spend',label:'Spend',format:money},{key:'roi',label:'ROI',format:value=>value==null?'—':`${Number(value).toFixed(0)}%`},{key:'clicks',label:'Clicks',format:value=>value==null?'—':count(value)},{key:'cvr',label:'CVR',format:value=>value==null?'—':`${Number(value).toFixed(1)}%`},{key:'cm1conv',label:'CM1/conv',format:value=>value==null?'—':`$${Number(value).toFixed(0)}`}];
+        return `<div class="bucket-table-wrap"><table class="bucket-table"><thead><tr><th>Combined entity</th><th>Signal</th><th>Swing</th><th>Spend · W0</th><th>ROI · W0</th><th>Clicks · W0</th><th>CVR · W0</th><th>AOV · W0</th><th>Completion</th><th>Take rate</th><th>Driver</th><th>Read</th></tr></thead><tbody>${rows.map(row=>{const w0=(row.weeks||[])[0]||{},w1=(row.weeks||[])[1]||{};return `<tr><td>${bucketCe(row,bucketWeeks(row,metrics))}</td><td><span class="bucket-pill ${direction==='down'?'negative':'positive'}">${escapeHtml(row.signal||'RPC')}</span></td><td class="${tone(row.swing_pct)}">${pct(row.swing_pct)}</td><td>${money(w0.spend)}${bucketDelta(w0.spend,w1.spend)}</td><td>${w0.roi==null?'—':`${Number(w0.roi).toFixed(0)}%`}${bucketDelta(w0.roi,w1.roi)}</td><td>${w0.clicks==null?'—':count(w0.clicks)}${bucketDelta(w0.clicks,w1.clicks)}</td><td>${w0.cvr==null?'—':`${Number(w0.cvr).toFixed(1)}%`}${bucketDelta(w0.cvr,w1.cvr)}</td><td>${w0.aov==null?'—':money(w0.aov)}${bucketDelta(w0.aov,w1.aov)}</td><td>${w0.cr==null?'—':`${Number(w0.cr).toFixed(1)}%`}${bucketDelta(w0.cr,w1.cr)}</td><td>${w0.tr==null?'—':`${Number(w0.tr).toFixed(1)}%`}${bucketDelta(w0.tr,w1.tr)}</td><td class="bucket-left"><span class="bucket-driver">${escapeHtml(row.dominant||'—')}</span></td><td class="bucket-left"><span class="bucket-pill ${row.verdict==='+ve'?'positive':row.verdict==='-ve'?'negative':'amber'}">${escapeHtml(row.verdict||'watch')}</span><span class="bucket-subvalue">${escapeHtml(row.cause||'')} · ${escapeHtml(row.recommendation||'')}</span></td></tr>`;}).join('')}</tbody></table></div>`;
+      }
+      function renderFluctuations(item) {
+        const root=document.getElementById('fluctuations-section'),data=item.diagnostic_buckets?.fluctuations||{},down=data.down||[],up=data.up||[],window=data.window||{},windowCopy=window.fluctuation_window_start&&window.fluctuation_window_end?`${dateLabel(window.fluctuation_window_start)}–${dateLabel(window.fluctuation_window_end)} vs ${dateLabel(window.fluctuation_compare_start)}–${dateLabel(window.fluctuation_compare_end)}`:'V1 weekly comparison window';
+        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Revenue quality</div><h2>RPC / CM1 fluctuations</h2><p>V1 direction, qualifying signal, driver, verdict and recommendation are unchanged · ${escapeHtml(windowCopy)}.</p></div><span class="bucket-count">${down.length+up.length} flagged</span></header><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↓</h3><p>Defend · investigate revenue-quality deterioration</p></div><span class="bucket-count">${down.length}</span></div>${fluctuationTable(down,'down')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↑</h3><p>Compound · validate and act on revenue-quality improvement</p></div><span class="bucket-count">${up.length}</span></div>${fluctuationTable(up,'up')}</section></article>`;
+      }
+      function renderDiagnosticBuckets(item){renderLosingMoney(item);renderFluctuations(item);}
       function renderPostDiagnostic(item){renderSeasonality(item);renderLevers(item);}
       function setSelectOptions(select, values, allLabel, unavailableLabel, selectedValue='') {
         select.innerHTML=`<option value="">${values.length?allLabel:unavailableLabel}</option>`+values.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
@@ -1204,7 +1277,7 @@
           metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
         }
         document.getElementById('source-note').textContent=monthly.source ? `Sources: frozen weekly snapshot and the ${monthLabel(monthly.month)} market target.` : 'Source: frozen weekly snapshot; no monthly target is attached.';
-        renderRunway(item); renderTargets(item); drawChart(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderPostDiagnostic(item); renderDrawer(item); renderAllCes(item);
+        renderRunway(item); renderTargets(item); drawChart(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderDiagnosticBuckets(item); renderPostDiagnostic(item); renderDrawer(item); renderAllCes(item);
       }
       payload.headlines.forEach((item,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`; weekSelect.appendChild(option); });
       weekSelect.value=String(Math.max(0,payload.headlines.length-1));
@@ -1235,6 +1308,7 @@
       let ceReturnFocus=null;
       function openCeDrawer(ceId){const item=currentHeadline(),ce=(item.all_ces||[]).find(row=>String(row.ce_id)===String(ceId));if(!ce)return;renderCeDrawer(ce);ceReturnFocus=document.activeElement;ceDrawerRoot.hidden=false;document.body.classList.add('drawer-open');ceClose.focus();}
       function closeCeDrawer(){ceDrawerRoot.hidden=true;document.body.classList.remove('drawer-open');if(ceReturnFocus)ceReturnFocus.focus();}
+      document.getElementById('diagnostic-buckets').addEventListener('click',event=>{const button=event.target.closest('[data-bucket-ce]');if(button)openCeDrawer(button.dataset.bucketCe);});
       document.getElementById('post-diagnostic-sections').addEventListener('click',event=>{const button=event.target.closest('[data-post-ce]');if(button)openCeDrawer(button.dataset.postCe);});
       document.getElementById('ce-table-body').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch){toggleWatchlist(watch.dataset.ceWatch);return;}const group=event.target.closest('[data-ce-group-toggle]');if(group){const label=group.dataset.ceGroupToggle;ceState.collapsed[label]=!ceState.collapsed[label];renderAllCes(currentHeadline());return;}const button=event.target.closest('[data-ce-open]');if(button)openCeDrawer(button.dataset.ceOpen);});
       document.getElementById('ce-drawer-chips').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch)toggleWatchlist(watch.dataset.ceWatch);});

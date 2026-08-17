@@ -265,6 +265,57 @@ def _post_diagnostic_view(market):
     }
 
 
+def _diagnostic_bucket_view(market):
+    """Project the authoritative V1 diagnostic buckets without reclassification."""
+    final = market.get("buckets_final") or {}
+    defend = final.get("defend") or {}
+    compound = final.get("compound") or {}
+    losing = defend.get("losing_money") or {}
+    meta = market.get("meta") or {}
+    return {
+        "losing_money": {
+            "existing": deepcopy(losing.get("existing") or []),
+            "new": deepcopy(losing.get("new") or []),
+            "paused": deepcopy(losing.get("paused") or []),
+            "tracking_gap": deepcopy(losing.get("tracking_gap") or []),
+            "burn_line": deepcopy(losing.get("burn_line") or {}),
+        },
+        "fluctuations": {
+            "down": deepcopy(defend.get("seasonality_down") or []),
+            "up": deepcopy(compound.get("seasonality_up") or []),
+            "window": {
+                key: deepcopy(meta.get(key)) for key in (
+                    "fluctuation_partial", "fluctuation_days",
+                    "fluctuation_window_start", "fluctuation_window_end",
+                    "fluctuation_compare_start", "fluctuation_compare_end",
+                )
+            },
+        },
+    }
+
+
+def _scope_diagnostic_buckets(market, ce_ids):
+    """Country-scope bucket rows while preserving V1 order and row payloads."""
+    scoped = deepcopy(market)
+    ids = {str(value) for value in ce_ids}
+    final = scoped.setdefault("buckets_final", {})
+    defend = final.setdefault("defend", {})
+    compound = final.setdefault("compound", {})
+    losing = defend.setdefault("losing_money", {})
+
+    def keep(rows):
+        return [row for row in (rows or []) if str(row.get("ce_id")) in ids]
+
+    for key in ("existing", "new", "paused", "tracking_gap"):
+        losing[key] = keep(losing.get(key))
+    # The market-level burn line has no CID-keyed rows, so it must not leak into
+    # a country slice. The unfiltered market retains the authoritative summary.
+    losing["burn_line"] = {}
+    defend["seasonality_down"] = keep(defend.get("seasonality_down"))
+    compound["seasonality_up"] = keep(compound.get("seasonality_up"))
+    return scoped
+
+
 def _scope_post_diagnostic(market, ce_ids):
     """Scope V1 post-diagnostic outputs to the selected business country."""
     scoped = deepcopy(market)
@@ -647,7 +698,9 @@ def _country_market(market, country, ces):
         "shapley_wow": shapley,
         "week_header": {"trend": {"top_droppers": drops, "top_gainers": gains}},
     }
-    scoped = _scope_post_diagnostic(market, [ce.get("ce_id") for ce in ces])
+    ce_ids = [ce.get("ce_id") for ce in ces]
+    scoped = _scope_post_diagnostic(market, ce_ids)
+    scoped = _scope_diagnostic_buckets(scoped, ce_ids)
     scoped["ces"] = ces
     scoped["market_summary"] = {"weekly": rows, "weekly_ly": weekly_ly, "headlines": headlines}
     scoped["meta"] = {**(market.get("meta") or {}), "country": country}
@@ -764,6 +817,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
             "metrics": _metric_views(headlines, rows, weekly_ly),
             "shapley": _shapley_view(headlines),
         },
+        "diagnostic_buckets": _diagnostic_bucket_view(market),
         "post_diagnostic": _post_diagnostic_view(market),
         "all_ces": _ce_views(market, ce_dimensions),
     }

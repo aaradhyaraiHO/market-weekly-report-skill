@@ -97,6 +97,40 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(canada["no_bid_campaigns"]["totals"], {"count": 1, "spend_total": 100})
         self.assertEqual([row["ce_id"] for row in canada["prepurchase"]], [canada_id])
 
+    def test_diagnostic_buckets_preserve_v1_rows_and_country_scope(self):
+        market = copy.deepcopy(self.market)
+        canada_id = str(market["ces"][0]["ce_id"])
+        us_id = str(market["ces"][1]["ce_id"])
+        market["ces"][0].setdefault("metadata", {})["country"] = "Canada"
+        market["ces"][1].setdefault("metadata", {})["country"] = "United States"
+        market["buckets_final"] = {
+            "defend": {
+                "losing_money": {
+                    "existing": [{"ce_id": canada_id, "ce_name": "Canada CE", "criteria": ["C2"]}],
+                    "new": [{"ce_id": us_id, "ce_name": "US CE", "criteria": ["C5"]}],
+                    "paused": [{"ce_id": canada_id, "ce_name": "Canada paused"}],
+                    "tracking_gap": [],
+                    "burn_line": {"count": 2, "bleed_wk": -50},
+                },
+                "seasonality_down": [{"ce_id": canada_id, "ce_name": "Canada CE", "signal": "rpc"}],
+            },
+            "compound": {
+                "seasonality_up": [{"ce_id": us_id, "ce_name": "US CE", "signal": "cm1_per_conv"}],
+            },
+        }
+        source = copy.deepcopy(market)
+
+        view = headline_v2.build_headline_view(market)
+
+        self.assertEqual(market, source)
+        self.assertEqual(view["diagnostic_buckets"]["losing_money"]["existing"][0]["criteria"], ["C2"])
+        canada = view["country_views"]["Canada"]["diagnostic_buckets"]
+        self.assertEqual([row["ce_id"] for row in canada["losing_money"]["existing"]], [canada_id])
+        self.assertEqual(canada["losing_money"]["new"], [])
+        self.assertEqual(canada["losing_money"]["burn_line"], {})
+        self.assertEqual([row["ce_id"] for row in canada["fluctuations"]["down"]], [canada_id])
+        self.assertEqual(canada["fluctuations"]["up"], [])
+
     def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
         view = headline_v2.build_headline_view(self.market)
         revenue = next(metric for metric in view["detail"]["metrics"] if metric["key"] == "revenue")
@@ -230,6 +264,14 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("row.target_mtd_attainment_pct", html)
         self.assertNotIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
         self.assertNotIn('class="sort-select" data-mover-sort', html)
+        self.assertIn('id="diagnostic-buckets"', html)
+        self.assertIn('id="losing-money-section"', html)
+        self.assertIn('id="fluctuations-section"', html)
+        self.assertIn("function renderDiagnosticBuckets", html)
+        self.assertIn("item.diagnostic_buckets", html)
+        self.assertIn("data-bucket-ce", html)
+        self.assertIn("Losing Money", html)
+        self.assertIn("RPC / CM1 fluctuations", html)
         self.assertIn('id="post-diagnostic-sections"', html)
         self.assertIn("Seasonality visibility", html)
         self.assertIn("Levers visibility", html)
