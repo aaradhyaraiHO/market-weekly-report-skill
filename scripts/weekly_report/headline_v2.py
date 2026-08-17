@@ -151,6 +151,8 @@ def _metric_views(headlines, rows, weekly_ly):
                 wm1 = round(w0 / (1.0 + delta_pct / 100.0), 6)
         if delta_abs is None and w0 is not None and wm1 is not None:
             delta_abs = w0 - wm1
+        current_ly = series[-1]["ly"] if series else None
+        yoy_pct = _percent_change(w0, current_ly)
         views.append({
             "key": key,
             "label": metric.get("label") or default_label,
@@ -161,6 +163,8 @@ def _metric_views(headlines, rows, weekly_ly):
             "wm1": wm1,
             "delta_abs": delta_abs,
             "delta_pct": delta_pct,
+            "ly_w0": current_ly,
+            "yoy_pct": yoy_pct,
             "series": series,
         })
     return views

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Market Weekly Alert V2"
+  short_description: "Build the two-message market weekly alert"
+  default_prompt: "Use $market-weekly-alert-v2 to build a V2 market weekly Slack alert from the published report."

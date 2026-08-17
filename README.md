@@ -115,3 +115,36 @@ Add `--fetch-goals` for the approved live target enrichment. These commands do
 not publish, deploy, post to Slack, or write Sheets. The staged publish path
 continues to reject V2 until the route is explicitly activated after a reviewed
 parallel run; V1 therefore remains the rollback path.
+
+## Weekly Market Alert V2
+
+The locked two-parent V2 alert is isolated under `alert/v2/` and consumes the
+live schema-v2 report. V1 remains the default alert and rollback path.
+
+Check static send readiness without network calls or Slack writes:
+
+```sh
+python3 alert/v2/check_readiness.py
+```
+
+Once a V2 report is live, generate a safe dry run through the staged runner:
+
+```sh
+python3 scripts/weekly_report/run_weekly.py <market|all> \
+  --week <YYYY-MM-DD> --stage alert --alert-version v2
+```
+
+Only add `--post` after reviewing the dry run. The V2 stage reuses the existing
+V1 market-channel map and delivery ledger, requires approved real BGM Slack IDs,
+builds market-grain OKRs from the current central engine definitions, and keeps
+the CE RCA enrichment fail-soft. Before any live Slack write, the runner
+preflights the complete requested batch: every report must exist, every market
+must have a BGM and V1 channel route, the Slack token must be present, and the
+weekly duplicate ledger must be clean. A failed preflight sends nothing.
+
+Deployment/runtime prerequisites that intentionally stay outside the repository:
+
+- authenticated read access to BigQuery for OKR and RCA enrichment;
+- `REVENUE_ALERT_SLACK_TOKEN` supplied by the deployment secret store (never a file);
+- the alert bot invited to every channel in `alert/market_channels.json`;
+- one reviewed all-market V2 dry run before the first explicit `--post`.

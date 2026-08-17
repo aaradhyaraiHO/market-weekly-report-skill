@@ -1,0 +1,58 @@
+{
+  "_note": "V2 only. The four KRs are finalized and computed at market grain by build_market_okr_results.py using the current central-tracking engine definitions. Company targets are intentionally not compared with individual market actuals.",
+  "tracker": {
+    "spreadsheet_id": "1vRgfr9jnefP7grYKa-zaSkUzCpT7pnah7UCkaZuz5Dg",
+    "sheet": "H2 2026",
+    "header_row": 10
+  },
+  "engine": {
+    "builder": "alert/v2/build_market_okr_results.py",
+    "authority": "scripts/band_dashboards/generate_dashboards.py",
+    "source": "headout-analytics.analytics_reporting.combined_entity_stats",
+    "dimension_source": "headout-analytics.analytics_reporting.dim_combined_entities",
+    "grain": "market",
+    "read_only": true
+  },
+  "selected_krs": [
+    {
+      "id": "grow_cumulative_pro_plus_ces",
+      "label": "Grow cumulative Pro+ CEs",
+      "logic": "Count CEs whose trailing-92-day predicted revenue is at least $10K as of the report week."
+    },
+    {
+      "id": "launch_new_pro_plus_mature",
+      "label": "Launch new Pro+ CEs — Mature",
+      "logic": "Count current-quarter Mature CEs already at $10K QTD or projected to $10K using QTD plus the trailing-28-day/L4W daily run-rate over exact remaining quarter days, with maximum prior-four-quarter revenue below $10K."
+    },
+    {
+      "id": "launch_new_pro_plus_emerging_growth",
+      "label": "Launch new Pro+ CEs — Emerging & Growth",
+      "logic": "Count current-quarter Emerging/Growth CEs already at $10K QTD or projected to $10K using QTD plus the trailing-28-day/L4W daily run-rate over exact remaining quarter days, with maximum prior-four-quarter revenue below $10K."
+    },
+    {
+      "id": "grow_non_poi_gel_revenue_yoy",
+      "label": "Grow non-POI GEL revenue YoY",
+      "logic": "Exact-calendar-QTD predicted revenue for non-Mature, non-POI, Managed/Managed Lite CEs versus the same month/day calendar span one year earlier."
+    }
+  ],
+  "markets": {
+    "north_america": {"tracker_team": "America Business", "tracker_market": "America"},
+    "italy": {"tracker_team": "Europe Business", "tracker_market": "Italy"},
+    "france": {"tracker_team": "Europe Business", "tracker_market": "France"},
+    "united_kingdom": {"tracker_team": "Europe Business", "tracker_market": "UK & Benelux"},
+    "benelux": {"tracker_team": "Europe Business", "tracker_market": "UK & Benelux"},
+    "iberia": {"tracker_team": "Europe Business", "tracker_market": "Iberia"},
+    "csee": {"tracker_team": "Europe Business", "tracker_market": "CSEE"},
+    "nordics": {"tracker_team": "Europe Business", "tracker_market": "CSEE"},
+    "oceania": {"tracker_team": "APAC Business", "tracker_market": "Oceania"},
+    "east_asia": {"tracker_team": "APAC Business", "tracker_market": "East Asia"},
+    "sea": {"tracker_team": "APAC Business", "tracker_market": "South East Asia"},
+    "uae": {"tracker_team": "MENA Business", "tracker_market": "UAE"},
+    "gcc": {"tracker_team": "MENA Business", "tracker_market": "GCC"},
+    "north_africa": {"tracker_team": "MENA Business", "tracker_market": "North Africa"},
+    "rest_of_mea": {"tracker_team": "MENA Business", "tracker_market": "Rest of MEA"},
+    "south_america": {"tracker_team": "America Business", "tracker_market": "South America"},
+    "mexico_central_america": {"tracker_team": "America Business", "tracker_market": "Mexico & Central America"},
+    "headout": {"tracker_team": "Company", "tracker_market": "Company"}
+  }
+}

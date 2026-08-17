@@ -5,6 +5,7 @@ import csv
 import gzip
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -116,6 +117,100 @@ class DownstreamConsumerCoverage(unittest.TestCase):
         self.assertIn("--ce-ids", commands[1])
         self.assertIn("6004", commands[1])
         self.assertIn("--dry-run", commands[2])
+
+    def test_run_weekly_alert_v2_dry_run_wires_locked_builder_and_delivery(self):
+        calls = []
+        with tempfile.TemporaryDirectory(prefix="weekly-alert-v2-stage-") as tmp:
+            tmp = Path(tmp)
+            cache, reports = tmp / "cache", tmp / "reports"
+            cache.mkdir(); reports.mkdir()
+            (reports / "report_gcc_2026-08-02.html").write_text("V2 report placeholder")
+            bgms = tmp / "market_bgms.json"
+            bgms.write_text(json.dumps({"markets": {"gcc": {"slack_user_ids": ["U123ABC"]}}}))
+
+            def record(cmd, cwd=None, check=True):
+                command = [str(part) for part in cmd]
+                calls.append((command, cwd, check))
+                if "build_market_okr_results.py" in command:
+                    Path(command[command.index("--out") + 1]).write_text(json.dumps({
+                        "week_start": "2026-08-02", "markets": {"gcc": []}
+                    }))
+                if "weekly_alert_v2.py" in command:
+                    Path(command[command.index("--out") + 1]).write_text(json.dumps({
+                        "_rca": {"ce_ids": ["6004"]}
+                    }))
+                return 0
+
+            with patch.object(run_weekly, "CACHE", cache), patch.object(
+                run_weekly, "REPORTS_V2", reports
+            ), patch.object(run_weekly, "BGM_CONFIG", bgms), patch.object(
+                run_weekly, "run", side_effect=record
+            ):
+                run_weekly.stage_alert_v2(["gcc"], "2026-08-02", post=False)
+
+        commands = [row[0] for row in calls]
+        self.assertEqual([Path(cmd[1]).name for cmd in commands], [
+            "build_market_okr_results.py", "weekly_alert_v2.py",
+            "weekly_rca_helper.py", "post_message.py",
+        ])
+        self.assertIn("--okr-results", commands[1])
+        self.assertIn("--slug", commands[3])
+        self.assertIn("--week", commands[3])
+        self.assertIn("--dry-run", commands[3])
+
+    def test_run_weekly_alert_v2_preflights_entire_batch_before_queries_or_posts(self):
+        calls = []
+        with tempfile.TemporaryDirectory(prefix="weekly-alert-v2-preflight-") as tmp:
+            tmp = Path(tmp)
+            reports = tmp / "reports"
+            reports.mkdir()
+            (reports / "report_gcc_2026-08-02.html").write_text("V2 report placeholder")
+            bgms = tmp / "market_bgms.json"
+            bgms.write_text(json.dumps({"markets": {
+                "gcc": {"slack_user_ids": ["U123ABC"]},
+                "north_africa": {"slack_user_ids": ["U456DEF"]},
+            }}))
+
+            with patch.object(run_weekly, "REPORTS_V2", reports), patch.object(
+                run_weekly, "BGM_CONFIG", bgms
+            ), patch.object(run_weekly, "run", side_effect=lambda *a, **k: calls.append(a)):
+                with self.assertRaisesRegex(SystemExit, "live V2 report is missing for north_africa"):
+                    run_weekly.stage_alert_v2(
+                        ["gcc", "north_africa"], "2026-08-02", post=False
+                    )
+
+        self.assertEqual(calls, [])
+
+    def test_run_weekly_alert_v2_live_preflight_requires_token_and_clean_ledger(self):
+        with tempfile.TemporaryDirectory(prefix="weekly-alert-v2-live-preflight-") as tmp:
+            tmp = Path(tmp)
+            reports = tmp / "reports"
+            reports.mkdir()
+            (reports / "report_gcc_2026-08-02.html").write_text("V2 report placeholder")
+            bgms = tmp / "market_bgms.json"
+            bgms.write_text(json.dumps({"markets": {
+                "gcc": {"slack_user_ids": ["U123ABC"]}
+            }}))
+            ledger = tmp / "posted_ledger.json"
+
+            with patch.object(run_weekly, "REPORTS_V2", reports), patch.object(
+                run_weekly, "BGM_CONFIG", bgms
+            ), patch.object(run_weekly, "POSTED_LEDGER", ledger), patch.dict(
+                os.environ, {}, clear=True
+            ):
+                with self.assertRaisesRegex(SystemExit, "SLACK_TOKEN is not set"):
+                    run_weekly.stage_alert_v2(["gcc"], "2026-08-02", post=True)
+
+            ledger.write_text(json.dumps({"2026-08-02": {
+                "gcc": {"msg1_ts": "123.45", "msg2_ts": "123.46"}
+            }}))
+            with patch.object(run_weekly, "REPORTS_V2", reports), patch.object(
+                run_weekly, "BGM_CONFIG", bgms
+            ), patch.object(run_weekly, "POSTED_LEDGER", ledger), patch.dict(
+                os.environ, {"REVENUE_ALERT_SLACK_TOKEN": "test-only"}, clear=True
+            ):
+                with self.assertRaisesRegex(SystemExit, "already posted.*gcc"):
+                    run_weekly.stage_alert_v2(["gcc"], "2026-08-02", post=True)
 
     def test_export_flagged_writes_sanitized_fixture_csv_shapes_in_temp(self):
         with tempfile.TemporaryDirectory(prefix="weekly-flagged-") as tmp:

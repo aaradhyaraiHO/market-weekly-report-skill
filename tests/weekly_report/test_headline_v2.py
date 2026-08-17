@@ -492,6 +492,8 @@ class HeadlineV2Contract(unittest.TestCase):
         revenue_metric = next(metric for metric in metrics if metric["key"] == "revenue")
         self.assertTrue(revenue_metric["has_ly"])
         self.assertTrue(any(point["ly"] is not None for point in revenue_metric["series"]))
+        self.assertEqual(revenue_metric["ly_w0"], revenue_metric["series"][-1]["ly"])
+        self.assertIsNotNone(revenue_metric["yoy_pct"])
 
         ce = next(row for row in view["all_ces"] if row["buckets"])
         self.assertIn("subcategory", ce)

@@ -20,8 +20,11 @@ each ending with the exact next action to take.
 
     # --- USER runs: vercel deploy --prod --cwd market-notebook-v2 ---
 
-    python3 run_weekly.py <market|all> --week YYYY-MM-DD --stage alert [--post]
+    python3 run_weekly.py <market|all> --week YYYY-MM-DD --stage alert \
+      [--alert-version v1|v2] [--post]
       → per market: weekly_alert → weekly_rca_helper (BigQuery) → post_message.
+        V1 remains the default fallback. V2 consumes a live V2 report, builds
+        the current market-grain OKR sidecar, then uses the same delivery layer.
         Dry-run by default; --post posts to each market's real channel
         (needs REVENUE_ALERT_SLACK_TOKEN).
 """
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -36,8 +40,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 ALERT = REPO / "alert"
+ALERT_V2 = ALERT / "v2"
 CACHE = REPO / ".cache" / "weekly_report"
 REPORTS = REPO / "thoughts" / "shared" / "weekly-report-v1"
+REPORTS_V2 = REPO / "thoughts" / "shared" / "weekly-report-v2"
+BGM_CONFIG = ALERT_V2 / "market_bgms.json"
+POSTED_LEDGER = ALERT / "posted_ledger.json"
 
 sys.path.insert(0, str(HERE))
 import config  # noqa: E402
@@ -157,6 +165,103 @@ def stage_alert(slugs, week, post):
         print(f"\n  Reviewed the dry-runs? Re-run with --post to go live (needs REVENUE_ALERT_SLACK_TOKEN).")
 
 
+def stage_alert_v2(slugs, week, post):
+    """Build and deliver the isolated V2 alert without changing the V1 path."""
+    print(f"\n═══ S5 · Slack alert V2 ({'LIVE POST' if post else 'dry-run'}) ═══")
+    bgm_config = json.loads(BGM_CONFIG.read_text()).get("markets", {})
+    missing_bgms = [slug for slug in slugs if not (bgm_config.get(slug) or {}).get("slack_user_ids")]
+    if missing_bgms:
+        raise SystemExit(
+            "V2 alert blocked: no approved BGM Slack IDs for " + ", ".join(missing_bgms)
+        )
+
+    channels = json.loads((ALERT / "market_channels.json").read_text()).get("markets", {})
+    missing_channels = [slug for slug in slugs if not channels.get(slug)]
+    if missing_channels:
+        raise SystemExit(
+            "V2 alert blocked: no V1 channel route for " + ", ".join(missing_channels)
+        )
+
+    reports = {slug: REPORTS_V2 / f"report_{slug}_{week}.html" for slug in slugs}
+    missing_reports = [slug for slug, path in reports.items() if not path.exists()]
+    if missing_reports:
+        raise SystemExit(
+            "V2 alert blocked: live V2 report is missing for " + ", ".join(missing_reports)
+        )
+
+    if post:
+        if not os.environ.get("REVENUE_ALERT_SLACK_TOKEN"):
+            raise SystemExit(
+                "V2 alert blocked: REVENUE_ALERT_SLACK_TOKEN is not set in the runtime"
+            )
+        ledger = {}
+        if POSTED_LEDGER.exists():
+            try:
+                ledger = json.loads(POSTED_LEDGER.read_text()).get(week, {})
+            except (json.JSONDecodeError, OSError):
+                raise SystemExit(
+                    f"V2 alert blocked: cannot safely read duplicate ledger {POSTED_LEDGER}"
+                )
+        duplicates = [
+            slug for slug in slugs
+            if (ledger.get(slug) or {}).get("msg1_ts")
+            or (ledger.get(slug) or {}).get("msg2_ts")
+        ]
+        if duplicates:
+            raise SystemExit(
+                "V2 alert blocked: already posted for this week: " + ", ".join(duplicates)
+            )
+
+    print(f"  ✓ batch preflight passed for {len(slugs)} market(s); no Slack writes started")
+    week_end = _week_end(week)
+    okr_results = CACHE / f"_okr_results_v2_{week}.json"
+    okr_rc = run(
+        ["python3", "build_market_okr_results.py", "--week-start", week, "--out", str(okr_results)],
+        cwd=ALERT_V2,
+        check=False,
+    )
+    okr_ready = okr_rc == 0 and okr_results.exists()
+    if not okr_ready:
+        print("  ⚠ V2 OKR enrichment unavailable — continuing without the optional OKR block")
+
+    for slug in slugs:
+        report = reports[slug]
+        print(f"\n── {slug} · V2 ──")
+        payload = CACHE / f"_alert_payload_v2_{slug}.json"
+        rca = CACHE / f"_alert_rca_v2_{slug}.json"
+        build_cmd = [
+            "python3", "weekly_alert_v2.py", "--file", str(report),
+            "--market-slug", slug, "--week-start", week,
+            "--bgms", str(BGM_CONFIG), "--out", str(payload),
+        ]
+        if okr_ready:
+            build_cmd.extend(["--okr-results", str(okr_results)])
+        run(build_cmd, cwd=ALERT_V2)
+
+        handoff = json.loads(payload.read_text()).get("_rca", {})
+        ids = ",".join(str(value) for value in handoff.get("ce_ids", []))
+        rca_rc = run(
+            ["python3", "weekly_rca_helper.py", "--ce-ids", ids,
+             "--week-start", week, "--week-end", week_end, "--out", str(rca)],
+            cwd=ALERT,
+            check=False,
+        )
+        if rca_rc != 0:
+            print(f"  ⚠ {slug}: RCA query failed — V2 parents remain sendable without CE threads")
+            rca.write_text("{}")
+
+        post_cmd = [
+            "python3", "post_message.py", "--payload", str(payload),
+            "--rca-blocks", str(rca), "--slug", slug, "--week", week,
+        ]
+        if post:
+            run([*post_cmd, "--channel", channels[slug]], cwd=ALERT)
+        else:
+            run([*post_cmd, "--dry-run"], cwd=ALERT)
+    if not post:
+        print("\n  V2 dry-run complete. Re-run with --post only after report/channel review.")
+
+
 def _week_end(week):
     import datetime
     d = datetime.date.fromisoformat(week)
@@ -171,6 +276,10 @@ def main():
     ap.add_argument("--renderer", choices=["v1", "v2", "both"], default="v1",
                     help="(report stage only) render V1, V2, or both from shared snapshots")
     ap.add_argument("--post", action="store_true", help="(alert stage) post live instead of dry-run")
+    ap.add_argument(
+        "--alert-version", choices=["v1", "v2"], default="v1",
+        help="Alert renderer for --stage alert; V1 stays the default rollback path",
+    )
     args = ap.parse_args()
     import datetime as _dt
     args.week = config.iso(config._week_start(_dt.date.fromisoformat(args.week)))   # ensure Sun-Sat across all stages
@@ -183,7 +292,10 @@ def main():
             sys.exit("Publish one renderer at a time: choose --renderer v1 or --renderer v2.")
         stage_publish(slugs, args.week, args.renderer)
     elif args.stage == "alert":
-        stage_alert(slugs, args.week, args.post)
+        if args.alert_version == "v2":
+            stage_alert_v2(slugs, args.week, args.post)
+        else:
+            stage_alert(slugs, args.week, args.post)
 
 
 if __name__ == "__main__":
