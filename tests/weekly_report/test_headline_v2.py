@@ -66,6 +66,37 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(canada["revenue"], market["ces"][0]["weekly"][-1]["revenue"])
         self.assertEqual(canada["movers"]["drops"][0]["ce_id"], market["ces"][0]["ce_id"])
 
+    def test_post_diagnostic_v1_outputs_are_projected_and_country_scoped(self):
+        market = copy.deepcopy(self.market)
+        canada_id = str(market["ces"][0]["ce_id"])
+        us_id = str(market["ces"][1]["ce_id"])
+        market["ces"][0].setdefault("metadata", {})["country"] = "Canada"
+        market["ces"][1].setdefault("metadata", {})["country"] = "United States"
+        market["seasonality_adjustments"] = [{"ce_id": canada_id, "ce_name": "Canada CE", "pct": 10}]
+        market["levers"] = [{"ce_id": us_id, "ce_name": "US CE", "lever": "pp"}]
+        market["no_bid_campaigns"] = {
+            "totals": {"count": 2, "spend_total": 300},
+            "rows": [
+                {"ce_id": canada_id, "ce_name": "Canada CE", "spend_wk": 100},
+                {"ce_id": us_id, "ce_name": "US CE", "spend_wk": 200},
+            ],
+        }
+        market["prepurchase"] = [
+            {"ce_id": canada_id, "ce": "Canada CE", "dated": 1},
+            {"ce_id": us_id, "ce": "US CE", "dated": 2},
+        ]
+        source = copy.deepcopy(market)
+
+        view = headline_v2.build_headline_view(market)
+
+        self.assertEqual(market, source)
+        self.assertEqual(view["post_diagnostic"]["no_bid_campaigns"]["totals"]["count"], 2)
+        canada = view["country_views"]["Canada"]["post_diagnostic"]
+        self.assertEqual([row["ce_id"] for row in canada["seasonality_adjustments"]], [canada_id])
+        self.assertEqual(canada["levers"], [])
+        self.assertEqual(canada["no_bid_campaigns"]["totals"], {"count": 1, "spend_total": 100})
+        self.assertEqual([row["ce_id"] for row in canada["prepurchase"]], [canada_id])
+
     def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
         view = headline_v2.build_headline_view(self.market)
         revenue = next(metric for metric in view["detail"]["metrics"] if metric["key"] == "revenue")
@@ -199,6 +230,14 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("row.target_mtd_attainment_pct", html)
         self.assertNotIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
         self.assertNotIn('class="sort-select" data-mover-sort', html)
+        self.assertIn('id="post-diagnostic-sections"', html)
+        self.assertIn("Seasonality visibility", html)
+        self.assertIn("Levers visibility", html)
+        self.assertIn("No-bid campaigns", html)
+        self.assertIn("Prepurchase (dim_pp_allotments → CE)", html)
+        self.assertIn("function renderPostDiagnostic", html)
+        self.assertIn("item.post_diagnostic", html)
+        self.assertIn("data-post-ce", html)
         self.assertIn('id="all-ces-view"', html)
         self.assertIn("const CE_METRICS", html)
         self.assertIn("const CE_SUB_SORTS", html)

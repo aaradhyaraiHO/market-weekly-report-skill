@@ -246,6 +246,53 @@ def _shapley_view(headlines):
     }
 
 
+def _post_diagnostic_view(market):
+    """Project the V1 sections that follow Diagnostic buckets verbatim.
+
+    These collections are already produced by the V1 snapshot engine.  V2 is
+    only a renderer for them: no thresholds, classifications, recommendations,
+    or per-row calculations are reproduced here.
+    """
+    no_bid = market.get("no_bid_campaigns") or {}
+    return {
+        "seasonality_adjustments": deepcopy(market.get("seasonality_adjustments") or []),
+        "levers": deepcopy(market.get("levers") or []),
+        "no_bid_campaigns": {
+            "totals": deepcopy(no_bid.get("totals") or {}),
+            "rows": deepcopy(no_bid.get("rows") or []),
+        },
+        "prepurchase": deepcopy(market.get("prepurchase") or []),
+    }
+
+
+def _scope_post_diagnostic(market, ce_ids):
+    """Scope V1 post-diagnostic outputs to the selected business country."""
+    scoped = deepcopy(market)
+    ids = {str(value) for value in ce_ids}
+
+    def filtered(key):
+        return [
+            row for row in (market.get(key) or [])
+            if str(row.get("ce_id")) in ids
+        ]
+
+    scoped["seasonality_adjustments"] = filtered("seasonality_adjustments")
+    scoped["levers"] = filtered("levers")
+    scoped["prepurchase"] = filtered("prepurchase")
+    no_bid_rows = [
+        row for row in ((market.get("no_bid_campaigns") or {}).get("rows") or [])
+        if str(row.get("ce_id")) in ids
+    ]
+    scoped["no_bid_campaigns"] = {
+        "totals": {
+            "count": len(no_bid_rows),
+            "spend_total": sum(_number(row.get("spend_wk")) or 0.0 for row in no_bid_rows),
+        },
+        "rows": no_bid_rows,
+    }
+    return scoped
+
+
 def _ce_bucket_memberships(market):
     """Project current buckets_final membership without changing bucket logic."""
     memberships = {}
@@ -600,7 +647,7 @@ def _country_market(market, country, ces):
         "shapley_wow": shapley,
         "week_header": {"trend": {"top_droppers": drops, "top_gainers": gains}},
     }
-    scoped = deepcopy(market)
+    scoped = _scope_post_diagnostic(market, [ce.get("ce_id") for ce in ces])
     scoped["ces"] = ces
     scoped["market_summary"] = {"weekly": rows, "weekly_ly": weekly_ly, "headlines": headlines}
     scoped["meta"] = {**(market.get("meta") or {}), "country": country}
@@ -717,6 +764,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
             "metrics": _metric_views(headlines, rows, weekly_ly),
             "shapley": _shapley_view(headlines),
         },
+        "post_diagnostic": _post_diagnostic_view(market),
         "all_ces": _ce_views(market, ce_dimensions),
     }
     result["country"] = meta.get("country")
