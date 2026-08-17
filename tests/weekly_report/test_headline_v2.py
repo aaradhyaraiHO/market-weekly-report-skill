@@ -580,6 +580,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("scrollbar-gutter:stable", template)
         self.assertIn(".bucket-table { width:100%; min-width:1020px; border-collapse:collapse; font-size:13px", template)
         self.assertIn(".bucket-ce { padding:0; border:0; color:var(--ink); background:transparent; font-size:13px", template)
+        self.assertIn(".bucket-subvalue.positive { color:var(--green); }", template)
+        self.assertIn(".bucket-subvalue.negative { color:var(--red); }", template)
         self.assertIn("box-shadow:1px 0 0 var(--line-dark)", template)
 
     def test_v2_weekly_comparisons_use_relative_percentages_everywhere(self):
