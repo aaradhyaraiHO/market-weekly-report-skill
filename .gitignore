@@ -15,3 +15,7 @@ flagged_*.csv
 alert/followup_drafts_*.json
 alert/followup_drafts_*.txt
 alert/followup_posted_*.json
+.DS_Store
+**/.DS_Store
+thoughts/shared/weekly-report-v2/*.html
+thoughts/shared/weekly-report-v2/goals_v2.json

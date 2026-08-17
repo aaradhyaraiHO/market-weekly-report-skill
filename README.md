@@ -116,6 +116,41 @@ not publish, deploy, post to Slack, or write Sheets. The staged publish path
 continues to reject V2 until the route is explicitly activated after a reviewed
 parallel run; V1 therefore remains the rollback path.
 
+### Autonomous V2 release package
+
+The canonical full-run command packages all 17 configured markets plus Headout,
+runs the V1 baseline and V2 parity gates, stages a self-contained notebook, and
+dry-runs every market alert:
+
+```sh
+python3 scripts/weekly_report/run_v2_release.py \
+  --week YYYY-MM-DD
+```
+
+The safe default performs no deployment, Slack post, or Sheet write. It records a
+machine-readable receipt at `.cache/weekly_report/v2_run_<week>.json` and stages
+the notebook under `.cache/weekly_report/v2_package_<week>/notebook/`. Inspect the
+exact plan without running anything with `--plan`.
+
+Production writes remain explicit and ordered after all gates:
+
+```sh
+python3 scripts/weekly_report/run_v2_release.py \
+  --week YYYY-MM-DD \
+  --notebook-dir ~/analytics/market-notebook-v2 \
+  --deploy
+
+# Only after reviewing the staged reports and alert dry run:
+python3 scripts/weekly_report/run_v2_release.py \
+  --week YYYY-MM-DD \
+  --notebook-dir ~/analytics/market-notebook-v2 \
+  --deploy --post-alerts
+```
+
+Headout is included in report generation, parity checking, and notebook staging;
+the alert batch remains market-only. V1 is built from the same snapshots and is
+the rollback artifact if a V2-only enrichment is unavailable.
+
 ## Weekly Market Alert V2
 
 The locked two-parent V2 alert is isolated under `alert/v2/` and consumes the

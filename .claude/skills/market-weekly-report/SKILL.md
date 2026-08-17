@@ -5,6 +5,20 @@ description: Weekly market growth report for a Headout market — one command bu
 
 # Market Weekly Report
 
+## Canonical V2 package
+
+For a complete V2 release candidate—every configured market plus Headout—use:
+
+```bash
+python3 scripts/weekly_report/run_v2_release.py --week <YYYY-MM-DD>
+```
+
+This is dry-run safe by default: it builds V1 and V2 from the same snapshots,
+runs baseline/parity gates, stages a local notebook, and dry-runs market alerts.
+Use `--plan` to inspect the exact steps. Deployment requires `--deploy`; live
+Slack posting additionally requires `--post-alerts`. Never add either flag
+without explicit user authorization. V1 remains the rollback path.
+
 Weekly-cadence, market-level growth report. One orchestrator command builds a per-market snapshot
 (12 weeks, weekly grain, revenue = `sum_revenue_predicted`) and renders a **self-contained HTML**
 (one file per market; `all` produces a tabbed multi-market file). The producer is fully data-driven;
