@@ -331,6 +331,11 @@ def main(argv=None):
     ap.add_argument("--cols", type=int, default=N_COLS)
     ap.add_argument("--renderer", choices=("v1", "v2"), default="v1",
                     help="report artifact set to stage; V1 remains the default")
+    ap.add_argument(
+        "--skip-perf-sheet",
+        action="store_true",
+        help="stage report artifacts without the optional Google Sheet exports",
+    )
     args = ap.parse_args(argv)
 
     deploy = notebook_dir()
@@ -367,7 +372,7 @@ def main(argv=None):
 
     # Weekly Flagged export → perf sheet (Task 2). Runs once on a full `all` publish; writes the
     # `w/c <week>` tab (all markets, GM cols owned; perf's 3 cols untouched). Best-effort, main-only.
-    if args.market == "all":
+    if args.market == "all" and not args.skip_perf_sheet:
         try:
             import export_perf_sheet as eps
             camp_cat = eps._fetch_campaign_categories(args.week)   # campaign-level Category (one query)
