@@ -200,15 +200,22 @@ def _mover_views(headlines, direction, ce_target_pacing=None):
         ce_id = row.get("ce_id")
         target = ce_target_pacing.get(str(ce_id)) or {}
         yoy_growth = _number(row.get("yoy_growth"))
+        revenue = _number(row.get("w0_rev"))
+        previous_revenue = revenue - wow_abs if revenue is not None and wow_abs is not None else None
+        trailing_four_revenue = (
+            revenue - delta_4w if revenue is not None and delta_4w is not None else None
+        )
         result.append({
             "ce_id": ce_id,
             "ce_name": row.get("ce_name") or "Unnamed experience",
             "primary_delta": _number(primary[0]),
             "primary_lens": primary[1],
             "delta_4w": delta_4w,
+            "delta_4w_pct": _percent_change(revenue, trailing_four_revenue),
             "wow_abs": wow_abs,
+            "wow_pct": _percent_change(revenue, previous_revenue),
             "ly_wow": _number(row.get("ly_wow")),
-            "revenue": _number(row.get("w0_rev")),
+            "revenue": revenue,
             "yoy_growth": yoy_growth,
             "yoy_pct": yoy_growth * 100.0 if yoy_growth is not None else None,
             "target_mtd_gap": _number(target.get("mtd_gap")),
@@ -270,6 +277,7 @@ def _diagnostic_bucket_view(market):
     final = market.get("buckets_final") or {}
     defend = final.get("defend") or {}
     compound = final.get("compound") or {}
+    lifecycle = final.get("lifecycle") or {}
     losing = defend.get("losing_money") or {}
     meta = market.get("meta") or {}
     return {
@@ -291,6 +299,10 @@ def _diagnostic_bucket_view(market):
                 )
             },
         },
+        "lifecycle": {
+            "new_ces": deepcopy(lifecycle.get("new_ces") or []),
+            "iteration": deepcopy(lifecycle.get("iteration") or []),
+        },
     }
 
 
@@ -301,6 +313,7 @@ def _scope_diagnostic_buckets(market, ce_ids):
     final = scoped.setdefault("buckets_final", {})
     defend = final.setdefault("defend", {})
     compound = final.setdefault("compound", {})
+    lifecycle = final.setdefault("lifecycle", {})
     losing = defend.setdefault("losing_money", {})
 
     def keep(rows):
@@ -313,6 +326,8 @@ def _scope_diagnostic_buckets(market, ce_ids):
     losing["burn_line"] = {}
     defend["seasonality_down"] = keep(defend.get("seasonality_down"))
     compound["seasonality_up"] = keep(compound.get("seasonality_up"))
+    lifecycle["new_ces"] = keep(lifecycle.get("new_ces"))
+    lifecycle["iteration"] = keep(lifecycle.get("iteration"))
     return scoped
 
 

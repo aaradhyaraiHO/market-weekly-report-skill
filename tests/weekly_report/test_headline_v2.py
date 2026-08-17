@@ -3,10 +3,12 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import os
 import re
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORT_DIR = ROOT / "scripts" / "weekly_report"
@@ -117,6 +119,16 @@ class HeadlineV2Contract(unittest.TestCase):
             "compound": {
                 "seasonality_up": [{"ce_id": us_id, "ce_name": "US CE", "signal": "cm1_per_conv"}],
             },
+            "lifecycle": {
+                "new_ces": [
+                    {"ce_id": canada_id, "ce_name": "Canada New", "lane": "A_graduated"},
+                    {"ce_id": us_id, "ce_name": "US New", "lane": "B_on_pace"},
+                ],
+                "iteration": [
+                    {"ce_id": canada_id, "ce_name": "Canada Iteration", "lane": "iteration"},
+                    {"ce_id": us_id, "ce_name": "US Untapped", "lane": "untapped"},
+                ],
+            },
         }
         source = copy.deepcopy(market)
 
@@ -130,6 +142,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(canada["losing_money"]["burn_line"], {})
         self.assertEqual([row["ce_id"] for row in canada["fluctuations"]["down"]], [canada_id])
         self.assertEqual(canada["fluctuations"]["up"], [])
+        self.assertEqual([row["ce_id"] for row in canada["lifecycle"]["new_ces"]], [canada_id])
+        self.assertEqual([row["ce_id"] for row in canada["lifecycle"]["iteration"]], [canada_id])
 
     def test_legacy_key_metric_reconstructs_display_wm1_from_v1_wow(self):
         view = headline_v2.build_headline_view(self.market)
@@ -185,6 +199,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(first_drop["target_mtd_gap_pct"], -18.2)
         self.assertEqual(first_drop["target_mtd_attainment_pct"], 81.8)
         self.assertEqual(first_drop["monthly_target"], 210_000)
+        self.assertAlmostEqual(first_drop["wow_pct"], -30.0)
+        self.assertIsNone(first_drop["delta_4w_pct"])
 
     def test_stale_goal_cannot_drive_current_verdict(self):
         goal = {
@@ -256,9 +272,9 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("const moverSorts", html)
         self.assertNotIn('data-mover-lens=', html)
         self.assertIn("['name','CE']", html)
-        self.assertIn("['wow','vs LW']", html)
-        self.assertIn("['fourWeek','vs L4W']", html)
-        self.assertIn("['yoy','vs LY']", html)
+        self.assertIn("['wow','vs LW %']", html)
+        self.assertIn("['fourWeek','vs L4W %']", html)
+        self.assertIn("['yoy','vs LY %']", html)
         self.assertIn("['target','Aug target %']", html)
         self.assertIn("rows.slice(0,5)", html)
         self.assertIn("row.target_mtd_attainment_pct", html)
@@ -267,16 +283,48 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="diagnostic-buckets"', html)
         self.assertIn('id="losing-money-section"', html)
         self.assertIn('id="fluctuations-section"', html)
+        self.assertIn('id="new-ces-section"', html)
+        self.assertIn('id="iteration-section"', html)
         self.assertIn("function renderDiagnosticBuckets", html)
         self.assertIn("item.diagnostic_buckets", html)
         self.assertIn("data-bucket-ce", html)
         self.assertIn("Losing Money", html)
         self.assertIn("RPC / CM1 fluctuations", html)
+        self.assertIn("function renderNewCes", html)
+        self.assertIn("function renderIteration", html)
+        self.assertIn("New CEs", html)
+        self.assertIn("Iteration / Untapped", html)
+        self.assertIn("item.diagnostic_buckets?.lifecycle", html)
+        self.assertIn("▸ Show weekly numbers", html)
+        self.assertIn("▾ Hide weekly numbers", html)
+        self.assertIn("let diagnosticWeeksHidden=true", html)
+        self.assertIn('aria-controls="lm-week-wrap fluctuations-week-wrap"', html)
+        self.assertIn('data-diagnostic-week-wrap', html)
+        self.assertIn("wr_v2_diagnostic_wk_hidden", html)
+        self.assertIn("Collapsed = this week + WoW", html)
+        self.assertIn("CM1/conv · W0", html)
+        self.assertIn("CPC · W0", html)
+        self.assertIn("tROAS now", html)
+        self.assertIn("CM2 · 90d", html)
+        self.assertIn("W0 loss", html)
+        self.assertIn("CM1/conv", html)
+        self.assertIn("function bucketActionCell", html)
+        self.assertIn("action:'action_upsert'", html)
+        self.assertIn("action:'action_delete'", html)
+        self.assertIn("action=action_list", html)
+        self.assertIn("function actionPrevPull", html)
+        self.assertIn("last wk: <strong>", html)
+        self.assertIn("'losing_money'", html)
+        self.assertIn("'flux_down'", html)
+        self.assertIn("'flux_up'", html)
+        self.assertIn("Actions save to the established Weekly Actions Sheet", html)
+        self.assertIn("${pct(relative)} vs LW", html)
+        self.assertNotIn("deltaFormat==='money'", html)
         self.assertIn('id="post-diagnostic-sections"', html)
         self.assertIn("Seasonality visibility", html)
         self.assertIn("Levers visibility", html)
-        self.assertIn("No-bid campaigns", html)
-        self.assertIn("Prepurchase (dim_pp_allotments → CE)", html)
+        self.assertNotIn("No-bid campaigns", html)
+        self.assertIn("(b) Prepurchase (dim_pp_allotments → CE)", html)
         self.assertIn("function renderPostDiagnostic", html)
         self.assertIn("item.post_diagnostic", html)
         self.assertIn("data-post-ce", html)
@@ -528,6 +576,16 @@ class HeadlineV2Contract(unittest.TestCase):
             ["2026-07-26", "2026-08-02"],
         )
         self.assertEqual({item["market_slug"] for item in embedded["headlines"]}, {"north_america"})
+
+    def test_v2_reuses_v1_action_sidecar_without_writing_during_render(self):
+        with mock.patch.dict(os.environ, {"WR_NOTES_SCRIPT_URL": "https://example.com/weekly-actions"}):
+            html = render_v2.render([self.market])
+        match = re.search(r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S)
+        embedded = json.loads(match.group(1))
+
+        self.assertEqual(embedded["notes_url"], "https://example.com/weekly-actions")
+        self.assertIn("action=action_list", html)
+        self.assertNotIn("fetch(NOTES_URL,{method:'POST'", html)
 
 
 if __name__ == "__main__":

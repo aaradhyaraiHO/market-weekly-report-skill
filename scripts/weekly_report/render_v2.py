@@ -45,6 +45,10 @@ def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None):
         "schema_version": 2,
         "source_schema_version": markets[0].get("meta", {}).get("schema_version", 1),
         "headlines": build_headline_payload(scoped_markets, goals, ce_dimensions),
+        # Reuse the established V1 action sidecar contract. Rendering remains
+        # read-only; writes only happen after an explicit reviewer interaction.
+        "notes_url": (os.environ.get("WR_NOTES_SCRIPT_URL") or render_v1.NOTES_SCRIPT_URL) or None,
+        "notes_channels": render_v1.NOTES_SLACK_CHANNELS,
     }
     data_json = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
     names = " · ".join(item["market"] for item in payload["headlines"])
