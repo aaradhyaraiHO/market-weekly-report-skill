@@ -70,14 +70,20 @@ def sidecar_path(slug, week):
 
 
 # --------------------------------------------------------------------------- #
-def stage_report(slugs, week):
+def stage_report(slugs, week, renderer="v1"):
     print(f"\n═══ S2 · build + render ({len(slugs)} market(s), week {week}) ═══")
     target = "all" if len(slugs) == len(config.MARKETS) else slugs[0] if len(slugs) == 1 else None
     if target:
-        run(["python3", "weekly_market_report.py", target, "--week", week, "--no-open"], cwd=HERE)
+        command = ["python3", "weekly_market_report.py", target, "--week", week]
+        if renderer != "v1":
+            command.extend(["--renderer", renderer])
+        run([*command, "--no-open"], cwd=HERE)
     else:
         for s in slugs:
-            run(["python3", "weekly_market_report.py", s, "--week", week, "--no-open"], cwd=HERE)
+            command = ["python3", "weekly_market_report.py", s, "--week", week]
+            if renderer != "v1":
+                command.extend(["--renderer", renderer])
+            run([*command, "--no-open"], cwd=HERE)
     missing = [s for s in slugs if not sidecar_path(s, week).exists()]
     print("\n── NEXT (S3 · Slack digest, agent step) ──")
     if missing:
@@ -154,6 +160,8 @@ def main():
     ap.add_argument("market", help="market slug or 'all'")
     ap.add_argument("--week", required=True, help="W0 week-start = SUNDAY (YYYY-MM-DD); snapped to its Sun–Sat week")
     ap.add_argument("--stage", required=True, choices=["report", "publish", "alert"])
+    ap.add_argument("--renderer", choices=["v1", "v2", "both"], default="v1",
+                    help="(report stage only) render V1, V2, or both from shared snapshots")
     ap.add_argument("--post", action="store_true", help="(alert stage) post live instead of dry-run")
     args = ap.parse_args()
     import datetime as _dt
@@ -161,8 +169,11 @@ def main():
 
     slugs = slugs_for(args.market)
     if args.stage == "report":
-        stage_report(slugs, args.week)
+        stage_report(slugs, args.week, args.renderer)
     elif args.stage == "publish":
+        if args.renderer != "v1":
+            sys.exit("V2 publishing is not activated. Run the report-stage parity gate first; "
+                     "publish remains V1 until explicit cutover.")
         stage_publish(slugs, args.week)
     elif args.stage == "alert":
         stage_alert(slugs, args.week, args.post)

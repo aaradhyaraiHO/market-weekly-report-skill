@@ -83,3 +83,35 @@ five-band lead-time mix, and customer-country mix. Missing blocks omit cleanly;
 resource trendlines are not synthesized when a historical sidecar is absent.
 Saved views, watchlists, custom groups, notes and action persistence remain
 separate migration slices.
+
+## V2 parallel weekly run and release gate
+
+V1 remains the default weekly renderer. To build V1 and V2 from the same fresh
+snapshots, fetch approved monthly targets, and run the V2 parity gate without
+publishing either artifact:
+
+```sh
+python3 scripts/weekly_report/weekly_market_report.py all \
+  --week YYYY-MM-DD --renderer both --no-open
+```
+
+The V2 run writes one report per market under
+`thoughts/shared/weekly-report-v2/` and a machine-readable release manifest to
+`.cache/weekly_report/v2_release_<week>.json`. The gate fails closed if V2
+changes shared V1 revenue, All-CE membership, current `buckets_final`
+membership, mover order, or Shapley evidence. Optional goals and resource
+enrichments report per-market warnings instead of taking down the V1 build.
+
+Existing snapshots can be rendered and checked without rerunning BigQuery:
+
+```sh
+python3 scripts/weekly_report/release_v2.py \
+  --glob '.cache/weekly_report/snapshot_*_YYYY-MM-DD.json' \
+  --out-dir /tmp/weekly-v2-release \
+  --manifest /tmp/weekly-v2-release/manifest.json
+```
+
+Add `--fetch-goals` for the approved live target enrichment. These commands do
+not publish, deploy, post to Slack, or write Sheets. The staged publish path
+continues to reject V2 until the route is explicitly activated after a reviewed
+parallel run; V1 therefore remains the rollback path.

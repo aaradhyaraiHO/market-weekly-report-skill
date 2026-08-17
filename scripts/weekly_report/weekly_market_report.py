@@ -1,5 +1,5 @@
 """
-Weekly Market Report V1 — one-command orchestrator.
+Weekly Market Report — one-command snapshot producer and renderer.
 
 Chains the full pipeline for one or many pilot markets:
     build_snapshot.build_market(slug, week) -> write snapshot json
@@ -13,6 +13,7 @@ Usage:
     python weekly_market_report.py all --week 2026-06-29
     python weekly_market_report.py all --validate --no-open
     python weekly_market_report.py italy --week 2026-06-29 --no-open
+    python weekly_market_report.py all --week 2026-06-29 --renderer both --no-open
 
 `--validate` runs the NA reference gate whenever north_america is in the set
 (other markets only get a "no reference gate" note — they are spot-checked by
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -29,8 +31,12 @@ from pathlib import Path
 import build_global
 import build_snapshot
 import config
+import release_v2
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parent.parent
+V2_REPORTS = REPO / "thoughts" / "shared" / "weekly-report-v2"
+CACHE = REPO / ".cache" / "weekly_report"
 
 
 def _to_date(s: str) -> dt.date:
@@ -51,7 +57,7 @@ def _resolve_targets(market_arg: str) -> list[str]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Weekly Market Report V1 orchestrator")
+    ap = argparse.ArgumentParser(description="Weekly Market Report orchestrator")
     ap.add_argument("market", help="market slug, 'all', or 'headout' (true-global) "
                     f"({', '.join(config.MARKETS)})")
     ap.add_argument("--week", help="W0 week-start = SUNDAY (YYYY-MM-DD); "
@@ -60,11 +66,15 @@ def main() -> None:
                     help="do not open the rendered HTML")
     ap.add_argument("--validate", action="store_true",
                     help="run the NA reference gate when north_america is in the set")
+    ap.add_argument("--renderer", choices=("v1", "v2", "both"), default="v1",
+                    help="render V1 (default), V2, or both from the same snapshots")
+    ap.add_argument("--no-v2-goals", action="store_true",
+                    help="skip the optional live monthly-target enrichment for V2")
     args = ap.parse_args()
 
     w0 = config._week_start(_to_date(args.week)) if args.week else config.latest_complete_week()
     targets = _resolve_targets(args.market)
-    print(f"Weekly Market Report V1 | week {config.iso(w0)} | markets: {targets}")
+    print(f"Weekly Market Report | week {config.iso(w0)} | markets: {targets} | renderer: {args.renderer}")
 
     # ---- build + write a snapshot per market (reuse build_snapshot helpers) ----
     snapshot_paths: list[Path] = []
@@ -87,12 +97,29 @@ def main() -> None:
                 print(f"  [{slug}] --validate: no reference gate "
                       f"(spot-check headline vs Omni in the skill workflow)")
 
-    # ---- render ONCE with all snapshots -> one tabbed HTML ----
-    cmd = [sys.executable, str(HERE / "render.py"), *[str(p) for p in snapshot_paths]]
-    if not args.open_:
-        cmd.append("--no-open")
-    print(f"\nRendering: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True)
+    # V1 remains the default and retains its existing one-file tabbed render.
+    if args.renderer in ("v1", "both"):
+        cmd = [sys.executable, str(HERE / "render.py"), *[str(p) for p in snapshot_paths]]
+        if not args.open_:
+            cmd.append("--no-open")
+        print(f"\nRendering V1: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+
+    # V2 is a presentation/enrichment layer over the exact snapshots above.
+    # It renders one artifact per market and emits a no-publish release gate.
+    if args.renderer in ("v2", "both"):
+        manifest = release_v2.release(
+            snapshot_paths,
+            V2_REPORTS,
+            fetch_goals=not args.no_v2_goals,
+        )
+        CACHE.mkdir(parents=True, exist_ok=True)
+        manifest_path = CACHE / f"v2_release_{config.iso(w0)}.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        print(f"\nV2 release gate: {manifest['status'].upper()}")
+        print(f"V2 manifest: {manifest_path}")
+        if manifest["status"] != "pass":
+            sys.exit("V2 parity gate FAILED — V1 artifacts are intact; activation blocked.")
 
 
 if __name__ == "__main__":
