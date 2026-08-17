@@ -350,6 +350,25 @@ class DownstreamConsumerCoverage(unittest.TestCase):
         post_message.validate_payload(payload)
         blocks = post_message.expand_blocks(payload["parent"])
         self.assertEqual(blocks[0]["text"]["text"], "hello")
+        native_table = {
+            "type": "table",
+            "rows": [[
+                {"type": "raw_text", "text": "KPI"},
+                {"type": "raw_text", "text": "Actual"},
+            ], [
+                {"type": "raw_text", "text": "Revenue"},
+                {"type": "raw_text", "text": "$10.0K"},
+            ]],
+            "column_settings": [
+                {"align": "left", "is_wrapped": True},
+                {"align": "right", "is_wrapped": True},
+            ],
+        }
+        self.assertEqual(post_message.expand_blocks([native_table]), [native_table])
+        malformed = dict(native_table)
+        malformed["rows"] = [native_table["rows"][0], native_table["rows"][1][:-1]]
+        with self.assertRaisesRegex(ValueError, "consistent width"):
+            post_message.expand_blocks([malformed])
         self.assertEqual(update_posts.header_of([{"type": "header", "text": {"text": "Losing Money"}}]), "Losing Money")
         with tempfile.TemporaryDirectory(prefix="weekly-ledger-") as tmp:
             ledger = Path(tmp) / "ledger.json"

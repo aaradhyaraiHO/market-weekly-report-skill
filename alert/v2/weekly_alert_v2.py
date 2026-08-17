@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_BGMS = HERE / "market_bgms.json"
 DEFAULT_FEEDBACK_CANVAS_URL = "https://headout.slack.com/docs/T029AQ5LB/F0BKPP4C7GC"
 DEFAULT_OKR_TRACKER_URL = "https://central-tracking.vercel.app/okr-tracker"
-LOCKED_FORMAT_VERSION = "2026-08-17.1"
+LOCKED_FORMAT_VERSION = "2026-08-17.2"
 
 OKR_SHORT_LABELS = {
     "grow_cumulative_pro_plus_ces": "Grow cumulative Pro+ CEs",
@@ -167,8 +167,26 @@ def _metric_yoy(metric: dict | None) -> str:
     return fmt_delta(metric.get("yoy_pct"), 1)
 
 
-def alert_1_kpi_section(headline: dict, kpis: dict) -> str:
-    """Render Revenue, Overall, and Paid tables from the V2 headline."""
+def _raw_text_cell(value: Any) -> dict:
+    """Return one native Slack table cell without relying on mrkdwn tables."""
+    return {"type": "raw_text", "text": str(value)}
+
+
+def _table_block(rows: list[list[Any]], alignments: list[str]) -> dict:
+    if not rows or any(len(row) != len(alignments) for row in rows):
+        raise ValueError("Slack table rows must match the declared column count")
+    return {
+        "type": "table",
+        "rows": [[_raw_text_cell(cell) for cell in row] for row in rows],
+        "column_settings": [
+            {"align": alignment, "is_wrapped": True}
+            for alignment in alignments
+        ],
+    }
+
+
+def alert_1_kpi_blocks(headline: dict, kpis: dict) -> list[dict]:
+    """Render Revenue, Overall, and Paid as native Slack table blocks."""
     metrics = _metric_index(headline)
     overall_roi = metrics.get("roi1")
     paid_roi = metrics.get("paid_roi")
@@ -177,32 +195,49 @@ def alert_1_kpi_section(headline: dict, kpis: dict) -> str:
     paid_clicks = metrics.get("paid_clicks")
     paid_cvr = metrics.get("paid_cvr")
 
-    return "\n".join([
-        ":bar_chart: *Revenue*",
-        "|KPI|Actual|vs LW|vs same week LY|vs target|",
-        "|---|---:|---:|---:|---:|",
-        (
-            f"|Revenue|{fmt_money(kpis['revenue'])}|{fmt_delta(kpis['vs_lw_pct'])}|"
-            f"{fmt_delta(kpis['vs_ly_pct'])}|"
-            f"{fmt_attainment(kpis['target_attainment_pct'])} projected "
-            f"({fmt_money(kpis['forecast_revenue'])} / {fmt_money(kpis['monthly_goal'])})|"
-        ),
-        "",
-        "*Overall*",
-        "|KPI|Actual|vs LW|vs same week LY|",
-        "|---|---:|---:|---:|",
-        f"|Overall ROI|{_metric_actual(overall_roi, 'pct2')}|{_metric_wow(overall_roi)}|{_metric_yoy(overall_roi)}|",
-        f"|AOV|{_metric_actual(aov, 'money')}|{_metric_wow(aov)}|{_metric_yoy(aov)}|",
-        f"|Take rate|{_metric_actual(take_rate, 'pct2')}|{_metric_wow(take_rate)}|{_metric_yoy(take_rate)}|",
-        "",
-        "*Paid · Google Search + Bing*",
-        "|KPI|Actual|vs LW|vs same week LY|",
-        "|---|---:|---:|---:|",
-        f"|Paid ROI|{_metric_actual(paid_roi, 'pct2')}|{_metric_wow(paid_roi)}|{_metric_yoy(paid_roi)}|",
-        f"|Paid clicks|{_metric_actual(paid_clicks, 'count')}|{_metric_wow(paid_clicks)}|{_metric_yoy(paid_clicks)}|",
-        f"|Paid CVR|{_metric_actual(paid_cvr, 'pct2')}|{_metric_wow(paid_cvr)}|{_metric_yoy(paid_cvr)}|",
-        "_Paid ROI LY uses the report's calculated-CM fallback before Sep 2025, where applicable._",
-    ])
+    revenue_rows = [
+        ["KPI", "Actual", "vs LW", "vs same week LY", "vs target"],
+        [
+            "Revenue",
+            fmt_money(kpis["revenue"]),
+            fmt_delta(kpis["vs_lw_pct"]),
+            fmt_delta(kpis["vs_ly_pct"]),
+            (
+                f"{fmt_attainment(kpis['target_attainment_pct'])} projected "
+                f"({fmt_money(kpis['forecast_revenue'])} / {fmt_money(kpis['monthly_goal'])})"
+            ),
+        ],
+    ]
+    overall_rows = [
+        ["KPI", "Actual", "vs LW", "vs same week LY"],
+        ["Overall ROI", _metric_actual(overall_roi, "pct2"), _metric_wow(overall_roi), _metric_yoy(overall_roi)],
+        ["AOV", _metric_actual(aov, "money"), _metric_wow(aov), _metric_yoy(aov)],
+        ["Take rate", _metric_actual(take_rate, "pct2"), _metric_wow(take_rate), _metric_yoy(take_rate)],
+    ]
+    paid_rows = [
+        ["KPI", "Actual", "vs LW", "vs same week LY"],
+        ["Paid ROI", _metric_actual(paid_roi, "pct2"), _metric_wow(paid_roi), _metric_yoy(paid_roi)],
+        ["Paid clicks", _metric_actual(paid_clicks, "count"), _metric_wow(paid_clicks), _metric_yoy(paid_clicks)],
+        ["Paid CVR", _metric_actual(paid_cvr, "pct2"), _metric_wow(paid_cvr), _metric_yoy(paid_cvr)],
+    ]
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": ":bar_chart: *Revenue*"}},
+        _table_block(revenue_rows, ["left", "right", "right", "right", "right"]),
+        {"type": "section", "text": {"type": "mrkdwn", "text": "*Overall*"}},
+        _table_block(overall_rows, ["left", "right", "right", "right"]),
+        {"type": "section", "text": {"type": "mrkdwn", "text": "*Paid · Google Search + Bing*"}},
+        _table_block(paid_rows, ["left", "right", "right", "right"]),
+        {
+            "type": "context",
+            "elements": [{
+                "type": "mrkdwn",
+                "text": (
+                    "_Paid ROI LY uses the report's calculated-CM fallback before "
+                    "Sep 2025, where applicable._"
+                ),
+            }],
+        },
+    ]
 
 
 def bgm_mentions(slug: str, config: dict) -> list[str]:
@@ -287,10 +322,9 @@ def build_alert_1(
         f"📊 *{headline['market']} — Weekly Review*  ·  "
         f"_{headline['week_start']} → {headline['week_end']}_"
     )
-    summary = alert_1_kpi_section(headline, kpis)
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": title}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
+        *alert_1_kpi_blocks(headline, kpis),
     ]
 
     okrs = _okr_rows(slug, okr_results, headline.get("week_start"))

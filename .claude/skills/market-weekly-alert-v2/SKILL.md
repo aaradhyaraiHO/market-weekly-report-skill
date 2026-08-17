@@ -57,18 +57,20 @@ Before an all-market dry run, run `python3 alert/v2/check_readiness.py`. Do not 
 
 ## Fixed V2 shape
 
-The current locked format version is `2026-08-17.1`. Changing the three KPI tables, compact linked OKRs, two-parent split, or CE-thread contract requires an explicit user decision and a format-version bump.
+The current locked format version is `2026-08-17.2`. Changing the three KPI tables, compact linked OKRs, two-parent split, or CE-thread contract requires an explicit user decision and a format-version bump.
 
 ### Alert 1
 
 - Tag every configured BGM for the market.
-- Use three pipe-delimited tables. Revenue has one row and the columns Actual, vs LW, vs same week LY, and vs target. Overall has separate rows for Overall ROI, AOV, and Take rate, with Actual, vs LW, and vs same week LY. Paid has separate rows for Paid ROI, Paid clicks, and Paid CVR with the same three comparison columns; label its scope Google Search + Bing. Overall and Paid must not have a target column. Preserve the Paid ROI footnote explaining the report's calculated-CM fallback before Sep 2025 when applicable.
+- Use three native Slack Block Kit `table` blocks. Pipe-delimited mrkdwn tables are forbidden because the Block Kit sender does not render them as tables. Revenue has one row and the columns Actual, vs LW, vs same week LY, and vs target. Overall has separate rows for Overall ROI, AOV, and Take rate, with Actual, vs LW, and vs same week LY. Paid has separate rows for Paid ROI, Paid clicks, and Paid CVR with the same three comparison columns; label its scope Google Search + Bing. Overall and Paid must not have a target column. Preserve the Paid ROI footnote explaining the report's calculated-CM fallback before Sep 2025 when applicable.
 - Read restored metrics only from `headlines[].detail.metrics`: `roi1`, `paid_roi`, `aov`, `tr_pct`, `paid_clicks`, and `paid_cvr`; never recompute or substitute these values in the alert.
 - Seven separate KPI rows across the three tables are an explicit market-alert exception to the generic pod weekly update's five-KPI ceiling. Do not replace the tables with a numbered list and do not group ROI or Paid funnel pairs.
 - Show the four finalized market-level KRs from the same-week OKR sidecar.
 - Hyperlink the `Selected OKRs` headline to `https://central-tracking.vercel.app/okr-tracker`. Keep each line to the short label, current result, reached count when available, target when available, and status. Do not repeat L92, prior-four-quarter, L4W projection, or exact-calendar methodology in the Slack copy; the linked tracker and retained sidecar detail carry that evidence.
 - Link directly to that market's weekly report and to the Weekly Market Report feedback Canvas.
 - Do not attach the V1 Losing Money or RPC Fluctuation tables.
+- When revising an alert already posted for the week, update both recorded parent timestamps with `alert/post_message.py --update <msg1_ts>,<msg2_ts>`. Update mode must never post new parent messages or replay RCA threads.
+- If the live Slack API or destination workspace rejects native table blocks, create the three formatted KPI tables in a Slack Canvas and add one Canvas link to Alert 1. Keep the same two parent messages and RCA thread anchors; do not duplicate the alert. Canvas is a failure fallback, not the default format.
 
 ### Alert 2
 

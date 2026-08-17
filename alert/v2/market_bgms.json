@@ -12,7 +12,7 @@
     "france": {"slack_user_ids": ["U06PSKRQEE9", "U0ASTLMBDHD"]},
     "united_kingdom": {"slack_user_ids": ["U09P7MTHCG7", "U0979THK5MZ"]},
     "iberia": {"slack_user_ids": ["U04MZBQPE11", "U08QZTDRQ3B"]},
-    "csee": {"slack_user_ids": ["U07V5BEG58V", "U08ARAYTMN3"]},
+    "csee": {"slack_user_ids": ["U07V5BEG58V", "U08ARAYTMN3", "U04U3S73SN8", "U03F4LXTEBD", "U02T5DUD2DS"]},
     "east_asia": {"slack_user_ids": ["U07H104DULW"]},
     "sea": {"slack_user_ids": ["U08ARAZ2FF1"]},
     "uae": {"slack_user_ids": ["U08EXD3GL3C"]},

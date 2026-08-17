@@ -64,22 +64,27 @@ class WeeklyAlertV2Contract(unittest.TestCase):
             str(row["ce_id"]) for row in top + bottom
         }))
         self.assertEqual(payload["_v2"]["headline_source"], "codex/v2-market-headlines")
-        self.assertEqual(payload["_v2"]["format_version"], "2026-08-17.1")
+        self.assertEqual(payload["_v2"]["format_version"], "2026-08-17.2")
         self.assertTrue(payload["_v2"]["format_locked"])
         rendered = json.dumps(payload, ensure_ascii=False)
         self.assertIn("<@U123ABC>", rendered)
-        self.assertIn("|KPI|Actual|vs LW|vs same week LY|vs target|", rendered)
+        tables = [
+            block for block in payload["messages"][0]["blocks"]
+            if block.get("type") == "table"
+        ]
+        self.assertEqual(len(tables), 3)
+        self.assertNotIn("|KPI|Actual|", rendered)
         self.assertIn(":bar_chart: *Revenue*", rendered)
         self.assertIn("*Overall*", rendered)
         self.assertIn("*Paid · Google Search + Bing*", rendered)
         self.assertIn("calculated-CM fallback before Sep 2025", rendered)
-        self.assertIn("|Revenue|", rendered)
-        self.assertIn("|Overall ROI|", rendered)
-        self.assertIn("|AOV|", rendered)
-        self.assertIn("|Take rate|", rendered)
-        self.assertIn("|Paid ROI|", rendered)
-        self.assertIn("|Paid clicks|", rendered)
-        self.assertIn("|Paid CVR|", rendered)
+        self.assertIn('"text": "Revenue"', rendered)
+        self.assertIn('"text": "Overall ROI"', rendered)
+        self.assertIn('"text": "AOV"', rendered)
+        self.assertIn('"text": "Take rate"', rendered)
+        self.assertIn('"text": "Paid ROI"', rendered)
+        self.assertIn('"text": "Paid clicks"', rendered)
+        self.assertIn('"text": "Paid CVR"', rendered)
         self.assertIn("Open this market's weekly report", rendered)
         self.assertIn("F0BKPP4C7GC", rendered)
         self.assertIn("Top 5", rendered)
@@ -87,37 +92,48 @@ class WeeklyAlertV2Contract(unittest.TestCase):
         self.assertNotIn("Losing Money", rendered)
         self.assertNotIn("RPC Fluctuations", rendered)
 
-    def test_alert_1_restores_each_v1_kpi_as_a_separate_line(self):
+    def test_alert_1_uses_native_table_cells_for_each_v1_kpi(self):
         payload = weekly_alert_v2.build_payload(self.headline, self.bgms)
-        section = payload["messages"][0]["blocks"][1]["text"]["text"]
+        tables = [
+            block for block in payload["messages"][0]["blocks"]
+            if block.get("type") == "table"
+        ]
         by_key = {row["key"]: row for row in self.headline["detail"]["metrics"]}
 
-        table_rows = [line for line in section.splitlines() if line.startswith("|")]
-        self.assertEqual(len(table_rows), 13)
-        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["roi1"]["w0"], 2), section)
-        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["paid_roi"]["w0"], 2), section)
-        self.assertIn(weekly_alert_v2.fmt_money(by_key["aov"]["w0"]), section)
-        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["tr_pct"]["w0"], 2), section)
-        self.assertIn(weekly_alert_v2.fmt_count(by_key["paid_clicks"]["w0"]), section)
-        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["paid_cvr"]["w0"], 2), section)
-
-        self.assertIn("projected", table_rows[2])
-        self.assertEqual(table_rows[3], "|KPI|Actual|vs LW|vs same week LY|")
-        self.assertEqual(table_rows[8], "|KPI|Actual|vs LW|vs same week LY|")
+        self.assertEqual([len(table["rows"]) for table in tables], [2, 4, 4])
+        cells = [
+            cell["text"]
+            for table in tables
+            for row in table["rows"]
+            for cell in row
+        ]
+        self.assertTrue(all(cell.get("type") == "raw_text" for table in tables for row in table["rows"] for cell in row))
+        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["roi1"]["w0"], 2), cells)
+        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["paid_roi"]["w0"], 2), cells)
+        self.assertIn(weekly_alert_v2.fmt_money(by_key["aov"]["w0"]), cells)
+        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["tr_pct"]["w0"], 2), cells)
+        self.assertIn(weekly_alert_v2.fmt_count(by_key["paid_clicks"]["w0"]), cells)
+        self.assertIn(weekly_alert_v2.fmt_attainment(by_key["paid_cvr"]["w0"], 2), cells)
+        self.assertTrue(any("projected" in value for value in cells))
+        self.assertEqual(cells.count("KPI"), 3)
         for key in ("roi1", "aov", "tr_pct", "paid_roi", "paid_clicks", "paid_cvr"):
-            self.assertIn(weekly_alert_v2.fmt_delta(by_key[key]["yoy_pct"], 1), section)
+            self.assertIn(weekly_alert_v2.fmt_delta(by_key[key]["yoy_pct"], 1), cells)
 
     def test_optional_restored_metrics_render_unavailable_without_breaking_alert(self):
         headline = dict(self.headline)
         headline["detail"] = {"metrics": []}
 
         payload = weekly_alert_v2.build_payload(headline, self.bgms)
-        section = payload["messages"][0]["blocks"][1]["text"]["text"]
-
-        self.assertIn("|Overall ROI|—|—|—|", section)
-        self.assertIn("|Paid ROI|—|—|—|", section)
-        self.assertIn("|Paid clicks|—|—|—|", section)
-        self.assertIn("|Paid CVR|—|—|—|", section)
+        tables = [
+            block for block in payload["messages"][0]["blocks"]
+            if block.get("type") == "table"
+        ]
+        rows = {
+            row[0]["text"]: [cell["text"] for cell in row[1:]]
+            for table in tables for row in table["rows"][1:]
+        }
+        for label in ("Overall ROI", "Paid ROI", "Paid clicks", "Paid CVR"):
+            self.assertEqual(rows[label], ["—", "—", "—"])
 
     def test_movers_preserve_v2_order_and_thread_order(self):
         top, bottom = weekly_alert_v2.report_movers(self.headline)
@@ -200,7 +216,13 @@ class WeeklyAlertV2Contract(unittest.TestCase):
             row["status"] = status
 
         payload = weekly_alert_v2.build_payload(self.headline, self.bgms, rows)
-        okr_block = payload["messages"][0]["blocks"][2]["text"]["text"]
+        okr_block = next(
+            block["text"]["text"]
+            for block in payload["messages"][0]["blocks"]
+            if block.get("type") == "section"
+            and isinstance(block.get("text"), dict)
+            and "Selected OKRs" in block["text"].get("text", "")
+        )
 
         self.assertIn("<https://central-tracking.vercel.app/okr-tracker|Selected OKRs>", okr_block)
         self.assertIn("*New Pro+ CEs · Mature* — 7 on pace (4 reached)", okr_block)
@@ -284,7 +306,7 @@ class AlertV2ReadinessContract(unittest.TestCase):
         result = check_readiness.check()
 
         self.assertFalse(result["ready"])
-        self.assertEqual(result["format_version"], "2026-08-17.1")
+        self.assertEqual(result["format_version"], "2026-08-17.2")
         self.assertEqual(result["blockers"]["missing_bgm_assignments"], ["rest_of_mea"])
         for key, values in result["blockers"].items():
             if key != "missing_bgm_assignments":

@@ -68,6 +68,9 @@ log = logging.getLogger("post_message")
 SECTION_CHAR_LIMIT = 2900   # Slack section text hard limit is 3000; leave headroom
 BLOCKS_PER_MESSAGE = 45     # Slack limit is 50; leave headroom
 HEADER_CHAR_LIMIT  = 150    # Slack header hard limit
+TABLE_ROW_LIMIT = 100
+TABLE_COLUMN_LIMIT = 20
+TABLE_CHAR_LIMIT = 10_000
 
 
 # =============================================================================
@@ -100,6 +103,41 @@ def expand_block(b: dict) -> list[dict]:
     `text` is a dict or the block has `elements`) are passed through as-is."""
     t = b.get("type")
 
+    if t == "table":
+        rows = b.get("rows")
+        if not isinstance(rows, list) or not 1 <= len(rows) <= TABLE_ROW_LIMIT:
+            raise ValueError(f"Slack table must contain 1..{TABLE_ROW_LIMIT} rows")
+        if any(not isinstance(row, list) for row in rows):
+            raise ValueError("Slack table rows must be lists with a consistent width")
+        widths = {len(row) for row in rows}
+        if len(widths) != 1:
+            raise ValueError("Slack table rows must be lists with a consistent width")
+        width = next(iter(widths))
+        if not 1 <= width <= TABLE_COLUMN_LIMIT:
+            raise ValueError(f"Slack table must contain 1..{TABLE_COLUMN_LIMIT} columns")
+        total_chars = 0
+        for row in rows:
+            if not isinstance(row, list) or len(row) != width:
+                raise ValueError("Slack table rows must be lists with a consistent width")
+            for cell in row:
+                if not isinstance(cell, dict) or cell.get("type") not in {
+                    "raw_text", "raw_number", "rich_text"
+                }:
+                    raise ValueError("Slack table cells must be raw_text, raw_number, or rich_text")
+                total_chars += len(_table_cell_text(cell))
+        if total_chars > TABLE_CHAR_LIMIT:
+            raise ValueError(f"Slack table exceeds the {TABLE_CHAR_LIMIT}-character cell limit")
+        settings = b.get("column_settings")
+        if settings is not None:
+            if not isinstance(settings, list) or len(settings) != width:
+                raise ValueError("Slack table column_settings must match the table width")
+            for setting in settings:
+                if setting.get("align") not in {None, "left", "center", "right"}:
+                    raise ValueError("Slack table column alignment must be left, center, or right")
+                if "is_wrapped" in setting and not isinstance(setting["is_wrapped"], bool):
+                    raise ValueError("Slack table is_wrapped must be a boolean")
+        return [b]
+
     # Pass-through: already-real Block Kit (helper output)
     if isinstance(b.get("text"), dict) or "elements" in b:
         return [b]
@@ -120,7 +158,31 @@ def expand_block(b: dict) -> list[dict]:
             out.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk}})
         return out
 
-    raise ValueError(f"Unknown block type: {t!r} (allowed: section/header/context/divider)")
+    raise ValueError(
+        f"Unknown block type: {t!r} (allowed: section/header/context/divider/table)"
+    )
+
+
+def _table_cell_text(cell: dict) -> str:
+    if cell.get("type") == "raw_text":
+        return str(cell.get("text", ""))
+    if cell.get("type") == "raw_number":
+        return str(cell.get("value", cell.get("text", "")))
+
+    def collect(value) -> list[str]:
+        if isinstance(value, dict):
+            result = [str(value["text"])] if "text" in value else []
+            for nested in value.values():
+                result.extend(collect(nested))
+            return result
+        if isinstance(value, list):
+            result = []
+            for nested in value:
+                result.extend(collect(nested))
+            return result
+        return []
+
+    return "".join(collect(cell))
 
 
 def expand_blocks(blocks: list[dict]) -> list[dict]:
@@ -291,6 +353,10 @@ def print_expanded(blocks: list[dict], label: str = "") -> None:
             for el in b.get("elements", []):
                 print(f"  {el['text']}")
             print()
+        elif t == "table":
+            for row in b.get("rows", []):
+                print(" | ".join(_table_cell_text(cell) for cell in row))
+            print()
 
 
 # =============================================================================
@@ -396,17 +462,20 @@ def main() -> None:
         blocks = expand_blocks(m["blocks"])
 
         if update_ts:
-            parent_ts = update_ts[i].strip()
-            log.info("Updating message: %s (ts=%s)", fb, parent_ts)
-            for chunk in chunk_blocks(blocks):
-                resp = slack_update(token, args.channel, parent_ts, chunk, fallback_text=fb)
-                if not resp.get("ok"):
-                    break
-                time.sleep(0.4)
-            link = get_permalink(token, args.channel, parent_ts)
+            target_ts = update_ts[i].strip()
+            chunks = chunk_blocks(blocks)
+            if len(chunks) != 1:
+                log.error("In-place updates require one Slack message chunk; got %d", len(chunks))
+                sys.exit(1)
+            log.info("Updating message: %s (ts=%s)", fb, target_ts)
+            resp = slack_update(token, args.channel, target_ts, chunks[0], fallback_text=fb)
+            if not resp.get("ok"):
+                sys.exit(1)
+            time.sleep(0.4)
+            link = get_permalink(token, args.channel, target_ts)
             permalinks.append((fb, link))
-            log.info("  ✅ updated: ts=%s  link=%s", parent_ts, link)
-            ts = parent_ts
+            log.info("  ✅ updated: ts=%s  link=%s", target_ts, link)
+            ts = target_ts
         else:
             log.info("Posting message: %s", fb)
             ts = post_message_chunked(token, args.channel, blocks,
