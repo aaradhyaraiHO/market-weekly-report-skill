@@ -548,6 +548,17 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertNotIn("#6d2cff", template.lower())
         self.assertIsNone(re.search(r"transition\s*:\s*all\b", template, re.I))
 
+    def test_v2_diagnostic_tables_are_readable_and_horizontally_scrollable(self):
+        template = Path(render_v2.TEMPLATE).read_text()
+
+        self.assertIn(".diagnostic-buckets { display:grid; grid-template-columns:minmax(0,1fr)", template)
+        self.assertIn(".bucket-table-wrap { width:100%; min-width:0; max-width:100%; overflow-x:scroll", template)
+        self.assertIn(".bucket-table-wrap::-webkit-scrollbar { height:14px; }", template)
+        self.assertIn("scrollbar-gutter:stable", template)
+        self.assertIn(".bucket-table { width:100%; min-width:1020px; border-collapse:collapse; font-size:13px", template)
+        self.assertIn(".bucket-ce { padding:0; border:0; color:var(--ink); background:transparent; font-size:13px", template)
+        self.assertIn("box-shadow:1px 0 0 var(--line-dark)", template)
+
     def test_v2_weekly_comparisons_use_relative_percentages_everywhere(self):
         template = Path(render_v2.TEMPLATE).read_text()
 
