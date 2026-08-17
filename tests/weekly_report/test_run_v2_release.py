@@ -55,6 +55,11 @@ class RunV2ReleaseTests(unittest.TestCase):
         self.assertIn("--skip-perf-sheet", stage.command)
         self.assertEqual(stage.env, {"MMR_NOTEBOOK_DIR": str(self.notebook)})
 
+    def test_v2_publisher_stages_authenticated_review_proxy(self) -> None:
+        source = (ROOT / "scripts" / "weekly_report" / "publish_weekly.py").read_text()
+        self.assertIn('review_proxy_api.js', source)
+        self.assertIn('api_dir / "review.js"', source)
+
     def test_live_steps_are_explicit_and_ordered(self) -> None:
         plan = release.build_plan(
             self.week, self.notebook, deploy=True, post_alerts=True

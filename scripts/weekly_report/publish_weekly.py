@@ -341,6 +341,11 @@ def main(argv=None):
     deploy = notebook_dir()
     if not deploy.exists():
         sys.exit(f"notebook dir not found: {deploy} (set MMR_NOTEBOOK_DIR)")
+    if args.renderer == "v2":
+        review_proxy = Path(__file__).resolve().parent / "notes" / "review_proxy_api.js"
+        api_dir = deploy / "api"
+        api_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(review_proxy, api_dir / "review.js")
     # 'headout' publishes only the portfolio hero; 'all' does the 10 markets + refreshes headout if present
     targets = (list(config.MARKETS) if args.market == "all"
                else [] if args.market == "headout" else [args.market])
@@ -367,6 +372,8 @@ def main(argv=None):
     (deploy / "weekly_state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False))
     (deploy / "weekly.html").write_text(render_matrix(state, args.week, weeks, deploy))
     print(f"\n  wrote {deploy/'weekly.html'} + weekly_state.json ({n} market(s), {len(weeks)} cols)")
+    if args.renderer == "v2":
+        print(f"  wrote {deploy/'api'/'review.js'} (authenticated action/comment proxy)")
     print(f"\n  open {deploy/'weekly.html'}")
     print("  vercel deploy --prod --cwd market-notebook-v2   # from ~/analytics — USER runs")
 

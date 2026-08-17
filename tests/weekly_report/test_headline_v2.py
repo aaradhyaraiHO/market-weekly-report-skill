@@ -309,6 +309,10 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("W0 loss", html)
         self.assertIn("CM1/conv", html)
         self.assertIn("function bucketActionCell", html)
+        self.assertIn("const ACTIONS_API='/api/review'", html)
+        self.assertIn("credentials:'same-origin'", html)
+        self.assertIn("Saved to Weekly Actions Sheet", html)
+        self.assertIn("Add a comment to sync", html)
         self.assertIn("action:'action_upsert'", html)
         self.assertIn("action:'action_delete'", html)
         self.assertIn("action=action_list", html)
@@ -339,6 +343,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="ce-filter-panel"', html)
         self.assertIn('class="ce-context-controls"', html)
         self.assertNotIn('id="ce-bdm"', html)
+
         self.assertNotIn('id="ce-growth"', html)
         self.assertIn('class="ce-hover-revenue"', html)
         self.assertIn('data-ce-expand="${metric.key}"', html)
@@ -403,6 +408,21 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('class="ce-lead-total"', html)
         self.assertNotIn("remain in the existing V1 drawer", html)
         self.assertNotIn("Top revenue movers", html.split('id="detail-root"', 1)[1])
+
+    def test_weekly_actions_require_authenticated_sheet_sync(self):
+        root = Path(__file__).resolve().parents[2]
+        apps_script = (root / "scripts/weekly_report/notes/apps_script.js").read_text()
+        proxy = (root / "scripts/weekly_report/notes/review_proxy_api.js").read_text()
+
+        self.assertIn("function reviewMutationGate", apps_script)
+        self.assertIn("authenticated BGM identity required", apps_script)
+        self.assertIn("reviewActorEmail(p), aNow", apps_script)
+        self.assertNotIn('p.owner || "", aNow', apps_script)
+
+        self.assertIn("mmr_session", proxy)
+        self.assertIn("REVIEW_PROXY_SECRET", proxy)
+        self.assertIn('params.set("actor_sig", signature)', proxy)
+        self.assertIn('action") === "whoami"', proxy)
 
     def test_ce_ownership_dimensions_require_an_explicit_sidecar(self):
         ce_id = self.market["ces"][0]["ce_id"]

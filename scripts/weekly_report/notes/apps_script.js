@@ -1,7 +1,8 @@
 /**
  * Google Apps Script — Weekly Report GM-Notes + Bucket-Actions backend + Slack relay.
  *
- * Deploy as: Web app → Execute as Me → Anyone.
+ * Deploy as: Web app → Execute as Me → Anyone. Mutations are accepted only
+ * through the authenticated notebook proxy, which signs the logged-in actor.
  *
  * Two tabs in the same spreadsheet:
  *
@@ -31,6 +32,56 @@ var HEADERS = [
   "market_slug","ce_id","ce_name","week_start","note","author","updated",
   "slack_channel","slack_thread_ts","slack_permalink"
 ];
+
+function reviewBool(v) { return String(v || "").toLowerCase() === "true"; }
+
+function reviewActorCanonicalParams(p) {
+  return Object.keys(p || {}).filter(function(key) { return key !== "actor_sig"; }).sort()
+    .map(function(key) { return encodeURIComponent(key) + "=" + encodeURIComponent(String(p[key] == null ? "" : p[key])); })
+    .join("\n");
+}
+
+function reviewHex(bytes) {
+  return bytes.map(function(value) {
+    return ("0" + ((value + 256) % 256).toString(16)).slice(-2);
+  }).join("");
+}
+
+function reviewSafeEqual(a, b) {
+  a = String(a || ""); b = String(b || "");
+  if (!a || a.length !== b.length) return false;
+  var mismatch = 0;
+  for (var i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+function reviewSignedActorEmail(p) {
+  var email = String(p.actor_email || "").trim().toLowerCase();
+  var timestamp = parseInt(p.actor_ts || "0", 10);
+  var signature = String(p.actor_sig || "").toLowerCase();
+  var secret = PropertiesService.getScriptProperties().getProperty("REVIEW_PROXY_SECRET") ||
+    PropertiesService.getScriptProperties().getProperty("REVIEW_AI_WEBHOOK_SECRET") || "";
+  if (!email || !timestamp || !signature || !secret) return "";
+  if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) return "";
+  var expected = reviewHex(Utilities.computeHmacSha256Signature(reviewActorCanonicalParams(p), secret));
+  return reviewSafeEqual(signature, expected) ? email : "";
+}
+
+function reviewActorEmail(p) {
+  var email = "";
+  try { email = Session.getActiveUser().getEmail() || ""; } catch (err) {}
+  if (!email) email = reviewSignedActorEmail(p);
+  if (!email && reviewBool(PropertiesService.getScriptProperties().getProperty("REVIEW_ALLOW_ACTOR_PARAM")))
+    email = p.actor_email || "";
+  return String(email).trim().toLowerCase();
+}
+
+function reviewMutationGate(action, p) {
+  var mutations = ["upsert", "delete", "post", "action_delete", "action_upsert"];
+  if (mutations.indexOf(action) < 0) return null;
+  var email = reviewActorEmail(p);
+  return email ? null : jsonResp({ok:false, error:"authenticated BGM identity required"});
+}
 
 function getSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -201,6 +252,8 @@ function writeActionRow(sh, existing, vals) {
 function doGet(e) {
   var p = e.parameter;
   var action = p.action || "list";
+  var denied = reviewMutationGate(action, p);
+  if (denied) return denied;
 
   if (action === "list") {
     var rows = allRows();
@@ -215,7 +268,7 @@ function doGet(e) {
     var now = new Date().toISOString();
     var vals = [
       p.market_slug || "", String(p.ce_id || ""), p.ce_name || "",
-      p.week_start || "", p.note || "", p.author || "", now,
+      p.week_start || "", p.note || "", reviewActorEmail(p), now,
       // preserve any existing slack linkage
       existing ? existing.slack_channel   : "",
       existing ? existing.slack_thread_ts : "",
@@ -271,7 +324,7 @@ function doGet(e) {
     var aVals = [
       p.market_slug || "", String(p.ce_id || ""), p.week_start || "",
       p.bucket || "", p.checkbox || "", p.note || "", p.status || "",
-      p.owner || "", aNow
+      reviewActorEmail(p), aNow
     ];
     writeActionRow(ash, aExisting, aVals);
     return jsonResp({ ok: true, action: aExisting ? "updated" : "created", updated: aNow });

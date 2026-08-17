@@ -81,8 +81,9 @@ continue to work. The V2 CE drawer consumes the live schema-v1 Overall/Paid
 series, Shapley result, channels, funnel, TGIDs, booking-grain variants,
 five-band lead-time mix, and customer-country mix. Missing blocks omit cleanly;
 resource trendlines are not synthesized when a historical sidecar is absent.
-Saved views, watchlists, custom groups, notes and action persistence remain
-separate migration slices.
+Saved views, watchlists, custom groups and general review notes remain separate
+migration slices. Diagnostic Action status/comments preserve the V1 Sheet
+contract and sync through the authenticated notebook review proxy.
 
 ## V2 parallel weekly run and release gate
 
@@ -150,6 +151,14 @@ python3 scripts/weekly_report/run_v2_release.py \
 Headout is included in report generation, parity checking, and notebook staging;
 the alert batch remains market-only. V1 is built from the same snapshots and is
 the rollback artifact if a V2-only enrichment is unavailable.
+
+The V2 publish stage also installs `api/review.js` from
+`scripts/weekly_report/notes/review_proxy_api.js`. The notebook runtime must
+provide `AUTH_SECRET`, `ALLOWED_DOMAIN`, `REVIEW_PROXY_SECRET`, and
+`REVIEW_APPS_SCRIPT_URL`, and its package must include `jose`. The Apps Script
+deployment must have the same `REVIEW_PROXY_SECRET` script property. V2 keeps a
+local draft while editing, but only displays an action/comment as synced after
+this authenticated proxy confirms the existing Weekly Actions Sheet write.
 
 ## Weekly Market Alert V2
 

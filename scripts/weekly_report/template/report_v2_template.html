@@ -889,15 +889,22 @@
         root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">V1 visibility</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) prepurchase</p></div></header><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></article>`;
       }
       const NOTES_URL=payload.notes_url||'';
-      const ACTION_SYNC_OK=Boolean(NOTES_URL);
+      // Mutations must pass through the authenticated same-origin proxy.  The
+      // Apps Script endpoint rejects anonymous writers and is never called
+      // directly from a rendered report.
+      const ACTIONS_API='/api/review';
+      const ACTION_SYNC_OK=true;
       const LM_ACTIONS=[['','—'],['skip','Skip / No change required'],['roas_change','tROAS change'],['negative_seasonality','−ve seasonality'],['pause_review','Pause & Review']];
       const FX_ACTIONS_DOWN=[['','—'],['negative_seasonality','−ve seasonality'],['roas_change','ROAS target change'],['pause_review','Pause & review'],['no_change','No change required'],['skip','Skip']];
       const FX_ACTIONS_UP=[['','—'],['positive_seasonality','+ve seasonality'],['no_change','No change required'],['skip','Skip']];
-      let actionsData={},actionsPrev={},actionLoadedKey='';
+      let actionsData={},actionsPrev={},actionLoadedKey='',actionSyncState={};
       const actionContext=()=>baseHeadline();
       const actionSlug=()=>String(actionContext()?.market_slug||actionContext()?.market||'market');
       const actionWeek=()=>String(actionContext()?.week_start||'');
       const actionKey=(bucket,ceId)=>`${bucket}::${String(ceId)}`;
+      const actionStateKey=(bucket,ceId)=>`${actionSlug()}::${actionWeek()}::${actionKey(bucket,ceId)}`;
+      function setActionSyncState(bucket,ceId,state,message=''){actionSyncState[actionStateKey(bucket,ceId)]={state,message};}
+      function getActionSyncState(bucket,ceId){return actionSyncState[actionStateKey(bucket,ceId)]||{};}
       const actionCacheKey=()=>`wr_actions::${actionSlug()}::${actionWeek()}`;
       function loadActionCache(){try{actionsData[actionSlug()]=JSON.parse(localStorage.getItem(actionCacheKey())||'{}');}catch(_){actionsData[actionSlug()]={};}actionLoadedKey=actionCacheKey();}
       function ensureActionCache(){if(actionLoadedKey!==actionCacheKey())loadActionCache();}
@@ -908,28 +915,38 @@
       function deleteAction(bucket,ceId){ensureActionCache();delete (actionsData[actionSlug()]||{})[actionKey(bucket,ceId)];saveActionCache();}
       const actionEmpty=value=>!value.checkbox&&!value.status&&!String(value.note||'').trim();
       function saveBucketAction(bucket,ceId,patch){
-        const merged={...getAction(bucket,ceId),...patch,owner:patch.owner||localStorage.getItem('wr_author')||'',updated:new Date().toISOString()};
+        const merged={...getAction(bucket,ceId),...patch,updated:new Date().toISOString()};
         if(actionEmpty(merged))deleteAction(bucket,ceId);else putAction(bucket,ceId,merged);
-        if(!ACTION_SYNC_OK)return Promise.resolve();
-        const params=actionEmpty(merged)?new URLSearchParams({action:'action_delete',market_slug:actionSlug(),ce_id:String(ceId),week_start:actionWeek(),bucket}):new URLSearchParams({action:'action_upsert',market_slug:actionSlug(),ce_id:String(ceId),week_start:actionWeek(),bucket,checkbox:merged.checkbox?'true':'',note:merged.note||'',status:merged.status||'',owner:merged.owner||''});
-        return fetch(`${NOTES_URL}?${params.toString()}`,{redirect:'follow'}).then(response=>response.json()).then(result=>{if(!result?.ok)throw new Error('Action save failed');}).catch(error=>console.warn('Weekly action retained locally; Sheet sync failed.',error));
+        if(merged.status&&!String(merged.note||'').trim()){
+          setActionSyncState(bucket,ceId,'needs_comment','Add a comment to sync');
+          return Promise.resolve({ok:false,draft:true});
+        }
+        if(!ACTION_SYNC_OK){setActionSyncState(bucket,ceId,'local','Saved as a local draft only');return Promise.resolve({ok:false,draft:true});}
+        setActionSyncState(bucket,ceId,'saving','Saving…');
+        const params=actionEmpty(merged)?new URLSearchParams({action:'action_delete',market_slug:actionSlug(),ce_id:String(ceId),week_start:actionWeek(),bucket}):new URLSearchParams({action:'action_upsert',market_slug:actionSlug(),ce_id:String(ceId),week_start:actionWeek(),bucket,checkbox:merged.checkbox?'true':'',note:merged.note||'',status:merged.status||''});
+        return fetch(`${ACTIONS_API}?${params.toString()}`,{credentials:'same-origin',redirect:'follow'})
+          .then(async response=>{const result=await response.json().catch(()=>({ok:false,error:`HTTP ${response.status}`}));if(!response.ok||!result?.ok)throw new Error(result?.error||`HTTP ${response.status}`);return result;})
+          .then(result=>{setActionSyncState(bucket,ceId,'synced','Saved to Weekly Actions Sheet');return result;})
+          .catch(error=>{setActionSyncState(bucket,ceId,'error',error?.message||'Sheet sync failed');console.warn('Weekly action Sheet sync failed.',error);return {ok:false,error:error?.message||'Sheet sync failed'};});
       }
       function actionOptions(options,value){const list=[...options];if(value&&!list.some(option=>option[0]===value))list.push([value,value]);return list.map(([key,label])=>`<option value="${escapeHtml(key)}"${key===value?' selected':''}>${escapeHtml(label)}</option>`).join('');}
       function bucketActionCell(row,bucket,kind='lm'){
         const action=getAction(bucket,row.ce_id),value=action.status||'',note=action.note||'',options=kind==='lm'?LM_ACTIONS:(bucket==='flux_up'?FX_ACTIONS_UP:FX_ACTIONS_DOWN),required=Boolean(value&&!note.trim()),showNote=kind==='lm'||value||note.trim();
         const meta=[action.owner,action.updated?new Date(action.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''].filter(Boolean).join(' · ');
+        const sync=getActionSyncState(bucket,row.ce_id),syncClass=sync.state==='error'||sync.state==='needs_comment'?' bucket-action-warning':'',syncMeta=sync.message?`<div class="bucket-action-meta${syncClass}">${escapeHtml(sync.message)}</div>`:'';
         const previous=getPrevAction(bucket,row.ce_id),previousLabel=previous.status?(options.find(option=>option[0]===previous.status)?.[1]||previous.status):'',previousMeta=previousLabel?`<div class="bucket-action-meta" title="${escapeHtml(previous.note||'')}">last wk: <strong>${escapeHtml(previousLabel)}</strong>${previous.owner?` · ${escapeHtml(previous.owner)}`:''}</div>`:'';
-        return `<div class="bucket-action" data-action-cell><select class="bucket-action-select" aria-label="Action for ${escapeHtml(row.ce_name||row.ce_id)}" data-action-status data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}">${actionOptions(options,value)}</select>${showNote?`<textarea class="bucket-action-note${required?' required':''}" data-action-note data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}" placeholder="${required?'Comment required — why?':kind==='lm'?'why?\ngrowth:\nperf:':'why?'}">${escapeHtml(note)}</textarea>`:''}${required?'<div class="bucket-action-meta bucket-action-warning">Comment required</div>':meta?`<div class="bucket-action-meta">${escapeHtml(meta)}</div>`:''}${previousMeta}</div>`;
+        const saveMeta=syncMeta||(required?'<div class="bucket-action-meta bucket-action-warning">Add a comment to sync</div>':meta?`<div class="bucket-action-meta">${escapeHtml(meta)}</div>`:'');
+        return `<div class="bucket-action" data-action-cell><select class="bucket-action-select" aria-label="Action for ${escapeHtml(row.ce_name||row.ce_id)}" data-action-status data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}">${actionOptions(options,value)}</select>${showNote?`<textarea class="bucket-action-note${required?' required':''}" data-action-note data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}" placeholder="${required?'Comment required — why?':kind==='lm'?'why?\ngrowth:\nperf:':'why?'}">${escapeHtml(note)}</textarea>`:''}${saveMeta}${previousMeta}</div>`;
       }
       function actionSyncPull(){
         loadActionCache();if(!ACTION_SYNC_OK)return Promise.resolve();
-        return fetch(`${NOTES_URL}?action=action_list&market=${encodeURIComponent(actionSlug())}&week=${encodeURIComponent(actionWeek())}`,{redirect:'follow'}).then(response=>response.json()).then(data=>{actionsData[actionSlug()]={};(data.actions||[]).forEach(action=>{if(action.ce_id&&action.bucket)actionsData[actionSlug()][actionKey(action.bucket,action.ce_id)]={checkbox:action.checkbox==='true',note:action.note||'',status:action.status||'',owner:action.owner||'',updated:action.updated||''};});saveActionCache();renderDiagnosticBuckets(currentHeadline());}).catch(error=>console.warn('Weekly action Sheet pull failed; using local cache.',error));
+        return fetch(`${ACTIONS_API}?action=action_list&market=${encodeURIComponent(actionSlug())}&week=${encodeURIComponent(actionWeek())}`,{credentials:'same-origin',redirect:'follow'}).then(async response=>{const data=await response.json();if(!response.ok||!data?.ok)throw new Error(data?.error||`HTTP ${response.status}`);return data;}).then(data=>{actionsData[actionSlug()]={};(data.actions||[]).forEach(action=>{if(action.ce_id&&action.bucket){actionsData[actionSlug()][actionKey(action.bucket,action.ce_id)]={checkbox:action.checkbox==='true',note:action.note||'',status:action.status||'',owner:action.owner||'',updated:action.updated||''};setActionSyncState(action.bucket,action.ce_id,'synced','Saved to Weekly Actions Sheet');}});saveActionCache();renderDiagnosticBuckets(currentHeadline());}).catch(error=>console.warn('Weekly action Sheet pull failed; using local drafts.',error));
       }
       function actionPrevPull(){
         if(!ACTION_SYNC_OK||!actionWeek())return Promise.resolve();
         const weeks=[-7,-6].map(offset=>{const date=new Date(`${actionWeek()}T00:00:00Z`);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10);});
         actionsPrev[actionSlug()]={};
-        return Promise.all(weeks.map(week=>fetch(`${NOTES_URL}?action=action_list&market=${encodeURIComponent(actionSlug())}&week=${encodeURIComponent(week)}`,{redirect:'follow'}).then(response=>response.json()).then(data=>{(data.actions||[]).forEach(action=>{if(!action.ce_id||!action.bucket)return;const key=actionKey(action.bucket,action.ce_id),existing=actionsPrev[actionSlug()][key];if(!existing||String(action.updated||'')>String(existing.updated||''))actionsPrev[actionSlug()][key]={checkbox:action.checkbox==='true',note:action.note||'',status:action.status||'',owner:action.owner||'',updated:action.updated||''};});}).catch(()=>{}))).then(()=>renderDiagnosticBuckets(currentHeadline()));
+        return Promise.all(weeks.map(week=>fetch(`${ACTIONS_API}?action=action_list&market=${encodeURIComponent(actionSlug())}&week=${encodeURIComponent(week)}`,{credentials:'same-origin',redirect:'follow'}).then(async response=>{const data=await response.json();if(!response.ok||!data?.ok)throw new Error(data?.error||`HTTP ${response.status}`);return data;}).then(data=>{(data.actions||[]).forEach(action=>{if(!action.ce_id||!action.bucket)return;const key=actionKey(action.bucket,action.ce_id),existing=actionsPrev[actionSlug()][key];if(!existing||String(action.updated||'')>String(existing.updated||''))actionsPrev[actionSlug()][key]={checkbox:action.checkbox==='true',note:action.note||'',status:action.status||'',owner:action.owner||'',updated:action.updated||''};});}).catch(()=>{}))).then(()=>renderDiagnosticBuckets(currentHeadline()));
       }
       function bucketRelative(current,previous) {
         return current==null||previous==null||Number(previous)===0?null:(Number(current)/Number(previous)-1)*100;
