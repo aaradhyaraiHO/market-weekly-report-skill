@@ -83,7 +83,7 @@ class DownstreamConsumerCoverage(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            ["python3", "publish_weekly.py", "gcc", "--week", "2026-08-02"],
+            ["python3", "publish_weekly.py", "gcc", "--week", "2026-08-02", "--renderer", "v1"],
             commands,
         )
         self.assertEqual(run_weekly.slugs_for("headout"), ["headout"])
@@ -210,6 +210,26 @@ class DownstreamConsumerCoverage(unittest.TestCase):
                 "weekly.html", "weekly_state.json",
             ):
                 self.assertTrue((deploy / name).exists(), name)
+
+    def test_publish_weekly_can_explicitly_stage_v2_without_changing_v1_default(self):
+        with tempfile.TemporaryDirectory(prefix="weekly-publish-v2-") as tmp:
+            tmp = Path(tmp)
+            cache, v1_reports, v2_reports, deploy = (
+                tmp / "cache", tmp / "v1", tmp / "v2", tmp / "deploy"
+            )
+            for path in (cache, v1_reports, v2_reports, deploy):
+                path.mkdir()
+            snapshot = captured("sparse")
+            (cache / "snapshot_gcc_2026-08-02.json").write_text(json.dumps(snapshot))
+            (v1_reports / "report_gcc_2026-08-02.html").write_text("V1 artifact")
+            (v2_reports / "report_gcc_2026-08-02.html").write_text("V2 artifact")
+            with patch.object(publish_weekly, "CACHE_DIR", cache), patch.object(
+                publish_weekly, "REPORT_DIR", v1_reports
+            ), patch.object(publish_weekly, "REPORT_DIR_V2", v2_reports), patch.object(
+                publish_weekly, "notebook_dir", return_value=deploy
+            ):
+                publish_weekly.main(["gcc", "--week", "2026-08-02", "--renderer", "v2"])
+            self.assertEqual((deploy / "weekly-report-gcc.html").read_text(), "V2 artifact")
 
     def test_bucket_diff_and_action_ping_read_sanitized_outputs(self):
         sparse = captured("sparse")

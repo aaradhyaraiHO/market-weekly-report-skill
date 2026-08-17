@@ -97,7 +97,7 @@ def stage_report(slugs, week, renderer="v1"):
     print(f"\n  Then:  python3 run_weekly.py {'all' if target=='all' else ' '.join(slugs)} --week {week} --stage publish")
 
 
-def stage_publish(slugs, week):
+def stage_publish(slugs, week, renderer="v1"):
     print(f"\n═══ S3-reload + S4.5 · rebuild (load digests) + publish ═══")
     for s in slugs:
         if sidecar_path(s, week).exists():
@@ -108,12 +108,20 @@ def stage_publish(slugs, week):
         else:
             print(f"  ⚠ {s}: no sidecar — rendering without a digest")
         snap = CACHE / f"snapshot_{s}_{week}.json"
-        run(["python3", "render.py", str(snap), "--no-open"], cwd=HERE)
+        if renderer == "v1":
+            run(["python3", "render.py", str(snap), "--no-open"], cwd=HERE)
+        else:
+            run(["python3", "release_v2.py", str(snap),
+                 "--fetch-goals",
+                 "--out-dir", str(REPO / "thoughts" / "shared" / "weekly-report-v2"),
+                 "--manifest", str(CACHE / f"v2_release_{s}_{week}.json")], cwd=HERE)
     target = "all" if len(slugs) == len(config.MARKETS) else None
     if target:
-        run(["python3", "publish_weekly.py", "all", "--week", week], cwd=HERE)
+        run(["python3", "publish_weekly.py", "all", "--week", week,
+             "--renderer", renderer], cwd=HERE)
     else:
-        run(["python3", "publish_weekly.py", *slugs, "--week", week], cwd=HERE, check=False)
+        run(["python3", "publish_weekly.py", *slugs, "--week", week,
+             "--renderer", renderer], cwd=HERE, check=False)
     print("\n── NEXT (S4.5 deploy · USER runs, interactive auth) ──")
     print("  ! vercel deploy --prod --cwd market-notebook-v2      # from ~/analytics")
     print(f"\n  Then:  python3 run_weekly.py {'all' if target else ' '.join(slugs)} --week {week} --stage alert   # add --post to go live")
@@ -171,10 +179,9 @@ def main():
     if args.stage == "report":
         stage_report(slugs, args.week, args.renderer)
     elif args.stage == "publish":
-        if args.renderer != "v1":
-            sys.exit("V2 publishing is not activated. Run the report-stage parity gate first; "
-                     "publish remains V1 until explicit cutover.")
-        stage_publish(slugs, args.week)
+        if args.renderer == "both":
+            sys.exit("Publish one renderer at a time: choose --renderer v1 or --renderer v2.")
+        stage_publish(slugs, args.week, args.renderer)
     elif args.stage == "alert":
         stage_alert(slugs, args.week, args.post)
 

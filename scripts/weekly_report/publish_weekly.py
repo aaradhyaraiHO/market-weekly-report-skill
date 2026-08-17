@@ -32,7 +32,10 @@ import config
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 CACHE_DIR = REPO_ROOT / ".cache" / "weekly_report"
-REPORT_DIR = REPO_ROOT / "thoughts" / "shared" / "weekly-report-v1"
+REPORT_DIR_V1 = REPO_ROOT / "thoughts" / "shared" / "weekly-report-v1"
+REPORT_DIR_V2 = REPO_ROOT / "thoughts" / "shared" / "weekly-report-v2"
+# Compatibility alias for existing callers/tests. V1 remains the safe default.
+REPORT_DIR = REPORT_DIR_V1
 N_COLS = 6
 
 
@@ -120,13 +123,13 @@ def upsert(state, entry):
     state["markets"].append(entry)
 
 
-def publish_market(slug, week, deploy, n):
+def publish_market(slug, week, deploy, n, report_dir=None):
     meta = MARKET_META.get(slug)
     if not meta:
         print(f"  ! no ledger metadata for '{slug}' — skipping"); return None
     ledger_slug, name, flag, region = meta
     snap_p = CACHE_DIR / f"snapshot_{slug}_{week}.json"
-    rep_p = REPORT_DIR / f"report_{slug}_{week}.html"
+    rep_p = (report_dir or REPORT_DIR) / f"report_{slug}_{week}.html"
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! missing snapshot/report for {slug} {week} — run the producer first"); return None
     shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}.html")            # current alias
@@ -139,11 +142,11 @@ def publish_market(slug, week, deploy, n):
             "spark": _sparkline([s["rev"] for s in series])}
 
 
-def publish_headout(week, deploy, n):
+def publish_headout(week, deploy, n, report_dir=None):
     """Headout = the true-global rollup (all ~69 markets). Rendered as a hero banner
     above the market matrix (not a region row), linking to its own full report."""
     snap_p = CACHE_DIR / f"snapshot_headout_{week}.json"
-    rep_p = REPORT_DIR / f"report_headout_{week}.html"
+    rep_p = (report_dir or REPORT_DIR) / f"report_headout_{week}.html"
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! no headout snapshot/report for {week} — run build_global.py first"); return None
     shutil.copyfile(rep_p, deploy / "weekly-report-headout.html")
@@ -326,6 +329,8 @@ def main(argv=None):
     ap.add_argument("market")
     ap.add_argument("--week", required=True)
     ap.add_argument("--cols", type=int, default=N_COLS)
+    ap.add_argument("--renderer", choices=("v1", "v2"), default="v1",
+                    help="report artifact set to stage; V1 remains the default")
     args = ap.parse_args(argv)
 
     deploy = notebook_dir()
@@ -334,16 +339,18 @@ def main(argv=None):
     # 'headout' publishes only the portfolio hero; 'all' does the 10 markets + refreshes headout if present
     targets = (list(config.MARKETS) if args.market == "all"
                else [] if args.market == "headout" else [args.market])
-    print(f"Weekly Ledger (matrix) · week {args.week} · {targets or ['headout']}\n  deploy: {deploy}")
+    report_dir = REPORT_DIR if args.renderer == "v1" else REPORT_DIR_V2
+    print(f"Weekly Ledger (matrix) · week {args.week} · {targets or ['headout']}"
+          f" · renderer {args.renderer}\n  reports: {report_dir}\n  deploy: {deploy}")
 
     state = load_state(deploy)
     n = 0
     for slug in targets:
-        e = publish_market(slug, args.week, deploy, args.cols)
+        e = publish_market(slug, args.week, deploy, args.cols, report_dir=report_dir)
         if e:
             upsert(state, e); n += 1
     if args.market in ("headout", "all"):
-        ho = publish_headout(args.week, deploy, args.cols)
+        ho = publish_headout(args.week, deploy, args.cols, report_dir=report_dir)
         if ho:
             state["headout"] = ho; n += 1
     if not n:
