@@ -452,6 +452,27 @@ class HeadlineV2Contract(unittest.TestCase):
         )
         self.assertEqual(view["movers"]["gains"][0]["primary_delta"], 50_000)
 
+    def test_compact_v1_mover_uses_authoritative_ce_w0_revenue(self):
+        market = copy.deepcopy(self.market)
+        headlines = market["market_summary"]["headlines"]
+        rich_drop = headlines["week_header"]["trend"]["top_droppers"][0]
+        headlines["top_drops"] = [{
+            "ce_id": rich_drop["ce_id"],
+            "ce_name": rich_drop["ce_name"],
+            "delta_wow": rich_drop["raw_wow"],
+        }]
+        drop = headlines["top_drops"][0]
+        market["market_summary"]["headlines"].pop("week_header", None)
+        drop.pop("w0_rev", None)
+        expected = market["ces"][0]["weekly"][-1]["revenue"]
+
+        first_drop = headline_v2.build_headline_view(market)["movers"]["drops"][0]
+
+        self.assertEqual(first_drop["ce_id"], market["ces"][0]["ce_id"])
+        self.assertEqual(first_drop["revenue"], expected)
+        self.assertEqual(first_drop["source_rank"], 1)
+        self.assertEqual(first_drop["ranking_method"], "V1 raw WoW revenue ranking")
+
     def test_dense_snapshot_drives_drawer_metrics_shapley_and_rich_movers(self):
         with gzip.open(DENSE_FIXTURE, "rt") as fixture:
             market = json.load(fixture)

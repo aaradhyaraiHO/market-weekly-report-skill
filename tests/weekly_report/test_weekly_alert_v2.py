@@ -302,12 +302,12 @@ class MarketOKRBuilderContract(unittest.TestCase):
 
 
 class AlertV2ReadinessContract(unittest.TestCase):
-    def test_finalized_market_readiness_names_only_missing_bgm_assignment(self):
+    def test_finalized_market_readiness_is_ready(self):
         result = check_readiness.check()
 
-        self.assertFalse(result["ready"])
+        self.assertTrue(result["ready"])
         self.assertEqual(result["format_version"], "2026-08-17.2")
-        self.assertEqual(result["blockers"]["missing_bgm_assignments"], ["rest_of_mea"])
+        self.assertEqual(result["blockers"]["missing_bgm_assignments"], [])
         for key, values in result["blockers"].items():
             if key != "missing_bgm_assignments":
                 self.assertEqual(values, [], key)
@@ -317,7 +317,7 @@ class AlertV2ReadinessContract(unittest.TestCase):
 
         self.assertEqual(
             result["blockers"]["missing_bgm_assignments"],
-            ["rest_of_mea", "headout"],
+            ["headout"],
         )
 
 

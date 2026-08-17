@@ -170,7 +170,7 @@ def _metric_views(headlines, rows, weekly_ly):
     return views
 
 
-def _mover_views(headlines, direction, ce_target_pacing=None):
+def _mover_views(headlines, direction, ce_target_pacing=None, ce_current_revenue=None):
     trend = (headlines.get("week_header") or {}).get("trend") or {}
     rich_key = "top_droppers" if direction == "drop" else "top_gainers"
     fallback_key = "top_drops" if direction == "drop" else "top_gainers"
@@ -188,6 +188,7 @@ def _mover_views(headlines, direction, ce_target_pacing=None):
     )
     result = []
     ce_target_pacing = ce_target_pacing or {}
+    ce_current_revenue = ce_current_revenue or {}
     for rank, row in enumerate(source, start=1):
         delta_4w = _number(row.get("delta_4w"))
         wow_abs = _number(row.get("raw_wow"))
@@ -205,6 +206,8 @@ def _mover_views(headlines, direction, ce_target_pacing=None):
         target = ce_target_pacing.get(str(ce_id)) or {}
         yoy_growth = _number(row.get("yoy_growth"))
         revenue = _number(row.get("w0_rev"))
+        if revenue is None:
+            revenue = _number(ce_current_revenue.get(str(ce_id)))
         previous_revenue = revenue - wow_abs if revenue is not None and wow_abs is not None else None
         trailing_four_revenue = (
             revenue - delta_4w if revenue is not None and delta_4w is not None else None
@@ -809,6 +812,11 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
 
     current_ly_revenue = chart[-1]["revenue_ly"] if chart else None
     ce_target_pacing = monthly.get("ce_target_pacing") or {}
+    ce_current_revenue = {}
+    for ce in market.get("ces") or []:
+        weekly = ce.get("weekly") or []
+        if weekly:
+            ce_current_revenue[str(ce.get("ce_id"))] = _number(weekly[-1].get("revenue"))
 
     result = {
         "market": meta.get("market", "Unknown market"),
@@ -829,8 +837,8 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
         "monthly": monthly,
         "chart": chart,
         "movers": {
-            "drops": _mover_views(headlines, "drop", ce_target_pacing),
-            "gains": _mover_views(headlines, "gain", ce_target_pacing),
+            "drops": _mover_views(headlines, "drop", ce_target_pacing, ce_current_revenue),
+            "gains": _mover_views(headlines, "gain", ce_target_pacing, ce_current_revenue),
         },
         "detail": {
             "metrics": _metric_views(headlines, rows, weekly_ly),
