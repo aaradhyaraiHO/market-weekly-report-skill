@@ -1,0 +1,695 @@
+/* Weekly Review tab — production logic (Eevee design language).
+ *
+ * Wires the review workspace to the live /api/review backend. Loaded as an external classic script;
+ * the V2 shell calls window.initReviewView(ctx) from inside its IIFE, passing closure refs.
+ *
+ * UX model (per design references, Aug 2026):
+ *  - BGM note: read card (avatar + name·role + meta + Edit/Delete links); textbox only when writing/editing.
+ *  - Actions: checkbox-led task rows (task text as headline, owner·due·source meta, per-item status select,
+ *    owner avatar). Scheduled checks use a date badge. Split "+ Add action" / "+ Schedule check".
+ *  - Queue: "+ Add CE" searchable picker over all CEs; manual adds removable.
+ *
+ * No build step. Edit here, then re-run scripts/weekly_report/inject_review_view.py to redeploy.
+ */
+(function (global) {
+  "use strict";
+
+  var TREATMENT_LABELS = {
+    not_scheduled: "Not scheduled", live: "Review live", async: "Review async",
+    follow_up: "Follow-up only", skip: "Skip this week"
+  };
+  var TREATMENT_ORDER = ["not_scheduled", "live", "async", "follow_up", "skip"];
+  var WORK_STATUS = [
+    ["needs_action", "Needs action"], ["already_actioned", "Already actioned"],
+    ["self_recovering", "Self-recovering"], ["monitoring", "Monitoring"],
+    ["no_action_needed", "No action needed"], ["complete", "Complete"]
+  ];
+  var CHECK_STATUS = [
+    ["scheduled", "Scheduled"], ["monitoring", "Monitoring"],
+    ["self_recovering", "Self-recovering"], ["complete", "Complete"]
+  ];
+  var CLOSED = ["complete", "cancelled", "no_action_needed"];
+  var MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+  global.initReviewView = function initReviewView(ctx) {
+    var root = ctx.root;
+    if (!root) return null;
+    var H = ctx.helpers || {};
+    var esc = H.escapeHtml || function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var api = global.createWeeklyReviewApi ? global.createWeeklyReviewApi("/api/review") : null;
+
+    var S = {
+      headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
+      queue: [], byId: {}, selected: null, loaded: false,
+      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, setRows: {}, setRowsList: [],
+      loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
+      processing: false, processSummary: ""
+    };
+
+    // ---- small helpers ---------------------------------------------------
+    function author() { try { return localStorage.getItem("wr_author") || ""; } catch (e) { return ""; } }
+    function setAuthor(v) { try { localStorage.setItem("wr_author", String(v || "").trim()); } catch (e) {} }
+    function ident(ceId) {
+      var ce = S.byId[String(ceId)] || {};
+      return { market_slug: S.market_slug, ce_id: String(ceId), ce_name: ce.ce_name || "", week_start: S.week_start };
+    }
+    function toast(msg) {
+      var t = document.getElementById("rv-toast");
+      if (!t) return;
+      t.textContent = msg; t.hidden = false;
+      clearTimeout(global.__rvToast); global.__rvToast = setTimeout(function () { t.hidden = true; }, 2800);
+    }
+    function initials(name) {
+      var p = String(name || "").trim().split(/\s+/).filter(Boolean);
+      if (!p.length) return "?";
+      return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+    }
+    function avatar(name, cls) {
+      var n = String(name || "").trim();
+      if (!n) return '<span class="rv-av ' + (cls || "") + ' none">–</span>';
+      return '<span class="rv-av ' + (cls || "") + '" title="' + esc(n) + '">' + esc(initials(n)) + "</span>";
+    }
+    function parseDate(s) { if (!s) return null; var d = new Date(String(s).length <= 10 ? s + "T00:00:00Z" : s); return isNaN(d) ? null : d; }
+    function fmtWhen(iso) {
+      var d = parseDate(iso); if (!d) return "";
+      var now = new Date(), same = d.getUTCFullYear() === now.getFullYear() && d.getUTCMonth() === now.getMonth() && d.getUTCDate() === now.getDate();
+      var hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
+      return same ? "Today, " + hh + ":" + mm : d.getUTCDate() + " " + MONTHS[d.getUTCMonth()][0] + MONTHS[d.getUTCMonth()].slice(1).toLowerCase();
+    }
+    function fmtDue(s) { var d = parseDate(s); return d ? d.getUTCDate() + " " + MONTHS[d.getUTCMonth()][0] + MONTHS[d.getUTCMonth()].slice(1).toLowerCase() : ""; }
+    function optionList(options, value) {
+      var list = options.slice();
+      if (value && !list.some(function (o) { return o[0] === value; })) list.push([value, value]);
+      return list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("");
+    }
+
+    // ---- queue construction ---------------------------------------------
+    function flaggedRows(h) {
+      var b = (h && h.diagnostic_buckets) || {}, lm = b.losing_money || {}, fx = b.fluctuations || {}, out = [];
+      (lm.existing || []).forEach(function (r) { out.push({ ce_id: r.ce_id, ce_name: r.ce_name, reason: "Losing money", bucket: "losing_money" }); });
+      (lm.new || []).forEach(function (r) { out.push({ ce_id: r.ce_id, ce_name: r.ce_name, reason: "Losing money · new", bucket: "losing_money" }); });
+      (fx.down || []).forEach(function (r) { out.push({ ce_id: r.ce_id, ce_name: r.ce_name, reason: "RPC / CM1 drop", bucket: "flux_down" }); });
+      (fx.up || []).forEach(function (r) { out.push({ ce_id: r.ce_id, ce_name: r.ce_name, reason: "RPC / CM1 spike", bucket: "flux_up" }); });
+      return out;
+    }
+    function buildQueue() {
+      var h = S.headline, all = h.all_ces || [], nameById = {};
+      all.forEach(function (ce) { nameById[String(ce.ce_id)] = ce.ce_name; });
+      var seen = {}, queue = [];
+      flaggedRows(h).forEach(function (r) {
+        var id = String(r.ce_id); if (!id || seen[id]) return; seen[id] = true;
+        queue.push({ ce_id: id, ce_name: r.ce_name || nameById[id] || ("CE " + id), reason: r.reason, source: "flag" });
+      });
+      (S.setRowsList || []).forEach(function (r) {
+        var id = String(r.ce_id); if (!id || seen[id]) return; seen[id] = true;
+        queue.push({ ce_id: id, ce_name: r.ce_name || nameById[id] || ("CE " + id), reason: r.reason || "Added to review", source: "manual" });
+      });
+      S.queue = queue; S.byId = {};
+      queue.forEach(function (q) { S.byId[q.ce_id] = q; });
+    }
+    function treatmentFor(ceId) { var r = S.setRows[String(ceId)]; return (r && r.treatment) || "not_scheduled"; }
+    function reviewedFor(ceId) { return !!S.receipts[String(ceId)]; }
+    function workFor(ceId) { return (S.work[String(ceId)] || []); }
+    function openWorkFor(ceId) { return workFor(ceId).filter(function (w) { return CLOSED.indexOf(w.status) < 0; }); }
+
+    // ---- data loading (unchanged backend surface) -----------------------
+    function refreshHeadline() {
+      var h = ctx.getHeadline ? ctx.getHeadline() : null;
+      if (!h) return false;
+      var changed = h.market_slug !== S.market_slug || h.week_start !== S.week_start;
+      S.headline = h; S.market = h.market || h.market_slug || ""; S.market_slug = h.market_slug || h.market || "";
+      S.week_start = h.week_start || ""; S.week_end = h.week_end || "";
+      var ch = (h.notes_channels || (ctx.getBaseHeadline && ctx.getBaseHeadline().notes_channels) || {})[S.market_slug];
+      S.channel = ch || null;
+      return changed;
+    }
+    function loadQueue() {
+      refreshHeadline();
+      if (!api) { S.setRowsList = []; buildQueue(); render(); return Promise.resolve(); }
+      var id = { market_slug: S.market_slug, week: S.week_start };
+      return Promise.all([
+        api.reviewSet(id).catch(function () { return { review_set: [] }; }),
+        api.receipts({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { receipts: [] }; }),
+        api.work({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { work_items: [] }; })
+      ]).then(function (res) {
+        S.setRowsList = (res[0].review_set || []);
+        S.setRows = {}; S.setRowsList.forEach(function (r) { S.setRows[String(r.ce_id)] = r; });
+        S.receipts = {}; (res[1].receipts || []).forEach(function (r) { S.receipts[String(r.ce_id)] = r; });
+        S.work = {}; (res[2].work_items || []).forEach(function (w) { var k = String(w.ce_id); (S.work[k] = S.work[k] || []).push(w); });
+        buildQueue();
+        if (!S.selected || !S.byId[S.selected]) {
+          var firstOpen = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); })[0];
+          S.selected = (firstOpen || S.queue[0] || {}).ce_id || null;
+        }
+        S.loaded = true; render();
+        if (S.selected) loadCe(S.selected);
+      });
+    }
+    function loadCe(ceId) {
+      if (!api || S.loadingCe[ceId]) return;
+      S.loadingCe[ceId] = true;
+      Promise.all([
+        api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8).catch(function () { return { weekly: [] }; }),
+        api.granolaSuggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; })
+      ]).then(function (res) {
+        var rows = res[0].weekly || [];
+        S.weekly[ceId] = rows.filter(function (r) { return String(r.week_start) === String(S.week_start); })[0] || null;
+        S.weeklyHist[ceId] = rows;
+        S.suggestions[ceId] = res[1].suggestions || [];
+        S.loadingCe[ceId] = false;
+        if (String(S.selected) === String(ceId)) render();
+      }).catch(function () { S.loadingCe[ceId] = false; });
+    }
+
+    function select(ceId) {
+      S.selected = String(ceId); S.editingNote = false; S.confirmDelete = false; S.compose = "";
+      render();
+      if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
+    }
+
+    // ---- render: shell ---------------------------------------------------
+    function render() {
+      if (!S.headline) { root.innerHTML = ""; return; }
+      root.innerHTML = '<div class="rv-layout">' + renderSide() + renderMain() + "</div>" +
+        '<div class="rv-toast" id="rv-toast" hidden></div>' + renderMemoryDrawer();
+      wire();
+    }
+
+    function renderSide() {
+      var open = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); }).length;
+      var total = S.queue.length, reviewed = total - open;
+      var rows = S.queue.length ? S.queue.map(queueRow).join("") :
+        '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>';
+      var openWork = [];
+      Object.keys(S.work).forEach(function (id) { openWorkFor(id).forEach(function (w) { openWork.push(w); }); });
+      var workPanel = openWork.length ? openWork.map(function (w) {
+        return '<button class="rv-ce-row" type="button" data-open-ce="' + esc(w.ce_id) + '"><span class="rv-dot"></span>' +
+          '<span class="rv-ce-copy"><strong>' + esc(w.text) + "</strong><small>" + esc(w.ce_name || ("CE " + w.ce_id)) +
+          (w.owner ? " · " + esc(w.owner) : "") + (w.due_date ? " · due " + esc(fmtDue(w.due_date)) : "") + "</small></span></button>";
+      }).join("") : '<div class="rv-empty-queue"><strong>No open work yet</strong><span>Confirmed actions and checks show up here.</span></div>';
+      var picker = S.adding ? renderPicker() : "";
+      var processPanel = S.processing ? renderProcessPanel() : "";
+      return '<aside class="rv-side">' +
+        '<div class="rv-eyebrow">Weekly review · w/c ' + esc(S.week_start) + "</div>" +
+        '<div class="rv-side-head"><h2>' + (open ? open + " CE" + (open === 1 ? "" : "s") + " to review" : "All caught up") + "</h2>" +
+        '<button class="rv-addce" type="button" id="rv-add-ce">＋ Add CE</button></div>' +
+        '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed</div>" +
+        '<button class="rv-process-btn" type="button" id="rv-process">✦ Process meeting notes</button>' + processPanel + picker +
+        '<div class="rv-queue-tabs"><button class="rv-queue-tab active" type="button" data-queue="review">Review queue</button>' +
+        '<button class="rv-queue-tab" type="button" data-queue="work">Open work' + (openWork.length ? " (" + openWork.length + ")" : "") + "</button></div>" +
+        '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div>" +
+        '<div class="rv-queue-panel" id="rv-queue-work" hidden>' + workPanel + "</div></aside>";
+    }
+    function queueRow(q) {
+      var reviewed = reviewedFor(q.ce_id), active = String(q.ce_id) === String(S.selected), t = treatmentFor(q.ce_id);
+      var openN = openWorkFor(q.ce_id).length;
+      var tags = '<span class="rv-chip' + (reviewed ? " done" : "") + '">' + (reviewed ? "Reviewed" : esc(TREATMENT_LABELS[t] || t)) + "</span>" +
+        (openN ? '<span class="rv-chip">' + openN + " open</span>" : "") +
+        (q.source === "manual" ? '<span class="rv-chip">manual</span>' : "");
+      var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" title="Remove from review set">×</button>' : "";
+      return '<div style="position:relative">' + remove +
+        '<button class="rv-ce-row' + (active ? " active" : "") + (reviewed ? " reviewed" : "") + '" type="button" data-select-ce="' + esc(q.ce_id) + '">' +
+        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong>' + esc(q.ce_name) + "</strong>" +
+        "<small>" + esc(q.reason) + " · CE " + esc(q.ce_id) + '</small><span class="rv-ce-tags">' + tags + "</span></span></button></div>";
+    }
+    function renderProcessPanel() {
+      return '<div class="rv-process" id="rv-process-panel">' +
+        '<div class="rv-process-head">Paste a meeting’s notes or transcript. Claude extracts commentary and action items per CE — you approve each on the CE.</div>' +
+        '<textarea id="rv-process-text" placeholder="Paste the Granola meeting notes / transcript for this market…"></textarea>' +
+        (S.processSummary ? '<div class="rv-process-summary">' + S.processSummary + "</div>" : "") +
+        '<div class="rv-process-foot"><button class="rv-btn small" type="button" id="rv-process-cancel">Close</button>' +
+        '<button class="rv-btn small primary" type="button" id="rv-process-run">Extract &amp; distribute</button></div></div>';
+    }
+    function renderPicker() {
+      return '<div class="rv-picker" id="rv-picker"><input id="rv-picker-input" type="search" placeholder="Add a CE to this week’s review…" value="' + esc(S.pickerQuery || "") + '">' +
+        '<div class="rv-picker-results" id="rv-picker-results">' + renderPickerResults() + "</div></div>";
+    }
+    function renderPickerResults() {
+      var all = (S.headline.all_ces || []);
+      var q = (S.pickerQuery || "").toLowerCase();
+      if (!q) return '<div class="rv-picker-empty">Type a CE name, id or city…</div>';
+      var matches = all.filter(function (ce) {
+        if (S.byId[String(ce.ce_id)]) return false;
+        return (String(ce.ce_name || "") + " " + String(ce.ce_id) + " " + String(ce.city || "")).toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 20);
+      if (!matches.length) return '<div class="rv-picker-empty">No unadded CE matches “' + esc(S.pickerQuery) + "”.</div>";
+      return matches.map(function (ce) {
+        return '<button class="rv-picker-item" type="button" data-pick-ce="' + esc(ce.ce_id) + '"><strong>' + esc(ce.ce_name || ("CE " + ce.ce_id)) +
+          "</strong><small>CE " + esc(ce.ce_id) + (ce.city ? " · " + esc(ce.city) : "") + (ce.category ? " · " + esc(ce.category) : "") + "</small></button>";
+      }).join("");
+    }
+
+    // ---- render: workspace ----------------------------------------------
+    function renderMain() {
+      var q = S.byId[S.selected];
+      if (!q) return '<main class="rv-main"><div class="rv-workspace"><div class="rv-empty-state"><strong>Nothing to review</strong>' +
+        "<span>No CE is flagged this week. Use ＋ Add CE to pull one in.</span></div></div></main>";
+      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id);
+      var receipt = reviewed
+        ? '<span class="rv-receipt done">✓ Reviewed by ' + esc((S.receipts[q.ce_id] || {}).reviewer || author() || "BGM") + "</span>"
+        : t !== "not_scheduled" ? '<span class="rv-receipt">Ready to finish</span>'
+          : '<span class="rv-receipt">Choose how you’ll review this CE</span>';
+      var footHint = reviewed ? "Review saved — open work carries into next week"
+        : t === "not_scheduled" ? "Set a treatment above to finish this CE" : "Finish when you’re done with this CE";
+      return '<main class="rv-main">' +
+        '<header class="rv-detail-head"><div class="rv-breadcrumb">CE ' + esc(q.ce_id) + " · " + esc(S.market) + "</div>" +
+        '<div class="rv-title-line"><div><h1>' + esc(q.ce_name) + "</h1>" +
+        "<p>Record what you know, decide the follow-through, and mark it reviewed.</p></div>" +
+        '<div class="rv-button-row"><button class="rv-btn" type="button" id="rv-open-drawer">Open CE drawer</button></div></div>' +
+        '<div class="rv-status-line"><label for="rv-treatment">Review as</label>' +
+        '<select class="rv-select" id="rv-treatment" aria-label="Review treatment">' +
+        TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
+        "</select>" + receipt + "</div></header>" +
+        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
+        '<div class="rv-resource-state">Saved to Weekly Report Notes · CE ' + esc(q.ce_id) + "</div></div>" +
+        '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" +
+        '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
+        '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
+        (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
+    }
+
+    function renderCommentaryCard(q) {
+      var weekly = S.weekly[q.ce_id];
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "comment" || !s.kind; });
+      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
+      var accepted = sugg.filter(function (s) { return s.status === "approved" || s.accepted_body; });
+      var pillTxt = pending.length ? pending.length + " to review" : accepted.length ? accepted.length + " added" : "Waiting on meetings";
+      var granolaAddRow = S.addingGranola
+        ? '<div class="rv-granola-add"><input id="rv-granola-link" type="url" inputmode="url" placeholder="https://notes.granola.ai/t/… — paste a meeting link">' +
+          '<button class="rv-btn small primary" type="button" id="rv-granola-add">Add meeting</button>' +
+          '<button class="rv-btn small" type="button" id="rv-granola-cancel">Cancel</button></div>' +
+          '<div class="rv-granola-help">Use this only when a meeting wasn’t matched automatically. It’s queued for extraction.</div>'
+        : "";
+      var band = '<div class="rv-granola">' +
+        '<div class="rv-source-band"><span class="rv-source-symbol">✦</span>' +
+        "<span><strong>Granola meeting capture</strong><span>Matched meetings surface here automatically. Commentary lands in this card; work in Actions below.</span></span>" +
+        '<span class="rv-source-pill' + (pending.length ? " live" : "") + '">' + pillTxt + "</span>" +
+        '<button class="rv-btn small ghost" type="button" id="rv-granola-toggle" style="margin-left:8px">' + (S.addingGranola ? "Close" : "＋ Add link") + "</button></div>" +
+        granolaAddRow + "</div>";
+      var pendingHtml = pending.map(function (s) {
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
+          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
+          "<p>" + esc(s.body || "") + "</p>" +
+          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>Add to commentary</button>' +
+          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
+      }).join("");
+      var acceptedHtml = accepted.map(function (s) {
+        return '<div class="rv-note"><div class="rv-note-read">' + avatar("Granola") +
+          '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">Meeting pointer</span><span class="rv-note-metatxt">✦ AI · Granola</span></div>' +
+          '<div class="rv-note-text">' + esc(s.accepted_body || s.body || "") + "</div></div></div></div>";
+      }).join("");
+
+      var hasNote = !!(weekly && weekly.bgm_note && !weekly.note_deleted_at);
+      var hasThread = !!(weekly && weekly.slack_post_ts);
+      var noteAuthor = (weekly && weekly.bgm_author) || author() || "BGM";
+      var summary = (function () { try { return weekly && weekly.summary_json ? JSON.parse(weekly.summary_json) : null; } catch (e) { return null; } })();
+      function sumList(label, arr) {
+        if (!arr || !arr.length) return "";
+        return '<div class="rv-sum-group"><span class="rv-sum-label">' + label + "</span><ul>" +
+          arr.map(function (x) { return "<li>" + esc(typeof x === "string" ? x : (x.text || x.body || "")) + "</li>"; }).join("") + "</ul></div>";
+      }
+      var summaryInner = summary ? (sumList("Findings", summary.findings) + sumList("Decisions", summary.decisions) + sumList("Open points", summary.open_points)) : "";
+      var threadStrip = hasThread ? '<div class="rv-thread-wrap"><div class="rv-thread">' + avatar("Slack", "sm") +
+        '<div class="rv-thread-copy"><strong>CE Slack thread</strong><span>Discussion happens in Slack; replies are summarized back here, source-linked.</span></div>' +
+        '<a class="rv-btn small ghost" href="' + esc(weekly.slack_post_permalink || "#") + '" target="_blank" rel="noopener">Open thread ↗</a>' +
+        '<button class="rv-btn small" type="button" id="rv-sync-thread">Sync</button></div>' +
+        (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">✦ Slack summary<span>AI · source-linked</span></div>' + summaryInner + "</div>"
+          : '<div class="rv-summary rv-summary-empty">Replies will be summarized here automatically once the team responds in Slack.</div>') +
+        "</div>" : "";
+
+      var noteBlock;
+      if (hasNote && !S.editingNote) {
+        var links = S.confirmDelete
+          ? '<button class="rv-link danger" type="button" id="rv-del-yes">Confirm delete</button><button class="rv-link" type="button" id="rv-del-no">Cancel</button>'
+          : '<button class="rv-link" type="button" id="rv-edit-note">Edit</button><button class="rv-link danger" type="button" id="rv-delete-note">Delete</button>';
+        noteBlock = '<div class="rv-note"><div class="rv-note-read">' + avatar(noteAuthor) +
+          '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">' + esc(noteAuthor) + " · BGM</span>" +
+          '<span class="rv-note-metatxt">' + esc(weekly.bgm_updated_at ? fmtWhen(weekly.bgm_updated_at) : "saved") + " · original</span>" +
+          '<span class="rv-note-links">' + links + "</span></div>" +
+          '<div class="rv-note-text">' + esc(weekly.bgm_note) + "</div>" +
+          (hasThread ? "" : '<div class="rv-note-foot"><span class="hint"></span><div class="rv-note-actions"><button class="rv-btn small ghost" type="button" id="rv-start-slack">Start Slack discussion</button></div></div>') +
+          "</div></div>" + threadStrip + "</div>";
+      } else {
+        var val = hasNote ? weekly.bgm_note : "";
+        noteBlock = '<div class="rv-note rv-note-edit">' +
+          (author() ? "" : '<input class="rv-note-author" id="rv-author" placeholder="Your name">') +
+          '<textarea id="rv-note" placeholder="What is happening with this CE that the data can’t see?">' + esc(val) + "</textarea>" +
+          '<div class="rv-note-foot"><span class="hint">Names you type resolve to Slack tags on Start discussion.</span>' +
+          '<div class="rv-note-actions">' + (hasNote ? '<button class="rv-btn small" type="button" id="rv-cancel-note">Cancel</button>' : "") +
+          '<button class="rv-btn small" type="button" id="rv-save-note">Save note</button>' +
+          '<button class="rv-btn small primary" type="button" id="rv-start-slack">' + (hasThread ? "Open thread ↗" : "Start Slack discussion") + "</button></div></div>" +
+          threadStrip + "</div>";
+      }
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span>' +
+        '<div class="rv-card-headings"><div class="rv-card-title">Commentary &amp; observations</div>' +
+        '<div class="rv-card-sub">One BGM note; discussion happens in Slack and is summarized back here — each stays source-attributed</div></div>' +
+        '<span class="rv-card-count">' + (hasNote ? "BGM note saved" : "No note yet") + "</span></div>" +
+        '<div class="rv-card-body">' + band + pendingHtml + acceptedHtml + noteBlock + "</div></section>";
+    }
+
+    function renderActionsCard(q) {
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
+      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
+      var allWork = workFor(q.ce_id);
+      var openItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) < 0; });
+      var doneItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) >= 0; });
+      var openN = openItems.length;
+      var suggHtml = pending.map(function (s) {
+        var isCheck = s.kind === "check";
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="' + esc(s.kind) + '">' +
+          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span>" +
+          "<span>·</span><span>" + (isCheck ? "suggested check" : "suggested action") + "</span></div>" +
+          "<p>" + esc(s.body || "") + "</p>" +
+          '<div class="rv-compose" style="margin-top:0;display:block" hidden></div>' +
+          '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
+          '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
+          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isCheck ? "Schedule check" : "Create action") + "</button>" +
+          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
+      }).join("");
+      var openHtml = openItems.map(workRow).join("");
+      var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
+        '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
+      var emptyState = (openItems.length || pending.length || S.compose) ? "" :
+        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below, or accept a Granola suggestion.</span></div>';
+      var composer = S.compose ? renderCompose(S.compose) : "";
+      var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span>' +
+        '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
+        '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
+        '<span class="rv-card-count">' + count + "</span></div>" +
+        '<div class="rv-card-body">' + suggHtml + openHtml + emptyState + doneHtml +
+        composer +
+        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
+        '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
+    }
+    function workRow(w) {
+      var done = CLOSED.indexOf(w.status) >= 0, isCheck = w.kind === "check";
+      var src = w.source_type === "granola" ? "Granola" : w.source_type === "slack" ? "Slack" : w.source_type === "bgm_manual" ? "Manual" : (w.source_type || "");
+      var srcLink = w.source_url ? '<a href="' + esc(w.source_url) + '" target="_blank" rel="noopener">' + esc(src || "source") + " ↗</a>" : esc(src);
+      var meta = [w.owner ? esc(w.owner) : (isCheck ? "" : "no owner"), w.due_date ? (isCheck ? "returns " : "due ") + esc(fmtDue(w.due_date)) : "", srcLink].filter(Boolean).join(" · ");
+      var left = isCheck && w.due_date
+        ? '<span class="rv-datebadge"><span class="m">' + MONTHS[(parseDate(w.due_date) || new Date()).getUTCMonth()] + '</span><span class="d">' + (parseDate(w.due_date) || new Date()).getUTCDate() + "</span></span>"
+        : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
+      var right = w.owner ? avatar(w.owner, "sm") : '<span class="rv-av sm none">–</span>';
+      return '<div class="rv-work' + (done ? " done" : "") + '" data-work="' + esc(w.work_id) + '">' + left +
+        '<div class="rv-work-main">' + (isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "") +
+        '<div class="rv-work-title">' + esc(w.text) + "</div>" +
+        '<div class="rv-work-meta">' + meta + "</div>" +
+        '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        "</div>" + right + "</div>";
+    }
+    function renderCompose(kind) {
+      var isCheck = kind === "check";
+      return '<div class="rv-compose" style="display:block"><div class="row1"><input type="text" id="rv-c-text" placeholder="' + (isCheck ? "What should we revisit next week?" : "What needs to happen?") + '"></div>' +
+        '<div class="row2"><input type="text" id="rv-c-owner" placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '">' +
+        '<input type="date" id="rv-c-due">' +
+        '<select class="rv-select" id="rv-c-status">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
+        '<div class="foot"><button class="rv-btn small" type="button" id="rv-c-cancel">Cancel</button>' +
+        '<button class="rv-btn small primary" type="button" id="rv-c-save">' + (isCheck ? "Schedule check" : "Create action") + "</button></div></div>";
+    }
+    function renderMemoryRail() {
+      return '<button class="rv-memory-rail" type="button" id="rv-open-memory"><span class="rv-memory-icon">↺</span>' +
+        '<span class="rv-memory-copy"><strong>CE Memory</strong><span>Past weekly notes, work and source history for this CE</span></span><span class="rv-arrow">→</span></button>';
+    }
+    function renderMemoryDrawer() {
+      return '<div class="rv-drawer-wrap" id="rv-memory-drawer" hidden><div class="rv-drawer" role="dialog" aria-modal="true">' +
+        '<header class="rv-drawer-head"><div><div class="rv-eyebrow" id="rv-memory-eyebrow"></div><h2 id="rv-memory-title">CE Memory</h2>' +
+        "<p>Original weekly records and work history.</p></div><button class=\"rv-close\" id=\"rv-close-memory\" type=\"button\" aria-label=\"Close\">×</button></header>" +
+        '<div class="rv-drawer-body" id="rv-memory-body"><div class="rv-empty-state"><strong>Loading…</strong></div></div></div></div>';
+    }
+
+    // ---- events ----------------------------------------------------------
+    function bind(sel, fn) { var el = root.querySelector(sel); if (el) el.onclick = fn; }
+    function wirePickerResults() {
+      root.querySelectorAll("[data-pick-ce]").forEach(function (b) { b.onclick = function () { addCe(b.dataset.pickCe); }; });
+    }
+    function wire() {
+      root.querySelectorAll(".rv-queue-tab").forEach(function (b) {
+        b.onclick = function () {
+          root.querySelectorAll(".rv-queue-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
+          root.querySelector("#rv-queue-review").hidden = b.dataset.queue !== "review";
+          root.querySelector("#rv-queue-work").hidden = b.dataset.queue !== "work";
+        };
+      });
+      root.querySelectorAll("[data-select-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.selectCe); }; });
+      root.querySelectorAll("[data-open-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.openCe); }; });
+      root.querySelectorAll("[data-remove-ce]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeCe(b.dataset.removeCe); }; });
+      bind("#rv-add-ce", function () { S.adding = !S.adding; S.pickerQuery = ""; render(); var i = root.querySelector("#rv-picker-input"); if (i) i.focus(); });
+      bind("#rv-process", function () { S.processing = !S.processing; S.processSummary = ""; render(); var t = root.querySelector("#rv-process-text"); if (t) t.focus(); });
+      bind("#rv-process-cancel", function () { S.processing = false; render(); });
+      bind("#rv-process-run", runExtract);
+      var pick = root.querySelector("#rv-picker-input");
+      if (pick) pick.oninput = function () {
+        S.pickerQuery = pick.value;
+        var res = root.querySelector("#rv-picker-results");
+        if (res) { res.innerHTML = renderPickerResults(); wirePickerResults(); }
+      };
+      wirePickerResults();
+
+      var treatment = root.querySelector("#rv-treatment");
+      if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
+      bind("#rv-open-drawer", function () {
+        var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(S.selected); });
+        if (ce && ctx.openCeDrawer) ctx.openCeDrawer(ce); else toast("CE analytics drawer unavailable for this CE");
+      });
+      bind("#rv-edit-note", function () { S.editingNote = true; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+      bind("#rv-cancel-note", function () { S.editingNote = false; render(); });
+      bind("#rv-delete-note", function () { S.confirmDelete = true; render(); });
+      bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
+      bind("#rv-del-yes", deleteNote);
+      bind("#rv-save-note", saveNote);
+      bind("#rv-start-slack", startSlack);
+      bind("#rv-sync-thread", syncThread);
+      bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
+      bind("#rv-granola-cancel", function () { S.addingGranola = false; render(); });
+      bind("#rv-granola-add", addGranola);
+      var glink = root.querySelector("#rv-granola-link"); if (glink) glink.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); addGranola(); } };
+      root.querySelectorAll(".rv-sugg").forEach(function (card) {
+        var acc = card.querySelector("[data-sugg-accept]"), ig = card.querySelector("[data-sugg-ignore]");
+        if (acc) acc.onclick = function () { acceptSuggestion(card); };
+        if (ig) ig.onclick = function () { decideSuggestion(card.dataset.suggestion, "rejected", {}); };
+      });
+      root.querySelectorAll("[data-work-toggle]").forEach(function (b) { b.onclick = function () { toggleWork(b.dataset.workToggle); }; });
+      root.querySelectorAll("[data-work-status]").forEach(function (sel) { sel.onchange = function () { setWorkStatus(sel.dataset.workStatus, sel.value); }; });
+      bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
+      bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
+      bind("#rv-c-cancel", function () { S.compose = ""; render(); });
+      bind("#rv-c-save", saveCompose);
+      bind("#rv-next-ce", nextCe);
+      bind("#rv-finish", finishReview);
+      bind("#rv-open-memory", openMemory);
+      bind("#rv-close-memory", function () { root.querySelector("#rv-memory-drawer").hidden = true; });
+      var wrap = root.querySelector("#rv-memory-drawer");
+      if (wrap) wrap.onclick = function (e) { if (e.target === wrap) wrap.hidden = true; };
+    }
+    function ensureAuthor() {
+      var el = root.querySelector("#rv-author");
+      if (el && el.value.trim()) setAuthor(el.value);
+      if (!author()) { if (el) el.focus(); toast("Add your name first"); return false; }
+      return true;
+    }
+
+    // ---- backend actions -------------------------------------------------
+    function setTreatment(value) {
+      if (!api) { toast("Review backend unavailable"); return; }
+      var q = S.byId[S.selected];
+      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: q.ce_id, ce_name: q.ce_name, treatment: value, reason: q.reason || "", source: q.source || "flag" })
+        .then(function (res) { S.setRows[q.ce_id] = res.review_set_item || { treatment: value }; render(); })
+        .catch(function () { toast("Could not save treatment"); });
+    }
+    function runExtract() {
+      var ta = root.querySelector("#rv-process-text"), text = ta ? ta.value.trim() : "";
+      if (!text) { if (ta) ta.focus(); toast("Paste the meeting notes first"); return; }
+      if (!ensureAuthor()) return;
+      var btn = root.querySelector("#rv-process-run"); if (btn) { btn.textContent = "Extracting…"; btn.disabled = true; }
+      var ceList = (S.headline.all_ces || []).map(function (c) { return { ce_id: String(c.ce_id), ce_name: c.ce_name || "" }; });
+      var payload = { market_slug: S.market_slug, week: S.week_start, text: text, submitted_by: author(), ces: ceList };
+      var call = (api && api.extractMeeting) ? api.extractMeeting(payload)
+        : fetch("/api/review-extract", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }).then(function (r) { return r.json(); });
+      call.then(function (res) {
+        if (!res || res.ok === false) throw new Error((res && res.error) || "extract failed");
+        var ces = res.ces || [], total = 0, added = [];
+        ces.forEach(function (c) {
+          var id = String(c.ce_id), arr = c.suggestions || [];
+          total += arr.length;
+          if (arr.length) S.suggestions[id] = (S.suggestions[id] || []).concat(arr);
+          if (!S.byId[id]) added.push({ ce_id: id, ce_name: c.ce_name, reason: "From meeting notes", source: "manual" });
+        });
+        if (added.length) { S.setRowsList = (S.setRowsList || []).concat(added); buildQueue(); }
+        S.processSummary = "Extracted " + total + " suggestion" + (total === 1 ? "" : "s") + " across " + ces.length +
+          " CE" + (ces.length === 1 ? "" : "s") + ". Open each CE to approve — accepted items land on the CE and its report tables.";
+        render(); toast("Distributed to " + ces.length + " CE" + (ces.length === 1 ? "" : "s"));
+      }).catch(function (e) {
+        toast((e && e.message) || "Extraction failed");
+        var b = root.querySelector("#rv-process-run"); if (b) { b.textContent = "Extract & distribute"; b.disabled = false; }
+      });
+    }
+    function addCe(ceId) {
+      if (!api) return;
+      var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(ceId); }) || { ce_id: ceId };
+      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", treatment: "not_scheduled", reason: "Added to review", source: "manual" })
+        .then(function () { S.adding = false; S.pickerQuery = ""; return loadQueue().then(function () { select(ceId); }); })
+        .then(function () { toast("CE added to this week’s review"); })
+        .catch(function () { toast("Could not add CE"); });
+    }
+    function removeCe(ceId) {
+      if (!api) return;
+      var ce = S.byId[String(ceId)] || {};
+      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", included: "false", source: "manual" })
+        .then(function () { if (String(S.selected) === String(ceId)) S.selected = null; return loadQueue(); })
+        .then(function () { toast("Removed from review set"); })
+        .catch(function () { toast("Could not remove CE"); });
+    }
+    function saveNote() {
+      if (!ensureAuthor() || !api) return;
+      var ta = root.querySelector("#rv-note"); if (!ta.value.trim()) { ta.focus(); toast("Write an observation first"); return; }
+      api.saveWeeklyNote(Object.assign({}, ident(S.selected), { bgm_note: ta.value.trim(), bgm_author: author() }))
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("Note saved"); render(); })
+        .catch(function () { toast("Save failed · note kept locally"); });
+    }
+    function deleteNote() {
+      if (!api) return;
+      api.deleteWeeklyNote(ident(S.selected), author()).then(function (res) {
+        S.weekly[S.selected] = res.weekly || null; S.confirmDelete = false; S.editingNote = false; toast("Note deleted · audit retained"); render();
+      }).catch(function () { toast("Delete failed"); });
+    }
+    function startSlack() {
+      var weekly = S.weekly[S.selected];
+      if (weekly && weekly.slack_post_ts) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
+      if (!ensureAuthor() || !api) return;
+      if (!S.channel) { toast("No Slack channel configured for this market"); return; }
+      var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
+      if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
+      var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
+      api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("CE discussion started"); render(); })
+        .catch(function (e) { toast((e && e.message) || "Post failed · note remains saved"); });
+    }
+    function syncThread() {
+      if (!api) return;
+      api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) { if (res.weekly) S.weekly[S.selected] = res.weekly; toast("Thread synced"); render(); }).catch(function () { toast("Sync failed"); });
+    }
+    function addGranola() {
+      if (!ensureAuthor() || !api) return;
+      var inp = root.querySelector("#rv-granola-link"), url = inp ? inp.value.trim() : "";
+      if (!/^https:\/\/([a-z0-9-]+\.)*granola\.ai\//i.test(url)) { if (inp) inp.focus(); toast("Paste a valid Granola meeting link"); return; }
+      api.attachGranolaMeeting(Object.assign({}, ident(S.selected), { source_url: url, submitted_by: author() }))
+        .then(function () { S.addingGranola = false; toast("Meeting attached · extraction queued"); loadCe(S.selected); })
+        .catch(function (e) { toast((e && e.message) || "Could not attach meeting"); });
+    }
+    function acceptSuggestion(card) {
+      var kind = card.dataset.kind, sid = card.dataset.suggestion;
+      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment" }); return; }
+      if (!ensureAuthor()) return;
+      var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
+      var due = (card.querySelector("[data-w-due]") || {}).value || "";
+      var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
+      if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
+      if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
+      decideSuggestion(sid, "approved", { destination: kind, owner: owner.trim(), due_date: due, work_status: status });
+    }
+    function decideSuggestion(sid, decision, fields) {
+      if (!api) return;
+      api.decideSuggestion(Object.assign({ suggestion_id: sid, decision: decision, decided_by: author() }, fields || {}))
+        .then(function () { toast(decision === "approved" ? "Added" : "Ignored · source retained"); return Promise.all([loadCe(S.selected), reloadWork()]); })
+        .catch(function () { toast("Could not update suggestion"); });
+    }
+    function saveCompose() {
+      if (!ensureAuthor() || !api) return;
+      var kind = S.compose, text = root.querySelector("#rv-c-text").value.trim();
+      if (!text) { root.querySelector("#rv-c-text").focus(); toast("Describe it first"); return; }
+      var owner = root.querySelector("#rv-c-owner").value.trim(), due = root.querySelector("#rv-c-due").value, status = root.querySelector("#rv-c-status").value;
+      if (kind === "action" && status === "needs_action" && !owner) { root.querySelector("#rv-c-owner").focus(); toast("Confirm an owner for work that needs action"); return; }
+      if (kind === "check" && !due) { root.querySelector("#rv-c-due").focus(); toast("Choose the next review date"); return; }
+      saveWorkItem({ market_slug: S.market_slug, ce_id: S.selected, ce_name: (S.byId[S.selected] || {}).ce_name, origin_week: S.week_start, kind: kind, text: text, owner: owner, due_date: due, status: status, source_type: "bgm_manual" }, kind === "check" ? "Check scheduled" : "Action created");
+      S.compose = "";
+    }
+    function toggleWork(workId) {
+      var w = findWork(workId); if (!w || !api) return;
+      var next = CLOSED.indexOf(w.status) >= 0 ? (w.kind === "check" ? "scheduled" : "needs_action") : "complete";
+      saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week, kind: w.kind, text: w.text, owner: w.owner || "", due_date: w.due_date || "", status: next, source_type: w.source_type || "bgm_manual" }, next === "complete" ? "Marked complete" : "Reopened");
+    }
+    function setWorkStatus(workId, status) {
+      var w = findWork(workId); if (!w || !api) return;
+      saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week, kind: w.kind, text: w.text, owner: w.owner || "", due_date: w.due_date || "", status: status, source_type: w.source_type || "bgm_manual" }, "Status updated");
+    }
+    function saveWorkItem(item, okMsg) { api.saveWork(item).then(function () { toast(okMsg); reloadWork(); }).catch(function () { toast("Could not save work item"); }); }
+    function reloadWork() {
+      if (!api) return Promise.resolve();
+      return api.work({ market_slug: S.market_slug, week: S.week_start }).then(function (res) {
+        S.work = {}; (res.work_items || []).forEach(function (w) { var k = String(w.ce_id); (S.work[k] = S.work[k] || []).push(w); }); render();
+      }).catch(function () {});
+    }
+    function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }
+    function finishReview() {
+      var q = S.byId[S.selected], t = treatmentFor(q.ce_id);
+      if (t === "not_scheduled") { root.querySelector("#rv-treatment").focus(); toast("Choose how you’ll review this CE"); return; }
+      if (!ensureAuthor() || !api) return;
+      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.weekly[q.ce_id] && S.weekly[q.ce_id].bgm_note) || "" })
+        .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; toast("CE review finished"); render(); })
+        .catch(function () { toast("Could not save review receipt"); });
+    }
+    function nextCe() {
+      var open = S.queue.filter(function (x) { return !reviewedFor(x.ce_id) && String(x.ce_id) !== String(S.selected); });
+      if (!open.length) { toast("Review queue complete for this week 🎉"); return; }
+      select(open[0].ce_id);
+    }
+    function openMemory() {
+      var wrap = root.querySelector("#rv-memory-drawer"), body = root.querySelector("#rv-memory-body"), q = S.byId[S.selected];
+      root.querySelector("#rv-memory-title").textContent = q.ce_name + " memory";
+      root.querySelector("#rv-memory-eyebrow").textContent = "CE " + q.ce_id + " · " + S.market;
+      wrap.hidden = false;
+      if (!api) { body.innerHTML = '<div class="rv-empty-state"><strong>Backend unavailable</strong></div>'; return; }
+      api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { body.innerHTML = renderMemory(res); wireMemory(body); })
+        .catch(function () { body.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
+    }
+    function renderMemory(res) {
+      var weekly = res.weekly || [], work = res.work || [], receipts = res.receipts || [], legacy = res.legacy_notes || res.legacyNotes || [];
+      var story = weekly.map(function (w) {
+        return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(w.week_start) + "<span>" + esc(w.bgm_author || "BGM") + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p></div></article>";
+      }).join("");
+      var legacyStory = legacy.map(function (n) {
+        return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start) + "<span>legacy · " + esc(n.author_name || "") + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">Legacy note</div><p>' + esc(n.body || "") + "</p></div></article>";
+      }).join("");
+      var storyPanel = (story || legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
+      var workPanel = work.map(function (w) {
+        return '<article class="rv-week-card"><div class="rv-week-head">' + (w.kind === "check" ? "Scheduled check" : "Action") + "<span>w/c " + esc(w.origin_week) + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">' + esc((w.status || "").replace(/_/g, " ")) + "</div><p>" + esc(w.text) + "</p>" +
+          '<div class="rv-source-meta">' + (w.owner ? esc(w.owner) : "no owner") + (w.due_date ? " · " + esc(fmtDue(w.due_date)) : "") + "</div></div></article>";
+      }).join("");
+      var receiptPanel = receipts.map(function (r) {
+        return '<article class="rv-week-card"><div class="rv-week-head">Review receipt<span>w/c ' + esc(r.week_start) + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">' + esc(TREATMENT_LABELS[r.treatment] || r.treatment) + " · " + esc(r.reviewer || "") + "</div><p>" + esc(r.summary || "—") + "</p></div></article>";
+      }).join("");
+      var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
+      return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button></div>' +
+        '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>";
+    }
+    function wireMemory(body) {
+      body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
+        b.onclick = function () {
+          body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
+          body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
+          body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
+        };
+      });
+    }
+    function hash(raw) { var h = 2166136261; for (var i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); }
+
+    var visibleOnce = false;
+    return {
+      onShow: function () { if (refreshHeadline() || !S.loaded) loadQueue(); else render(); visibleOnce = true; },
+      onWeekChange: function () { S.selected = null; S.weekly = {}; S.suggestions = {}; S.loaded = false; if (visibleOnce) loadQueue(); }
+    };
+  };
+})(typeof window !== "undefined" ? window : this);
