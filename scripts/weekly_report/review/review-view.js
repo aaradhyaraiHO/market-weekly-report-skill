@@ -198,25 +198,14 @@
       var total = S.queue.length, reviewed = total - open;
       var rows = S.queue.length ? S.queue.map(queueRow).join("") :
         '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>';
-      var openWork = [];
-      Object.keys(S.work).forEach(function (id) { openWorkFor(id).forEach(function (w) { openWork.push(w); }); });
-      var workPanel = openWork.length ? openWork.map(function (w) {
-        return '<button class="rv-ce-row" type="button" data-open-ce="' + esc(w.ce_id) + '"><span class="rv-dot"></span>' +
-          '<span class="rv-ce-copy"><strong>' + esc(w.text) + "</strong><small>" + esc(w.ce_name || ("CE " + w.ce_id)) +
-          (w.owner ? " · " + esc(w.owner) : "") + (w.due_date ? " · due " + esc(fmtDue(w.due_date)) : "") + "</small></span></button>";
-      }).join("") : '<div class="rv-empty-queue"><strong>No open work yet</strong><span>Confirmed actions and checks show up here.</span></div>';
       var picker = S.adding ? renderPicker() : "";
-      var processPanel = S.processing ? renderProcessPanel() : "";
       return '<aside class="rv-side">' +
         '<div class="rv-eyebrow">Weekly review · w/c ' + esc(S.week_start) + "</div>" +
         '<div class="rv-side-head"><h2>' + (open ? open + " CE" + (open === 1 ? "" : "s") + " to review" : "All caught up") + "</h2>" +
         '<button class="rv-addce" type="button" id="rv-add-ce">＋ Add CE</button></div>' +
         '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed</div>" +
-        '<button class="rv-process-btn" type="button" id="rv-process">✦ Process meeting notes</button>' + processPanel + picker +
-        '<div class="rv-queue-tabs"><button class="rv-queue-tab active" type="button" data-queue="review">Review queue</button>' +
-        '<button class="rv-queue-tab" type="button" data-queue="work">Open work' + (openWork.length ? " (" + openWork.length + ")" : "") + "</button></div>" +
-        '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div>" +
-        '<div class="rv-queue-panel" id="rv-queue-work" hidden>' + workPanel + "</div></aside>";
+        '<div class="rv-queue-label">Review queue</div>' + picker +
+        '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div></aside>";
     }
     function queueRow(q) {
       var reviewed = reviewedFor(q.ce_id), active = String(q.ce_id) === String(S.selected), t = treatmentFor(q.ce_id);
@@ -280,7 +269,7 @@
         "</select>" + receipt + "</div></header>" +
         '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
         '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
-        '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" +
+        '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" + renderGranolaDock() +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
@@ -293,19 +282,6 @@
       });
       var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
       var accepted = (S.comments[q.ce_id] || []).filter(function (c) { return !c.deleted_at && String(c.source_type || "") === "granola"; });
-      var pillTxt = pending.length ? pending.length + " to review" : accepted.length ? accepted.length + " added" : "Waiting on meetings";
-      var granolaAddRow = S.addingGranola
-        ? '<div class="rv-granola-add"><input id="rv-granola-link" type="url" inputmode="url" placeholder="https://notes.granola.ai/t/… — paste a meeting link">' +
-          '<button class="rv-btn small primary" type="button" id="rv-granola-add">Add meeting</button>' +
-          '<button class="rv-btn small" type="button" id="rv-granola-cancel">Cancel</button></div>' +
-          '<div class="rv-granola-help">Use this only when a meeting wasn’t matched automatically. It’s queued for extraction.</div>'
-        : "";
-      var band = '<div class="rv-granola">' +
-        '<div class="rv-source-band"><span class="rv-source-symbol">✦</span>' +
-        "<span><strong>Granola meeting capture</strong><span>Matched meetings surface here automatically. Commentary lands in this card; work in Actions below.</span></span>" +
-        '<span class="rv-source-pill' + (pending.length ? " live" : "") + '">' + pillTxt + "</span>" +
-        '<button class="rv-btn small ghost" type="button" id="rv-granola-toggle" style="margin-left:8px">' + (S.addingGranola ? "Close" : "＋ Add link") + "</button></div>" +
-        granolaAddRow + "</div>";
       var pendingHtml = pending.map(function (s) {
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
           '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
@@ -330,7 +306,7 @@
         '<div class="rv-thread-copy"><strong>CE Slack thread</strong><span>Discussion happens in Slack; replies are summarized back here, source-linked.</span></div>' +
         '<a class="rv-btn small ghost" href="' + esc(weekly.slack_post_permalink || "#") + '" target="_blank" rel="noopener">Open thread ↗</a>' +
         '<button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>' +
-        '<div class="rv-sync-status"><span class="rv-live-dot"></span>Automatic sync every 5 minutes · ' + esc(syncLabel) + "</div>" +
+        '<div class="rv-sync-status"><span class="rv-live-dot"></span>Summarize now · Automatic sync every 5 minutes once Slack is connected · ' + esc(syncLabel) + "</div>" +
         (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">' + suggestionSource({ source_type: "slack" }) + '<span>Thread summary · source-linked</span></div>' + summaryInner + "</div>"
           : '<div class="rv-summary rv-summary-empty">Replies will be summarized here automatically once the team responds in Slack.</div>') +
         "</div>" : "";
@@ -363,7 +339,14 @@
         '<div class="rv-card-headings"><div class="rv-card-title">Commentary &amp; observations</div>' +
         '<div class="rv-card-sub">One BGM note; discussion happens in Slack and is summarized back here — each stays source-attributed</div></div>' +
         '<span class="rv-card-count">' + (hasNote ? "BGM note saved" : "No note yet") + "</span></div>" +
-        '<div class="rv-card-body">' + band + pendingHtml + acceptedHtml + noteBlock + "</div></section>";
+        '<div class="rv-card-body">' + pendingHtml + acceptedHtml + noteBlock + "</div></section>";
+    }
+
+    function renderGranolaDock() {
+      if (!S.addingGranola) return '<button class="rv-btn" type="button" id="rv-granola-toggle">Add Granola meeting</button>';
+      return '<div class="rv-granola-dock"><input id="rv-granola-link" type="url" inputmode="url" placeholder="Paste Granola link or transcript URL…">' +
+        '<button class="rv-btn small primary" type="button" id="rv-granola-add">Add</button>' +
+        '<button class="rv-btn small" type="button" id="rv-granola-cancel">Cancel</button></div>';
     }
 
     function renderImportedComment(c) {
@@ -489,20 +472,10 @@
       root.querySelectorAll("[data-pick-ce]").forEach(function (b) { b.onclick = function () { addCe(b.dataset.pickCe); }; });
     }
     function wire() {
-      root.querySelectorAll(".rv-queue-tab").forEach(function (b) {
-        b.onclick = function () {
-          root.querySelectorAll(".rv-queue-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
-          root.querySelector("#rv-queue-review").hidden = b.dataset.queue !== "review";
-          root.querySelector("#rv-queue-work").hidden = b.dataset.queue !== "work";
-        };
-      });
       root.querySelectorAll("[data-select-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.selectCe); }; });
       root.querySelectorAll("[data-open-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.openCe); }; });
       root.querySelectorAll("[data-remove-ce]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeCe(b.dataset.removeCe); }; });
       bind("#rv-add-ce", function () { S.adding = !S.adding; S.pickerQuery = ""; render(); var i = root.querySelector("#rv-picker-input"); if (i) i.focus(); });
-      bind("#rv-process", function () { S.processing = !S.processing; S.processSummary = ""; render(); var t = root.querySelector("#rv-process-text"); if (t) t.focus(); });
-      bind("#rv-process-cancel", function () { S.processing = false; render(); });
-      bind("#rv-process-run", runExtract);
       var pick = root.querySelector("#rv-picker-input");
       if (pick) pick.oninput = function () {
         S.pickerQuery = pick.value;
