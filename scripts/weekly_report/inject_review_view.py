@@ -97,9 +97,10 @@ def build_boot(deploy: Path, native: bool = False):
         return style, boot
     css = _read(REVIEW_DIR / "review-view.css")
     view_js = _guard(_read(REVIEW_DIR / "review-view.js"), "review-view.js")
-    client_path = REVIEW_DIR / "review-client.js"
-    if not client_path.exists():
-        client_path = deploy / "review-client.js"          # the deployed copy (hyphenated)
+    # The browser client is source-controlled beside the Review backend. Do not
+    # source it from a deploy directory: doing so can silently inject a stale
+    # client whose route contract no longer matches the canonical UI.
+    client_path = HERE / "notes" / "review_client.js"
     client_js = _guard(_read(client_path), "review-client.js")
     style = f'<style id="{STYLE_ID}">\n{css}\n</style>'
     boot = (

@@ -7,17 +7,17 @@
  *
  * Flow: verify session → ask Claude (ANTHROPIC_API_KEY) to segment the notes by CE (from the supplied
  * CE list) and extract items → ingest each as a PENDING source suggestion (Apps Script review_source_ingest,
- * REVIEW_INGEST_SECRET) so they appear on each CE's card. Nothing is written to a CE without BGM approval.
+ * REVIEW_MODE_INGEST_SECRET) so they appear on each CE's card. Nothing is written to a CE without BGM approval.
  *
  * Env: ANTHROPIC_API_KEY (already set for review-summary), AUTH_SECRET, ALLOWED_DOMAIN,
- *      REVIEW_APPS_SCRIPT_URL, REVIEW_INGEST_SECRET, REVIEW_AI_MODEL (optional; default Sonnet).
+ *      REVIEW_MODE_APPS_SCRIPT_URL, REVIEW_MODE_INGEST_SECRET,
+ *      REVIEW_AI_MODEL (optional; default Sonnet).
  */
 import { jwtVerify } from "jose";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.REVIEW_AI_MODEL || "claude-sonnet-4-5-20250929";
-const APPS_SCRIPT_URL = process.env.REVIEW_APPS_SCRIPT_URL ||
-  "https://script.google.com/macros/s/AKfycbyvXB69WxTM1p9qO4tQXxPfV28mkXOOiTKqW8J4SH2P_vtblTYd6bUQGJSb8HyLLGhOjA/exec";
+const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
 
 const SCHEMA = {
   type: "object",
@@ -90,11 +90,12 @@ const SYSTEM =
   "cannot confidently attribute to one CE. Be conservative — omit rather than guess.";
 
 async function ingest(items) {
-  const secret = process.env.REVIEW_INGEST_SECRET;
-  if (!secret) throw new Error("REVIEW_INGEST_SECRET not set");
+  if (!APPS_SCRIPT_URL) throw new Error("REVIEW_MODE_APPS_SCRIPT_URL not set");
+  const secret = process.env.REVIEW_MODE_INGEST_SECRET;
+  if (!secret) throw new Error("REVIEW_MODE_INGEST_SECRET not set");
   const r = await fetch(APPS_SCRIPT_URL, {
     method: "POST", redirect: "follow", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "review_source_ingest", ingest_secret: secret, source_type: "meeting_notes", items }),
+    body: JSON.stringify({ action: "review_source_ingest", ingest_secret: secret, source_type: "granola", items }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw new Error(j.error || `ingest ${r.status}`);
@@ -131,11 +132,11 @@ export default async function handler(req, res) {
         .slice(0, 12)
         .map((it, i) => ({
           market_slug, week_start: week, ce_id: id, ce_name: nameById[id],
-          source_type: "meeting_notes", source_author: who.name, source_ref: `${sourceRef}:${id}:${i}`,
+          source_type: "granola", source_author: who.name, source_ref: `${sourceRef}:${id}:${i}`,
           source_url: "", occurred_at: "", kind: it.kind, body: String(it.body).trim(),
           proposed_owner: it.proposed_owner || "",
           proposed_due_date: /^\d{4}-\d{2}-\d{2}$/.test(it.proposed_due_date || "") ? it.proposed_due_date : "",
-          confidence: "meeting_notes", match_status: "exact",
+          confidence: "granola_transcript", match_status: "exact",
         }));
       if (suggestions.length) { items.push(...suggestions); out.push({ ce_id: id, ce_name: nameById[id], suggestions }); }
     });

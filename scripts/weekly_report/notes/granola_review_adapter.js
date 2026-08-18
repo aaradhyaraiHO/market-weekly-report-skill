@@ -1,7 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-const APPS_SCRIPT_URL = process.env.REVIEW_APPS_SCRIPT_URL ||
-  "https://script.google.com/macros/s/AKfycbyvXB69WxTM1p9qO4tQXxPfV28mkXOOiTKqW8J4SH2P_vtblTYd6bUQGJSb8HyLLGhOjA/exec";
+const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
 
 function sameSecret(actual, expected) {
   const a = Buffer.from(String(actual || ""));
@@ -48,7 +47,7 @@ async function jsonPost(url, body, headers = {}) {
 
 async function extractSuggestions(meeting, match, aiUrl) {
   if (!aiUrl) throw new Error("review AI URL is not configured");
-  const secret = process.env.REVIEW_AI_WEBHOOK_SECRET_V2 || process.env.REVIEW_AI_WEBHOOK_SECRET;
+  const secret = process.env.REVIEW_MODE_AI_WEBHOOK_SECRET;
   if (!secret) throw new Error("review AI secret is not configured");
   const sourceRef = `granola:${meeting.id}`;
   const result = await jsonPost(aiUrl, {
@@ -83,9 +82,9 @@ async function extractSuggestions(meeting, match, aiUrl) {
 }
 
 async function ingest(items) {
-  if (!APPS_SCRIPT_URL) throw new Error("REVIEW_APPS_SCRIPT_URL is not configured");
-  const secret = process.env.REVIEW_INGEST_SECRET;
-  if (!secret) throw new Error("REVIEW_INGEST_SECRET is not configured");
+  if (!APPS_SCRIPT_URL) throw new Error("REVIEW_MODE_APPS_SCRIPT_URL is not configured");
+  const secret = process.env.REVIEW_MODE_INGEST_SECRET;
+  if (!secret) throw new Error("REVIEW_MODE_INGEST_SECRET is not configured");
   return jsonPost(APPS_SCRIPT_URL, {
     action: "review_source_ingest",
     ingest_secret: secret,
@@ -104,8 +103,7 @@ export default async function handler(req, res) {
     const meeting = cleanMeeting(body.meeting);
     const matches = cleanMatches(body.matches);
     const exact = matches.filter((match) => match.ce_id && match.match_status === "exact");
-    const aiUrl = process.env.REVIEW_AI_WEBHOOK_URL ||
-      `https://${req.headers.host || "market-notebook.vercel.app"}/api/review-summary`;
+    const aiUrl = process.env.REVIEW_MODE_AI_WEBHOOK_URL;
     let items = [];
     for (const match of exact) items.push(...await extractSuggestions(meeting, match, aiUrl));
 

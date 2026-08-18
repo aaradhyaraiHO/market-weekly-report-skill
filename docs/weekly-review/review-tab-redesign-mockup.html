@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Weekly Review tab — redesign mockup</title><style>body{margin:0;background:#fafafa}#rv-banner{padding:10px 20px;background:#150029;color:#fff;font:600 13px halyard-text,-apple-system,system-ui,sans-serif}#rv-banner b{color:#c68cff}</style><style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Weekly Review</title><style>body{margin:0;background:#fafafa}</style><style>
 /* Weekly Review tab — production styles (Eevee design language).
  * Tokens mirror @headout/eevee 7.0.4 (halyard type, purps/grey ramp, radii, shadows).
  * Scoped to #review-view so nothing collides with the V2 shell. Injected by
@@ -19,7 +19,7 @@
   --rv-shadow-3:0 6px 16px 5px rgba(17,17,17,.10),0 1px 8px rgba(17,17,17,.05);
   --rv-hd:halyard-display,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --rv-ht:halyard-text,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:300;
+  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:300;-webkit-font-smoothing:antialiased;
 }
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
@@ -90,7 +90,7 @@
 
 .rv-btn{min-height:40px;padding:10px 16px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-white);font-size:14px;font-weight:600;cursor:pointer;transition:background-color .14s,border-color .14s,transform .1s}
 .rv-btn:hover{background:var(--rv-g100)}
-.rv-btn:active{transform:scale(.97)}
+.rv-btn:active{transform:scale(.96)}
 .rv-btn.primary{border-color:var(--rv-purps);background:var(--rv-purps);color:#fff;box-shadow:var(--rv-shadow-1)}
 .rv-btn.primary:hover{background:var(--rv-purps-600)}
 .rv-btn.ghost{border-color:var(--rv-purps-200);background:#fff;color:var(--rv-purps-700)}
@@ -133,6 +133,10 @@
 .rv-sugg-meta{display:flex;gap:6px;align-items:center;color:var(--rv-purps-700);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .rv-sugg p{margin:8px 0 12px;color:var(--rv-ink);font-size:14px;line-height:20px}
 .rv-sugg-actions{display:flex;gap:8px;flex-wrap:wrap}
+.rv-origin{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:var(--rv-purps-20);color:var(--rv-purps-700)}
+.rv-origin.slack{background:var(--rv-blue-200);color:var(--rv-blue-700)}
+.rv-sugg-edit{width:100%;min-height:72px;margin:10px 0;padding:10px 12px;resize:vertical;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-g50);font-size:14px;line-height:20px}
+.rv-sugg-edit:focus{outline:2px solid var(--rv-purps);outline-offset:0;border-color:var(--rv-purps);background:#fff}
 
 /* note read card (Eevee: avatar + name·role + meta + edit/delete links) */
 .rv-note{margin:14px 0}
@@ -149,6 +153,20 @@
 .rv-note-foot{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .rv-note-foot .hint{color:var(--rv-g500);font-size:12px}
 .rv-note-actions{display:flex;gap:8px}
+.rv-imported-comment{padding:12px 0;border-top:1px solid var(--rv-g200)}
+.rv-source-link{display:inline-block;margin-top:7px;color:var(--rv-purps-700);font-size:12px;font-weight:600;text-decoration:none}
+.rv-source-link:hover{text-decoration:underline}
+
+/* Slack mention resolution is a deliberate pre-post step, never a silent rewrite. */
+.rv-mention-preview{margin-top:12px;padding:14px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
+.rv-mention-title{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:700}
+.rv-mention-ok,.rv-mention-ambiguous,.rv-mention-neutral{margin-top:10px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:var(--rv-muted);font-size:12px}
+.rv-mention-ok strong,.rv-mention-ambiguous strong{color:var(--rv-ink)}
+.rv-person-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:inset 0 0 0 1px var(--rv-purps-200)}
+.rv-mention-ambiguous{padding:10px;border-radius:10px;background:var(--rv-amber-200);color:var(--rv-amber-800)}
+.rv-mention-ambiguous span{flex-basis:100%}
+.rv-mention-message{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff;color:var(--rv-g800);font-size:14px;line-height:20px;white-space:pre-wrap}
+.rv-mention-actions{margin-top:10px;display:flex;justify-content:flex-end}
 
 /* CE Slack thread strip + AI summary brought back from Slack */
 .rv-thread{margin-top:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
@@ -157,6 +175,8 @@
 .rv-thread span{display:block;color:var(--rv-muted);font-size:12px}
 .rv-thread-wrap{margin-top:12px}
 .rv-thread-wrap .rv-thread{margin-top:0;border-radius:12px 12px 0 0;border-bottom:0}
+.rv-sync-status{padding:7px 16px;display:flex;align-items:center;gap:7px;border-right:1px solid var(--rv-purps-200);border-left:1px solid var(--rv-purps-200);background:var(--rv-purps-10);color:var(--rv-muted);font-size:11px;font-variant-numeric:tabular-nums}
+.rv-live-dot{width:7px;height:7px;border-radius:50%;background:var(--rv-green-700)}
 .rv-summary{padding:14px 16px;border:1px solid var(--rv-purps-200);border-top:0;border-radius:0 0 12px 12px;background:#fff}
 .rv-summary-empty{color:var(--rv-muted);font-size:13px}
 .rv-summary-head{display:flex;align-items:center;gap:8px;color:var(--rv-purps-700);font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
@@ -183,11 +203,16 @@
 .rv-work.done .rv-work-title{text-decoration:line-through;color:var(--rv-muted)}
 .rv-work-meta{margin-top:4px;color:var(--rv-muted);font-size:13px}
 .rv-work-meta a{color:var(--rv-purps-700);font-weight:600;text-decoration:none}
-.rv-work-status{margin-top:10px}
+.rv-work-status{margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rv-work-status select{min-height:38px;padding:8px 30px 8px 12px;font-size:13px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-white) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 10px center;-webkit-appearance:none;appearance:none;cursor:pointer}
 .rv-work-owner{flex:none}
 .rv-owner-remove{width:30px;height:30px;flex:none;border:1px solid var(--rv-g300);border-radius:50%;background:#fff;color:var(--rv-g500);cursor:pointer;font-size:16px;line-height:1}
 .rv-owner-remove:hover{background:var(--rv-g100)}
+.rv-delete-confirm{display:inline-flex;align-items:center;gap:10px;color:var(--rv-muted);font-size:12px}
+.rv-work-edit{padding:14px 0}
+.rv-work-edit input{width:100%;min-height:40px;padding:9px 12px;border:1px solid var(--rv-g400);border-radius:10px;background:#fff}
+.rv-work-edit-grid{margin-top:8px;display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+.rv-work-edit-actions{margin-top:10px;display:flex;justify-content:flex-end;gap:8px}
 
 /* archived (crossed-off) work — collapsed by default */
 .rv-done{margin-top:4px;border-top:1px solid var(--rv-g200)}
@@ -230,7 +255,7 @@
 .rv-drawer-head p{margin:4px 0 0;color:var(--rv-muted);font-size:13px}
 .rv-close{width:40px;height:40px;flex:none;border:0;border-radius:10px;background:var(--rv-g200);font-size:22px;cursor:pointer}
 .rv-drawer-body{padding:16px}
-.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:1fr 1fr;border-radius:12px;background:var(--rv-g200)}
+.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:repeat(3,1fr);border-radius:12px;background:var(--rv-g200)}
 .rv-memory-tab{min-height:38px;border:0;border-radius:10px;background:transparent;color:var(--rv-muted);cursor:pointer;font-size:13px}
 .rv-memory-tab.active{background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:var(--rv-shadow-1)}
 .rv-memory-panel[hidden]{display:none}
@@ -240,6 +265,9 @@
 .rv-week-body{padding:14px 16px}
 .rv-source-label{color:var(--rv-purps-700);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .rv-week-body p{margin:6px 0 0;color:var(--rv-muted);font-size:14px;white-space:pre-line}
+.rv-memory-source{margin-top:14px;padding-top:14px;border-top:1px solid var(--rv-g200)}
+.rv-memory-source ul{margin:7px 0 0;padding-left:18px;color:var(--rv-muted);font-size:14px;line-height:20px}
+.rv-memory-source li+li{margin-top:4px}
 .rv-source-meta{margin-top:8px;color:var(--rv-g500);font-size:12px}
 .rv-empty-state{padding:20px;border:1px dashed var(--rv-g400);border-radius:12px;background:var(--rv-g50);text-align:center}
 .rv-empty-state strong{display:block;font-weight:600}
@@ -253,10 +281,10 @@
   .rv-side{border-right:0;border-bottom:1px solid var(--rv-line)}
   .rv-workspace{padding:16px 16px 120px}
   .rv-compose .row2{grid-template-columns:1fr}
+  .rv-work-controls,.rv-work-edit-grid{grid-template-columns:1fr!important}
   .rv-footer{padding:12px 16px}
 }
-
-</style></head><body><div id="rv-banner">◆ <b>Interactive mockup</b> — redesigned Weekly Review tab (Eevee). Everything is clickable; data is in-memory (nothing saves). Niagara Falls = populated CE · Kennedy = Granola suggestions · LEGOLAND NY = already reviewed.</div><div id="review-view"></div><script>
+</style></head><body><div id="review-view"></div><script>
 
 // ---- stateful in-memory mock backend (no server / no auth) ----
 (function(g){
@@ -301,7 +329,10 @@
       {comment_id:'c1',ce_id:'2567',week_start:'2026-08-09',body:'Campaigns scaled down 15% after a 13% CVR drop concentrated in confirm-and-pay; ROI held at ~150%.',author_name:'Deeksha',author_role:'Perf',created_at:'2026-08-17T09:10:00',updated_at:'2026-08-17T09:10:00'},
       {comment_id:'c2',ce_id:'2567',week_start:'2026-08-09',body:'BDM confirms the operator is fine with the hybrid-fulfilment test from next week.',author_name:'Danny',author_role:'BDM',created_at:'2026-08-17T11:02:00',updated_at:'2026-08-17T11:02:00'}
     ]},
-    suggestions:{'3111':[
+    suggestions:{'2567':[
+      {suggestion_id:'sgs1',ce_id:'2567',kind:'action',body:'Fraud & Payments to confirm the Riskified-linked C2O response.',source_type:'slack',source_ref:'mkt-usa · CE thread',source_author:'AI thread summary',source_url:'https://headout.slack.com/archives/CNSHDD2H1/p1699',status:'pending'},
+      {suggestion_id:'sgs2',ce_id:'2567',kind:'check',body:'Check whether C2O recovers after the Riskified follow-up.',source_type:'slack',source_ref:'mkt-usa · CE thread',source_author:'AI thread summary',source_url:'https://headout.slack.com/archives/CNSHDD2H1/p1699',status:'pending',proposed_due_date:'2026-08-22'}
+    ],'3111':[
       {suggestion_id:'sg1',ce_id:'3111',kind:'comment',body:'KSC’s new marketing team wants to prioritise three side-letter actions; B2B selling is approved but hybrid fulfilment and Galaxy implications remain open.',source_ref:'KSC partnership meeting',source_author:'Granola',status:'pending'},
       {suggestion_id:'sg2',ce_id:'3111',kind:'action',body:'Draft the 1–2 page KSC side-letter recap and connect with Danny.',source_ref:'KSC partnership meeting',source_author:'Granola',status:'pending',proposed_owner:'Danny'},
       {suggestion_id:'sg3',ce_id:'3111',kind:'check',body:'Revisit whether promo-led CVR improvement continues after the 15% AOV decline.',source_ref:'North America WBR',source_author:'Granola',status:'pending',proposed_due_date:'2026-08-18'}
@@ -316,16 +347,19 @@
     receipts:function(){return ok({receipts:Object.keys(DB.receipts).map(function(k){return DB.receipts[k];})});},
     work:function(){return ok({work_items:flatWork()});},
     weeklyCommentary:function(id){var w=DB.weekly[id.ce_id];return ok({weekly:w?[w]:[]});},
-    granolaSuggestions:function(id){return ok({suggestions:(DB.suggestions[id.ce_id]||[]).filter(function(s){return !s.decided_at;})});},
+    suggestions:function(id){return ok({suggestions:(DB.suggestions[id.ce_id]||[]).filter(function(s){return !s.decided_at;})});},
+    granolaSuggestions:function(id){return ok({suggestions:(DB.suggestions[id.ce_id]||[]).filter(function(s){return !s.decided_at&&String(s.source_type||'granola')==='granola';})});},
     sourceInbox:function(){return ok({inbox:[]});},
     saveReviewSetItem:function(item){ if(String(item.included)==='false'){delete DB.review_set[item.ce_id];} else {DB.review_set[item.ce_id]=Object.assign({},DB.review_set[item.ce_id],item,{included:'true'});} return ok({review_set_item:DB.review_set[item.ce_id]||item}); },
     saveWeeklyNote:function(n){DB.weekly[n.ce_id]=Object.assign({},DB.weekly[n.ce_id],{market_slug:n.market_slug,ce_id:n.ce_id,week_start:n.week_start,bgm_note:n.bgm_note,bgm_author:n.bgm_author,bgm_updated_at:now(),note_deleted_at:''});return ok({weekly:DB.weekly[n.ce_id]});},
     deleteWeeklyNote:function(id){if(DB.weekly[id.ce_id]){DB.weekly[id.ce_id]=Object.assign({},DB.weekly[id.ce_id],{note_deleted_at:now(),bgm_note:''});}return ok({weekly:DB.weekly[id.ce_id]});},
+    resolveMentions:function(id,text){var people=[['Royan','UROYAN'],['Deeksha','UDEEK'],['Danny','UDANNY'],['Pari','UPARI']];var matches=people.filter(function(p){return new RegExp('\\b'+p[0]+'\\b','i').test(text);}).map(function(p){return {name:p[0],slack_user_id:p[1]};});return ok({resolved_text:text,matches:matches,ambiguous:[]});},
     startSlackDiscussion:function(m){DB.weekly[m.ce_id]=Object.assign({},DB.weekly[m.ce_id],{ce_id:m.ce_id,week_start:m.week_start,bgm_note:m.bgm_note,bgm_author:m.bgm_author,bgm_updated_at:now(),slack_post_ts:'1699',slack_post_permalink:'https://headout.slack.com/archives/CNSHDD2H1/p1699'});return ok({weekly:DB.weekly[m.ce_id]});},
     syncWeeklyDiscussion:function(id){return ok({weekly:DB.weekly[id.ce_id]});},
-    decideSuggestion:function(d){var arr=[];Object.keys(DB.suggestions).forEach(function(k){DB.suggestions[k].forEach(function(s){if(s.suggestion_id===d.suggestion_id){s.decided_at=now();s.status=d.decision;if(d.decision==='approved'&&d.destination&&d.destination!=='comment'){(DB.work[s.ce_id]=DB.work[s.ce_id]||[]).push({work_id:uid('w'),ce_id:s.ce_id,ce_name:'Kennedy Space Center',origin_week:'2026-08-09',kind:d.destination,text:s.body,owner:d.owner||'',due_date:d.due_date||'',status:d.work_status||(d.destination==='check'?'scheduled':'needs_action'),source_type:'granola',source_url:''});} if(d.decision==='approved'&&d.destination==='comment'){s.accepted_body=s.body;} }});});return ok({});},
+    decideSuggestion:function(d){var arr=[];Object.keys(DB.suggestions).forEach(function(k){DB.suggestions[k].forEach(function(s){if(s.suggestion_id===d.suggestion_id){s.decided_at=now();s.status=d.decision;if(d.decision==='approved'&&d.destination&&d.destination!=='comment'){(DB.work[s.ce_id]=DB.work[s.ce_id]||[]).push({work_id:uid('w'),ce_id:s.ce_id,ce_name:'Kennedy Space Center',origin_week:'2026-08-09',kind:d.destination,text:d.body||s.body,owner:d.owner||'',due_date:d.due_date||'',status:d.work_status||(d.destination==='check'?'scheduled':'needs_action'),source_type:s.source_type||'granola',source_url:s.source_url||''});} if(d.decision==='approved'&&d.destination==='comment'){s.accepted_body=d.body||s.body;} }});});return ok({});},
     attachGranolaMeeting:function(){return ok({});},
     saveWork:function(item){var ce=item.ce_id;DB.work[ce]=DB.work[ce]||[];var id=item.work_id;if(id){for(var i=0;i<DB.work[ce].length;i++){if(DB.work[ce][i].work_id===id){DB.work[ce][i]=Object.assign({},DB.work[ce][i],item);return ok({work_item:DB.work[ce][i]});}}}item.work_id=id||uid('w');DB.work[ce].push(item);return ok({work_item:item});},
+    deleteWork:function(id){Object.keys(DB.work).forEach(function(ce){DB.work[ce]=DB.work[ce].filter(function(w){return w.work_id!==id;});});return ok({work_id:id});},
     comments:function(id){return ok({comments:(DB.comments[id.ce_id]||[]).filter(function(c){return !c.deleted_at;})});},
     saveComment:function(c){var ce=c.ce_id;DB.comments[ce]=DB.comments[ce]||[];if(c.comment_id){for(var i=0;i<DB.comments[ce].length;i++){if(DB.comments[ce][i].comment_id===c.comment_id){DB.comments[ce][i]=Object.assign({},DB.comments[ce][i],c,{updated_at:now()});return ok({comment:DB.comments[ce][i]});}}}c.comment_id=uid('c');c.created_at=now();c.updated_at=now();DB.comments[ce].push(c);return ok({comment:c});},
     deleteComment:function(cid){Object.keys(DB.comments).forEach(function(k){DB.comments[k].forEach(function(c){if(c.comment_id===cid)c.deleted_at=now();});});return ok({comment_id:cid});},
@@ -400,9 +434,10 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, setRows: {}, setRowsList: [],
+      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: ""
+      processing: false, processSummary: "", noteDraft: null, mentionPreview: null, mentionBusy: false,
+      editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null
     };
 
     // ---- small helpers ---------------------------------------------------
@@ -440,6 +475,16 @@
       var list = options.slice();
       if (value && !list.some(function (o) { return o[0] === value; })) list.push([value, value]);
       return list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("");
+    }
+    function sourceName(item) {
+      var source = String((item && item.source_type) || "").toLowerCase();
+      return source === "slack" ? "Slack" : source === "granola" ? "Granola" : "Imported";
+    }
+    function suggestionSource(item) {
+      var source = sourceName(item);
+      if (source === "Slack") return '<span class="rv-origin slack">✦ AI · Slack</span>';
+      if (source === "Granola") return '<span class="rv-origin granola">✦ AI · Granola</span>';
+      return '<span class="rv-origin imported">✦ AI · Imported</span>';
     }
 
     // ---- queue construction ---------------------------------------------
@@ -505,16 +550,18 @@
       });
     }
     function loadCe(ceId) {
-      if (!api || S.loadingCe[ceId]) return;
+      if (!api || S.loadingCe[ceId]) return Promise.resolve();
       S.loadingCe[ceId] = true;
-      Promise.all([
+      return Promise.all([
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8).catch(function () { return { weekly: [] }; }),
-        api.granolaSuggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; })
+        api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; }),
+        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { comments: [] }; })
       ]).then(function (res) {
         var rows = res[0].weekly || [];
         S.weekly[ceId] = rows.filter(function (r) { return String(r.week_start) === String(S.week_start); })[0] || null;
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
+        S.comments[ceId] = res[2].comments || [];
         S.loadingCe[ceId] = false;
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { S.loadingCe[ceId] = false; });
@@ -522,6 +569,7 @@
 
     function select(ceId) {
       S.selected = String(ceId); S.editingNote = false; S.confirmDelete = false; S.compose = "";
+      S.noteDraft = null; S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
       render();
       if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
     }
@@ -620,7 +668,7 @@
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
         "</select>" + receipt + "</div></header>" +
         '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
-        '<div class="rv-resource-state">Saved to Weekly Report Notes · CE ' + esc(q.ce_id) + "</div></div>" +
+        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
         '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
@@ -629,9 +677,11 @@
 
     function renderCommentaryCard(q) {
       var weekly = S.weekly[q.ce_id];
-      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "comment" || !s.kind; });
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) {
+        return (s.kind === "comment" || !s.kind) && String(s.source_type || "granola") === "granola";
+      });
       var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
-      var accepted = sugg.filter(function (s) { return s.status === "approved" || s.accepted_body; });
+      var accepted = (S.comments[q.ce_id] || []).filter(function (c) { return !c.deleted_at && String(c.source_type || "") === "granola"; });
       var pillTxt = pending.length ? pending.length + " to review" : accepted.length ? accepted.length + " added" : "Waiting on meetings";
       var granolaAddRow = S.addingGranola
         ? '<div class="rv-granola-add"><input id="rv-granola-link" type="url" inputmode="url" placeholder="https://notes.granola.ai/t/… — paste a meeting link">' +
@@ -647,16 +697,12 @@
         granolaAddRow + "</div>";
       var pendingHtml = pending.map(function (s) {
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
-          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
-          "<p>" + esc(s.body || "") + "</p>" +
+          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
+          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested commentary">' + esc(s.body || "") + "</textarea>" +
           '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>Add to commentary</button>' +
           '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
       }).join("");
-      var acceptedHtml = accepted.map(function (s) {
-        return '<div class="rv-note"><div class="rv-note-read">' + avatar("Granola") +
-          '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">Meeting pointer</span><span class="rv-note-metatxt">✦ AI · Granola</span></div>' +
-          '<div class="rv-note-text">' + esc(s.accepted_body || s.body || "") + "</div></div></div></div>";
-      }).join("");
+      var acceptedHtml = accepted.map(renderImportedComment).join("");
 
       var hasNote = !!(weekly && weekly.bgm_note && !weekly.note_deleted_at);
       var hasThread = !!(weekly && weekly.slack_post_ts);
@@ -668,11 +714,13 @@
           arr.map(function (x) { return "<li>" + esc(typeof x === "string" ? x : (x.text || x.body || "")) + "</li>"; }).join("") + "</ul></div>";
       }
       var summaryInner = summary ? (sumList("Findings", summary.findings) + sumList("Decisions", summary.decisions) + sumList("Open points", summary.open_points)) : "";
+      var syncLabel = weekly && weekly.summary_updated_at ? "Updated " + fmtWhen(weekly.summary_updated_at) : "Waiting for replies";
       var threadStrip = hasThread ? '<div class="rv-thread-wrap"><div class="rv-thread">' + avatar("Slack", "sm") +
         '<div class="rv-thread-copy"><strong>CE Slack thread</strong><span>Discussion happens in Slack; replies are summarized back here, source-linked.</span></div>' +
         '<a class="rv-btn small ghost" href="' + esc(weekly.slack_post_permalink || "#") + '" target="_blank" rel="noopener">Open thread ↗</a>' +
-        '<button class="rv-btn small" type="button" id="rv-sync-thread">Sync</button></div>' +
-        (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">✦ Slack summary<span>AI · source-linked</span></div>' + summaryInner + "</div>"
+        '<button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>' +
+        '<div class="rv-sync-status"><span class="rv-live-dot"></span>Automatic sync every 5 minutes · ' + esc(syncLabel) + "</div>" +
+        (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">' + suggestionSource({ source_type: "slack" }) + '<span>Thread summary · source-linked</span></div>' + summaryInner + "</div>"
           : '<div class="rv-summary rv-summary-empty">Replies will be summarized here automatically once the team responds in Slack.</div>') +
         "</div>" : "";
 
@@ -689,14 +737,15 @@
           (hasThread ? "" : '<div class="rv-note-foot"><span class="hint"></span><div class="rv-note-actions"><button class="rv-btn small ghost" type="button" id="rv-start-slack">Start Slack discussion</button></div></div>') +
           "</div></div>" + threadStrip + "</div>";
       } else {
-        var val = hasNote ? weekly.bgm_note : "";
+        var val = S.noteDraft != null ? S.noteDraft : (hasNote ? weekly.bgm_note : "");
         noteBlock = '<div class="rv-note rv-note-edit">' +
           (author() ? "" : '<input class="rv-note-author" id="rv-author" placeholder="Your name">') +
           '<textarea id="rv-note" placeholder="What is happening with this CE that the data can’t see?">' + esc(val) + "</textarea>" +
-          '<div class="rv-note-foot"><span class="hint">Names you type resolve to Slack tags on Start discussion.</span>' +
+          renderMentionPreview() +
+          '<div class="rv-note-foot"><span class="hint">Mention names naturally. You’ll preview resolved Slack tags before posting.</span>' +
           '<div class="rv-note-actions">' + (hasNote ? '<button class="rv-btn small" type="button" id="rv-cancel-note">Cancel</button>' : "") +
           '<button class="rv-btn small" type="button" id="rv-save-note">Save note</button>' +
-          '<button class="rv-btn small primary" type="button" id="rv-start-slack">' + (hasThread ? "Open thread ↗" : "Start Slack discussion") + "</button></div></div>" +
+          '<button class="rv-btn small primary" type="button" id="rv-start-slack"' + (S.mentionBusy ? " disabled" : "") + ">" + (S.mentionBusy ? "Resolving names…" : (hasThread ? "Open thread ↗" : "Preview Slack post")) + "</button></div></div>" +
           threadStrip + "</div>";
       }
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span>' +
@@ -704,6 +753,36 @@
         '<div class="rv-card-sub">One BGM note; discussion happens in Slack and is summarized back here — each stays source-attributed</div></div>' +
         '<span class="rv-card-count">' + (hasNote ? "BGM note saved" : "No note yet") + "</span></div>" +
         '<div class="rv-card-body">' + band + pendingHtml + acceptedHtml + noteBlock + "</div></section>";
+    }
+
+    function renderImportedComment(c) {
+      if (String(S.editingComment || "") === String(c.comment_id)) {
+        return '<div class="rv-note rv-imported-comment" data-comment="' + esc(c.comment_id) + '"><div class="rv-sugg-meta">' + suggestionSource(c) + '<span>Accepted commentary</span></div>' +
+          '<textarea class="rv-sugg-edit" data-comment-body>' + esc(c.body || "") + '</textarea><div class="rv-sugg-actions">' +
+          '<button class="rv-btn small" type="button" data-comment-edit-cancel>Cancel</button><button class="rv-btn small primary" type="button" data-comment-save="' + esc(c.comment_id) + '">Save changes</button></div></div>';
+      }
+      return '<div class="rv-note rv-imported-comment"><div class="rv-note-read">' + avatar("Granola") +
+        '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">Meeting pointer</span><span class="rv-note-metatxt">' + suggestionSource(c) + " · " + esc(fmtWhen(c.updated_at || c.created_at)) + '</span>' +
+        '<span class="rv-note-links">' + (String(S.confirmDeleteComment || "") === String(c.comment_id)
+          ? '<span class="rv-delete-confirm">Delete?<button class="rv-link danger" type="button" data-comment-delete-confirm="' + esc(c.comment_id) + '">Confirm</button><button class="rv-link" type="button" data-comment-delete-cancel>Cancel</button></span>'
+          : '<button class="rv-link" type="button" data-comment-edit="' + esc(c.comment_id) + '">Edit</button><button class="rv-link danger" type="button" data-comment-delete="' + esc(c.comment_id) + '">Delete</button>') + '</span></div>' +
+        '<div class="rv-note-text">' + esc(c.body || "") + "</div>" + (c.source_url ? '<a class="rv-source-link" href="' + esc(c.source_url) + '" target="_blank" rel="noopener">Open Granola source ↗</a>' : "") + "</div></div></div>";
+    }
+
+    function renderMentionPreview() {
+      var p = S.mentionPreview;
+      if (!p) return "";
+      var matches = p.matches || [], ambiguous = p.ambiguous || [];
+      var resolved = matches.length ? '<div class="rv-mention-ok"><strong>Will tag</strong>' + matches.map(function (m) {
+        return '<span class="rv-person-chip">@' + esc(m.name || m.slack_user_id) + "</span>";
+      }).join("") + "</div>" : '<div class="rv-mention-neutral">No names were matched. You can still post without tags.</div>';
+      var blocked = ambiguous.length ? '<div class="rv-mention-ambiguous"><strong>Clarify before posting</strong>' + ambiguous.map(function (a) {
+        var names = (a.candidates || []).map(function (c) { return c.name; }).filter(Boolean).join(" or ");
+        return '<span>“' + esc(a.name) + '” matches ' + esc(names || "more than one person") + ". Use their full Slack name.</span>";
+      }).join("") + "</div>" : "";
+      return '<div class="rv-mention-preview" aria-live="polite"><div class="rv-mention-title"><span>Slack post preview</span><button class="rv-link" type="button" id="rv-mention-cancel">Edit message</button></div>' +
+        resolved + blocked + '<div class="rv-mention-message">' + esc(p.original_text || "") + "</div>" +
+        '<div class="rv-mention-actions"><button class="rv-btn small primary" type="button" id="rv-confirm-slack"' + (ambiguous.length ? " disabled" : "") + '>Post to Slack</button></div></div>';
     }
 
     function renderActionsCard(q) {
@@ -716,10 +795,9 @@
       var suggHtml = pending.map(function (s) {
         var isCheck = s.kind === "check";
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="' + esc(s.kind) + '">' +
-          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span>" +
+          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "source") + "</span>" +
           "<span>·</span><span>" + (isCheck ? "suggested check" : "suggested action") + "</span></div>" +
-          "<p>" + esc(s.body || "") + "</p>" +
-          '<div class="rv-compose" style="margin-top:0;display:block" hidden></div>' +
+          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
           '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
           '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
@@ -731,7 +809,7 @@
       var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
         '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
       var emptyState = (openItems.length || pending.length || S.compose) ? "" :
-        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below, or accept a Granola suggestion.</span></div>';
+        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
       var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span>' +
@@ -752,12 +830,27 @@
         ? '<span class="rv-datebadge"><span class="m">' + MONTHS[(parseDate(w.due_date) || new Date()).getUTCMonth()] + '</span><span class="d">' + (parseDate(w.due_date) || new Date()).getUTCDate() + "</span></span>"
         : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
       var right = w.owner ? avatar(w.owner, "sm") : '<span class="rv-av sm none">–</span>';
+      if (String(S.editingWork || "") === String(w.work_id)) return renderWorkEdit(w);
       return '<div class="rv-work' + (done ? " done" : "") + '" data-work="' + esc(w.work_id) + '">' + left +
         '<div class="rv-work-main">' + (isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "") +
         '<div class="rv-work-title">' + esc(w.text) + "</div>" +
         '<div class="rv-work-meta">' + meta + "</div>" +
-        '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select>" +
+        (String(S.confirmDeleteWork || "") === String(w.work_id)
+          ? '<span class="rv-delete-confirm">Remove this item?<button class="rv-link danger" type="button" data-work-delete-confirm="' + esc(w.work_id) + '">Delete</button><button class="rv-link" type="button" data-work-delete-cancel>Cancel</button></span>'
+          : '<button class="rv-link" type="button" data-work-edit="' + esc(w.work_id) + '">Edit</button><button class="rv-link danger" type="button" data-work-delete="' + esc(w.work_id) + '">Delete</button>') + "</div>" +
         "</div>" + right + "</div>";
+    }
+    function renderWorkEdit(w) {
+      var isCheck = w.kind === "check";
+      return '<div class="rv-work rv-work-edit" data-work="' + esc(w.work_id) + '"><div class="rv-work-main">' +
+        '<div class="rv-work-kicker">Edit ' + (isCheck ? "scheduled check" : "action") + "</div>" +
+        '<input type="text" data-edit-text value="' + esc(w.text || "") + '" aria-label="Work item">' +
+        '<div class="rv-work-edit-grid"><input type="text" data-edit-owner value="' + esc(w.owner || "") + '" placeholder="Owner' + (isCheck ? " (optional)" : "") + '">' +
+        '<input type="date" data-edit-due value="' + esc(w.due_date || "") + '">' +
+        '<select class="rv-select" data-edit-status>' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<div class="rv-work-edit-actions"><button class="rv-btn small" type="button" data-work-edit-cancel>Cancel</button>' +
+        '<button class="rv-btn small primary" type="button" data-work-edit-save="' + esc(w.work_id) + '">Save changes</button></div></div></div>';
     }
     function renderCompose(kind) {
       var isCheck = kind === "check";
@@ -813,13 +906,17 @@
         var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(S.selected); });
         if (ce && ctx.openCeDrawer) ctx.openCeDrawer(ce); else toast("CE analytics drawer unavailable for this CE");
       });
-      bind("#rv-edit-note", function () { S.editingNote = true; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
-      bind("#rv-cancel-note", function () { S.editingNote = false; render(); });
+      bind("#rv-edit-note", function () { S.editingNote = true; S.noteDraft = (S.weekly[S.selected] || {}).bgm_note || ""; S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+      bind("#rv-cancel-note", function () { S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; render(); });
       bind("#rv-delete-note", function () { S.confirmDelete = true; render(); });
       bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
       bind("#rv-del-yes", deleteNote);
       bind("#rv-save-note", saveNote);
       bind("#rv-start-slack", startSlack);
+      bind("#rv-confirm-slack", postSlack);
+      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) n.focus(); });
+      var noteInput = root.querySelector("#rv-note");
+      if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.mentionPreview = null; };
       bind("#rv-sync-thread", syncThread);
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; render(); });
@@ -830,8 +927,20 @@
         if (acc) acc.onclick = function () { acceptSuggestion(card); };
         if (ig) ig.onclick = function () { decideSuggestion(card.dataset.suggestion, "rejected", {}); };
       });
+      root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
+      root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
+      root.querySelectorAll("[data-comment-save]").forEach(function (b) { b.onclick = function () { saveImportedComment(b.dataset.commentSave); }; });
+      root.querySelectorAll("[data-comment-delete]").forEach(function (b) { b.onclick = function () { S.confirmDeleteComment = b.dataset.commentDelete; render(); }; });
+      root.querySelectorAll("[data-comment-delete-confirm]").forEach(function (b) { b.onclick = function () { deleteImportedComment(b.dataset.commentDeleteConfirm); }; });
+      root.querySelectorAll("[data-comment-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteComment = null; render(); }; });
       root.querySelectorAll("[data-work-toggle]").forEach(function (b) { b.onclick = function () { toggleWork(b.dataset.workToggle); }; });
       root.querySelectorAll("[data-work-status]").forEach(function (sel) { sel.onchange = function () { setWorkStatus(sel.dataset.workStatus, sel.value); }; });
+      root.querySelectorAll("[data-work-edit]").forEach(function (b) { b.onclick = function () { S.editingWork = b.dataset.workEdit; render(); }; });
+      root.querySelectorAll("[data-work-delete]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = b.dataset.workDelete; render(); }; });
+      root.querySelectorAll("[data-work-delete-confirm]").forEach(function (b) { b.onclick = function () { deleteWork(b.dataset.workDeleteConfirm); }; });
+      root.querySelectorAll("[data-work-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = null; render(); }; });
+      root.querySelectorAll("[data-work-edit-save]").forEach(function (b) { b.onclick = function () { saveWorkEdit(b.dataset.workEditSave); }; });
+      root.querySelectorAll("[data-work-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingWork = null; render(); }; });
       bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
       bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
       bind("#rv-c-cancel", function () { S.compose = ""; render(); });
@@ -905,7 +1014,7 @@
       if (!ensureAuthor() || !api) return;
       var ta = root.querySelector("#rv-note"); if (!ta.value.trim()) { ta.focus(); toast("Write an observation first"); return; }
       api.saveWeeklyNote(Object.assign({}, ident(S.selected), { bgm_note: ta.value.trim(), bgm_author: author() }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("Note saved"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("Note saved"); render(); })
         .catch(function () { toast("Save failed · note kept locally"); });
     }
     function deleteNote() {
@@ -921,14 +1030,32 @@
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
       if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
+      S.noteDraft = text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
+      api.resolveMentions(ident(S.selected), text).then(function (res) {
+        S.mentionBusy = false;
+        S.mentionPreview = { original_text: text, resolved_text: res.resolved_text || text, matches: res.matches || [], ambiguous: res.ambiguous || [] };
+        render();
+      }).catch(function () { S.mentionBusy = false; render(); toast("Could not resolve Slack names · message not posted"); });
+    }
+    function postSlack() {
+      var p = S.mentionPreview, weekly = S.weekly[S.selected];
+      if (!p || (p.ambiguous || []).length) { toast("Clarify ambiguous names before posting"); return; }
+      if (!ensureAuthor() || !api) return;
+      if (!S.channel) { toast("No Slack channel configured for this market"); return; }
+      var text = String(p.original_text || "").trim();
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("CE discussion started"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
         .catch(function (e) { toast((e && e.message) || "Post failed · note remains saved"); });
     }
     function syncThread() {
       if (!api) return;
-      api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) { if (res.weekly) S.weekly[S.selected] = res.weekly; toast("Thread synced"); render(); }).catch(function () { toast("Sync failed"); });
+      var button = root.querySelector("#rv-sync-thread"); if (button) { button.disabled = true; button.textContent = "Summarizing…"; }
+      api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) {
+        if (res.weekly) S.weekly[S.selected] = res.weekly;
+        toast(res.new_replies && res.new_replies.length ? "Summary updated from new replies" : "Summary is current");
+        return Promise.all([loadCe(S.selected), reloadWork()]);
+      }).catch(function () { toast("Could not summarize now · automatic sync will retry"); render(); });
     }
     function addGranola() {
       if (!ensureAuthor() || !api) return;
@@ -940,20 +1067,42 @@
     }
     function acceptSuggestion(card) {
       var kind = card.dataset.kind, sid = card.dataset.suggestion;
-      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment" }); return; }
+      var body = ((card.querySelector("[data-sugg-body]") || {}).value || "").trim();
+      if (!body) { var bodyEl = card.querySelector("[data-sugg-body]"); if (bodyEl) bodyEl.focus(); toast("Keep or edit the suggestion text first"); return; }
+      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment", body: body }); return; }
       if (!ensureAuthor()) return;
       var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
       var due = (card.querySelector("[data-w-due]") || {}).value || "";
       var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
       if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
-      decideSuggestion(sid, "approved", { destination: kind, owner: owner.trim(), due_date: due, work_status: status });
+      decideSuggestion(sid, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
       api.decideSuggestion(Object.assign({ suggestion_id: sid, decision: decision, decided_by: author() }, fields || {}))
         .then(function () { toast(decision === "approved" ? "Added" : "Ignored · source retained"); return Promise.all([loadCe(S.selected), reloadWork()]); })
         .catch(function () { toast("Could not update suggestion"); });
+    }
+    function findImportedComment(commentId) {
+      return (S.comments[S.selected] || []).filter(function (c) { return String(c.comment_id) === String(commentId); })[0] || null;
+    }
+    function saveImportedComment(commentId) {
+      var c = findImportedComment(commentId); if (!c || !api || !ensureAuthor()) return;
+      var row = root.querySelector('[data-comment="' + String(commentId).replace(/"/g, "") + '"]');
+      var body = row && row.querySelector("[data-comment-body]") ? row.querySelector("[data-comment-body]").value.trim() : "";
+      if (!body) { if (row) row.querySelector("[data-comment-body]").focus(); toast("Commentary cannot be empty"); return; }
+      api.saveComment({ comment_id: c.comment_id, market_slug: c.market_slug, ce_id: c.ce_id, ce_name: c.ce_name,
+        week_start: c.week_start, body: body, author_name: c.author_name || c.source_author || "Granola",
+        author_role: c.author_role || "", source_type: c.source_type || "granola", source_author: c.source_author || "",
+        source_ref: c.source_ref || "", source_url: c.source_url || "", accepted_by: author() })
+        .then(function () { S.editingComment = null; toast("Granola commentary updated"); loadCe(S.selected); })
+        .catch(function () { toast("Could not update commentary"); });
+    }
+    function deleteImportedComment(commentId) {
+      if (!api || !ensureAuthor()) return;
+      api.deleteComment(commentId, author()).then(function () { S.confirmDeleteComment = null; toast("Granola commentary deleted · audit retained"); loadCe(S.selected); })
+        .catch(function () { toast("Could not delete commentary"); });
     }
     function saveCompose() {
       if (!ensureAuthor() || !api) return;
@@ -973,6 +1122,29 @@
     function setWorkStatus(workId, status) {
       var w = findWork(workId); if (!w || !api) return;
       saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week, kind: w.kind, text: w.text, owner: w.owner || "", due_date: w.due_date || "", status: status, source_type: w.source_type || "bgm_manual" }, "Status updated");
+    }
+    function saveWorkEdit(workId) {
+      var w = findWork(workId); if (!w || !api || !ensureAuthor()) return;
+      var row = root.querySelector('[data-work="' + String(workId).replace(/"/g, "") + '"]');
+      if (!row) return;
+      var text = (row.querySelector("[data-edit-text]") || {}).value || "";
+      var owner = (row.querySelector("[data-edit-owner]") || {}).value || "";
+      var due = (row.querySelector("[data-edit-due]") || {}).value || "";
+      var status = (row.querySelector("[data-edit-status]") || {}).value || w.status;
+      if (!text.trim()) { row.querySelector("[data-edit-text]").focus(); toast("Describe the work item first"); return; }
+      if (w.kind === "action" && status === "needs_action" && !owner.trim()) { row.querySelector("[data-edit-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
+      if (w.kind === "check" && !due) { row.querySelector("[data-edit-due]").focus(); toast("Choose the next review date"); return; }
+      S.editingWork = null;
+      saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week,
+        kind: w.kind, text: text.trim(), owner: owner.trim(), due_date: due, status: status,
+        source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
+    }
+    function deleteWork(workId) {
+      if (!ensureAuthor() || !api) return;
+      if (typeof api.deleteWork !== "function") { toast("Delete is not available on this Review backend"); return; }
+      api.deleteWork(workId, author()).then(function () {
+        S.confirmDeleteWork = null; toast("Work item deleted · audit retained"); return reloadWork();
+      }).catch(function () { toast("Could not delete work item"); });
     }
     function saveWorkItem(item, okMsg) { api.saveWork(item).then(function () { toast(okMsg); reloadWork(); }).catch(function () { toast("Could not save work item"); }); }
     function reloadWork() {
@@ -1006,15 +1178,22 @@
     }
     function renderMemory(res) {
       var weekly = res.weekly || [], work = res.work || [], receipts = res.receipts || [], legacy = res.legacy_notes || res.legacyNotes || [];
+      var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
+        var summary = null;
+        try { summary = w.summary_json ? JSON.parse(w.summary_json) : null; } catch (e) {}
+        var points = summary ? [].concat(summary.findings || [], summary.decisions || [], summary.open_points || []) : [];
+        var slackStory = points.length ? '<div class="rv-memory-source"><div class="rv-source-label">✦ AI · Slack · thread summary</div><ul>' +
+          points.map(function (p) { return "<li>" + esc(typeof p === "string" ? p : (p.text || p.body || "")) + "</li>"; }).join("") + "</ul>" +
+          (w.slack_post_permalink ? '<a class="rv-source-link" href="' + esc(w.slack_post_permalink) + '" target="_blank" rel="noopener">Open source thread ↗</a>' : "") + "</div>" : "";
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(w.week_start) + "<span>" + esc(w.bgm_author || "BGM") + "</span></div>" +
-          '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p></div></article>";
+          '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
       var legacyStory = legacy.map(function (n) {
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start) + "<span>legacy · " + esc(n.author_name || "") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Legacy note</div><p>' + esc(n.body || "") + "</p></div></article>";
       }).join("");
-      var storyPanel = (story || legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
+      var storyPanel = (story + legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
       var workPanel = work.map(function (w) {
         return '<article class="rv-week-card"><div class="rv-week-head">' + (w.kind === "check" ? "Scheduled check" : "Action") + "<span>w/c " + esc(w.origin_week) + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">' + esc((w.status || "").replace(/_/g, " ")) + "</div><p>" + esc(w.text) + "</p>" +
@@ -1025,10 +1204,16 @@
           '<div class="rv-week-body"><div class="rv-source-label">' + esc(TREATMENT_LABELS[r.treatment] || r.treatment) + " · " + esc(r.reviewer || "") + "</div><p>" + esc(r.summary || "—") + "</p></div></article>";
       }).join("");
       var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
+      var perfPanel = perf.length ? perf.map(function (p) {
+        return '<article class="rv-week-card"><div class="rv-week-head">Perf action<span>w/c ' + esc(p.week_start || p.week || "") + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">Read-only · Perf source</div><p>' + esc(p.text || p.action || p.comment || "—") + "</p></div></article>";
+      }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>Perf history source unavailable</strong><span>This read-only space is reserved for prior weekly Perf actions. No value is inferred when the source is missing.</span></div>';
       return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button></div>' +
+        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
         '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>";
+        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-perf" hidden>' + perfPanel + "</div>";
     }
     function wireMemory(body) {
       body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
@@ -1036,6 +1221,7 @@
           body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
           body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
           body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
+          body.querySelector("#rv-mem-perf").hidden = b.dataset.mem !== "perf";
         };
       });
     }
@@ -1048,7 +1234,6 @@
     };
   };
 })(typeof window !== "undefined" ? window : this);
-
 </script><script>
 
 try{ localStorage.setItem('wr_author','Aaradhya Rai'); }catch(e){}

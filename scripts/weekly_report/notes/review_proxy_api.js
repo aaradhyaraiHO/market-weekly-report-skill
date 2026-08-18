@@ -1,8 +1,7 @@
 import { createHmac } from "node:crypto";
 import { jwtVerify } from "jose";
 
-const APPS_SCRIPT_URL = process.env.REVIEW_APPS_SCRIPT_URL ||
-  "https://script.google.com/macros/s/AKfycbyvXB69WxTM1p9qO4tQXxPfV28mkXOOiTKqW8J4SH2P_vtblTYd6bUQGJSb8HyLLGhOjA/exec";
+const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
 
 function parseCookies(header) {
   const output = {};
@@ -39,6 +38,9 @@ export default async function handler(req, res) {
   try { actor = await authenticatedActor(req); } catch (_) { actor = null; }
   if (!actor) return res.status(401).json({ ok: false, error: "authenticated BGM identity required" });
 
+  if (!APPS_SCRIPT_URL)
+    return res.status(503).json({ ok: false, error: "isolated review backend unavailable" });
+
   const base = `https://${req.headers.host || "market-notebook.vercel.app"}`;
   const incoming = new URL(req.url, base);
   const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {})) : null;
@@ -46,11 +48,16 @@ export default async function handler(req, res) {
   if (params.get("action") === "whoami")
     return res.status(200).json({ ok: true, actor_email: actor.email, actor_name: actor.name });
 
-  const signingSecret = process.env.REVIEW_PROXY_SECRET ||
-    process.env.REVIEW_AI_WEBHOOK_SECRET_V2 || process.env.REVIEW_AI_WEBHOOK_SECRET;
+  const signingSecret = process.env.REVIEW_MODE_PROXY_SECRET;
   if (!signingSecret) return res.status(503).json({ ok: false, error: "review proxy signing unavailable" });
 
-  const target = new URL(APPS_SCRIPT_URL);
+  let target;
+  try {
+    target = new URL(APPS_SCRIPT_URL);
+    if (target.protocol !== "https:") throw new Error("HTTPS required");
+  } catch (_) {
+    return res.status(503).json({ ok: false, error: "isolated review backend misconfigured" });
+  }
   params.set("actor_email", actor.email);
   params.set("actor_ts", String(Math.floor(Date.now() / 1000)));
   const signature = createHmac("sha256", signingSecret)

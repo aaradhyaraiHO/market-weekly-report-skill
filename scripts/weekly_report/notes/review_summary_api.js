@@ -93,7 +93,7 @@ async function askModel(instruction, payload, schema) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST required" });
-  const expectedSecret = process.env.REVIEW_AI_WEBHOOK_SECRET_V2 || process.env.REVIEW_AI_WEBHOOK_SECRET;
+  const expectedSecret = process.env.REVIEW_MODE_AI_WEBHOOK_SECRET;
   if (!sameSecret(req.headers["x-review-secret"], expectedSecret))
     return res.status(401).json({ error: "unauthorized" });
 

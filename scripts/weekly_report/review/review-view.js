@@ -45,9 +45,10 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, setRows: {}, setRowsList: [],
+      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: ""
+      processing: false, processSummary: "", noteDraft: null, mentionPreview: null, mentionBusy: false,
+      editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null
     };
 
     // ---- small helpers ---------------------------------------------------
@@ -85,6 +86,16 @@
       var list = options.slice();
       if (value && !list.some(function (o) { return o[0] === value; })) list.push([value, value]);
       return list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === value ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("");
+    }
+    function sourceName(item) {
+      var source = String((item && item.source_type) || "").toLowerCase();
+      return source === "slack" ? "Slack" : source === "granola" ? "Granola" : "Imported";
+    }
+    function suggestionSource(item) {
+      var source = sourceName(item);
+      if (source === "Slack") return '<span class="rv-origin slack">✦ AI · Slack</span>';
+      if (source === "Granola") return '<span class="rv-origin granola">✦ AI · Granola</span>';
+      return '<span class="rv-origin imported">✦ AI · Imported</span>';
     }
 
     // ---- queue construction ---------------------------------------------
@@ -150,16 +161,18 @@
       });
     }
     function loadCe(ceId) {
-      if (!api || S.loadingCe[ceId]) return;
+      if (!api || S.loadingCe[ceId]) return Promise.resolve();
       S.loadingCe[ceId] = true;
-      Promise.all([
+      return Promise.all([
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8).catch(function () { return { weekly: [] }; }),
-        api.granolaSuggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; })
+        api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; }),
+        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { comments: [] }; })
       ]).then(function (res) {
         var rows = res[0].weekly || [];
         S.weekly[ceId] = rows.filter(function (r) { return String(r.week_start) === String(S.week_start); })[0] || null;
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
+        S.comments[ceId] = res[2].comments || [];
         S.loadingCe[ceId] = false;
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { S.loadingCe[ceId] = false; });
@@ -167,6 +180,7 @@
 
     function select(ceId) {
       S.selected = String(ceId); S.editingNote = false; S.confirmDelete = false; S.compose = "";
+      S.noteDraft = null; S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
       render();
       if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
     }
@@ -265,7 +279,7 @@
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
         "</select>" + receipt + "</div></header>" +
         '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
-        '<div class="rv-resource-state">Saved to Weekly Report Notes · CE ' + esc(q.ce_id) + "</div></div>" +
+        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
         '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
@@ -274,9 +288,11 @@
 
     function renderCommentaryCard(q) {
       var weekly = S.weekly[q.ce_id];
-      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "comment" || !s.kind; });
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) {
+        return (s.kind === "comment" || !s.kind) && String(s.source_type || "granola") === "granola";
+      });
       var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
-      var accepted = sugg.filter(function (s) { return s.status === "approved" || s.accepted_body; });
+      var accepted = (S.comments[q.ce_id] || []).filter(function (c) { return !c.deleted_at && String(c.source_type || "") === "granola"; });
       var pillTxt = pending.length ? pending.length + " to review" : accepted.length ? accepted.length + " added" : "Waiting on meetings";
       var granolaAddRow = S.addingGranola
         ? '<div class="rv-granola-add"><input id="rv-granola-link" type="url" inputmode="url" placeholder="https://notes.granola.ai/t/… — paste a meeting link">' +
@@ -292,16 +308,12 @@
         granolaAddRow + "</div>";
       var pendingHtml = pending.map(function (s) {
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
-          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
-          "<p>" + esc(s.body || "") + "</p>" +
+          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span></div>" +
+          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested commentary">' + esc(s.body || "") + "</textarea>" +
           '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>Add to commentary</button>' +
           '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
       }).join("");
-      var acceptedHtml = accepted.map(function (s) {
-        return '<div class="rv-note"><div class="rv-note-read">' + avatar("Granola") +
-          '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">Meeting pointer</span><span class="rv-note-metatxt">✦ AI · Granola</span></div>' +
-          '<div class="rv-note-text">' + esc(s.accepted_body || s.body || "") + "</div></div></div></div>";
-      }).join("");
+      var acceptedHtml = accepted.map(renderImportedComment).join("");
 
       var hasNote = !!(weekly && weekly.bgm_note && !weekly.note_deleted_at);
       var hasThread = !!(weekly && weekly.slack_post_ts);
@@ -313,11 +325,13 @@
           arr.map(function (x) { return "<li>" + esc(typeof x === "string" ? x : (x.text || x.body || "")) + "</li>"; }).join("") + "</ul></div>";
       }
       var summaryInner = summary ? (sumList("Findings", summary.findings) + sumList("Decisions", summary.decisions) + sumList("Open points", summary.open_points)) : "";
+      var syncLabel = weekly && weekly.summary_updated_at ? "Updated " + fmtWhen(weekly.summary_updated_at) : "Waiting for replies";
       var threadStrip = hasThread ? '<div class="rv-thread-wrap"><div class="rv-thread">' + avatar("Slack", "sm") +
         '<div class="rv-thread-copy"><strong>CE Slack thread</strong><span>Discussion happens in Slack; replies are summarized back here, source-linked.</span></div>' +
         '<a class="rv-btn small ghost" href="' + esc(weekly.slack_post_permalink || "#") + '" target="_blank" rel="noopener">Open thread ↗</a>' +
-        '<button class="rv-btn small" type="button" id="rv-sync-thread">Sync</button></div>' +
-        (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">✦ Slack summary<span>AI · source-linked</span></div>' + summaryInner + "</div>"
+        '<button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>' +
+        '<div class="rv-sync-status"><span class="rv-live-dot"></span>Automatic sync every 5 minutes · ' + esc(syncLabel) + "</div>" +
+        (summaryInner ? '<div class="rv-summary"><div class="rv-summary-head">' + suggestionSource({ source_type: "slack" }) + '<span>Thread summary · source-linked</span></div>' + summaryInner + "</div>"
           : '<div class="rv-summary rv-summary-empty">Replies will be summarized here automatically once the team responds in Slack.</div>') +
         "</div>" : "";
 
@@ -334,14 +348,15 @@
           (hasThread ? "" : '<div class="rv-note-foot"><span class="hint"></span><div class="rv-note-actions"><button class="rv-btn small ghost" type="button" id="rv-start-slack">Start Slack discussion</button></div></div>') +
           "</div></div>" + threadStrip + "</div>";
       } else {
-        var val = hasNote ? weekly.bgm_note : "";
+        var val = S.noteDraft != null ? S.noteDraft : (hasNote ? weekly.bgm_note : "");
         noteBlock = '<div class="rv-note rv-note-edit">' +
           (author() ? "" : '<input class="rv-note-author" id="rv-author" placeholder="Your name">') +
           '<textarea id="rv-note" placeholder="What is happening with this CE that the data can’t see?">' + esc(val) + "</textarea>" +
-          '<div class="rv-note-foot"><span class="hint">Names you type resolve to Slack tags on Start discussion.</span>' +
+          renderMentionPreview() +
+          '<div class="rv-note-foot"><span class="hint">Mention names naturally. You’ll preview resolved Slack tags before posting.</span>' +
           '<div class="rv-note-actions">' + (hasNote ? '<button class="rv-btn small" type="button" id="rv-cancel-note">Cancel</button>' : "") +
           '<button class="rv-btn small" type="button" id="rv-save-note">Save note</button>' +
-          '<button class="rv-btn small primary" type="button" id="rv-start-slack">' + (hasThread ? "Open thread ↗" : "Start Slack discussion") + "</button></div></div>" +
+          '<button class="rv-btn small primary" type="button" id="rv-start-slack"' + (S.mentionBusy ? " disabled" : "") + ">" + (S.mentionBusy ? "Resolving names…" : (hasThread ? "Open thread ↗" : "Preview Slack post")) + "</button></div></div>" +
           threadStrip + "</div>";
       }
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span>' +
@@ -349,6 +364,36 @@
         '<div class="rv-card-sub">One BGM note; discussion happens in Slack and is summarized back here — each stays source-attributed</div></div>' +
         '<span class="rv-card-count">' + (hasNote ? "BGM note saved" : "No note yet") + "</span></div>" +
         '<div class="rv-card-body">' + band + pendingHtml + acceptedHtml + noteBlock + "</div></section>";
+    }
+
+    function renderImportedComment(c) {
+      if (String(S.editingComment || "") === String(c.comment_id)) {
+        return '<div class="rv-note rv-imported-comment" data-comment="' + esc(c.comment_id) + '"><div class="rv-sugg-meta">' + suggestionSource(c) + '<span>Accepted commentary</span></div>' +
+          '<textarea class="rv-sugg-edit" data-comment-body>' + esc(c.body || "") + '</textarea><div class="rv-sugg-actions">' +
+          '<button class="rv-btn small" type="button" data-comment-edit-cancel>Cancel</button><button class="rv-btn small primary" type="button" data-comment-save="' + esc(c.comment_id) + '">Save changes</button></div></div>';
+      }
+      return '<div class="rv-note rv-imported-comment"><div class="rv-note-read">' + avatar("Granola") +
+        '<div class="rv-note-body"><div class="rv-note-top"><span class="rv-note-name">Meeting pointer</span><span class="rv-note-metatxt">' + suggestionSource(c) + " · " + esc(fmtWhen(c.updated_at || c.created_at)) + '</span>' +
+        '<span class="rv-note-links">' + (String(S.confirmDeleteComment || "") === String(c.comment_id)
+          ? '<span class="rv-delete-confirm">Delete?<button class="rv-link danger" type="button" data-comment-delete-confirm="' + esc(c.comment_id) + '">Confirm</button><button class="rv-link" type="button" data-comment-delete-cancel>Cancel</button></span>'
+          : '<button class="rv-link" type="button" data-comment-edit="' + esc(c.comment_id) + '">Edit</button><button class="rv-link danger" type="button" data-comment-delete="' + esc(c.comment_id) + '">Delete</button>') + '</span></div>' +
+        '<div class="rv-note-text">' + esc(c.body || "") + "</div>" + (c.source_url ? '<a class="rv-source-link" href="' + esc(c.source_url) + '" target="_blank" rel="noopener">Open Granola source ↗</a>' : "") + "</div></div></div>";
+    }
+
+    function renderMentionPreview() {
+      var p = S.mentionPreview;
+      if (!p) return "";
+      var matches = p.matches || [], ambiguous = p.ambiguous || [];
+      var resolved = matches.length ? '<div class="rv-mention-ok"><strong>Will tag</strong>' + matches.map(function (m) {
+        return '<span class="rv-person-chip">@' + esc(m.name || m.slack_user_id) + "</span>";
+      }).join("") + "</div>" : '<div class="rv-mention-neutral">No names were matched. You can still post without tags.</div>';
+      var blocked = ambiguous.length ? '<div class="rv-mention-ambiguous"><strong>Clarify before posting</strong>' + ambiguous.map(function (a) {
+        var names = (a.candidates || []).map(function (c) { return c.name; }).filter(Boolean).join(" or ");
+        return '<span>“' + esc(a.name) + '” matches ' + esc(names || "more than one person") + ". Use their full Slack name.</span>";
+      }).join("") + "</div>" : "";
+      return '<div class="rv-mention-preview" aria-live="polite"><div class="rv-mention-title"><span>Slack post preview</span><button class="rv-link" type="button" id="rv-mention-cancel">Edit message</button></div>' +
+        resolved + blocked + '<div class="rv-mention-message">' + esc(p.original_text || "") + "</div>" +
+        '<div class="rv-mention-actions"><button class="rv-btn small primary" type="button" id="rv-confirm-slack"' + (ambiguous.length ? " disabled" : "") + '>Post to Slack</button></div></div>';
     }
 
     function renderActionsCard(q) {
@@ -361,10 +406,9 @@
       var suggHtml = pending.map(function (s) {
         var isCheck = s.kind === "check";
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="' + esc(s.kind) + '">' +
-          '<div class="rv-sugg-meta"><span>✦ AI · Granola</span><span>·</span><span>' + esc(s.source_ref || s.source_author || "meeting") + "</span>" +
+          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "source") + "</span>" +
           "<span>·</span><span>" + (isCheck ? "suggested check" : "suggested action") + "</span></div>" +
-          "<p>" + esc(s.body || "") + "</p>" +
-          '<div class="rv-compose" style="margin-top:0;display:block" hidden></div>' +
+          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
           '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
           '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
@@ -376,7 +420,7 @@
       var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
         '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
       var emptyState = (openItems.length || pending.length || S.compose) ? "" :
-        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below, or accept a Granola suggestion.</span></div>';
+        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
       var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span>' +
@@ -397,12 +441,27 @@
         ? '<span class="rv-datebadge"><span class="m">' + MONTHS[(parseDate(w.due_date) || new Date()).getUTCMonth()] + '</span><span class="d">' + (parseDate(w.due_date) || new Date()).getUTCDate() + "</span></span>"
         : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
       var right = w.owner ? avatar(w.owner, "sm") : '<span class="rv-av sm none">–</span>';
+      if (String(S.editingWork || "") === String(w.work_id)) return renderWorkEdit(w);
       return '<div class="rv-work' + (done ? " done" : "") + '" data-work="' + esc(w.work_id) + '">' + left +
         '<div class="rv-work-main">' + (isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "") +
         '<div class="rv-work-title">' + esc(w.text) + "</div>" +
         '<div class="rv-work-meta">' + meta + "</div>" +
-        '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select>" +
+        (String(S.confirmDeleteWork || "") === String(w.work_id)
+          ? '<span class="rv-delete-confirm">Remove this item?<button class="rv-link danger" type="button" data-work-delete-confirm="' + esc(w.work_id) + '">Delete</button><button class="rv-link" type="button" data-work-delete-cancel>Cancel</button></span>'
+          : '<button class="rv-link" type="button" data-work-edit="' + esc(w.work_id) + '">Edit</button><button class="rv-link danger" type="button" data-work-delete="' + esc(w.work_id) + '">Delete</button>') + "</div>" +
         "</div>" + right + "</div>";
+    }
+    function renderWorkEdit(w) {
+      var isCheck = w.kind === "check";
+      return '<div class="rv-work rv-work-edit" data-work="' + esc(w.work_id) + '"><div class="rv-work-main">' +
+        '<div class="rv-work-kicker">Edit ' + (isCheck ? "scheduled check" : "action") + "</div>" +
+        '<input type="text" data-edit-text value="' + esc(w.text || "") + '" aria-label="Work item">' +
+        '<div class="rv-work-edit-grid"><input type="text" data-edit-owner value="' + esc(w.owner || "") + '" placeholder="Owner' + (isCheck ? " (optional)" : "") + '">' +
+        '<input type="date" data-edit-due value="' + esc(w.due_date || "") + '">' +
+        '<select class="rv-select" data-edit-status>' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<div class="rv-work-edit-actions"><button class="rv-btn small" type="button" data-work-edit-cancel>Cancel</button>' +
+        '<button class="rv-btn small primary" type="button" data-work-edit-save="' + esc(w.work_id) + '">Save changes</button></div></div></div>';
     }
     function renderCompose(kind) {
       var isCheck = kind === "check";
@@ -458,13 +517,17 @@
         var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(S.selected); });
         if (ce && ctx.openCeDrawer) ctx.openCeDrawer(ce); else toast("CE analytics drawer unavailable for this CE");
       });
-      bind("#rv-edit-note", function () { S.editingNote = true; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
-      bind("#rv-cancel-note", function () { S.editingNote = false; render(); });
+      bind("#rv-edit-note", function () { S.editingNote = true; S.noteDraft = (S.weekly[S.selected] || {}).bgm_note || ""; S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+      bind("#rv-cancel-note", function () { S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; render(); });
       bind("#rv-delete-note", function () { S.confirmDelete = true; render(); });
       bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
       bind("#rv-del-yes", deleteNote);
       bind("#rv-save-note", saveNote);
       bind("#rv-start-slack", startSlack);
+      bind("#rv-confirm-slack", postSlack);
+      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) n.focus(); });
+      var noteInput = root.querySelector("#rv-note");
+      if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.mentionPreview = null; };
       bind("#rv-sync-thread", syncThread);
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; render(); });
@@ -475,8 +538,20 @@
         if (acc) acc.onclick = function () { acceptSuggestion(card); };
         if (ig) ig.onclick = function () { decideSuggestion(card.dataset.suggestion, "rejected", {}); };
       });
+      root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
+      root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
+      root.querySelectorAll("[data-comment-save]").forEach(function (b) { b.onclick = function () { saveImportedComment(b.dataset.commentSave); }; });
+      root.querySelectorAll("[data-comment-delete]").forEach(function (b) { b.onclick = function () { S.confirmDeleteComment = b.dataset.commentDelete; render(); }; });
+      root.querySelectorAll("[data-comment-delete-confirm]").forEach(function (b) { b.onclick = function () { deleteImportedComment(b.dataset.commentDeleteConfirm); }; });
+      root.querySelectorAll("[data-comment-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteComment = null; render(); }; });
       root.querySelectorAll("[data-work-toggle]").forEach(function (b) { b.onclick = function () { toggleWork(b.dataset.workToggle); }; });
       root.querySelectorAll("[data-work-status]").forEach(function (sel) { sel.onchange = function () { setWorkStatus(sel.dataset.workStatus, sel.value); }; });
+      root.querySelectorAll("[data-work-edit]").forEach(function (b) { b.onclick = function () { S.editingWork = b.dataset.workEdit; render(); }; });
+      root.querySelectorAll("[data-work-delete]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = b.dataset.workDelete; render(); }; });
+      root.querySelectorAll("[data-work-delete-confirm]").forEach(function (b) { b.onclick = function () { deleteWork(b.dataset.workDeleteConfirm); }; });
+      root.querySelectorAll("[data-work-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = null; render(); }; });
+      root.querySelectorAll("[data-work-edit-save]").forEach(function (b) { b.onclick = function () { saveWorkEdit(b.dataset.workEditSave); }; });
+      root.querySelectorAll("[data-work-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingWork = null; render(); }; });
       bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
       bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
       bind("#rv-c-cancel", function () { S.compose = ""; render(); });
@@ -550,7 +625,7 @@
       if (!ensureAuthor() || !api) return;
       var ta = root.querySelector("#rv-note"); if (!ta.value.trim()) { ta.focus(); toast("Write an observation first"); return; }
       api.saveWeeklyNote(Object.assign({}, ident(S.selected), { bgm_note: ta.value.trim(), bgm_author: author() }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("Note saved"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("Note saved"); render(); })
         .catch(function () { toast("Save failed · note kept locally"); });
     }
     function deleteNote() {
@@ -566,14 +641,32 @@
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
       if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
+      S.noteDraft = text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
+      api.resolveMentions(ident(S.selected), text).then(function (res) {
+        S.mentionBusy = false;
+        S.mentionPreview = { original_text: text, resolved_text: res.resolved_text || text, matches: res.matches || [], ambiguous: res.ambiguous || [] };
+        render();
+      }).catch(function () { S.mentionBusy = false; render(); toast("Could not resolve Slack names · message not posted"); });
+    }
+    function postSlack() {
+      var p = S.mentionPreview, weekly = S.weekly[S.selected];
+      if (!p || (p.ambiguous || []).length) { toast("Clarify ambiguous names before posting"); return; }
+      if (!ensureAuthor() || !api) return;
+      if (!S.channel) { toast("No Slack channel configured for this market"); return; }
+      var text = String(p.original_text || "").trim();
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; toast("CE discussion started"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
         .catch(function (e) { toast((e && e.message) || "Post failed · note remains saved"); });
     }
     function syncThread() {
       if (!api) return;
-      api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) { if (res.weekly) S.weekly[S.selected] = res.weekly; toast("Thread synced"); render(); }).catch(function () { toast("Sync failed"); });
+      var button = root.querySelector("#rv-sync-thread"); if (button) { button.disabled = true; button.textContent = "Summarizing…"; }
+      api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) {
+        if (res.weekly) S.weekly[S.selected] = res.weekly;
+        toast(res.new_replies && res.new_replies.length ? "Summary updated from new replies" : "Summary is current");
+        return Promise.all([loadCe(S.selected), reloadWork()]);
+      }).catch(function () { toast("Could not summarize now · automatic sync will retry"); render(); });
     }
     function addGranola() {
       if (!ensureAuthor() || !api) return;
@@ -585,20 +678,42 @@
     }
     function acceptSuggestion(card) {
       var kind = card.dataset.kind, sid = card.dataset.suggestion;
-      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment" }); return; }
+      var body = ((card.querySelector("[data-sugg-body]") || {}).value || "").trim();
+      if (!body) { var bodyEl = card.querySelector("[data-sugg-body]"); if (bodyEl) bodyEl.focus(); toast("Keep or edit the suggestion text first"); return; }
+      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment", body: body }); return; }
       if (!ensureAuthor()) return;
       var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
       var due = (card.querySelector("[data-w-due]") || {}).value || "";
       var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
       if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
-      decideSuggestion(sid, "approved", { destination: kind, owner: owner.trim(), due_date: due, work_status: status });
+      decideSuggestion(sid, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
       api.decideSuggestion(Object.assign({ suggestion_id: sid, decision: decision, decided_by: author() }, fields || {}))
         .then(function () { toast(decision === "approved" ? "Added" : "Ignored · source retained"); return Promise.all([loadCe(S.selected), reloadWork()]); })
         .catch(function () { toast("Could not update suggestion"); });
+    }
+    function findImportedComment(commentId) {
+      return (S.comments[S.selected] || []).filter(function (c) { return String(c.comment_id) === String(commentId); })[0] || null;
+    }
+    function saveImportedComment(commentId) {
+      var c = findImportedComment(commentId); if (!c || !api || !ensureAuthor()) return;
+      var row = root.querySelector('[data-comment="' + String(commentId).replace(/"/g, "") + '"]');
+      var body = row && row.querySelector("[data-comment-body]") ? row.querySelector("[data-comment-body]").value.trim() : "";
+      if (!body) { if (row) row.querySelector("[data-comment-body]").focus(); toast("Commentary cannot be empty"); return; }
+      api.saveComment({ comment_id: c.comment_id, market_slug: c.market_slug, ce_id: c.ce_id, ce_name: c.ce_name,
+        week_start: c.week_start, body: body, author_name: c.author_name || c.source_author || "Granola",
+        author_role: c.author_role || "", source_type: c.source_type || "granola", source_author: c.source_author || "",
+        source_ref: c.source_ref || "", source_url: c.source_url || "", accepted_by: author() })
+        .then(function () { S.editingComment = null; toast("Granola commentary updated"); loadCe(S.selected); })
+        .catch(function () { toast("Could not update commentary"); });
+    }
+    function deleteImportedComment(commentId) {
+      if (!api || !ensureAuthor()) return;
+      api.deleteComment(commentId, author()).then(function () { S.confirmDeleteComment = null; toast("Granola commentary deleted · audit retained"); loadCe(S.selected); })
+        .catch(function () { toast("Could not delete commentary"); });
     }
     function saveCompose() {
       if (!ensureAuthor() || !api) return;
@@ -618,6 +733,29 @@
     function setWorkStatus(workId, status) {
       var w = findWork(workId); if (!w || !api) return;
       saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week, kind: w.kind, text: w.text, owner: w.owner || "", due_date: w.due_date || "", status: status, source_type: w.source_type || "bgm_manual" }, "Status updated");
+    }
+    function saveWorkEdit(workId) {
+      var w = findWork(workId); if (!w || !api || !ensureAuthor()) return;
+      var row = root.querySelector('[data-work="' + String(workId).replace(/"/g, "") + '"]');
+      if (!row) return;
+      var text = (row.querySelector("[data-edit-text]") || {}).value || "";
+      var owner = (row.querySelector("[data-edit-owner]") || {}).value || "";
+      var due = (row.querySelector("[data-edit-due]") || {}).value || "";
+      var status = (row.querySelector("[data-edit-status]") || {}).value || w.status;
+      if (!text.trim()) { row.querySelector("[data-edit-text]").focus(); toast("Describe the work item first"); return; }
+      if (w.kind === "action" && status === "needs_action" && !owner.trim()) { row.querySelector("[data-edit-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
+      if (w.kind === "check" && !due) { row.querySelector("[data-edit-due]").focus(); toast("Choose the next review date"); return; }
+      S.editingWork = null;
+      saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week,
+        kind: w.kind, text: text.trim(), owner: owner.trim(), due_date: due, status: status,
+        source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
+    }
+    function deleteWork(workId) {
+      if (!ensureAuthor() || !api) return;
+      if (typeof api.deleteWork !== "function") { toast("Delete is not available on this Review backend"); return; }
+      api.deleteWork(workId, author()).then(function () {
+        S.confirmDeleteWork = null; toast("Work item deleted · audit retained"); return reloadWork();
+      }).catch(function () { toast("Could not delete work item"); });
     }
     function saveWorkItem(item, okMsg) { api.saveWork(item).then(function () { toast(okMsg); reloadWork(); }).catch(function () { toast("Could not save work item"); }); }
     function reloadWork() {
@@ -651,15 +789,22 @@
     }
     function renderMemory(res) {
       var weekly = res.weekly || [], work = res.work || [], receipts = res.receipts || [], legacy = res.legacy_notes || res.legacyNotes || [];
+      var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
+        var summary = null;
+        try { summary = w.summary_json ? JSON.parse(w.summary_json) : null; } catch (e) {}
+        var points = summary ? [].concat(summary.findings || [], summary.decisions || [], summary.open_points || []) : [];
+        var slackStory = points.length ? '<div class="rv-memory-source"><div class="rv-source-label">✦ AI · Slack · thread summary</div><ul>' +
+          points.map(function (p) { return "<li>" + esc(typeof p === "string" ? p : (p.text || p.body || "")) + "</li>"; }).join("") + "</ul>" +
+          (w.slack_post_permalink ? '<a class="rv-source-link" href="' + esc(w.slack_post_permalink) + '" target="_blank" rel="noopener">Open source thread ↗</a>' : "") + "</div>" : "";
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(w.week_start) + "<span>" + esc(w.bgm_author || "BGM") + "</span></div>" +
-          '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p></div></article>";
+          '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
       var legacyStory = legacy.map(function (n) {
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start) + "<span>legacy · " + esc(n.author_name || "") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Legacy note</div><p>' + esc(n.body || "") + "</p></div></article>";
       }).join("");
-      var storyPanel = (story || legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
+      var storyPanel = (story + legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
       var workPanel = work.map(function (w) {
         return '<article class="rv-week-card"><div class="rv-week-head">' + (w.kind === "check" ? "Scheduled check" : "Action") + "<span>w/c " + esc(w.origin_week) + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">' + esc((w.status || "").replace(/_/g, " ")) + "</div><p>" + esc(w.text) + "</p>" +
@@ -670,10 +815,16 @@
           '<div class="rv-week-body"><div class="rv-source-label">' + esc(TREATMENT_LABELS[r.treatment] || r.treatment) + " · " + esc(r.reviewer || "") + "</div><p>" + esc(r.summary || "—") + "</p></div></article>";
       }).join("");
       var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
+      var perfPanel = perf.length ? perf.map(function (p) {
+        return '<article class="rv-week-card"><div class="rv-week-head">Perf action<span>w/c ' + esc(p.week_start || p.week || "") + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">Read-only · Perf source</div><p>' + esc(p.text || p.action || p.comment || "—") + "</p></div></article>";
+      }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>Perf history source unavailable</strong><span>This read-only space is reserved for prior weekly Perf actions. No value is inferred when the source is missing.</span></div>';
       return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button></div>' +
+        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
         '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>";
+        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-perf" hidden>' + perfPanel + "</div>";
     }
     function wireMemory(body) {
       body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
@@ -681,6 +832,7 @@
           body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
           body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
           body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
+          body.querySelector("#rv-mem-perf").hidden = b.dataset.mem !== "perf";
         };
       });
     }

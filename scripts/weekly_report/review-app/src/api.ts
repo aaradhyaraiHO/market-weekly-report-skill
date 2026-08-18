@@ -21,6 +21,7 @@ function make(baseUrl: string) {
     finishReview: (r: any) => req("review_receipt_upsert", r),
     work: (f: any) => req("review_work_list", f || {}),
     saveWork: (item: any) => req("review_work_upsert", item),
+    deleteWork: (workId: string, deletedBy: string) => req("review_work_delete", { work_id: workId, deleted_by: deletedBy }),
     weeklyCommentary: (id: any, before?: string, limit?: number) => req("review_weekly_list", { ...id, before: before || "", limit: limit || 26 }),
     saveWeeklyNote: (n: any) => req("review_weekly_note_upsert", n),
     deleteWeeklyNote: (id: any, by: string) => req("review_weekly_note_delete", { ...id, deleted_by: by }),

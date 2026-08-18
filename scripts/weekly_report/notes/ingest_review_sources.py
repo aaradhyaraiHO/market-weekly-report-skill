@@ -18,7 +18,7 @@ from pathlib import Path
 
 def build_payload(source_type: str, market_slug: str, week_start: str, items: list[dict], secret: str) -> dict:
     if not secret:
-        raise ValueError("WR_REVIEW_INGEST_SECRET is required")
+        raise ValueError("WR_REVIEW_MODE_INGEST_SECRET is required")
     if source_type not in {"granola", "slack"}:
         raise ValueError("source_type must be granola or slack")
     if not market_slug or not week_start:
@@ -53,7 +53,7 @@ def main() -> None:
     parser.add_argument("--source-type", default="granola", choices=["granola", "slack"])
     parser.add_argument("--market", required=True)
     parser.add_argument("--week", required=True)
-    parser.add_argument("--url", default=os.environ.get("WR_NOTES_SCRIPT_URL", ""))
+    parser.add_argument("--url", default=os.environ.get("WR_REVIEW_MODE_APPS_SCRIPT_URL", ""))
     parser.add_argument("--apply", action="store_true", help="POST to the configured Apps Script")
     args = parser.parse_args()
 
@@ -61,7 +61,7 @@ def main() -> None:
     items = raw.get("items", []) if isinstance(raw, dict) else raw
     if not isinstance(items, list):
         raise SystemExit("input must be a JSON array or {items:[...]}")
-    secret = os.environ.get("WR_REVIEW_INGEST_SECRET", "")
+    secret = os.environ.get("WR_REVIEW_MODE_INGEST_SECRET", "")
     payload = build_payload(args.source_type, args.market, args.week, items, secret or "DRY_RUN")
     if not args.apply:
         safe = dict(payload)
@@ -69,9 +69,9 @@ def main() -> None:
         print(json.dumps(safe, indent=2))
         return
     if not args.url:
-        raise SystemExit("--url or WR_NOTES_SCRIPT_URL is required")
+        raise SystemExit("--url or WR_REVIEW_MODE_APPS_SCRIPT_URL is required")
     if not secret:
-        raise SystemExit("WR_REVIEW_INGEST_SECRET is required with --apply")
+        raise SystemExit("WR_REVIEW_MODE_INGEST_SECRET is required with --apply")
     print(json.dumps(post(args.url, payload), indent=2))
 
 

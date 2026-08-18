@@ -18,7 +18,7 @@
   --rv-shadow-3:0 6px 16px 5px rgba(17,17,17,.10),0 1px 8px rgba(17,17,17,.05);
   --rv-hd:halyard-display,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --rv-ht:halyard-text,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:300;
+  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:300;-webkit-font-smoothing:antialiased;
 }
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
@@ -89,7 +89,7 @@
 
 .rv-btn{min-height:40px;padding:10px 16px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-white);font-size:14px;font-weight:600;cursor:pointer;transition:background-color .14s,border-color .14s,transform .1s}
 .rv-btn:hover{background:var(--rv-g100)}
-.rv-btn:active{transform:scale(.97)}
+.rv-btn:active{transform:scale(.96)}
 .rv-btn.primary{border-color:var(--rv-purps);background:var(--rv-purps);color:#fff;box-shadow:var(--rv-shadow-1)}
 .rv-btn.primary:hover{background:var(--rv-purps-600)}
 .rv-btn.ghost{border-color:var(--rv-purps-200);background:#fff;color:var(--rv-purps-700)}
@@ -132,6 +132,10 @@
 .rv-sugg-meta{display:flex;gap:6px;align-items:center;color:var(--rv-purps-700);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .rv-sugg p{margin:8px 0 12px;color:var(--rv-ink);font-size:14px;line-height:20px}
 .rv-sugg-actions{display:flex;gap:8px;flex-wrap:wrap}
+.rv-origin{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:var(--rv-purps-20);color:var(--rv-purps-700)}
+.rv-origin.slack{background:var(--rv-blue-200);color:var(--rv-blue-700)}
+.rv-sugg-edit{width:100%;min-height:72px;margin:10px 0;padding:10px 12px;resize:vertical;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-g50);font-size:14px;line-height:20px}
+.rv-sugg-edit:focus{outline:2px solid var(--rv-purps);outline-offset:0;border-color:var(--rv-purps);background:#fff}
 
 /* note read card (Eevee: avatar + name·role + meta + edit/delete links) */
 .rv-note{margin:14px 0}
@@ -148,6 +152,20 @@
 .rv-note-foot{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .rv-note-foot .hint{color:var(--rv-g500);font-size:12px}
 .rv-note-actions{display:flex;gap:8px}
+.rv-imported-comment{padding:12px 0;border-top:1px solid var(--rv-g200)}
+.rv-source-link{display:inline-block;margin-top:7px;color:var(--rv-purps-700);font-size:12px;font-weight:600;text-decoration:none}
+.rv-source-link:hover{text-decoration:underline}
+
+/* Slack mention resolution is a deliberate pre-post step, never a silent rewrite. */
+.rv-mention-preview{margin-top:12px;padding:14px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
+.rv-mention-title{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:700}
+.rv-mention-ok,.rv-mention-ambiguous,.rv-mention-neutral{margin-top:10px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:var(--rv-muted);font-size:12px}
+.rv-mention-ok strong,.rv-mention-ambiguous strong{color:var(--rv-ink)}
+.rv-person-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:inset 0 0 0 1px var(--rv-purps-200)}
+.rv-mention-ambiguous{padding:10px;border-radius:10px;background:var(--rv-amber-200);color:var(--rv-amber-800)}
+.rv-mention-ambiguous span{flex-basis:100%}
+.rv-mention-message{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff;color:var(--rv-g800);font-size:14px;line-height:20px;white-space:pre-wrap}
+.rv-mention-actions{margin-top:10px;display:flex;justify-content:flex-end}
 
 /* CE Slack thread strip + AI summary brought back from Slack */
 .rv-thread{margin-top:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
@@ -156,6 +174,8 @@
 .rv-thread span{display:block;color:var(--rv-muted);font-size:12px}
 .rv-thread-wrap{margin-top:12px}
 .rv-thread-wrap .rv-thread{margin-top:0;border-radius:12px 12px 0 0;border-bottom:0}
+.rv-sync-status{padding:7px 16px;display:flex;align-items:center;gap:7px;border-right:1px solid var(--rv-purps-200);border-left:1px solid var(--rv-purps-200);background:var(--rv-purps-10);color:var(--rv-muted);font-size:11px;font-variant-numeric:tabular-nums}
+.rv-live-dot{width:7px;height:7px;border-radius:50%;background:var(--rv-green-700)}
 .rv-summary{padding:14px 16px;border:1px solid var(--rv-purps-200);border-top:0;border-radius:0 0 12px 12px;background:#fff}
 .rv-summary-empty{color:var(--rv-muted);font-size:13px}
 .rv-summary-head{display:flex;align-items:center;gap:8px;color:var(--rv-purps-700);font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
@@ -182,11 +202,16 @@
 .rv-work.done .rv-work-title{text-decoration:line-through;color:var(--rv-muted)}
 .rv-work-meta{margin-top:4px;color:var(--rv-muted);font-size:13px}
 .rv-work-meta a{color:var(--rv-purps-700);font-weight:600;text-decoration:none}
-.rv-work-status{margin-top:10px}
+.rv-work-status{margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rv-work-status select{min-height:38px;padding:8px 30px 8px 12px;font-size:13px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-white) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 10px center;-webkit-appearance:none;appearance:none;cursor:pointer}
 .rv-work-owner{flex:none}
 .rv-owner-remove{width:30px;height:30px;flex:none;border:1px solid var(--rv-g300);border-radius:50%;background:#fff;color:var(--rv-g500);cursor:pointer;font-size:16px;line-height:1}
 .rv-owner-remove:hover{background:var(--rv-g100)}
+.rv-delete-confirm{display:inline-flex;align-items:center;gap:10px;color:var(--rv-muted);font-size:12px}
+.rv-work-edit{padding:14px 0}
+.rv-work-edit input{width:100%;min-height:40px;padding:9px 12px;border:1px solid var(--rv-g400);border-radius:10px;background:#fff}
+.rv-work-edit-grid{margin-top:8px;display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+.rv-work-edit-actions{margin-top:10px;display:flex;justify-content:flex-end;gap:8px}
 
 /* archived (crossed-off) work — collapsed by default */
 .rv-done{margin-top:4px;border-top:1px solid var(--rv-g200)}
@@ -229,7 +254,7 @@
 .rv-drawer-head p{margin:4px 0 0;color:var(--rv-muted);font-size:13px}
 .rv-close{width:40px;height:40px;flex:none;border:0;border-radius:10px;background:var(--rv-g200);font-size:22px;cursor:pointer}
 .rv-drawer-body{padding:16px}
-.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:1fr 1fr;border-radius:12px;background:var(--rv-g200)}
+.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:repeat(3,1fr);border-radius:12px;background:var(--rv-g200)}
 .rv-memory-tab{min-height:38px;border:0;border-radius:10px;background:transparent;color:var(--rv-muted);cursor:pointer;font-size:13px}
 .rv-memory-tab.active{background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:var(--rv-shadow-1)}
 .rv-memory-panel[hidden]{display:none}
@@ -239,6 +264,9 @@
 .rv-week-body{padding:14px 16px}
 .rv-source-label{color:var(--rv-purps-700);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .rv-week-body p{margin:6px 0 0;color:var(--rv-muted);font-size:14px;white-space:pre-line}
+.rv-memory-source{margin-top:14px;padding-top:14px;border-top:1px solid var(--rv-g200)}
+.rv-memory-source ul{margin:7px 0 0;padding-left:18px;color:var(--rv-muted);font-size:14px;line-height:20px}
+.rv-memory-source li+li{margin-top:4px}
 .rv-source-meta{margin-top:8px;color:var(--rv-g500);font-size:12px}
 .rv-empty-state{padding:20px;border:1px dashed var(--rv-g400);border-radius:12px;background:var(--rv-g50);text-align:center}
 .rv-empty-state strong{display:block;font-weight:600}
@@ -252,5 +280,6 @@
   .rv-side{border-right:0;border-bottom:1px solid var(--rv-line)}
   .rv-workspace{padding:16px 16px 120px}
   .rv-compose .row2{grid-template-columns:1fr}
+  .rv-work-controls,.rv-work-edit-grid{grid-template-columns:1fr!important}
   .rv-footer{padding:12px 16px}
 }

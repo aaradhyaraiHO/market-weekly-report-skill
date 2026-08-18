@@ -54,6 +54,11 @@
       },
       work: function(filter) { return request("review_work_list", filter || {}); },
       saveWork: function(item) { return request("review_work_upsert", item); },
+      deleteWork: function(workId, deletedBy) {
+        required(workId, "work_id");
+        required(deletedBy, "deleted_by");
+        return request("review_work_delete", {work_id: workId, deleted_by: deletedBy});
+      },
       finishReview: function(receipt) { return request("review_receipt_upsert", receipt); },
       receipts: function(identity) { return request("review_receipt_list", identity); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
