@@ -14,6 +14,7 @@ TEMPLATE = ROOT / "scripts" / "weekly_report" / "template" / "report_template.ht
 RENDER = ROOT / "scripts" / "weekly_report" / "render.py"
 PROXY = ROOT / "scripts" / "weekly_report" / "notes" / "review_proxy_api.js"
 GRANOLA_ADAPTER = ROOT / "scripts" / "weekly_report" / "notes" / "granola_review_adapter.js"
+GRANOLA_PULL = ROOT / "scripts" / "weekly_report" / "notes" / "granola_pull_api.js"
 
 
 def load_ingest():
@@ -240,6 +241,18 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('match_status: candidate.match_status || "unmatched"', adapter)
         self.assertIn('proposed_owner: ""', adapter)
         self.assertIn("api/granola-review", middleware)
+
+    def test_granola_rest_pull_is_server_side_and_fails_closed(self):
+        pull = GRANOLA_PULL.read_text()
+        middleware = (ROOT / "scripts" / "weekly_report" / "notes" / "review_summary_middleware.js").read_text()
+        self.assertIn('process.env.GRANOLA_API_KEY', pull)
+        self.assertIn('https://public-api.granola.ai/v1/notes', pull)
+        self.assertIn('process.env.REVIEW_MODE_AI_WEBHOOK_SECRET', pull)
+        self.assertIn('process.env.REVIEW_MODE_INGEST_SECRET', pull)
+        self.assertIn('match_status: "unmatched"', pull)
+        self.assertIn('match_status: "exact"', pull)
+        self.assertIn('proposed_owner: ""', pull)
+        self.assertIn("api/granola-pull", middleware)
 
     def test_legacy_note_and_bucket_action_routes_remain(self):
         for route in ('action === "list"', 'action === "upsert"', 'action === "post"',
