@@ -175,6 +175,19 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("function reviewTrustedAuthor(p,fallback)", self.backend)
         self.assertIn("next.bgm_author=trustedAuthor", self.backend)
 
+    def test_diagnostic_actions_keep_v1_authenticated_writer_contract(self):
+        self.assertIn('var diagnosticMutations=["action_delete","action_upsert"]', self.backend)
+        self.assertIn("authenticated Headout identity required", self.backend)
+        self.assertIn("return reviewActorEmail(p) ? null", self.backend)
+        self.assertIn("reviewActorEmail(p), aNow", self.backend)
+        self.assertNotIn('p.owner || "", aNow', self.backend)
+        gate = self.backend.split("function reviewMutationGate(action,p){", 1)[1].split(
+            "function reviewUpsertBy", 1
+        )[0]
+        review_mutations = gate.split("var mutations=", 1)[1]
+        self.assertNotIn('"action_delete"', review_mutations)
+        self.assertNotIn('"action_upsert"', review_mutations)
+
     def test_signed_same_origin_proxy_supplies_verified_bgm_identity(self):
         proxy = PROXY.read_text()
         template = TEMPLATE.read_text()

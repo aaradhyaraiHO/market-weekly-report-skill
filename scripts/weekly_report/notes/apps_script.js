@@ -415,7 +415,15 @@ function reviewTrustedAuthor(p,fallback) {
 }
 
 function reviewMutationGate(action,p){
-  var mutations=["upsert","delete","post","action_delete","action_upsert",
+  // Diagnostic bucket actions preserve the established V1 contract: any
+  // authenticated Headout user may write them. Review-mode mutations below
+  // remain restricted to the BGM/GM/admin market allowlist.
+  var diagnosticMutations=["action_delete","action_upsert"];
+  if(diagnosticMutations.indexOf(action)>=0){
+    return reviewActorEmail(p) ? null :
+      jsonResp({ok:false,error:"authenticated Headout identity required"});
+  }
+  var mutations=["upsert","delete","post",
     "review_comment_upsert","review_comment_delete","review_work_upsert",
     "review_receipt_upsert","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
@@ -848,7 +856,7 @@ function doGet(e) {
     var aVals = [
       p.market_slug || "", String(p.ce_id || ""), p.week_start || "",
       p.bucket || "", p.checkbox || "", p.note || "", p.status || "",
-      p.owner || "", aNow
+      reviewActorEmail(p), aNow
     ];
     writeActionRow(ash, aExisting, aVals);
     return jsonResp({ ok: true, action: aExisting ? "updated" : "created", updated: aNow });
