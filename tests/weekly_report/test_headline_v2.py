@@ -309,13 +309,15 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("W0 loss", html)
         self.assertIn("CM1/conv", html)
         self.assertIn("function bucketActionCell", html)
-        self.assertIn("const ACTIONS_API='/api/review'", html)
+        self.assertIn("const ACTIONS_API='/api/actions'", html)
+        self.assertNotIn("const ACTIONS_API='/api/review'", html)
         self.assertIn("credentials:'same-origin'", html)
         self.assertIn("Saved to Weekly Actions Sheet", html)
         self.assertIn("Add a comment to sync", html)
         self.assertIn("action:'action_upsert'", html)
         self.assertIn("action:'action_delete'", html)
         self.assertIn("action=action_list", html)
+        self.assertNotIn("/api/review?action=action_list", html)
         self.assertIn("function actionPrevPull", html)
         self.assertIn("last wk: <strong>", html)
         self.assertIn("'losing_money'", html)
@@ -643,6 +645,16 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("action=action_list", html)
         self.assertNotIn("fetch(NOTES_URL,{method:'POST'", html)
 
+
+    def test_diagnostic_actions_use_the_legacy_actions_proxy_not_review_mode(self):
+        html = render_v2.render([self.market])
+        self.assertIn("const ACTIONS_API='/api/actions'", html)
+        self.assertNotIn("const ACTIONS_API='/api/review'", html)
+        self.assertIn("action:'action_upsert'", html)
+        self.assertIn("action:'action_delete'", html)
+        self.assertIn("${ACTIONS_API}?${params.toString()}", html)
+        self.assertIn("${ACTIONS_API}?action=action_list", html)
+        self.assertNotRegex(html, r"/api/review[^\n]*(?:action_upsert|action_delete|action_list)")
 
 if __name__ == "__main__":
     unittest.main()

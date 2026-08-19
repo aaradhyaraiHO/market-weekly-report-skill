@@ -892,7 +892,9 @@
       // Mutations must pass through the authenticated same-origin proxy.  The
       // Apps Script endpoint rejects anonymous writers and is never called
       // directly from a rendered report.
-      const ACTIONS_API='/api/review';
+      // Diagnostic actions belong to the established Weekly Actions backend.
+      // Review mode is intentionally isolated and only accepts review_* calls.
+      const ACTIONS_API='/api/actions';
       const ACTION_SYNC_OK=true;
       const LM_ACTIONS=[['','—'],['skip','Skip / No change required'],['roas_change','tROAS change'],['negative_seasonality','−ve seasonality'],['pause_review','Pause & Review']];
       const FX_ACTIONS_DOWN=[['','—'],['negative_seasonality','−ve seasonality'],['roas_change','ROAS target change'],['pause_review','Pause & review'],['no_change','No change required'],['skip','Skip']];
