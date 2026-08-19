@@ -4,6 +4,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,13 @@ assert SPEC and SPEC.loader
 release = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = release
 SPEC.loader.exec_module(release)
+
+PUBLISH_MODULE_PATH = ROOT / "scripts" / "weekly_report" / "publish_weekly.py"
+PUBLISH_SPEC = importlib.util.spec_from_file_location("publish_weekly", PUBLISH_MODULE_PATH)
+assert PUBLISH_SPEC and PUBLISH_SPEC.loader
+publisher = importlib.util.module_from_spec(PUBLISH_SPEC)
+sys.modules[PUBLISH_SPEC.name] = publisher
+PUBLISH_SPEC.loader.exec_module(publisher)
 
 
 class RunV2ReleaseTests(unittest.TestCase):
@@ -55,10 +63,26 @@ class RunV2ReleaseTests(unittest.TestCase):
         self.assertIn("--skip-perf-sheet", stage.command)
         self.assertEqual(stage.env, {"MMR_NOTEBOOK_DIR": str(self.notebook)})
 
-    def test_v2_publisher_stages_authenticated_review_proxy(self) -> None:
-        source = (ROOT / "scripts" / "weekly_report" / "publish_weekly.py").read_text()
-        self.assertIn('review_proxy_api.js', source)
-        self.assertIn('api_dir / "review.js"', source)
+    def test_v2_publisher_stages_isolated_review_and_action_proxies(self) -> None:
+        notes = ROOT / "scripts" / "weekly_report" / "notes"
+        with tempfile.TemporaryDirectory() as directory:
+            deploy = Path(directory)
+            review_target, actions_target = publisher.stage_v2_proxies(deploy)
+
+            self.assertEqual(review_target, deploy / "api" / "review.js")
+            self.assertEqual(actions_target, deploy / "api" / "actions.js")
+            self.assertEqual(review_target.read_bytes(), (notes / "review_proxy_api.js").read_bytes())
+            self.assertEqual(actions_target.read_bytes(), (notes / "actions_proxy_api.js").read_bytes())
+
+        review_source = (notes / "review_proxy_api.js").read_text()
+        actions_source = (notes / "actions_proxy_api.js").read_text()
+        self.assertIn("REVIEW_MODE_APPS_SCRIPT_URL", review_source)
+        self.assertIn("REVIEW_MODE_PROXY_SECRET", review_source)
+        self.assertIn("review action required", review_source)
+        self.assertNotIn("ACTIONS_PROXY_SECRET", review_source)
+        self.assertIn("ACTIONS_PROXY_SECRET", actions_source)
+        self.assertIn('new Set(["action_list", "action_upsert", "action_delete"])', actions_source)
+        self.assertNotIn("process.env.REVIEW_MODE_", actions_source)
 
     def test_live_steps_are_explicit_and_ordered(self) -> None:
         plan = release.build_plan(

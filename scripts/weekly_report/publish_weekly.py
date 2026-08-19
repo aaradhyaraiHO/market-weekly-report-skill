@@ -44,6 +44,18 @@ def notebook_dir() -> Path:
     return Path(os.path.expanduser(env)) if env else Path(os.path.expanduser("~/analytics/market-notebook-v2"))
 
 
+def stage_v2_proxies(deploy: Path) -> tuple[Path, Path]:
+    """Stage the isolated review and legacy diagnostic-action API routes."""
+    notes_dir = HERE / "notes"
+    api_dir = deploy / "api"
+    api_dir.mkdir(parents=True, exist_ok=True)
+    review_target = api_dir / "review.js"
+    actions_target = api_dir / "actions.js"
+    shutil.copyfile(notes_dir / "review_proxy_api.js", review_target)
+    shutil.copyfile(notes_dir / "actions_proxy_api.js", actions_target)
+    return review_target, actions_target
+
+
 # weekly slug -> (ledger slug, name, flag, region)
 MARKET_META = {
     "headout": ("headout", "Headout — all markets", "🌐", "Portfolio"),
@@ -341,11 +353,7 @@ def main(argv=None):
     deploy = notebook_dir()
     if not deploy.exists():
         sys.exit(f"notebook dir not found: {deploy} (set MMR_NOTEBOOK_DIR)")
-    if args.renderer == "v2":
-        review_proxy = Path(__file__).resolve().parent / "notes" / "review_proxy_api.js"
-        api_dir = deploy / "api"
-        api_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(review_proxy, api_dir / "review.js")
+    staged_proxies = stage_v2_proxies(deploy) if args.renderer == "v2" else ()
     # 'headout' publishes only the portfolio hero; 'all' does the 10 markets + refreshes headout if present
     targets = (list(config.MARKETS) if args.market == "all"
                else [] if args.market == "headout" else [args.market])
@@ -372,8 +380,9 @@ def main(argv=None):
     (deploy / "weekly_state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False))
     (deploy / "weekly.html").write_text(render_matrix(state, args.week, weeks, deploy))
     print(f"\n  wrote {deploy/'weekly.html'} + weekly_state.json ({n} market(s), {len(weeks)} cols)")
-    if args.renderer == "v2":
-        print(f"  wrote {deploy/'api'/'review.js'} (authenticated action/comment proxy)")
+    if staged_proxies:
+        print(f"  wrote {staged_proxies[0]} (isolated review proxy)")
+        print(f"  wrote {staged_proxies[1]} (legacy diagnostic action/comment proxy)")
     print(f"\n  open {deploy/'weekly.html'}")
     print("  vercel deploy --prod --cwd market-notebook-v2   # from ~/analytics — USER runs")
 

@@ -1,9 +1,15 @@
+/**
+ * /api/actions — legacy diagnostic action proxy.
+ *
+ * This path is intentionally separate from /api/review. It targets only the
+ * established version-13 Weekly Report Notes deployment, and permits only the
+ * three diagnostic action routes. It must never read any REVIEW_MODE_* value.
+ */
 import { createHmac } from "node:crypto";
 import { jwtVerify } from "jose";
 
-// REVIEW_PROXY_SECRET is deliberately unsupported: review mode owns separate credentials.
-const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
-const REVIEW_ACTION = /^review_/;
+const LEGACY_ACTIONS_URL = "https://script.google.com/macros/s/AKfycbyvXB69WxTM1p9qO4tQXxPfV28mkXOOiTKqW8J4SH2P_vtblTYd6bUQGJSb8HyLLGhOjA/exec";
+const ALLOWED_ACTIONS = new Set(["action_list", "action_upsert", "action_delete"]);
 
 function parseCookies(header) {
   const output = {};
@@ -30,50 +36,36 @@ async function authenticatedActor(req) {
   const email = String(payload.email || "").trim().toLowerCase();
   const domain = String(process.env.ALLOWED_DOMAIN || "headout.com").toLowerCase();
   if (!email.endsWith(`@${domain}`)) return null;
-  return { email, name: String(payload.name || email) };
+  return { email };
 }
 
 export default async function handler(req, res) {
   if (!["GET", "POST"].includes(req.method)) return res.status(405).json({ ok: false, error: "GET or POST required" });
-
   let actor;
   try { actor = await authenticatedActor(req); } catch (_) { actor = null; }
-  if (!actor) return res.status(401).json({ ok: false, error: "authenticated BGM identity required" });
-
-  if (!APPS_SCRIPT_URL)
-    return res.status(503).json({ ok: false, error: "isolated review backend unavailable" });
+  if (!actor) return res.status(401).json({ ok: false, error: "authenticated Headout identity required" });
 
   const base = `https://${req.headers.host || "market-notebook.vercel.app"}`;
   const incoming = new URL(req.url, base);
   const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {})) : null;
-  const params = req.method === "POST" ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value ?? "")])) : incoming.searchParams;
-  if (params.get("action") === "whoami")
-    return res.status(200).json({ ok: true, actor_email: actor.email, actor_name: actor.name });
-  if (!REVIEW_ACTION.test(params.get("action") || ""))
-    return res.status(400).json({ ok: false, error: "review action required" });
+  const params = req.method === "POST"
+    ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value ?? "")]))
+    : incoming.searchParams;
+  const action = params.get("action") || "";
+  if (!ALLOWED_ACTIONS.has(action)) return res.status(400).json({ ok: false, error: "diagnostic action required" });
 
-  const signingSecret = process.env.REVIEW_MODE_PROXY_SECRET;
-  if (!signingSecret) return res.status(503).json({ ok: false, error: "review proxy signing unavailable" });
-
-  let target;
-  try {
-    target = new URL(APPS_SCRIPT_URL);
-    if (target.protocol !== "https:") throw new Error("HTTPS required");
-  } catch (_) {
-    return res.status(503).json({ ok: false, error: "isolated review backend misconfigured" });
-  }
+  const signingSecret = process.env.ACTIONS_PROXY_SECRET;
+  if (!signingSecret) return res.status(503).json({ ok: false, error: "diagnostic action proxy unavailable" });
+  const target = new URL(LEGACY_ACTIONS_URL);
   params.set("actor_email", actor.email);
   params.set("actor_ts", String(Math.floor(Date.now() / 1000)));
-  const signature = createHmac("sha256", signingSecret)
-    .update(canonicalParams(params))
-    .digest("hex");
-  params.set("actor_sig", signature);
+  params.set("actor_sig", createHmac("sha256", signingSecret).update(canonicalParams(params)).digest("hex"));
   if (req.method === "GET") params.forEach((value, key) => target.searchParams.set(key, value));
 
   try {
     const upstream = await fetch(target, req.method === "POST" ? {
-      method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
-      body: JSON.stringify(Object.fromEntries(params.entries()))
+      method: "POST", redirect: "follow", headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(params.entries())),
     } : { method: "GET", redirect: "follow" });
     const text = await upstream.text();
     res.status(upstream.status);
@@ -81,6 +73,6 @@ export default async function handler(req, res) {
     res.setHeader("cache-control", "no-store");
     return res.send(text);
   } catch (_) {
-    return res.status(502).json({ ok: false, error: "review backend unavailable" });
+    return res.status(502).json({ ok: false, error: "diagnostic action backend unavailable" });
   }
 }
