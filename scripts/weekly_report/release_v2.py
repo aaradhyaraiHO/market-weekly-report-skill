@@ -184,15 +184,29 @@ def verify_market(market, view, goal_error=None):
     }
 
 
-def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=False):
+def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True):
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     supplied_goals = render_v2.load_goals(goals_path) if goals_path else {}
+    goals_artifact = output_dir / "goals_v2.json"
+    try:
+        existing_goals = (
+            render_v2.load_goals(goals_artifact)
+            if goals_artifact.exists()
+            else {}
+        )
+    except (OSError, ValueError, TypeError):
+        # A damaged optional artifact must not take down V1/V2 generation. The
+        # requested markets are rebuilt below; unrequested records cannot be
+        # preserved safely when the prior file is unreadable.
+        existing_goals = {}
     records, artifacts, goal_records = [], [], {}
+    requested_slugs = set()
 
     for snapshot_path in snapshot_paths:
         market = render_v1.load_markets([str(snapshot_path)])[0]
         slug = market.get("meta", {}).get("market_slug") or "market"
+        requested_slugs.add(slug)
         week = market.get("meta", {}).get("week_start") or "week"
         goal_error = None
         goal = supplied_goals.get(slug)
@@ -201,6 +215,8 @@ def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=False):
                 _, goal = build_v2_goals.build_market_goal(market)
             except Exception as exc:  # optional live source must fail per market
                 goal_error = str(exc)
+        elif goal is None:
+            goal_error = "live target fetch disabled and no supplied goal record"
         if goal is not None:
             goal_records[slug] = goal
         goals = {slug: goal} if goal is not None else {}
@@ -212,8 +228,20 @@ def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=False):
         records.append(record)
         artifacts.append(str(output))
 
-    goals_artifact = output_dir / "goals_v2.json"
-    goals_artifact.write_text(json.dumps({"schema_version": 1, "markets": goal_records}, indent=2) + "\n")
+    # A targeted release must not truncate goals for markets outside its input
+    # set. Requested markets are always replaced (or removed after a failed
+    # fetch) so an old record cannot masquerade as current data.
+    preserved_goals = {
+        slug: goal
+        for slug, goal in existing_goals.items()
+        if slug not in requested_slugs and isinstance(goal, dict)
+    }
+    merged_goals = {**preserved_goals, **goal_records}
+    temporary_goals = goals_artifact.with_suffix(goals_artifact.suffix + ".tmp")
+    temporary_goals.write_text(
+        json.dumps({"schema_version": 1, "markets": merged_goals}, indent=2) + "\n"
+    )
+    temporary_goals.replace(goals_artifact)
     manifest = {
         "schema_version": 1,
         "status": "pass" if records and all(row["status"] == "pass" for row in records) else "fail",
@@ -231,7 +259,20 @@ def main():
     parser.add_argument("--glob", dest="snapshot_glob", help="additional snapshot glob")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--goals", help="existing goals sidecar")
-    parser.add_argument("--fetch-goals", action="store_true", help="read approved monthly targets from BigQuery")
+    goal_fetch = parser.add_mutually_exclusive_group()
+    goal_fetch.add_argument(
+        "--fetch-goals",
+        dest="fetch_goals",
+        action="store_true",
+        help="read approved monthly targets from BigQuery (default)",
+    )
+    goal_fetch.add_argument(
+        "--no-fetch-goals",
+        dest="fetch_goals",
+        action="store_false",
+        help="render without live target reads; missing supplied goals are warned",
+    )
+    parser.set_defaults(fetch_goals=True)
     parser.add_argument("--manifest", required=True)
     args = parser.parse_args()
     paths = [Path(path) for path in args.inputs]

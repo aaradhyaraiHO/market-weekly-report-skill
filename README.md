@@ -112,8 +112,12 @@ python3 scripts/weekly_report/release_v2.py \
   --manifest /tmp/weekly-v2-release/manifest.json
 ```
 
-Add `--fetch-goals` for the approved live target enrichment. These commands do
-not publish, deploy, post to Slack, or write Sheets. The staged publish path
+Approved live target enrichment is included by default. Use `--no-fetch-goals`
+only for an explicitly offline render; missing supplied goals are then recorded
+as per-market warnings. A partial market run preserves unrequested records in
+the shared goals artifact, while every requested market is refreshed or removed
+after a failed lookup so stale data cannot masquerade as current. These commands
+do not publish, deploy, post to Slack, or write Sheets. The staged publish path
 continues to reject V2 until the route is explicitly activated after a reviewed
 parallel run; V1 therefore remains the rollback path.
 

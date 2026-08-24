@@ -278,6 +278,16 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("['target','Aug target %']", html)
         self.assertIn("rows.slice(0,5)", html)
         self.assertIn("row.target_mtd_attainment_pct", html)
+        self.assertIn("Shows up to five CEs with the largest revenue drops or gains", html)
+        self.assertIn("using whichever move is greater: versus last week or the trailing four-week average", html)
+        self.assertIn("Sort any column for a different view", html)
+        self.assertIn("select a CE to open its detail", html)
+        self.assertNotIn("Default order preserves V1", html)
+        self.assertNotIn("Compact-source reports", html)
+        self.assertIn("Largest negative revenue moves · up to 5", html)
+        self.assertIn("Largest positive revenue moves · up to 5", html)
+        self.assertIn('data-mover-ce="${escapeHtml(row.ce_id)}"', html)
+        self.assertIn("openCeDrawer(mover.dataset.moverCe)", html)
         self.assertNotIn('class="mover-seasonality ${tagClass(row.seasonality_tag)}"', html)
         self.assertNotIn('class="sort-select" data-mover-sort', html)
         self.assertIn('id="diagnostic-buckets"', html)
@@ -459,6 +469,33 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(cvr["delta_pct"], 0.25)
         self.assertEqual(cvr["delta_kind"], "pp")
         self.assertEqual(cvr["series"], [])
+
+    def test_funnel_shapley_exposes_the_mixed_source_residual(self):
+        weekly = [
+            {
+                "revenue": 52_335.05, "orders": 1636, "completed_orders": 1608,
+                "gbv": 233_678.94, "gbv_completed": 228_321.0,
+            },
+            {
+                "revenue": 47_658.20, "orders": 1467, "completed_orders": 1451,
+                "gbv": 203_592.88, "gbv_completed": 199_790.0,
+            },
+        ]
+        funnel_levels = {
+            "wm1": {"lp_users": 23_441, "order_users": 1379},
+            "w0": {"lp_users": 21_859, "order_users": 1154},
+        }
+
+        result = headline_v2._funnel_revenue_shapley(weekly, funnel_levels)
+
+        self.assertIsNotNone(result)
+        self.assertEqual([row["label"] for row in result["factors"]], [
+            "Traffic", "LP→Order CVR", "Order completion", "AOV", "Take rate",
+        ])
+        self.assertAlmostEqual(
+            result["factor_total"] + result["residual"], result["net_delta"], places=1
+        )
+        self.assertNotEqual(result["residual"], 0)
 
     def test_existing_movers_are_normalized_without_recalculation(self):
         view = headline_v2.build_headline_view(self.market)
@@ -645,7 +682,6 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("action=action_list", html)
         self.assertNotIn("fetch(NOTES_URL,{method:'POST'", html)
 
-
     def test_diagnostic_actions_use_the_legacy_actions_proxy_not_review_mode(self):
         html = render_v2.render([self.market])
         self.assertIn("const ACTIONS_API='/api/actions'", html)
@@ -654,7 +690,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("action:'action_delete'", html)
         self.assertIn("${ACTIONS_API}?${params.toString()}", html)
         self.assertIn("${ACTIONS_API}?action=action_list", html)
-        self.assertNotRegex(html, r"/api/review[^\n]*(?:action_upsert|action_delete|action_list)")
+        self.assertNotRegex(html, r"/api/review[^\\n]*(?:action_upsert|action_delete|action_list)")
+
 
 if __name__ == "__main__":
     unittest.main()

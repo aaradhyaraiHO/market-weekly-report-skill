@@ -45,6 +45,7 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
         DATE_TRUNC(report_date, WEEK(SUNDAY))    AS week,
         SUM({REV})                               AS revenue,
         SUM(count_orders)                        AS orders,
+        SUM(count_completed_orders)              AS completed_orders,
         SUM(count_ad_clicks)                     AS clicks,
         SUM(count_ad_conversions)                AS ad_conversions,
         SUM(sum_order_value)                     AS gbv,
@@ -674,7 +675,6 @@ def ce_tgid_funnel(
     FROM {tbl}
 
     WHERE combined_entity_id IN UNNEST(@ce_ids)
-          AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
           AND (event_date BETWEEN @w0_s AND @w0_e
                OR event_date BETWEEN @wm1_s AND @wm1_e
                OR event_date BETWEEN @ly_s AND @ly_e)
@@ -1110,7 +1110,6 @@ def ce_funnel(
         FROM {tbl}
 
         WHERE combined_entity_id IN UNNEST(@ce_ids)
-              AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
               AND (event_date BETWEEN @w0_s AND @w0_e
                    OR event_date BETWEEN @wm1_s AND @wm1_e
                    OR event_date BETWEEN @ly_s AND @ly_e)
@@ -1121,6 +1120,7 @@ def ce_funnel(
         combined_entity_id,
         period,
         COUNT(DISTINCT user_id)                                                   AS lp_users,
+        COUNT(DISTINCT IF(has_order_completed, user_id, NULL))                    AS order_users,
         100 * SAFE_DIVIDE(
             COUNT(DISTINCT IF(has_select_page_viewed, user_id, NULL)),
             COUNT(DISTINCT user_id))                                              AS lp2s,
@@ -1151,11 +1151,11 @@ def ce_funnel(
 
 # --------------------------------------------------------------------------- #
 # Weekly overall CVR series (Mixpanel page-funnel) — for the drawer Overall tab.
-# Overall CVR = order-completed users ÷ LP users, all traffic, PMax excluded
-# (matches the CE-Health funnel definition). Weekly grain for the 12-wk trend.
+# Overall CVR = order-completed users ÷ LP users, all advertising channels.
+# Weekly grain for the 12-wk trend.
 # --------------------------------------------------------------------------- #
 def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.DataFrame:
-    """Weekly LP users + order-completed users per CE (Mixpanel, PMax excluded)."""
+    """Weekly LP users + order-completed users per CE (Mixpanel, all channels)."""
     if not ce_ids:
         return pd.DataFrame()
     sql = """
@@ -1166,7 +1166,6 @@ def ce_weekly_funnel(ce_ids: list[str], start: dt.date, end: dt.date) -> pd.Data
         COUNT(DISTINCT IF(has_order_completed, user_id, NULL))      AS order_users
     FROM {tbl}
     WHERE combined_entity_id IN UNNEST(@ce_ids)
-          AND (advertising_channel_type IS NULL OR advertising_channel_type != 'PERFORMANCE_MAX')
           AND event_date BETWEEN @start AND @end
     GROUP BY 1, 2
     """.format(tbl=config.MIXPANEL_FUNNEL)

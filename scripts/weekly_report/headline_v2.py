@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 from copy import deepcopy
+from functools import reduce
 from statistics import fmean
 
 import flows
@@ -40,6 +41,7 @@ _PAID_METRICS = frozenset({"paid_clicks", "paid_cvr", "paid_conv_value", "avg_cm
 
 _CE_PERIOD_FIELDS = (
     "revenue", "orders", "aov", "tr_pct", "cr_pct", "clicks", "paid_clicks",
+    "completed_orders",
     "cvr_pct", "paid_cvr_pct", "cpc", "paid_rpc", "spend", "cm1", "paid_cm2",
     "roi_pct", "coupon_wallet", "gbv", "gbv_completed", "ad_conversions",
     "organic_gbv", "paid_revenue", "overall_cvr_pct", "paid_ctr_pct",
@@ -401,6 +403,70 @@ def _ce_period(row):
     return {key: _number(row.get(key)) for key in _CE_PERIOD_FIELDS}
 
 
+def _funnel_revenue_shapley(weekly, funnel_levels):
+    """V2-only mixed-source attribution with an explicit revenue residual.
+
+    Traffic/CVR use the all-channel Mixpanel funnel. Completion, AOV and take
+    rate use the business weekly snapshot. This is intentionally not expected
+    to telescope to predicted revenue because Mixpanel counts users while the
+    business source counts orders; ``residual`` makes that boundary visible.
+    """
+    if len(weekly) < 2 or not isinstance(funnel_levels, dict):
+        return None
+    rows = {"w0": weekly[-1], "wm1": weekly[-2]}
+    factors = {}
+    for period, row in rows.items():
+        funnel = funnel_levels.get(period) or {}
+        lp_users = _number(funnel.get("lp_users"))
+        order_users = _number(funnel.get("order_users"))
+        orders = _number(row.get("orders"))
+        completed_orders = _number(row.get("completed_orders"))
+        gbv = _number(row.get("gbv"))
+        completed_gbv = _number(row.get("gbv_completed"))
+        revenue = _number(row.get("revenue"))
+        values = (lp_users, order_users, orders, completed_orders, gbv, completed_gbv, revenue)
+        if any(value is None or value <= 0 for value in values):
+            return None
+        factors[period] = {
+            "traffic": lp_users,
+            "cvr": order_users / lp_users,
+            "completion": completed_orders / orders,
+            "aov": gbv / orders,
+            "take_rate": revenue / completed_gbv,
+        }
+    keys = ("traffic", "cvr", "completion", "aov", "take_rate")
+    labels = {
+        "traffic": "Traffic", "cvr": "LP→Order CVR", "completion": "Order completion",
+        "aov": "AOV", "take_rate": "Take rate",
+    }
+    from itertools import combinations
+    from math import factorial
+    impacts = {}
+    for key in keys:
+        total = 0.0
+        rest = [other for other in keys if other != key]
+        for size in range(len(rest) + 1):
+            weight = factorial(size) * factorial(len(keys) - size - 1) / factorial(len(keys))
+            for subset in combinations(rest, size):
+                base = 1.0
+                for other in rest:
+                    base *= factors["w0"][other] if other in subset else factors["wm1"][other]
+                total += weight * base * (factors["w0"][key] - factors["wm1"][key])
+        impacts[key] = total
+    product = lambda period: reduce(lambda total, key: total * factors[period][key], keys, 1.0)
+    prior_product, current_product = product("wm1"), product("w0")
+    factor_total = current_product - prior_product
+    revenue_delta = rows["w0"]["revenue"] - rows["wm1"]["revenue"]
+    return {
+        "factors": [{"key": key, "label": labels[key], "value": round(impacts[key], 1)} for key in keys],
+        "factor_total": round(factor_total, 1),
+        "residual": round(revenue_delta - factor_total, 1),
+        "net_delta": round(revenue_delta, 1),
+        "prior_product": round(prior_product, 1),
+        "current_product": round(current_product, 1),
+    }
+
+
 def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
     current = weekly[-1] if weekly else {}
     previous = weekly[-2] if len(weekly) > 1 else {}
@@ -524,6 +590,7 @@ def _ce_views(market, dimensions=None):
             ],
             "drawer_metrics": _ce_drawer_metrics(weekly, weekly_ly_rows, ce.get("funnel")),
             "shapley": deepcopy(ce.get("shapley_wow")) if isinstance(ce.get("shapley_wow"), dict) else None,
+            "funnel_shapley": _funnel_revenue_shapley(weekly, ce.get("funnel_levels")),
             "channels": deepcopy(ce.get("channels") or []),
             "funnel": deepcopy(ce.get("funnel") or {}),
             "tgids": deepcopy(ce.get("tgids") or []),

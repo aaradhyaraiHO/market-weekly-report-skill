@@ -170,6 +170,7 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "revenue": _num(revenue),
         "gbv": _num(gbv) if biz is not None else None,
         "orders": int(orders) if orders is not None else None,
+        "completed_orders": int(b.get("completed_orders")) if _num(b.get("completed_orders")) is not None else None,
         "clicks": int(clicks) if clicks is not None else None,
         # Raw additive numerators — carried so group SUBTOTALS can recompute the
         # ratio metrics (CVR/AOV/TR/Paid %/ROI) exactly as Σnum/Σden rather than
@@ -596,11 +597,17 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
 
         # ---- Funnel (LP → order) ----
         funnel = {}
+        funnel_levels = {}
         g = fn_by_ce.get(cid)
         if g is not None:
             per = {r["period"]: r for _, r in g.iterrows()}
             w0, wm1, ly = per.get("w0"), per.get("wm1"), per.get("ly")
             if w0 is not None:
+                for period, row in per.items():
+                    funnel_levels[period] = {
+                        "lp_users": _num(row.get("lp_users")),
+                        "order_users": _num(row.get("order_users")),
+                    }
                 for label, col, is_rate in _FUNNEL_STAGES:
                     cur = _num(w0[col])
                     prev = _num(wm1[col]) if (wm1 is not None and wm1[col] is not None) else None
@@ -630,6 +637,7 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
                         "yoy": _num(round(cvr0 - cvrly, 2)) if cvrly is not None else None,
                     }
         ce["funnel"] = funnel
+        ce["funnel_levels"] = funnel_levels
 
 
 def _attach_resource_histories(ces, lead_df, country_df, channel_df) -> None:
