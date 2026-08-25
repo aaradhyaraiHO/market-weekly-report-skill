@@ -56,6 +56,11 @@ class ReviewIterationContract(unittest.TestCase):
         sync = VIEW.split("function syncThread()", 1)[1].split("function addGranola()", 1)[0]
         self.assertLess(sync.index("render();"), sync.index("Promise.all([loadCe"))
 
+    def test_memory_drawer_survives_ce_hydration_render(self):
+        self.assertIn("memoryOpen: false", VIEW)
+        self.assertIn("if (S.memoryOpen) setTimeout(openMemory, 0)", VIEW)
+        self.assertIn("current&&S.memoryOpen", VIEW)
+
 
 if __name__ == "__main__":
     unittest.main()

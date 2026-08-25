@@ -62,7 +62,7 @@
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, asyncBusy: {}
+      drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
     // Review mutations are BGM-only.  The server already has the authenticated
@@ -246,7 +246,7 @@
     function select(ceId) {
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = "";
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false;
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
       S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
@@ -261,6 +261,7 @@
       root.innerHTML = '<div class="rv-layout">' + renderSide() + renderMain() + "</div>" +
         '<div class="rv-toast" id="rv-toast" hidden></div>' + renderMemoryDrawer();
       wire();
+      if (S.memoryOpen) setTimeout(openMemory, 0);
     }
 
     function renderSide() {
@@ -658,9 +659,9 @@
       bind("#rv-next-ce", nextCe);
       bind("#rv-finish", finishReview);
       bind("#rv-open-memory", openMemory);
-      bind("#rv-close-memory", function () { root.querySelector("#rv-memory-drawer").hidden = true; });
+      bind("#rv-close-memory", function () { S.memoryOpen = false; root.querySelector("#rv-memory-drawer").hidden = true; });
       var wrap = root.querySelector("#rv-memory-drawer");
-      if (wrap) wrap.onclick = function (e) { if (e.target === wrap) wrap.hidden = true; };
+      if (wrap) wrap.onclick = function (e) { if (e.target === wrap) { S.memoryOpen = false; wrap.hidden = true; } };
     }
     function ensureAuthor() {
       var el = root.querySelector("#rv-author");
@@ -914,6 +915,7 @@
     }
     function openMemory() {
       var wrap = root.querySelector("#rv-memory-drawer"), body = root.querySelector("#rv-memory-body"), q = S.byId[S.selected];
+      S.memoryOpen = true;
       root.querySelector("#rv-memory-title").textContent = q.ce_name + " memory";
       root.querySelector("#rv-memory-eyebrow").textContent = "CE " + q.ce_id + " · " + S.market;
       wrap.hidden = false;
@@ -922,8 +924,8 @@
       if(cached){body.innerHTML=renderMemory(cached);wireMemory(body);return;}
       if(S.memoryInflight[key])return;
       body.innerHTML='<div class="rv-empty-state"><strong>Loading CE memory…</strong></div>';
-      S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; body.innerHTML = renderMemory(res); wireMemory(body); })
-        .catch(function () { body.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
+      S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen&&String(S.selected)===String(q.ce_id)){current.innerHTML=renderMemory(res);wireMemory(current);}return res; })
+        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
       S.memoryInflight[key].finally(function(){delete S.memoryInflight[key];});
     }
     function renderMemory(res) {
