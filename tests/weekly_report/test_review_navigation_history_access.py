@@ -74,7 +74,9 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
 
     def test_navigation_paints_before_remote_review_state(self):
         load_queue = VIEW.split("function loadQueue()", 1)[1].split("function loadCe", 1)[0]
-        self.assertLess(load_queue.index("buildQueue(); S.loaded = true; render();"), load_queue.index("Promise.all(["))
+        self.assertLess(load_queue.index("buildQueue();"), load_queue.index("Promise.all(["))
+        self.assertLess(load_queue.index("S.selected = (S.queue[0]"), load_queue.index("Promise.all(["))
+        self.assertLess(load_queue.index("S.loaded = true; render();"), load_queue.index("Promise.all(["))
         self.assertIn("setTimeout(function(){window.__rv&&window.__rv.prefetch", INJECTOR)
 
     def test_review_reads_are_cached_and_deduplicated(self):

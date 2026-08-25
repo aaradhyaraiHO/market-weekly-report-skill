@@ -193,7 +193,12 @@
       if (!api) { S.setRowsList = []; buildQueue(); render(); return Promise.resolve(); }
       // Paint the snapshot-backed queue immediately. Remote review state then
       // enriches it without delaying tab navigation.
-      if (!S.loaded) { buildQueue(); S.loaded = true; render(); }
+      if (!S.loaded) {
+        buildQueue();
+        if (!S.selected || !S.byId[S.selected]) S.selected = (S.queue[0] || {}).ce_id || null;
+        S.loaded = true; render();
+        if (S.selected) loadCe(S.selected);
+      }
       var id = { market_slug: S.market_slug, week: S.week_start };
       return Promise.all([
         api.reviewSet(id).catch(function () { return { review_set: [] }; }),
