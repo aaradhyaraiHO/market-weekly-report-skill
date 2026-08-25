@@ -60,7 +60,7 @@
       queue: [], byId: {}, selected: null, loaded: false,
       receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", mentionPreview: null, mentionBusy: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
       drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
@@ -194,6 +194,26 @@
     function reviewedFor(ceId) { return !!S.receipts[String(ceId)]; }
     function workFor(ceId) { return (S.work[String(ceId)] || []); }
     function openWorkFor(ceId) { return workFor(ceId).filter(function (w) { return CLOSED.indexOf(w.status) < 0; }); }
+    function ceMeta(ceId) {
+      return ((S.headline && S.headline.all_ces) || []).filter(function (ce) { return String(ce.ce_id) === String(ceId); })[0] || {};
+    }
+    function queueState(q) {
+      if (reviewedFor(q.ce_id)) return "reviewed";
+      var weekly = S.weekly[q.ce_id] || {}, hasDraft = Object.keys(S.roleDrafts).some(function (k) { return k.indexOf(String(q.ce_id) + ":") === 0; });
+      if (treatmentFor(q.ce_id) !== "not_scheduled" || openWorkFor(q.ce_id).length || weekly.bgm_note || weekly.performance_note || weekly.bdm_note || hasDraft) return "in_progress";
+      return "needs_review";
+    }
+    function visibleQueueRows() {
+      var needle = String(S.queueQuery || "").trim().toLowerCase();
+      return S.queue.filter(function (q) {
+        var meta = ceMeta(q.ce_id), state = queueState(q);
+        var haystack = [q.ce_name, q.ce_id, q.reason, meta.category, meta.city].join(" ").toLowerCase();
+        return (!needle || haystack.indexOf(needle) >= 0) &&
+          (S.queueFilter === "all" || state === S.queueFilter) &&
+          (!S.queueReason || String(q.reason || "") === S.queueReason) &&
+          (!S.queueCategory || String(meta.category || "") === S.queueCategory);
+      });
+    }
 
     // ---- data loading (unchanged backend surface) -----------------------
     function refreshHeadline() {
@@ -266,7 +286,7 @@
     function select(ceId) {
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false;
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = "";
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
       S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
@@ -289,17 +309,25 @@
       var open = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); }).length;
       var total = S.queue.length, reviewed = total - open;
       var needle=String(S.queueQuery||"").trim().toLowerCase();
-      var visibleQueue=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});
+      var visibleQueue=visibleQueueRows();
+      var counts={all:total,needs_review:0,in_progress:0,reviewed:0};S.queue.forEach(function(q){counts[queueState(q)]++;});
+      var reasons=Array.from(new Set(S.queue.map(function(q){return String(q.reason||"");}).filter(Boolean))).sort();
+      var categories=Array.from(new Set(S.queue.map(function(q){return String(ceMeta(q.ce_id).category||"");}).filter(Boolean))).sort();
       var rows = visibleQueue.length ? visibleQueue.map(queueRow).join("") :
         (needle?'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>':
         '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>');
       var picker = S.adding ? renderPicker() : "";
-      return '<aside class="rv-side">' +
+      return '<aside class="rv-side' + (S.queueBrowse ? ' open' : '') + '" aria-label="Review queue">' +
+        '<div class="rv-mobile-side-head"><strong>Browse/search CEs</strong><button class="rv-close" type="button" id="rv-close-queue" aria-label="Close CE browser">×</button></div>' +
         '<div class="rv-eyebrow">Weekly review · w/c ' + esc(S.week_start) + "</div>" +
         '<div class="rv-side-head"><h2>' + (open ? open + " CE" + (open === 1 ? "" : "s") + " to review" : "All caught up") + "</h2>" +
         '<button class="rv-addce" type="button" id="rv-add-ce">＋ Add CE</button></div>' +
         '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed</div>" +
         '<label class="rv-search"><span class="sr-only">Search CE</span><input id="rv-search-ce" type="search" placeholder="Search CE name or ID" value="'+esc(S.queueQuery||"")+'"><button type="button" id="rv-clear-search" aria-label="Clear CE search"'+(needle?'':' hidden')+'>×</button></label>'+
+        '<div class="rv-queue-filters" role="group" aria-label="Filter review status">'+
+        [['all','All'],['needs_review','Needs review'],['in_progress','In progress'],['reviewed','Reviewed']].map(function(f){return '<button type="button" class="rv-filter-chip'+(S.queueFilter===f[0]?' active':'')+'" data-queue-filter="'+f[0]+'">'+f[1]+' <span>'+counts[f[0]]+'</span></button>';}).join('')+'</div>'+
+        '<div class="rv-queue-selects"><select id="rv-reason-filter" aria-label="Filter by review reason"><option value="">All reasons</option>'+reasons.map(function(v){return '<option'+(S.queueReason===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'+
+        '<select id="rv-category-filter" aria-label="Filter by category"><option value="">All categories</option>'+categories.map(function(v){return '<option'+(S.queueCategory===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
         '<div class="rv-queue-label">Review queue</div>' + picker +
         '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div></aside>";
     }
@@ -309,11 +337,12 @@
       var tags = '<span class="rv-chip' + (reviewed ? " done" : "") + '">' + (reviewed ? "Reviewed" : esc(TREATMENT_LABELS[t] || t)) + "</span>" +
         (openN ? '<span class="rv-chip">' + openN + " open</span>" : "") +
         (q.source === "manual" ? '<span class="rv-chip">manual</span>' : "");
-      var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" title="Remove from review set">×</button>' : "";
-      return '<div style="position:relative">' + remove +
+      var details = '<button class="rv-ce-details" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '" aria-label="Open ' + esc(q.ce_name) + ' details">↗</button>';
+      var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" aria-label="Remove ' + esc(q.ce_name) + ' from review set">×</button>' : "";
+      return '<div class="rv-ce-row-wrap">' +
         '<button class="rv-ce-row' + (active ? " active" : "") + (reviewed ? " reviewed" : "") + '" type="button" data-select-ce="' + esc(q.ce_id) + '">' +
-        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</strong>" +
-        "<small>" + esc(q.reason) + ' · <span class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + '</span></small><span class="rv-ce-tags">' + tags + "</span></span></button></div>";
+        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong>' + esc(q.ce_name) + "</strong>" +
+        "<small>" + esc(q.reason) + ' · CE ' + esc(q.ce_id) + '</small><span class="rv-ce-tags">' + tags + "</span></span></button>" + details + remove + "</div>";
     }
     function renderProcessPanel() {
       return '<div class="rv-process" id="rv-process-panel">' +
@@ -353,8 +382,9 @@
         : t !== "not_scheduled" ? '<span class="rv-receipt">Ready to finish</span>'
           : '<span class="rv-receipt">Choose how you’ll review this CE</span>';
       var footHint = reviewed ? "Review saved — open work carries into next week"
-        : t === "not_scheduled" ? "Set a treatment above to finish this CE" : "Finish when you’re done with this CE";
+        : t === "not_scheduled" ? "Required: choose a review treatment before finishing" : "Ready to finish — treatment selected and work saved";
       return '<main class="rv-main">' +
+        '<div class="rv-mobile-current"><span><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+' · '+esc(TREATMENT_LABELS[t]||t)+'</small></span><button class="rv-btn" type="button" id="rv-browse-ces">Browse/search CEs</button></div>'+
         '<header class="rv-detail-head"><div class="rv-breadcrumb"><button class="rv-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + "</button> · " + esc(S.market) + "</div>" +
         '<div class="rv-title-line"><div><h1><button class="rv-title-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</button></h1>" +
         "<p>Record what you know, decide the follow-through, and mark it reviewed.</p></div>" +
@@ -366,8 +396,8 @@
         '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
         '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
-        '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" + renderGranolaDock() +
-        '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
+        '<footer class="rv-footer"><span class="rv-foot-hint '+(reviewed?'finished':(t==='not_scheduled'?'blocked':'ready'))+'">' + esc(footHint) + "</span>" + (t==='not_scheduled'?'<label class="rv-footer-treatment"><span>Choose review treatment</span><select class="rv-select" id="rv-footer-treatment">'+TREATMENT_ORDER.map(function(v){return '<option value="'+v+'"'+(v===t?' selected':'')+'>'+esc(TREATMENT_LABELS[v])+'</option>';}).join('')+'</select></label>':'') + renderGranolaDock() +
+        '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next unreviewed →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
     }
@@ -397,9 +427,29 @@
     }
     function renderCommentaryCard(q){
       var weekly=S.weekly[q.ce_id]||{},hasThread=!!weekly.slack_post_ts,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
-      var thread=hasThread?'<div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly):'';
+      var thread=hasThread?'<details class="rv-thread-compact"><summary><span><strong>Slack discussion active</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Summary pending replies')+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly)+'</details>':'';
       var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Start Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div><textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change any saved role note.">'+esc(slackText)+'</textarea>'+renderMentionPreview()+'<div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy||hasThread?' disabled':'')+'>'+(hasThread?'Discussion started':(S.mentionBusy?'Resolving names…':'Preview Slack post'))+'</button></div>'+thread+'</div>';
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">CE notes &amp; discussion</div><div class="rv-card-sub">Role notes save independently. Slack discussion is a separate message.</div></div></div><div class="rv-card-body rv-role-notes">'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+composer+'</div></section>';
+    }
+
+    function normalizedSuggestionBody(s) {
+      return String((s && s.body) || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+    }
+    function dedupeSuggestions(rows) {
+      var seen = {}, out = [];
+      rows.forEach(function (s) {
+        var key = String(s.kind || "action") + "|" + normalizedSuggestionBody(s);
+        if (!normalizedSuggestionBody(s)) key += "|" + String(s.suggestion_id || s.source_ref || "");
+        if (seen[key]) {
+          seen[key]._trace = seen[key]._trace || [];
+          seen[key]._trace.push({ suggestion_id:s.suggestion_id || "", source_ref:s.source_ref || "", source_type:s.source_type || "" });
+          return;
+        }
+        var copy = Object.assign({}, s);
+        copy._trace = [{ suggestion_id:s.suggestion_id || "", source_ref:s.source_ref || "", source_type:s.source_type || "" }];
+        seen[key] = copy; out.push(copy);
+      });
+      return out;
     }
 
     function renderLegacyCommentaryCard(q) {
@@ -407,7 +457,7 @@
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) {
         return (s.kind === "comment" || !s.kind) && String(s.source_type || "granola") === "granola";
       });
-      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
+      var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
       var accepted = (S.comments[q.ce_id] || []).filter(function (c) { return !c.deleted_at && String(c.source_type || "") === "granola"; });
       var pendingHtml = pending.map(function (s) {
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
@@ -516,17 +566,16 @@
       var doneItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) >= 0; });
       var openN = openItems.length;
       var suggHtml = pending.map(function (s) {
-        var isCheck = s.kind === "check";
-        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="' + esc(s.kind) + '">' +
-          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "source") + "</span>" +
-          "<span>·</span><span>" + (isCheck ? "suggested check" : "suggested action") + "</span></div>" +
-          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
+        var isCheck = s.kind === "check", expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(s.kind) + '">' +
+          '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isCheck?'Suggested check':'Suggested action')+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
+          (expanded?'<div class="rv-sugg-detail"><textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
           '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
           '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
           '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isCheck ? "Schedule check" : "Create action") + "</button>" +
-          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
+          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
       }).join("");
       var openHtml = openItems.map(workRow).join("");
       var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
@@ -539,7 +588,7 @@
         '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
         '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
         '<span class="rv-card-count">' + count + "</span></div>" +
-        '<div class="rv-card-body">' + suggHtml + openHtml + emptyState + doneHtml +
+        '<div class="rv-card-body">' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">Accepted / open <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + emptyState + doneHtml +
         composer +
         '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
         '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
@@ -592,7 +641,10 @@
       return '<div class="rv-drawer-wrap" id="rv-memory-drawer" hidden><div class="rv-drawer" role="dialog" aria-modal="true">' +
         '<header class="rv-drawer-head"><div><div class="rv-eyebrow" id="rv-memory-eyebrow"></div><h2 id="rv-memory-title">CE Memory</h2>' +
         "<p>Original weekly records and work history.</p></div><button class=\"rv-close\" id=\"rv-close-memory\" type=\"button\" aria-label=\"Close\">×</button></header>" +
-        '<div class="rv-drawer-body" id="rv-memory-body"><div class="rv-empty-state"><strong>Loading…</strong></div></div></div></div>';
+        '<div class="rv-drawer-body" id="rv-memory-body">'+renderMemoryLoading()+'</div></div></div>';
+    }
+    function renderMemoryLoading() {
+      return '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Story</button><button class="rv-memory-tab" disabled>Work</button><button class="rv-memory-tab" disabled>Historical comments</button><button class="rv-memory-tab" disabled>Perf history</button></div><div class="rv-memory-loading" role="status" aria-live="polite"><div class="rv-skeleton wide"></div><div class="rv-skeleton"></div><div class="rv-skeleton short"></div><strong>Loading CE memory…</strong><span>Current Review stays usable. Slow or missing history will not block this report.</span></div>';
     }
 
     // ---- events ----------------------------------------------------------
@@ -609,6 +661,11 @@
       root.querySelectorAll("[data-open-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.openCe); }; });
       root.querySelectorAll("[data-remove-ce]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeCe(b.dataset.removeCe); }; });
       bind("#rv-add-ce", function () { S.adding = !S.adding; S.pickerQuery = ""; render(); var i = root.querySelector("#rv-picker-input"); if (i) i.focus(); });
+      bind("#rv-browse-ces", function () { captureVisibleDrafts(); S.queueBrowse = true; render(); var i=root.querySelector("#rv-search-ce");if(i)i.focus({preventScroll:true}); });
+      bind("#rv-close-queue", function () { S.queueBrowse = false; render(); var b=root.querySelector("#rv-browse-ces");if(b)b.focus({preventScroll:true}); });
+      root.querySelectorAll("[data-queue-filter]").forEach(function(b){b.onclick=function(){S.queueFilter=b.dataset.queueFilter;render();};});
+      var reasonFilter=root.querySelector("#rv-reason-filter");if(reasonFilter)reasonFilter.onchange=function(){S.queueReason=reasonFilter.value;render();};
+      var categoryFilter=root.querySelector("#rv-category-filter");if(categoryFilter)categoryFilter.onchange=function(){S.queueCategory=categoryFilter.value;render();};
       var pick = root.querySelector("#rv-picker-input");
       if (pick) pick.oninput = function () {
         S.pickerQuery = pick.value;
@@ -617,11 +674,12 @@
       };
       wirePickerResults();
       var search=root.querySelector("#rv-search-ce");
-      if(search)search.oninput=function(){S.queueQuery=search.value;var clear=root.querySelector("#rv-clear-search");if(clear)clear.hidden=!String(S.queueQuery||"").trim();var panel=root.querySelector("#rv-queue-review");if(panel){var needle=String(S.queueQuery||"").trim().toLowerCase(),matches=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});panel.innerHTML=matches.length?matches.map(queueRow).join(""):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>';wire();}};
+      if(search)search.oninput=function(){S.queueQuery=search.value;var clear=root.querySelector("#rv-clear-search");if(clear)clear.hidden=!String(S.queueQuery||"").trim();var panel=root.querySelector("#rv-queue-review");if(panel){var matches=visibleQueueRows();panel.innerHTML=matches.length?matches.map(queueRow).join(""):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Clear search or adjust the local filters.</span></div>';wire();}};
       bind("#rv-clear-search",function(){S.queueQuery="";render();var el=root.querySelector("#rv-search-ce");if(el)el.focus();});
 
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
+      var footerTreatment=root.querySelector("#rv-footer-treatment");if(footerTreatment)footerTreatment.onchange=function(){setTreatment(footerTreatment.value);};
       bind("#rv-open-drawer", function () {
         openAnalyticsDrawer(S.selected);
       });
@@ -657,8 +715,9 @@
       root.querySelectorAll(".rv-sugg").forEach(function (card) {
         var acc = card.querySelector("[data-sugg-accept]"), ig = card.querySelector("[data-sugg-ignore]");
         if (acc) acc.onclick = function () { acceptSuggestion(card); };
-        if (ig) ig.onclick = function () { decideSuggestion(card.dataset.suggestion, "rejected", {}); };
+        if (ig) ig.onclick = function () { decideSuggestionGroup(card, "rejected", {}); };
       });
+      root.querySelectorAll("[data-sugg-expand]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=String(S.expandedSuggestion)===String(b.dataset.suggExpand)?"":b.dataset.suggExpand;render();var active=root.querySelector('[data-sugg-expand="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
       root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
       root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
       root.querySelectorAll("[data-comment-save]").forEach(function (b) { b.onclick = function () { saveImportedComment(b.dataset.commentSave); }; });
@@ -831,14 +890,21 @@
       var kind = card.dataset.kind, sid = card.dataset.suggestion;
       var body = ((card.querySelector("[data-sugg-body]") || {}).value || "").trim();
       if (!body) { var bodyEl = card.querySelector("[data-sugg-body]"); if (bodyEl) bodyEl.focus(); toast("Keep or edit the suggestion text first"); return; }
-      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment", body: body }); return; }
+      if (kind === "comment") { decideSuggestionGroup(card, "approved", { destination: "comment", body: body }); return; }
       if (!ensureAuthor()) return;
       var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
       var due = (card.querySelector("[data-w-due]") || {}).value || "";
       var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
       if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
-      decideSuggestion(sid, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
+      decideSuggestionGroup(card, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
+    }
+    function decideSuggestionGroup(card, decision, fields) {
+      var primary = card.dataset.suggestion, duplicates = String(card.dataset.duplicateIds || "").split(",").filter(Boolean);
+      if (!api) return;
+      var calls = [api.decideSuggestion(Object.assign({ suggestion_id:primary, decision:decision, decided_by:author() }, fields || {}))];
+      duplicates.forEach(function (sid) { calls.push(api.decideSuggestion({ suggestion_id:sid, decision:"rejected", decided_by:author(), duplicate_of:primary })); });
+      Promise.all(calls).then(function(){toast(decision==="approved"?(duplicates.length?"Added · duplicate suggestions archived":"Added"):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
@@ -944,9 +1010,9 @@
       var key=S.market_slug+"|"+S.week_start+"|"+q.ce_id,cached=S.memoryCache[key];
       if(cached){body.innerHTML=renderMemory(cached);wireMemory(body);return;}
       if(S.memoryInflight[key])return;
-      body.innerHTML='<div class="rv-empty-state"><strong>Loading CE memory…</strong></div>';
+      body.innerHTML=renderMemoryLoading();
       S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen&&String(S.selected)===String(q.ce_id)){current.innerHTML=renderMemory(res);wireMemory(current);}return res; })
-        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
+        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Story</button><button class="rv-memory-tab" disabled>Work</button><button class="rv-memory-tab" disabled>Historical comments</button><button class="rv-memory-tab" disabled>Perf history</button></div><div class="rv-empty-state"><strong>CE memory is temporarily unavailable</strong><span>Current Review data remains available. Try again later; missing history never blocks this report.</span></div>'; });
       S.memoryInflight[key].finally(function(){delete S.memoryInflight[key];});
     }
     function renderMemory(res) {

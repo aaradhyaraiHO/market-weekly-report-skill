@@ -225,6 +225,53 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn(".rv-queue-panel{max-height:", self.css)
         self.assertIn("overflow-y:auto", self.css)
 
+    def test_narrow_queue_is_an_on_demand_ce_browser(self):
+        for fragment in (
+            'id="rv-browse-ces"', 'id="rv-close-queue"',
+            'S.queueBrowse = true', 'S.queueBrowse = false',
+        ):
+            self.assertIn(fragment, self.view)
+        self.assertIn(".rv-side{display:none;position:fixed", self.css)
+        self.assertIn(".rv-side.open{display:flex", self.css)
+        self.assertIn(".rv-mobile-current{display:flex", self.css)
+
+    def test_queue_rows_have_no_nested_interactive_targets(self):
+        row = self.view.split("function queueRow(q)", 1)[1].split(
+            "function renderProcessPanel", 1
+        )[0]
+        self.assertNotIn('role="link"', row)
+        self.assertEqual(row.count('data-open-drawer-ce="'), 1)
+        self.assertIn('data-select-ce="', row)
+        self.assertIn('class="rv-ce-details"', row)
+
+    def test_queue_filters_are_local_and_cover_review_states(self):
+        for fragment in (
+            'queueFilter: "all"', '"needs_review"', '"in_progress"',
+            '"reviewed"', 'id="rv-reason-filter"', 'id="rv-category-filter"',
+            "function visibleQueueRows()",
+        ):
+            self.assertIn(fragment, self.view)
+
+    def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
+        self.assertIn("function dedupeSuggestions(rows)", self.view)
+        self.assertIn("normalizedSuggestionBody", self.view)
+        self.assertIn('class="rv-trace"', self.view)
+        self.assertIn("matching sources", self.view)
+        self.assertIn("Accepted / open", self.view)
+        self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0])
+
+    def test_completion_names_requirement_and_offers_inline_treatment(self):
+        self.assertIn("Required: choose a review treatment before finishing", self.view)
+        self.assertIn('id="rv-footer-treatment"', self.view)
+        self.assertIn("Next unreviewed", self.view)
+        self.assertIn("?'finished'", self.view)
+
+    def test_memory_loading_is_structured_and_fail_soft(self):
+        self.assertIn("function renderMemoryLoading()", self.view)
+        self.assertIn("Current Review stays usable", self.view)
+        self.assertIn("missing history never blocks this report", self.view)
+        self.assertIn(".rv-skeleton", self.css)
+
     def test_granola_stays_hidden_until_guarded_beta_is_approved(self):
         for fragment in (
             "Granola meeting",
