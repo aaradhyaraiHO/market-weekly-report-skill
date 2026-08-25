@@ -579,7 +579,7 @@
       };
       wirePickerResults();
       var search=root.querySelector("#rv-search-ce");
-      if(search)search.oninput=function(){S.queueQuery=search.value;var panel=root.querySelector("#rv-queue-review");if(panel){var needle=String(S.queueQuery||"").trim().toLowerCase(),matches=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});panel.innerHTML=matches.length?matches.map(queueRow).join(""):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>';wire();}};
+      if(search)search.oninput=function(){S.queueQuery=search.value;var clear=root.querySelector("#rv-clear-search");if(clear)clear.hidden=!String(S.queueQuery||"").trim();var panel=root.querySelector("#rv-queue-review");if(panel){var needle=String(S.queueQuery||"").trim().toLowerCase(),matches=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});panel.innerHTML=matches.length?matches.map(queueRow).join(""):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>';wire();}};
       bind("#rv-clear-search",function(){S.queueQuery="";render();var el=root.querySelector("#rv-search-ce");if(el)el.focus();});
 
       var treatment = root.querySelector("#rv-treatment");

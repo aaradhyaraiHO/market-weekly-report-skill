@@ -27,6 +27,7 @@ class ReviewIterationContract(unittest.TestCase):
         search = VIEW.split('var search=root.querySelector("#rv-search-ce")', 1)[1].split('bind("#rv-clear-search"', 1)[0]
         self.assertNotIn("api.", search)
         self.assertNotIn("S.selected =", search)
+        self.assertIn("clear.hidden=", search)
 
     def test_create_action_is_optimistic_deduplicated_and_rolls_back(self):
         save = VIEW.split("function saveCompose()", 1)[1].split("function toggleWork", 1)[0]
