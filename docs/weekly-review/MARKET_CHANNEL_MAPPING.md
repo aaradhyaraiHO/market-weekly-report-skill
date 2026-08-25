@@ -8,7 +8,7 @@ Complete mapping of Headout markets to Slack channels for weekly review context 
 
 | Market | Region | Channel(s) | Channel ID(s) | Countries/Notes |
 |--------|--------|-----------|---------------|-----------------|
-| **North America** | North America | #mkt-usa | `CNSHDD2H1` | USA, Canada, Bahamas |
+| **North America** | North America | #adhoc-north-america | `C0BQHT29WMB` | Review discussions only; weekly alerts remain in #mkt-usa |
 | **Central Live Entertainment** | Central Categories | #pod-live-entertainment | `C042A57T52Q` | Cross-market live entertainment category |
 | **Italy** | Europe | #mkt-italy | `C045L2WQ79P` | Italy, Malta, Switzerland |
 | **France** | Europe | #mkt-france | `CH64TEB71` | France, Monaco |

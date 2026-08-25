@@ -435,7 +435,7 @@
   // Primary posting routes mirror alert/market_channels.json. Alternate market
   // channels remain read/mention sources; one discussion must have one stable home.
   var MARKET_CHANNELS = {
-    north_america:{id:"CNSHDD2H1",name:"mkt-usa"},italy:{id:"C045L2WQ79P",name:"mkt-italy-switzerland-malta"},
+    north_america:{id:"C0BQHT29WMB",name:"adhoc-north-america"},italy:{id:"C045L2WQ79P",name:"mkt-italy-switzerland-malta"},
     oceania:{id:"CHKRLFDPU",name:"mkt-australia"},france:{id:"CH64TEB71",name:"mkt-france"},
     united_kingdom:{id:"CKTFHT4AF",name:"mkt-uk"},iberia:{id:"CH2LRMJF2",name:"mkt-iberia"},
     csee:{id:"CSQ10TALA",name:"mkt-csee"},east_asia:{id:"CQD6220VB",name:"mkt-japan"},
@@ -585,7 +585,9 @@
       S.headline = h; S.market = h.market || h.market_slug || ""; S.market_slug = h.market_slug || h.market || "";
       S.week_start = h.week_start || ""; S.week_end = h.week_end || "";
       var ch = (h.notes_channels || (ctx.getBaseHeadline && ctx.getBaseHeadline().notes_channels) || {})[S.market_slug];
-      S.channel = ch || MARKET_CHANNELS[S.market_slug] || null;
+      // North America Review discussions intentionally use the dedicated
+      // ad-hoc room; weekly alerts continue to use the report payload's mkt-usa route.
+      S.channel = S.market_slug === "north_america" ? MARKET_CHANNELS.north_america : (ch || MARKET_CHANNELS[S.market_slug] || null);
       return changed;
     }
     function loadQueue() {

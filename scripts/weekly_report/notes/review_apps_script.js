@@ -1051,7 +1051,7 @@ function installReviewStorage(){
 // rename in Slack cannot silently broaden who can be tagged. Keep this list in
 // lockstep with docs/weekly-review/MARKET_CHANNEL_MAPPING.md.
 var REVIEW_MARKET_SLACK_CHANNELS={
-  north_america:["CNSHDD2H1"],central_live_entertainment:["C042A57T52Q"],italy:["C045L2WQ79P"],france:["CH64TEB71"],
+  north_america:["C0BQHT29WMB"],central_live_entertainment:["C042A57T52Q"],italy:["C045L2WQ79P"],france:["CH64TEB71"],
   iberia:["CH2LRMJF2"],south_america:["CH2LRMJF2"],mexico_central_america:["C012949PQ81"],
   csee:["CSQ10TALA"],nordics:["CSQ10TALA"],united_kingdom:["CKTFHT4AF"],benelux:["CKTFHT4AF"],
   east_asia:["CQD6220VB","C01C4NPLYN6","C01CARUM1CL","C0809DN93DH"],oceania:["CHKRLFDPU","C039TMH0GEP","C097DVBLHGS"],

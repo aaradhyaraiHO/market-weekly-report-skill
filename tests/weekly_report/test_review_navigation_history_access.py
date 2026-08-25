@@ -44,9 +44,12 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
     def test_all_market_primary_channels_match_authoritative_alert_map(self):
         self.assertEqual(len(CHANNELS), 18)
         for market, channel in CHANNELS.items():
+            if market == "north_america":
+                channel = "C0BQHT29WMB"
             self.assertRegex(BACKEND, rf"{re.escape(market)}:\[\"{re.escape(channel)}\"")
             self.assertIn(f'{market}:{{id:"{channel}"', VIEW)
         self.assertIn("Slack channel does not match Review market routing", BACKEND)
+        self.assertIn('S.market_slug === "north_america" ? MARKET_CHANNELS.north_america', VIEW)
 
     def test_history_is_read_only_ce_id_scoped_and_fail_soft(self):
         self.assertIn("reviewStableCeId", BACKEND)
