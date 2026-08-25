@@ -44,6 +44,7 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn('data-role-open=', VIEW)
         self.assertIn('aria-expanded="false"', VIEW)
         self.assertIn('root.querySelectorAll("[data-role-open]")', VIEW)
+        self.assertIn("editing||hasDraft", VIEW)
 
     def test_client_keeps_legacy_note_compatibility(self):
         self.assertIn('note.note_type || "bgm"', CLIENT)
