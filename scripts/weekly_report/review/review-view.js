@@ -281,6 +281,7 @@
       root.innerHTML = '<div class="rv-layout">' + renderSide() + renderMain() + "</div>" +
         '<div class="rv-toast" id="rv-toast" hidden></div>' + renderMemoryDrawer();
       wire();
+      if (S.queueRevealUntil > Date.now() && S.selected) setTimeout(function () { revealQueueSelection(S.selected); }, 0);
       if (S.memoryOpen) setTimeout(openMemory, 0);
     }
 
@@ -1017,7 +1018,7 @@
         else if(requested&&ensureLocalCe(requested))select(requested);else render();
         visibleOnce = true;
       },
-      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){select(ceId);revealQueueSelection(ceId);return true;}return false; },
+      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){S.queueRevealUntil=Date.now()+2500;select(ceId);revealQueueSelection(ceId);return true;}return false; },
       prefetch: function(){refreshHeadline();if(!S.loaded)loadQueue();},
       onWeekChange: function () { if(S.selected&&S.noteDraft!=null)S.drafts[String(S.selected)]=S.noteDraft; Object.keys(S.ceRequestSeq).forEach(function(k){S.ceRequestSeq[k]++;}); S.selected = null; S.weekly = {}; S.suggestions = {}; S.ceLoadedAt={}; S.memoryCache={}; S.loaded = false; if (visibleOnce) loadQueue(); }
     };

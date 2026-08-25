@@ -220,6 +220,8 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("panel.scrollTop += rowRect.bottom - panelRect.bottom", self.view)
         self.assertIn("active.focus({ preventScroll: true })", self.view)
         self.assertNotIn("active.scrollIntoView", self.view)
+        self.assertIn("S.queueRevealUntil=Date.now()+2500", self.view)
+        self.assertIn("revealQueueSelection(S.selected)", self.view)
         self.assertIn(".rv-queue-panel{max-height:", self.css)
         self.assertIn("overflow-y:auto", self.css)
 
