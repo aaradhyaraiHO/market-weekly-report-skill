@@ -149,14 +149,14 @@ class ReviewV0UiContract(unittest.TestCase):
         ):
             self.assert_ui_contract(fragment)
 
-    def test_note_and_slack_share_one_composer(self):
-        self.assertEqual(self.view.count('id="rv-note"'), 1)
-        for fragment in ('id="rv-save-note"', 'id="rv-start-slack"'):
-            self.assert_ui_contract(fragment)
-        save_note = self.view.split("function saveNote()", 1)[1].split("function deleteNote()", 1)[0]
+    def test_role_notes_and_slack_have_separate_composers(self):
+        for role in ("bgm", "performance", "bdm"):
+            self.assertIn(f'renderRoleNote(weekly,"{role}")', self.view)
+        self.assertIn('id="rv-slack-message"', self.view)
         start_slack = self.view.split("function startSlack()", 1)[1].split("function syncThread()", 1)[0]
-        self.assertIn('querySelector("#rv-note")', save_note)
-        self.assertIn('querySelector("#rv-note")', start_slack)
+        self.assertIn('querySelector("#rv-slack-message")', start_slack)
+        self.assertNotIn('querySelector("#rv-note")', start_slack)
+        self.assertIn("discussion_text: text", self.view)
 
     def test_mentions_are_resolved_and_ambiguity_is_visible_before_posting(self):
         for fragment in (

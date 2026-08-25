@@ -23,6 +23,17 @@
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
 #review-view button,#review-view select,#review-view textarea,#review-view input{font:inherit;color:inherit}
+#review-view .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#review-view .rv-search{display:flex;align-items:center;margin:12px 0;position:relative}
+#review-view .rv-search input{width:100%;height:40px;padding:8px 38px 8px 12px;border:1px solid var(--rv-g300);border-radius:10px;background:#fff}
+#review-view .rv-search input:focus{outline:2px solid var(--rv-purps);border-color:transparent}
+#review-view .rv-search button{position:absolute;right:6px;border:0;background:transparent;width:30px;height:30px;border-radius:8px;cursor:pointer}
+#review-view .rv-role-notes{display:grid;gap:14px}
+#review-view .rv-role-note,#review-view .rv-slack-composer{padding:14px;border:1px solid var(--rv-g200);border-radius:12px;background:#fff}
+#review-view .rv-field-label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}
+#review-view .rv-role-note textarea,#review-view .rv-slack-composer textarea{width:100%;min-height:88px;padding:11px 12px;border:1px solid var(--rv-g400);border-radius:10px;resize:vertical}
+#review-view .rv-channel-preview{font-size:12px;color:var(--rv-muted);margin:-2px 0 8px}
+#review-view [data-work]._pending,#review-view [data-work][data-pending="true"]{opacity:.68}
 .rv-ce-identity,.rv-title-link{color:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;cursor:pointer}
 .rv-ce-identity:hover,.rv-ce-identity:focus,.rv-title-link:hover,.rv-title-link:focus{text-decoration-color:currentColor;outline:none}
 .rv-title-link{border:0;background:transparent;padding:0;font:inherit;text-align:left}

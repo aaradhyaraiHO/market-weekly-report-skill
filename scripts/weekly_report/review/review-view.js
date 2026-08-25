@@ -59,8 +59,8 @@
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
       receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
-      loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, mentionPreview: null, mentionBusy: false,
+      loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
       drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, asyncBusy: {}
     };
@@ -241,7 +241,7 @@
     function select(ceId) {
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = "";
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = "";
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
       S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
@@ -261,14 +261,18 @@
     function renderSide() {
       var open = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); }).length;
       var total = S.queue.length, reviewed = total - open;
-      var rows = S.queue.length ? S.queue.map(queueRow).join("") :
-        '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>';
+      var needle=String(S.queueQuery||"").trim().toLowerCase();
+      var visibleQueue=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});
+      var rows = visibleQueue.length ? visibleQueue.map(queueRow).join("") :
+        (needle?'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>':
+        '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>');
       var picker = S.adding ? renderPicker() : "";
       return '<aside class="rv-side">' +
         '<div class="rv-eyebrow">Weekly review · w/c ' + esc(S.week_start) + "</div>" +
         '<div class="rv-side-head"><h2>' + (open ? open + " CE" + (open === 1 ? "" : "s") + " to review" : "All caught up") + "</h2>" +
         '<button class="rv-addce" type="button" id="rv-add-ce">＋ Add CE</button></div>' +
         '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed</div>" +
+        '<label class="rv-search"><span class="sr-only">Search CE</span><input id="rv-search-ce" type="search" placeholder="Search CE name or ID" value="'+esc(S.queueQuery||"")+'"><button type="button" id="rv-clear-search" aria-label="Clear CE search"'+(needle?'':' hidden')+'>×</button></label>'+
         '<div class="rv-queue-label">Review queue</div>' + picker +
         '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div></aside>";
     }
@@ -341,7 +345,26 @@
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
     }
 
-    function renderCommentaryCard(q) {
+    function roleMeta(role) {
+      return role === "performance" ? {label:"Performance note",key:"performance_note",author:"performance_author",updated:"performance_updated_at",deleted:"performance_note_deleted_at"} :
+        role === "bdm" ? {label:"BDM note",key:"bdm_note",author:"bdm_author",updated:"bdm_updated_at",deleted:"bdm_note_deleted_at"} :
+        {label:"BGM note",key:"bgm_note",author:"bgm_author",updated:"bgm_updated_at",deleted:"note_deleted_at"};
+    }
+    function roleDraftKey(role){return String(S.selected)+":"+role;}
+    function renderRoleNote(weekly,role){
+      var m=roleMeta(role),saved=!!(weekly&&weekly[m.key]&&!weekly[m.deleted]),editing=S.editingRole===role;
+      var draftKey=roleDraftKey(role),val=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey)?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
+      if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
+      return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+(editing?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
+    }
+    function renderCommentaryCard(q){
+      var weekly=S.weekly[q.ce_id]||{},hasThread=!!weekly.slack_post_ts,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
+      var thread=hasThread?'<div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>':'';
+      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Start Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div><textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change any saved role note.">'+esc(slackText)+'</textarea>'+renderMentionPreview()+'<div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy||hasThread?' disabled':'')+'>'+(hasThread?'Discussion started':(S.mentionBusy?'Resolving names…':'Preview Slack post'))+'</button></div>'+thread+'</div>';
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">CE notes &amp; discussion</div><div class="rv-card-sub">Role notes save independently. Slack discussion is a separate message.</div></div></div><div class="rv-card-body rv-role-notes">'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+composer+'</div></section>';
+    }
+
+    function renderLegacyCommentaryCard(q) {
       var weekly = S.weekly[q.ce_id];
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) {
         return (s.kind === "comment" || !s.kind) && String(s.source_type || "granola") === "granola";
@@ -493,8 +516,8 @@
         : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
       var right = w.owner ? avatar(w.owner, "sm") : '<span class="rv-av sm none">–</span>';
       if (String(S.editingWork || "") === String(w.work_id)) return renderWorkEdit(w);
-      return '<div class="rv-work' + (done ? " done" : "") + '" data-work="' + esc(w.work_id) + '">' + left +
-        '<div class="rv-work-main">' + (isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "") +
+      return '<div class="rv-work' + (done ? " done" : "") + (w._pending ? " pending" : "") + '" data-work="' + esc(w.work_id) + '" data-pending="'+(w._pending?"true":"false")+'">' + left +
+        '<div class="rv-work-main">' + (w._pending?'<div class="rv-work-kicker">Saving…</div>':(isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "")) +
         '<div class="rv-work-title">' + esc(w.text) + "</div>" +
         '<div class="rv-work-meta">' + meta + "</div>" +
         '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select>" +
@@ -555,6 +578,9 @@
         if (res) { res.innerHTML = renderPickerResults(); wirePickerResults(); }
       };
       wirePickerResults();
+      var search=root.querySelector("#rv-search-ce");
+      if(search)search.oninput=function(){S.queueQuery=search.value;var panel=root.querySelector("#rv-queue-review");if(panel){var needle=String(S.queueQuery||"").trim().toLowerCase(),matches=S.queue.filter(function(q){return !needle||(String(q.ce_name||"")+" "+String(q.ce_id||"")).toLowerCase().indexOf(needle)>=0;});panel.innerHTML=matches.length?matches.map(queueRow).join(""):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>';wire();}};
+      bind("#rv-clear-search",function(){S.queueQuery="";render();var el=root.querySelector("#rv-search-ce");if(el)el.focus();});
 
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
@@ -567,11 +593,17 @@
       bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
       bind("#rv-del-yes", deleteNote);
       bind("#rv-save-note", saveNote);
+      root.querySelectorAll("[data-role-edit]").forEach(function(b){b.onclick=function(){S.editingRole=b.dataset.roleEdit;render();var el=root.querySelector('[data-role-input="'+S.editingRole+'"]');if(el)el.focus();};});
+      root.querySelectorAll("[data-role-cancel]").forEach(function(b){b.onclick=function(){delete S.roleDrafts[roleDraftKey(b.dataset.roleCancel)];S.editingRole="";render();};});
+      root.querySelectorAll("[data-role-save]").forEach(function(b){b.onclick=function(){saveRoleNote(b.dataset.roleSave,b);};});
+      root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
+      root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
       bind("#rv-confirm-slack", postSlack);
-      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) n.focus(); });
+      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-slack-message"); if (n) n.focus(); });
       var noteInput = root.querySelector("#rv-note");
       if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.drafts[S.selected]=S.noteDraft; S.mentionPreview = null; };
+      var slackInput=root.querySelector("#rv-slack-message");if(slackInput)slackInput.oninput=function(){S.slackDrafts[String(S.selected)]=slackInput.value;S.mentionPreview=null;};
       bind("#rv-sync-thread", syncThread);
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; S.processing = false; render(); });
@@ -671,6 +703,21 @@
         .then(function () { toast("Removed from review set"); })
         .catch(function () { toast("Could not remove CE"); });
     }
+    function saveRoleNote(role,button){
+      if(!ensureAuthor()||!api||S.asyncBusy["note:"+role])return;
+      var el=root.querySelector('[data-role-input="'+role+'"]'),text=el?el.value.trim():"";
+      if(!text){if(el)el.focus();toast("Write the "+role+" note first");return;}
+      S.asyncBusy["note:"+role]=true;if(button){button.disabled=true;button.textContent="Saving…";}
+      var payload=Object.assign({},ident(S.selected),{note_type:role,note:text,author:author()});
+      payload[role+"_note"]=text;payload[role+"_author"]=author();
+      api.saveWeeklyNote(payload).then(function(res){S.weekly[S.selected]=res.weekly;delete S.roleDrafts[roleDraftKey(role)];S.editingRole="";toast(roleMeta(role).label+" saved");render();})
+        .catch(function(){toast("Save failed · note kept locally");}).finally(function(){delete S.asyncBusy["note:"+role];});
+    }
+    function deleteRoleNote(role){
+      if(!api||S.asyncBusy["note:"+role])return;S.asyncBusy["note:"+role]=true;
+      api.deleteWeeklyNote(ident(S.selected),author(),role).then(function(res){S.weekly[S.selected]=res.weekly||null;toast(roleMeta(role).label+" deleted · audit retained");render();})
+        .catch(function(){toast("Delete failed");}).finally(function(){delete S.asyncBusy["note:"+role];});
+    }
     function saveNote() {
       if (!ensureAuthor() || !api) return;
       var ta = root.querySelector("#rv-note"); if (!ta.value.trim()) { ta.focus(); toast("Write an observation first"); return; }
@@ -690,9 +737,9 @@
       if (weekly && weekly.slack_post_ts) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
       if (!ensureAuthor() || !api) return;
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
-      var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
+      var ta = root.querySelector("#rv-slack-message"); var text = ta ? ta.value.trim() : (S.slackDrafts[String(S.selected)] || "");
       if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
-      S.noteDraft = text; S.drafts[S.selected]=text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
+      S.slackDrafts[String(S.selected)]=text; S.mentionBusy = true; S.mentionPreview = null; render();
       api.resolveMentions(ident(S.selected), text).then(function (res) {
         S.mentionBusy = false;
         S.mentionPreview = { original_text: text, resolved_text: res.resolved_text || text, matches: res.matches || [], ambiguous: res.ambiguous || [] };
@@ -707,9 +754,9 @@
       var text = String(p.original_text || "").trim();
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
-      api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; delete S.drafts[S.selected]; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
-        .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · note remains saved"); });
+      api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, discussion_text: text, discussion_author: author(), request_id: reqId, report_url: location.href }))
+        .then(function (res) { S.weekly[S.selected] = res.weekly; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; toast("CE discussion started"); render(); })
+        .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · discussion kept locally"); });
     }
     function syncThread() {
       if (!api) return;
@@ -781,13 +828,18 @@
     }
     function saveCompose() {
       if (!ensureAuthor() || !api) return;
+      if(S.asyncBusy.createWork)return;
       var kind = S.compose, text = root.querySelector("#rv-c-text").value.trim();
       if (!text) { root.querySelector("#rv-c-text").focus(); toast("Describe it first"); return; }
       var owner = root.querySelector("#rv-c-owner").value.trim(), due = root.querySelector("#rv-c-due").value, status = root.querySelector("#rv-c-status").value;
       if (kind === "action" && status === "needs_action" && !owner) { root.querySelector("#rv-c-owner").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { root.querySelector("#rv-c-due").focus(); toast("Choose the next review date"); return; }
-      saveWorkItem({ market_slug: S.market_slug, ce_id: S.selected, ce_name: (S.byId[S.selected] || {}).ce_name, origin_week: S.week_start, kind: kind, text: text, owner: owner, due_date: due, status: status, source_type: "bgm_manual" }, kind === "check" ? "Check scheduled" : "Action created");
-      S.compose = "";
+      S.asyncBusy.createWork=true;
+      var started=performance.now(),tempId="pending_"+Date.now()+"_"+hash(text+owner+due),item={ work_id:tempId,market_slug:S.market_slug,ce_id:S.selected,ce_name:(S.byId[S.selected]||{}).ce_name,origin_week:S.week_start,kind:kind,text:text,owner:owner,due_date:due,status:status,source_type:"bgm_manual",_pending:true };
+      (S.work[String(S.selected)]=S.work[String(S.selected)]||[]).push(item);S.compose="";render();toast(kind==="check"?"Scheduling check…":"Creating action…");
+      api.saveWork(Object.assign({},item,{work_id:""})).then(function(res){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list[idx]=res.work_item||Object.assign({},item,{work_id:(res.work_item||{}).work_id||tempId,_pending:false});console.info("review_work_persist_ms",Math.round(performance.now()-started));toast(kind==="check"?"Check scheduled":"Action created");render();return reloadWork();})
+        .catch(function(){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list.splice(idx,1);S.compose=kind;toast("Could not save work item · rolled back");render();})
+        .finally(function(){S.asyncBusy.createWork=false;});
     }
     function toggleWork(workId) {
       var w = findWork(workId); if (!w || !api) return;
@@ -821,7 +873,7 @@
         S.confirmDeleteWork = null; toast("Work item deleted · audit retained"); return reloadWork();
       }).catch(function () { toast("Could not delete work item"); });
     }
-    function saveWorkItem(item, okMsg) { api.saveWork(item).then(function () { toast(okMsg); reloadWork(); }).catch(function () { toast("Could not save work item"); }); }
+    function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
     function reloadWork() {
       if (!api) return Promise.resolve();
       return api.work({ market_slug: S.market_slug, week: S.week_start }).then(function (res) {

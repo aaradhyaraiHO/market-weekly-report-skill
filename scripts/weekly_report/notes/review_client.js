@@ -81,12 +81,13 @@
         return request("review_weekly_list", Object.assign({}, identity, {before: before || "", limit: limit || 26}), options);
       },
       saveWeeklyNote: function(note) {
-        required(note.bgm_author, "bgm_author");
-        required(note.bgm_note, "bgm_note");
+        required(note.note_type || "bgm", "note_type");
+        required(note.author || note.bgm_author || note.performance_author || note.bdm_author, "author");
+        required(note.note || note.bgm_note || note.performance_note || note.bdm_note, "note");
         return post("review_weekly_note_upsert", note);
       },
-      deleteWeeklyNote: function(identity, deletedBy) {
-        return post("review_weekly_note_delete", Object.assign({}, identity, {deleted_by: deletedBy}));
+      deleteWeeklyNote: function(identity, deletedBy, noteType) {
+        return post("review_weekly_note_delete", Object.assign({}, identity, {deleted_by: deletedBy, note_type: noteType || "bgm"}));
       },
       resolveMentions: function(identity, text) {
         return request("review_mention_resolve", Object.assign({}, identity, {text: text}));

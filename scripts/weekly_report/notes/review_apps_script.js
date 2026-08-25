@@ -60,7 +60,9 @@ var REVIEW_TABLES = {
   weekly: {
     sheet: "review_weekly_commentary",
     headers: ["weekly_id","market_slug","ce_id","ce_name","week_start","bgm_note",
-      "bgm_author","bgm_updated_at","note_deleted_at","slack_post_ts","slack_post_permalink","last_scanned_ts",
+      "bgm_author","bgm_updated_at","note_deleted_at","performance_note","performance_author",
+      "performance_updated_at","performance_note_deleted_at","bdm_note","bdm_author","bdm_updated_at",
+      "bdm_note_deleted_at","slack_post_ts","slack_post_permalink","last_scanned_ts",
       "reply_count","contributors_json","summary_json","summary_upto_ts","summary_updated_at",
       "sync_status","last_error","last_post_request_id","version"]
   },
@@ -376,6 +378,11 @@ function reviewWeeklyBase(p,existing){
     week_start:ymd(p.week_start),bgm_note:(existing&&existing.bgm_note)||"",
     bgm_author:(existing&&existing.bgm_author)||"",bgm_updated_at:(existing&&existing.bgm_updated_at)||"",
     note_deleted_at:(existing&&existing.note_deleted_at)||"",
+    performance_note:(existing&&existing.performance_note)||"",performance_author:(existing&&existing.performance_author)||"",
+    performance_updated_at:(existing&&existing.performance_updated_at)||"",
+    performance_note_deleted_at:(existing&&existing.performance_note_deleted_at)||"",
+    bdm_note:(existing&&existing.bdm_note)||"",bdm_author:(existing&&existing.bdm_author)||"",
+    bdm_updated_at:(existing&&existing.bdm_updated_at)||"",bdm_note_deleted_at:(existing&&existing.bdm_note_deleted_at)||"",
     slack_post_ts:(existing&&existing.slack_post_ts)||"",
     slack_post_permalink:(existing&&existing.slack_post_permalink)||"",
     last_scanned_ts:(existing&&existing.last_scanned_ts)||"",reply_count:(existing&&existing.reply_count)||"0",
@@ -396,13 +403,20 @@ function reviewWeeklyMutate(p,mutator){
 }
 
 function reviewWeeklyNoteUpsert(p){
-  var err=reviewRequired(p,["market_slug","ce_id","week_start","bgm_note","bgm_author"]);if(err)return err;
-  var trustedAuthor=reviewTrustedAuthor(p,p.bgm_author);
+  var noteType=String(p.note_type||"bgm").toLowerCase();
+  if(["bgm","performance","bdm"].indexOf(noteType)<0)return jsonResp({ok:false,error:"invalid note_type"});
+  var noteKey=noteType+"_note",authorKey=noteType+"_author",updatedKey=noteType+"_updated_at";
+  var deletedKey=noteType==="bgm"?"note_deleted_at":noteType+"_note_deleted_at";
+  var noteValue=p[noteKey]!=null?p[noteKey]:p.note;
+  var suppliedAuthor=p[authorKey]!=null?p[authorKey]:p.author;
+  var err=reviewRequired(Object.assign({},p,{note_value:noteValue,note_author:suppliedAuthor}),["market_slug","ce_id","week_start","note_value","note_author"]);if(err)return err;
+  var trustedAuthor=reviewTrustedAuthor(p,suppliedAuthor);
   var rec=reviewUpsertBy("weekly",function(r){return r.market_slug===p.market_slug&&
     String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start);},function(existing){
       var next=reviewWeeklyBase(p,existing),now=reviewNow();
-      next.bgm_note=p.bgm_note;next.bgm_author=trustedAuthor;next.bgm_updated_at=now;
-      next.note_deleted_at="";next.sync_status=next.slack_post_ts?"sent":"saved";next.last_error="";
+      if(noteType==="bgm"){next.bgm_note=noteValue;next.bgm_author=trustedAuthor;next.bgm_updated_at=now;}
+      else{next[noteKey]=noteValue;next[authorKey]=trustedAuthor;next[updatedKey]=now;}
+      next[deletedKey]="";next.sync_status=next.slack_post_ts?"sent":"saved";next.last_error="";
       next.version=String((parseInt(next.version,10)||0)+1);return next;
     });
   return jsonResp({ok:true,weekly:rec});
@@ -412,7 +426,10 @@ function reviewWeeklyNoteDelete(p){
   var err=reviewRequired(p,["market_slug","ce_id","week_start","deleted_by"]);if(err)return err;
   var existing=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
   if(!existing)return jsonResp({ok:true,action:"noop"});
-  var rec=reviewWeeklyMutate(p,function(next){next.note_deleted_at=reviewNow();
+  var noteType=String(p.note_type||"bgm").toLowerCase();
+  if(["bgm","performance","bdm"].indexOf(noteType)<0)return jsonResp({ok:false,error:"invalid note_type"});
+  var deletedKey=noteType==="bgm"?"note_deleted_at":noteType+"_note_deleted_at";
+  var rec=reviewWeeklyMutate(p,function(next){next[deletedKey]=reviewNow();
     next.sync_status=next.slack_post_ts?next.sync_status:"note_deleted";
     next.version=String((parseInt(next.version,10)||0)+1);return next;});
   return jsonResp({ok:true,weekly:rec,action:"tombstoned"});
@@ -897,22 +914,20 @@ function reviewSlackPostCore(p) {
 function reviewSlackPost(p){return jsonResp(reviewSlackPostCore(p));}
 
 function reviewWeeklySlackPost(p){
-  var err=reviewRequired(p,["market_slug","ce_id","ce_name","week_start","channel","bgm_note","bgm_author","request_id"]);
+  var discussionText=p.discussion_text!=null?p.discussion_text:p.bgm_note;
+  var discussionAuthor=p.discussion_author!=null?p.discussion_author:p.bgm_author;
+  var err=reviewRequired(Object.assign({},p,{discussion_text:discussionText,discussion_author:discussionAuthor}),["market_slug","ce_id","ce_name","week_start","channel","discussion_text","discussion_author","request_id"]);
   if(err)return err;
   var current=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
   if(current && current.last_post_request_id===p.request_id && current.slack_post_ts)
     return jsonResp({ok:true,duplicate:true,weekly:current});
-  var trustedAuthor=reviewTrustedAuthor(p,p.bgm_author);
-  var mentions=reviewResolveMentions(p.bgm_note,p.market_slug);
+  var trustedAuthor=reviewTrustedAuthor(p,discussionAuthor);
+  var mentions=reviewResolveMentions(discussionText,p.market_slug);
   if(mentions.ambiguous.length)return jsonResp({ok:false,error:"ambiguous Slack mentions",mentions:mentions});
-  // Save the BGM note first. If Slack fails, the report still retains the note
-  // and a retry reuses request_id instead of creating another weekly starter.
+  // Slack composition is deliberately independent from all role notes. A
+  // retry reuses request_id without overwriting BGM/Performance/BDM memory.
   var saved=reviewWeeklyMutate(p,function(next){
-    next.bgm_note=p.bgm_note;next.bgm_author=trustedAuthor;next.bgm_updated_at=reviewNow();
-    // A new Slack starter is also a new current-week BGM note.  It must
-    // revive a previously deleted draft rather than carrying its tombstone
-    // into the current record and hiding the newly posted note in Review.
-    next.note_deleted_at="";next.sync_status="posting";next.last_error="";
+    next.sync_status="posting";next.last_error="";
     next.version=String((parseInt(next.version,10)||0)+1);return next;
   });
   var posted=reviewSlackPostCore({market_slug:p.market_slug,ce_id:p.ce_id,ce_name:p.ce_name,
