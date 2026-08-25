@@ -24,6 +24,9 @@
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
 #review-view button,#review-view select,#review-view textarea,#review-view input{font:inherit;color:inherit}
+.rv-ce-identity,.rv-title-link{color:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;cursor:pointer}
+.rv-ce-identity:hover,.rv-ce-identity:focus,.rv-title-link:hover,.rv-title-link:focus{text-decoration-color:currentColor;outline:none}
+.rv-title-link{border:0;background:transparent;padding:0;font:inherit;text-align:left}
 
 .rv-layout{display:grid;grid-template-columns:312px minmax(0,1fr);min-height:calc(100vh - 64px)}
 .rv-side{padding:24px 20px;border-right:1px solid var(--rv-line);background:var(--rv-white)}
@@ -429,6 +432,19 @@
   ];
   var CLOSED = ["complete", "cancelled", "no_action_needed"];
   var MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  // Primary posting routes mirror alert/market_channels.json. Alternate market
+  // channels remain read/mention sources; one discussion must have one stable home.
+  var MARKET_CHANNELS = {
+    north_america:{id:"CNSHDD2H1",name:"mkt-usa"},italy:{id:"C045L2WQ79P",name:"mkt-italy-switzerland-malta"},
+    oceania:{id:"CHKRLFDPU",name:"mkt-australia"},france:{id:"CH64TEB71",name:"mkt-france"},
+    united_kingdom:{id:"CKTFHT4AF",name:"mkt-uk"},iberia:{id:"CH2LRMJF2",name:"mkt-iberia"},
+    csee:{id:"CSQ10TALA",name:"mkt-csee"},east_asia:{id:"CQD6220VB",name:"mkt-japan"},
+    sea:{id:"C5WFYN82H",name:"mkt-singapore"},uae:{id:"C046622L80Z",name:"mkt-mena"},
+    gcc:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},north_africa:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},
+    rest_of_mea:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},benelux:{id:"CKTFHT4AF",name:"mkt-uk"},
+    nordics:{id:"CSQ10TALA",name:"mkt-csee"},south_america:{id:"CH2LRMJF2",name:"mkt-iberia"},
+    mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"},headout:{id:"C0975BGAX0B",name:"team-central-biz"}
+  };
 
   global.initReviewView = function initReviewView(ctx) {
     var root = ctx.root;
@@ -447,7 +463,8 @@
       receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, mentionPreview: null, mentionBusy: false,
-      editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null
+      editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
+      drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, asyncBusy: {}
     };
 
     // Review mutations are BGM-only.  The server already has the authenticated
@@ -470,6 +487,26 @@
     function ident(ceId) {
       var ce = S.byId[String(ceId)] || {};
       return { market_slug: S.market_slug, ce_id: String(ceId), ce_name: ce.ce_name || "", week_start: S.week_start };
+    }
+    function syncUrl(ceId) {
+      try {
+        var url = new URL(location.href);
+        url.searchParams.set("view", "review");
+        url.searchParams.set("market", S.market_slug);
+        url.searchParams.set("week", S.week_start);
+        if (ceId) url.searchParams.set("ce_id", String(ceId)); else url.searchParams.delete("ce_id");
+        history.replaceState(history.state, "", url.toString());
+      } catch (e) {}
+    }
+    function ensureLocalCe(ceId) {
+      var id=String(ceId), ce=(S.headline.all_ces||[]).find(function(row){return String(row.ce_id)===id;});
+      if (!ce) return null;
+      if (!S.byId[id]) { var q={ce_id:id,ce_name:ce.ce_name||("CE "+id),reason:"Opened from CE drawer",source:"drawer"}; S.queue.push(q); S.byId[id]=q; }
+      return ce;
+    }
+    function openAnalyticsDrawer(ceId) {
+      var ce=ensureLocalCe(ceId);
+      if (ce && ctx.openCeDrawer) ctx.openCeDrawer(String(ce.ce_id)); else toast("CE analytics drawer unavailable for this CE");
     }
     function toast(msg) {
       var t = document.getElementById("rv-toast");
@@ -548,12 +585,15 @@
       S.headline = h; S.market = h.market || h.market_slug || ""; S.market_slug = h.market_slug || h.market || "";
       S.week_start = h.week_start || ""; S.week_end = h.week_end || "";
       var ch = (h.notes_channels || (ctx.getBaseHeadline && ctx.getBaseHeadline().notes_channels) || {})[S.market_slug];
-      S.channel = ch || null;
+      S.channel = ch || MARKET_CHANNELS[S.market_slug] || null;
       return changed;
     }
     function loadQueue() {
       refreshHeadline();
       if (!api) { S.setRowsList = []; buildQueue(); render(); return Promise.resolve(); }
+      // Paint the snapshot-backed queue immediately. Remote review state then
+      // enriches it without delaying tab navigation.
+      if (!S.loaded) { buildQueue(); S.loaded = true; render(); }
       var id = { market_slug: S.market_slug, week: S.week_start };
       return Promise.all([
         api.reviewSet(id).catch(function () { return { review_set: [] }; }),
@@ -574,26 +614,38 @@
       });
     }
     function loadCe(ceId) {
-      if (!api || S.loadingCe[ceId]) return Promise.resolve();
+      ceId=String(ceId);
+      if (!api || S.loadingCe[ceId]) return S.loadingCe[ceId] || Promise.resolve();
+      if (S.ceLoadedAt[ceId] && Date.now()-S.ceLoadedAt[ceId] < 60000) return Promise.resolve();
       S.loadingCe[ceId] = true;
-      return Promise.all([
-        api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8).catch(function () { return { weekly: [] }; }),
-        api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { suggestions: [] }; }),
-        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false).catch(function () { return { comments: [] }; })
+      var seq=(S.ceRequestSeq[ceId]||0)+1; S.ceRequestSeq[ceId]=seq;
+      var controller=typeof AbortController!=="undefined"?new AbortController():null; S.ceControllers[ceId]=controller;
+      var requestOptions=controller?{signal:controller.signal}:{};
+      var call=Promise.all([
+        api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
+        api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
+        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; })
       ]).then(function (res) {
+        if(S.ceRequestSeq[ceId]!==seq)return;
         var rows = res[0].weekly || [];
         S.weekly[ceId] = rows.filter(function (r) { return String(r.week_start) === String(S.week_start); })[0] || null;
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
-        S.loadingCe[ceId] = false;
+        S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
-      }).catch(function () { S.loadingCe[ceId] = false; });
+      }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
+      S.loadingCe[ceId]=call; return call;
     }
 
     function select(ceId) {
-      S.selected = String(ceId); S.editingNote = false; S.confirmDelete = false; S.compose = "";
-      S.noteDraft = null; S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
+      if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
+      if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = "";
+      S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
+      S.editingNote = S.noteDraft != null;
+      S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
+      syncUrl(S.selected);
       render();
       if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
     }
@@ -629,8 +681,8 @@
       var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" title="Remove from review set">×</button>' : "";
       return '<div style="position:relative">' + remove +
         '<button class="rv-ce-row' + (active ? " active" : "") + (reviewed ? " reviewed" : "") + '" type="button" data-select-ce="' + esc(q.ce_id) + '">' +
-        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong>' + esc(q.ce_name) + "</strong>" +
-        "<small>" + esc(q.reason) + " · CE " + esc(q.ce_id) + '</small><span class="rv-ce-tags">' + tags + "</span></span></button></div>";
+        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</strong>" +
+        "<small>" + esc(q.reason) + ' · <span class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + '</span></small><span class="rv-ce-tags">' + tags + "</span></span></button></div>";
     }
     function renderProcessPanel() {
       return '<div class="rv-process" id="rv-process-panel">' +
@@ -672,8 +724,8 @@
       var footHint = reviewed ? "Review saved — open work carries into next week"
         : t === "not_scheduled" ? "Set a treatment above to finish this CE" : "Finish when you’re done with this CE";
       return '<main class="rv-main">' +
-        '<header class="rv-detail-head"><div class="rv-breadcrumb">CE ' + esc(q.ce_id) + " · " + esc(S.market) + "</div>" +
-        '<div class="rv-title-line"><div><h1>' + esc(q.ce_name) + "</h1>" +
+        '<header class="rv-detail-head"><div class="rv-breadcrumb"><button class="rv-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + "</button> · " + esc(S.market) + "</div>" +
+        '<div class="rv-title-line"><div><h1><button class="rv-title-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</button></h1>" +
         "<p>Record what you know, decide the follow-through, and mark it reviewed.</p></div>" +
         '<div class="rv-button-row"><button class="rv-btn" type="button" id="rv-open-drawer">Open CE drawer</button></div></div>' +
         '<div class="rv-status-line"><label for="rv-treatment">Review as</label>' +
@@ -889,6 +941,10 @@
     }
     function wire() {
       root.querySelectorAll("[data-select-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.selectCe); }; });
+      root.querySelectorAll("[data-open-drawer-ce]").forEach(function (b) {
+        b.onclick=function(e){e.preventDefault();e.stopPropagation();openAnalyticsDrawer(b.dataset.openDrawerCe);};
+        b.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openAnalyticsDrawer(b.dataset.openDrawerCe);}};
+      });
       root.querySelectorAll("[data-open-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.openCe); }; });
       root.querySelectorAll("[data-remove-ce]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeCe(b.dataset.removeCe); }; });
       bind("#rv-add-ce", function () { S.adding = !S.adding; S.pickerQuery = ""; render(); var i = root.querySelector("#rv-picker-input"); if (i) i.focus(); });
@@ -903,11 +959,10 @@
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
       bind("#rv-open-drawer", function () {
-        var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(S.selected); });
-        if (ce && ctx.openCeDrawer) ctx.openCeDrawer(ce); else toast("CE analytics drawer unavailable for this CE");
+        openAnalyticsDrawer(S.selected);
       });
-      bind("#rv-edit-note", function () { S.editingNote = true; S.noteDraft = (S.weekly[S.selected] || {}).bgm_note || ""; S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
-      bind("#rv-cancel-note", function () { S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; render(); });
+      bind("#rv-edit-note", function () { S.editingNote = true; S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts,S.selected)?S.drafts[S.selected]:((S.weekly[S.selected] || {}).bgm_note || ""); S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } });
+      bind("#rv-cancel-note", function () { S.editingNote = false; delete S.drafts[S.selected]; S.noteDraft = null; S.mentionPreview = null; render(); });
       bind("#rv-delete-note", function () { S.confirmDelete = true; render(); });
       bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
       bind("#rv-del-yes", deleteNote);
@@ -916,7 +971,7 @@
       bind("#rv-confirm-slack", postSlack);
       bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) n.focus(); });
       var noteInput = root.querySelector("#rv-note");
-      if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.mentionPreview = null; };
+      if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.drafts[S.selected]=S.noteDraft; S.mentionPreview = null; };
       bind("#rv-sync-thread", syncThread);
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; S.processing = false; render(); });
@@ -1019,9 +1074,10 @@
     function saveNote() {
       if (!ensureAuthor() || !api) return;
       var ta = root.querySelector("#rv-note"); if (!ta.value.trim()) { ta.focus(); toast("Write an observation first"); return; }
+      var btn=root.querySelector("#rv-save-note");if(btn){btn.disabled=true;btn.textContent="Saving…";}
       api.saveWeeklyNote(Object.assign({}, ident(S.selected), { bgm_note: ta.value.trim(), bgm_author: author() }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("Note saved"); render(); })
-        .catch(function () { toast("Save failed · note kept locally"); });
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; delete S.drafts[S.selected]; S.noteDraft = null; S.mentionPreview = null; toast("Note saved"); render(); })
+        .catch(function () { if(btn){btn.disabled=false;btn.textContent="Save note";} toast("Save failed · note kept locally"); });
     }
     function deleteNote() {
       if (!api) return;
@@ -1036,7 +1092,7 @@
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
       if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
-      S.noteDraft = text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
+      S.noteDraft = text; S.drafts[S.selected]=text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
       api.resolveMentions(ident(S.selected), text).then(function (res) {
         S.mentionBusy = false;
         S.mentionPreview = { original_text: text, resolved_text: res.resolved_text || text, matches: res.matches || [], ambiguous: res.ambiguous || [] };
@@ -1050,9 +1106,10 @@
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var text = String(p.original_text || "").trim();
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
+      var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
-        .catch(function (e) { toast((e && e.message) || "Post failed · note remains saved"); });
+        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; delete S.drafts[S.selected]; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
+        .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · note remains saved"); });
     }
     function syncThread() {
       if (!api) return;
@@ -1191,15 +1248,21 @@
       root.querySelector("#rv-memory-eyebrow").textContent = "CE " + q.ce_id + " · " + S.market;
       wrap.hidden = false;
       if (!api) { body.innerHTML = '<div class="rv-empty-state"><strong>Backend unavailable</strong></div>'; return; }
-      api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { body.innerHTML = renderMemory(res); wireMemory(body); })
+      var key=S.market_slug+"|"+S.week_start+"|"+q.ce_id,cached=S.memoryCache[key];
+      if(cached){body.innerHTML=renderMemory(cached);wireMemory(body);return;}
+      if(S.memoryInflight[key])return;
+      body.innerHTML='<div class="rv-empty-state"><strong>Loading CE memory…</strong></div>';
+      S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; body.innerHTML = renderMemory(res); wireMemory(body); })
         .catch(function () { body.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
+      S.memoryInflight[key].finally(function(){delete S.memoryInflight[key];});
     }
     function renderMemory(res) {
       // The isolated Review API returns explicit table-shaped keys. Keep the
       // older aliases as a compatibility fallback, but prefer the canonical
       // names so CE Memory always contains the BGM note and Slack summary that
       // were just written in Review mode.
-      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [], legacy = res.legacy_notes || res.legacyNotes || [];
+      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [];
+      var legacy = res.historical_comments || res.legacy_notes || res.legacyNotes || [], sourceStatus=res.historical_source_status||{};
       var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
         var summary = null;
@@ -1211,11 +1274,12 @@
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(w.week_start) + "<span>" + esc(w.bgm_author || "BGM") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
-      var legacyStory = legacy.map(function (n) {
-        return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start) + "<span>legacy · " + esc(n.author_name || "") + "</span></div>" +
-          '<div class="rv-week-body"><div class="rv-source-label">Legacy note</div><p>' + esc(n.body || "") + "</p></div></article>";
-      }).join("");
-      var storyPanel = (story + legacyStory) || '<div class="rv-empty-state"><strong>No commentary history yet</strong></div>';
+      var storyPanel = story || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
+      var legacyPanel = legacy.map(function (n) {
+        return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start || "date unavailable") + "<span>" + esc(n.author_name || "author unavailable") + "</span></div>" +
+          '<div class="rv-week-body"><div class="rv-source-label">Historical CE comment · read-only</div><p>' + esc(n.body || "—") + "</p>" +
+          '<div class="rv-source-meta">' + esc(n.created_at || "timestamp unavailable") + (n.duplicate_count>1?" · "+esc(n.duplicate_count)+" duplicate rows":"") + "</div></div></article>";
+      }).join("") || '<div class="rv-empty-state"><strong>' + ((sourceStatus.comments||{}).unavailable?"Historical comments source unavailable":"No historical CE comments") + '</strong><span>Missing history never blocks this report.</span></div>';
       var workPanel = work.map(function (w) {
         return '<article class="rv-week-card"><div class="rv-week-head">' + (w.kind === "check" ? "Scheduled check" : "Action") + "<span>w/c " + esc(w.origin_week) + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">' + esc((w.status || "").replace(/_/g, " ")) + "</div><p>" + esc(w.text) + "</p>" +
@@ -1228,13 +1292,16 @@
       var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
       var perfPanel = perf.length ? perf.map(function (p) {
         return '<article class="rv-week-card"><div class="rv-week-head">Perf action<span>w/c ' + esc(p.week_start || p.week || "") + "</span></div>" +
-          '<div class="rv-week-body"><div class="rv-source-label">Read-only · Perf source</div><p>' + esc(p.text || p.action || p.comment || "—") + "</p></div></article>";
-      }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>Perf history source unavailable</strong><span>This read-only space is reserved for prior weekly Perf actions. No value is inferred when the source is missing.</span></div>';
+          '<div class="rv-week-body"><div class="rv-source-label">Historical Performance action · read-only</div><p>' + esc(p.action_text || p.text || p.action || p.comment || "—") + "</p>" +
+          '<div class="rv-source-meta">' + [p.owner?"owner "+esc(p.owner):"",p.status?"status "+esc(String(p.status).replace(/_/g," ")):"",p.outcome?"outcome "+esc(p.outcome):"",p.updated_at?esc(p.updated_at):"",p.duplicate_count>1?esc(p.duplicate_count)+" duplicate rows":""].filter(Boolean).join(" · ") + "</div></div></article>";
+      }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>' + ((sourceStatus.actions||{}).unavailable?"Performance history source unavailable":"No historical Performance actions") + '</strong><span>No value is inferred when history is missing.</span></div>';
       return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
         '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="comments">Historical comments</button>' +
         '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
         '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
         '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-comments" hidden>' + legacyPanel + "</div>" +
         '<div class="rv-memory-panel" id="rv-mem-perf" hidden>' + perfPanel + "</div>";
     }
     function wireMemory(body) {
@@ -1243,6 +1310,7 @@
           body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
           body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
           body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
+          body.querySelector("#rv-mem-comments").hidden = b.dataset.mem !== "comments";
           body.querySelector("#rv-mem-perf").hidden = b.dataset.mem !== "perf";
         };
       });
@@ -1251,8 +1319,15 @@
 
     var visibleOnce = false;
     return {
-      onShow: function () { if (refreshHeadline() || !S.loaded) loadQueue(); else render(); visibleOnce = true; },
-      onWeekChange: function () { S.selected = null; S.weekly = {}; S.suggestions = {}; S.loaded = false; if (visibleOnce) loadQueue(); }
+      onShow: function () {
+        var requested="";try{requested=new URL(location.href).searchParams.get("ce_id")||"";}catch(e){}
+        if (refreshHeadline() || !S.loaded) loadQueue().then(function(){if(requested&&ensureLocalCe(requested))select(requested);});
+        else if(requested&&ensureLocalCe(requested))select(requested);else render();
+        visibleOnce = true;
+      },
+      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){select(ceId);var active=root.querySelector('[data-select-ce="'+String(ceId).replace(/"/g,'\\"')+'"]');if(active)active.scrollIntoView({block:"nearest"});return true;}return false; },
+      prefetch: function(){refreshHeadline();if(!S.loaded)loadQueue();},
+      onWeekChange: function () { if(S.selected&&S.noteDraft!=null)S.drafts[String(S.selected)]=S.noteDraft; Object.keys(S.ceRequestSeq).forEach(function(k){S.ceRequestSeq[k]++;}); S.selected = null; S.weekly = {}; S.suggestions = {}; S.ceLoadedAt={}; S.memoryCache={}; S.loaded = false; if (visibleOnce) loadQueue(); }
     };
   };
 })(typeof window !== "undefined" ? window : this);

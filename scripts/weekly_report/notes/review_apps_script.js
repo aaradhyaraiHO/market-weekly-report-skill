@@ -8,6 +8,7 @@
  *
  * Required Script properties:
  *   REVIEW_SPREADSHEET_ID
+ *   REVIEW_HISTORY_SPREADSHEET_ID (defaults to the authoritative Weekly Report Notes workbook)
  *   REVIEW_MODE_PROXY_SECRET
  *   REVIEW_MODE_INGEST_SECRET
  *   REVIEW_ENFORCE_ACCESS=true
@@ -85,6 +86,58 @@ var REVIEW_TABLES = {
     headers: ["slack_user_id","display_name","real_name","aliases","market_slug","active","updated_at"]
   }
 };
+
+// Read-only legacy memory source. This is deliberately outside REVIEW_TABLES:
+// Review never creates, rewrites, or appends to these historical tabs.
+var REVIEW_HISTORY_DEFAULT_SPREADSHEET_ID = "1hC_IAsJrlPcpFv5K49eRtcwgK6i_DkAt4ZvETxlK-s8";
+var REVIEW_HISTORY_SCHEMAS = {
+  actions: ["market_slug","ce_id","week_start","bucket","checkbox","note","status","owner","updated"],
+  notes: ["market_slug","ce_id","ce_name","week_start","note","author","updated","slack_channel","slack_thread_ts","slack_permalink"]
+};
+
+function reviewStableCeId(value) {
+  var match = String(value == null ? "" : value).trim().match(/^(\d+)(?:\s*-\s*.*)?$/);
+  return match ? match[1] : "";
+}
+
+function reviewHistoricalRows(kind, market, ceId) {
+  var schema = REVIEW_HISTORY_SCHEMAS[kind];
+  if (!schema) return {rows:[], unavailable:true, error:"unknown historical source"};
+  try {
+    var id = String(PropertiesService.getScriptProperties().getProperty("REVIEW_HISTORY_SPREADSHEET_ID") || REVIEW_HISTORY_DEFAULT_SPREADSHEET_ID).trim();
+    var sh = SpreadsheetApp.openById(id).getSheetByName(kind), wanted = reviewStableCeId(ceId);
+    if (!sh) return {rows:[], unavailable:true, error:"historical " + kind + " tab unavailable"};
+    var last = sh.getLastRow();
+    if (last < 2) return {rows:[], unavailable:false, skipped_missing_ce_id:0, duplicates:0};
+    var cache = CacheService.getScriptCache(), cacheKey = "review-history-v2:" + id + ":" + kind + ":" + String(market);
+    var cached = cache.get(cacheKey), payload = null;
+    try { payload = cached ? JSON.parse(cached) : null; } catch (_) { payload = null; }
+    if (!payload) {
+      var values = sh.getRange(2, 1, last - 1, schema.length).getValues(), marketRows = [], skippedAll = 0;
+      values.forEach(function(valuesRow, index) {
+        var row = {_source_row:index + 2};
+        schema.forEach(function(header, col) { row[header] = valuesRow[col]; });
+        var stable = reviewStableCeId(row.ce_id);
+        if (!stable) { skippedAll++; return; }
+        if (String(row.market_slug) !== String(market)) return;
+        row.ce_id = stable; row.week_start = ymd(row.week_start); row.updated = String(row.updated || "");
+        marketRows.push(row);
+      });
+      payload = {rows:marketRows, skipped_missing_ce_id:skippedAll};
+      try { cache.put(cacheKey, JSON.stringify(payload), 300); } catch (_) {}
+    }
+    var skipped = payload.skipped_missing_ce_id || 0, duplicates = 0, seen = {}, rows = [];
+    payload.rows.forEach(function(row) {
+      if (row.ce_id !== wanted) return;
+      var signature = kind + "|" + [row.market_slug,row.ce_id,row.week_start,row.bucket,row.note,row.status,row.owner,row.author,row.updated].join("|");
+      if (seen[signature]) { seen[signature]._duplicate_count++; duplicates++; return; }
+      row._duplicate_count = 1; seen[signature] = row; rows.push(row);
+    });
+    return {rows:rows, unavailable:false, skipped_missing_ce_id:skipped, duplicates:duplicates};
+  } catch (error) {
+    return {rows:[], unavailable:true, error:"historical source unavailable"};
+  }
+}
 
 function reviewSpreadsheet() {
   var id = String(PropertiesService.getScriptProperties().getProperty("REVIEW_SPREADSHEET_ID") || "").trim();
@@ -227,7 +280,7 @@ function reviewActorEmail(p) {
 
 function reviewAuthenticatedActor(p) {
   if (!reviewBool(PropertiesService.getScriptProperties().getProperty("REVIEW_ENFORCE_ACCESS")))
-    return {ok:true, actor_email:reviewActorEmail(p), enforcement:"off"};
+    return {ok:false,error:"Review access enforcement is not configured"};
   var email=reviewActorEmail(p);
   if(!email)return {ok:false,error:"authenticated BGM identity required"};
   return {ok:true,actor_email:email,enforcement:"on"};
@@ -236,7 +289,6 @@ function reviewAuthenticatedActor(p) {
 function reviewAccessDecision(p) {
   var authenticated=reviewAuthenticatedActor(p);
   if(!authenticated.ok)return authenticated;
-  if(authenticated.enforcement==="off")return authenticated;
   var email=authenticated.actor_email;
   var market=String(p.market_slug||p.market||"");
   var allowed=reviewRows("access").filter(function(r){
@@ -666,6 +718,19 @@ function reviewMemory(p) {
   var weekly = reviewFilter(reviewRows("weekly"), f).sort(function(a,b){ return String(b.week_start).localeCompare(String(a.week_start)); });
   var suggestions = reviewFilter(reviewRows("suggestions"), f).sort(function(a,b){ return String(b.created_at).localeCompare(String(a.created_at)); });
   var thread = reviewFind("threads", function(r){ return r.market_slug===p.market_slug && String(r.ce_id)===String(p.ce_id); });
+  var historicalActions=reviewHistoricalRows("actions",p.market_slug,p.ce_id);
+  var historicalComments=reviewHistoricalRows("notes",p.market_slug,p.ce_id);
+  var perfHistory=historicalActions.rows.map(function(row){return {
+    ce_id:row.ce_id,week_start:row.week_start,bucket:String(row.bucket||""),action_text:String(row.note||""),
+    owner:String(row.owner||""),status:String(row.status||""),outcome:"",updated_at:row.updated,
+    duplicate_count:row._duplicate_count,source_row:row._source_row,read_only:true
+  };});
+  var legacyComments=historicalComments.rows.map(function(row){return {
+    ce_id:row.ce_id,ce_name:String(row.ce_name||""),week_start:row.week_start,body:String(row.note||""),
+    author_name:String(row.author||""),created_at:row.updated,slack_channel:String(row.slack_channel||""),
+    slack_thread_ts:String(row.slack_thread_ts||""),slack_permalink:String(row.slack_permalink||""),
+    duplicate_count:row._duplicate_count,source_row:row._source_row,read_only:true
+  };});
   var openWork=work.filter(function(r){return !r.closed_at;});
   var recentClosed=work.filter(function(r){return !!r.closed_at;}).slice(0,25);
   return jsonResp({ok:true, identity:{market_slug:p.market_slug,ce_id:String(p.ce_id)},
@@ -673,6 +738,9 @@ function reviewMemory(p) {
       source_suggestions:suggestions.length},
     weekly_commentary:weekly.slice(0,52),comments:comments.slice(0,25),work_items:openWork.concat(recentClosed),receipts:receipts.slice(0,12),
     source_suggestions:suggestions.slice(0,25),slack_thread:thread || null,
+    perf_history:perfHistory,historical_comments:legacyComments,
+    historical_source_status:{actions:{unavailable:historicalActions.unavailable,skipped_missing_ce_id:historicalActions.skipped_missing_ce_id||0,duplicates:historicalActions.duplicates||0},
+      comments:{unavailable:historicalComments.unavailable,skipped_missing_ce_id:historicalComments.skipped_missing_ce_id||0,duplicates:historicalComments.duplicates||0}},
     diagnostic_history_contract:"read-only report snapshot or dedicated GET-only adapter; no Review-store write",
     perf_history_contract:"read ce.perf_action_hist from the report snapshot; no review-store write"});
 }
@@ -794,6 +862,9 @@ function reviewThreadFor(market, ceId) {
 function reviewSlackPostCore(p) {
   var err = reviewRequired(p,["market_slug","ce_id","week_start","channel","text","author"]);
   if (err) return {ok:false,error:"required Slack fields missing"};
+  var expectedChannel=reviewPrimarySlackChannel(p.market_slug);
+  if(!expectedChannel)return {ok:false,error:"no Review Slack channel configured for market"};
+  if(String(p.channel)!==expectedChannel)return {ok:false,error:"Slack channel does not match Review market routing"};
   var token = PropertiesService.getScriptProperties().getProperty("SLACK_BOT_TOKEN");
   if (!token) return {ok:false,error:"SLACK_BOT_TOKEN not set in Script properties"};
   var existing = reviewThreadFor(p.market_slug,p.ce_id);
@@ -981,12 +1052,18 @@ function installReviewStorage(){
 // lockstep with docs/weekly-review/MARKET_CHANNEL_MAPPING.md.
 var REVIEW_MARKET_SLACK_CHANNELS={
   north_america:["CNSHDD2H1"],central_live_entertainment:["C042A57T52Q"],italy:["C045L2WQ79P"],france:["CH64TEB71"],
-  iberia:["CH2LRMJF2"],south_america:["CH2LRMJF2"],mexico_central_america:["CH2LRMJF2"],
+  iberia:["CH2LRMJF2"],south_america:["CH2LRMJF2"],mexico_central_america:["C012949PQ81"],
   csee:["CSQ10TALA"],nordics:["CSQ10TALA"],united_kingdom:["CKTFHT4AF"],benelux:["CKTFHT4AF"],
   east_asia:["CQD6220VB","C01C4NPLYN6","C01CARUM1CL","C0809DN93DH"],oceania:["CHKRLFDPU","C039TMH0GEP","C097DVBLHGS"],
   sea:["C5WFYN82H","C03R4UJ4DHC","C01CHADFPAM","C03US4WRHB6","C05D50N5BQW"],
-  uae:["C046622L80Z"],gcc:["C046622L80Z"],north_africa:["C0889D22PM5"],rest_of_mea:["C0889D22PM5"]
+  uae:["C046622L80Z"],gcc:["C0889D22PM5"],north_africa:["C0889D22PM5"],rest_of_mea:["C0889D22PM5"],
+  headout:["C0975BGAX0B"]
 };
+
+function reviewPrimarySlackChannel(market){
+  var channels=REVIEW_MARKET_SLACK_CHANNELS[String(market)]||[];
+  return channels.length ? String(channels[0]) : "";
+}
 
 function reviewSlackApi(token,url){
   var resp=UrlFetchApp.fetch(url,{headers:{Authorization:"Bearer "+token},muteHttpExceptions:true});

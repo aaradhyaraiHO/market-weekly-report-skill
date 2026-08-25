@@ -23,6 +23,9 @@
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
 #review-view button,#review-view select,#review-view textarea,#review-view input{font:inherit;color:inherit}
+.rv-ce-identity,.rv-title-link{color:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;cursor:pointer}
+.rv-ce-identity:hover,.rv-ce-identity:focus,.rv-title-link:hover,.rv-title-link:focus{text-decoration-color:currentColor;outline:none}
+.rv-title-link{border:0;background:transparent;padding:0;font:inherit;text-align:left}
 
 .rv-layout{display:grid;grid-template-columns:312px minmax(0,1fr);min-height:calc(100vh - 64px)}
 .rv-side{padding:24px 20px;border-right:1px solid var(--rv-line);background:var(--rv-white)}

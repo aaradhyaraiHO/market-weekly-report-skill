@@ -196,7 +196,7 @@ class ReviewV0UiContract(unittest.TestCase):
             self.assert_ui_contract(fragment)
 
     def test_ce_memory_preserves_perf_as_read_only_or_unavailable(self):
-        for fragment in ("CE Memory", "Perf", "Perf history source unavailable"):
+        for fragment in ("CE Memory", "Perf", "Performance history source unavailable"):
             self.assert_ui_contract(fragment)
         memory = self.view.split("function renderMemory(res)", 1)[1].split(
             "function wireMemory", 1

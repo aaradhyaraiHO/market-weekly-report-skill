@@ -56,6 +56,10 @@ SWITCH_ADD = ("document.getElementById('all-ces-view').hidden=view!=='all-ces';"
 
 # the shell's IIFE ends with these three calls then `})();` — we boot just before the close.
 BOOT_ANCHOR = "      actionPrevPull();\n    })();"
+CE_REVIEW_CONTROL = '<button class="drawer-omni" id="ce-open-review" type="button">Open in Review →</button>'
+CE_REVIEW_CONTROL_ANCHOR = '<a class="drawer-omni" id="ce-drawer-omni"'
+CE_REVIEW_WIRE_ANCHOR = "document.getElementById('ce-drawer-omni').href=omniLink(ce.ce_id);"
+CE_REVIEW_WIRE = CE_REVIEW_WIRE_ANCHOR + "document.getElementById('ce-open-review').onclick=()=>{if(window.__openReviewCe)window.__openReviewCe(String(ce.ce_id));};"
 
 
 def _read(path: Path) -> str:
@@ -110,6 +114,8 @@ def build_boot(deploy: Path, native: bool = False):
             "    getHeadline:function(){var h=currentHeadline(); var c=(typeof payload!=='undefined'&&payload.notes_channels)||h.notes_channels||{}; return Object.assign({},h,{notes_channels:c});}, getBaseHeadline:function(){var h=baseHeadline(); var c=(typeof payload!=='undefined'&&payload.notes_channels)||h.notes_channels||{}; return Object.assign({},h,{notes_channels:c});},\n"
             "    openCeDrawer:(typeof openCeDrawer!=='undefined'?openCeDrawer:null)\n"
             "  });\n"
+            "  window.__openReviewCe=function(ceId){if(typeof closeCeDrawer==='function')closeCeDrawer();var b=document.querySelector('[data-report-view=\"review\"]');if(b)b.click();if(window.__rv&&window.__rv.focusCe)window.__rv.focusCe(String(ceId));};\n"
+            "  setTimeout(function(){window.__rv&&window.__rv.prefetch&&window.__rv.prefetch();},250);\n"
             "  if(typeof weekSelect!=='undefined'&&weekSelect)weekSelect.addEventListener('change',function(){window.__rv&&window.__rv.onWeekChange&&window.__rv.onWeekChange();});\n"
             "}\n"
             "}catch(_rvErr){console.warn('native review view init failed',_rvErr);}\n"
@@ -143,6 +149,8 @@ def build_boot(deploy: Path, native: bool = False):
         "      count:(typeof count!=='undefined'?count:null)},\n"
         "    openCeDrawer:(typeof openCeDrawer!=='undefined'?openCeDrawer:null)\n"
         "  });\n"
+        "  window.__openReviewCe=function(ceId){if(typeof closeCeDrawer==='function')closeCeDrawer();var b=document.querySelector('[data-report-view=\"review\"]');if(b)b.click();if(window.__rv&&window.__rv.focusCe)window.__rv.focusCe(String(ceId));};\n"
+        "  setTimeout(function(){window.__rv&&window.__rv.prefetch&&window.__rv.prefetch();},250);\n"
         "  if(typeof weekSelect!=='undefined'&&weekSelect)weekSelect.addEventListener('change',function(){window.__rv&&window.__rv.onWeekChange();});\n"
         "}\n"
         "}catch(_rvErr){console.warn('review view init failed',_rvErr);}\n"
@@ -188,6 +196,19 @@ def inject(path: Path, deploy: Path, native: bool = False) -> bool:
             print(f"  ! {path.name}: view-switch anchor not found — skipped")
             return False
         html = html.replace(SWITCH_ANCHOR, SWITCH_ADD, 1)
+
+    # Existing complete static V2 artifacts predate the drawer → Review control.
+    # Add it to the existing drawer rather than rebuilding any report analytics.
+    if 'id="ce-open-review"' not in html:
+        if CE_REVIEW_CONTROL_ANCHOR not in html:
+            print(f"  ! {path.name}: CE drawer identity anchor not found — skipped")
+            return False
+        html = html.replace(CE_REVIEW_CONTROL_ANCHOR, CE_REVIEW_CONTROL + CE_REVIEW_CONTROL_ANCHOR, 1)
+    if "getElementById('ce-open-review').onclick" not in html:
+        if CE_REVIEW_WIRE_ANCHOR not in html:
+            print(f"  ! {path.name}: CE drawer Review wire anchor not found — skipped")
+            return False
+        html = html.replace(CE_REVIEW_WIRE_ANCHOR, CE_REVIEW_WIRE, 1)
 
     # 4. style before </head>
     html = html.replace("</head>", style + "\n</head>", 1)

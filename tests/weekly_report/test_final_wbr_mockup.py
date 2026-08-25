@@ -43,11 +43,13 @@ class FinalWbrMockupTest(unittest.TestCase):
         for text in (
             'data-mem="story"',
             'data-mem="work"',
+            'data-mem="comments"',
             'data-mem="perf"',
             "BGM note · original",
             "thread summary",
-            "Read-only · Perf source",
-            "Perf history source unavailable",
+            "Historical CE comment · read-only",
+            "Historical Performance action · read-only",
+            "Performance history source unavailable",
         ):
             self.assertIn(text, self.view)
 

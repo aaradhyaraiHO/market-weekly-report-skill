@@ -13,19 +13,25 @@
 
   function createWeeklyReviewApi(baseUrl) {
     required(baseUrl, "baseUrl");
+    var cache = {}, inflight = {}, CACHE_MS = 60000;
 
-    function request(action, params) {
+    function request(action, params, options) {
       var query = new URLSearchParams({action: action});
       Object.keys(params || {}).forEach(function(key) {
         var value = params[key];
         if (value !== undefined && value !== null) query.set(key, String(value));
       });
-      return fetch(baseUrl + "?" + query.toString(), {redirect: "follow"})
+      var url = baseUrl + "?" + query.toString(), now = Date.now(), opts = options || {};
+      if (!opts.refresh && cache[url] && now - cache[url].at < (opts.ttl || CACHE_MS)) return Promise.resolve(cache[url].body);
+      if (!opts.refresh && inflight[url]) return inflight[url];
+      inflight[url] = fetch(url, {redirect: "follow", credentials: "same-origin", signal: opts.signal})
         .then(function(response) { return response.json(); })
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
+          cache[url] = {at: Date.now(), body: body};
           return body;
-        });
+        }).finally(function() { delete inflight[url]; });
+      return inflight[url];
     }
 
     function post(action, params) {
@@ -37,6 +43,9 @@
       }).then(function(response) { return response.json(); })
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
+          // Any successful mutation may change queue, CE history, work, or
+          // memory. Drop read caches only after confirmation from the server.
+          cache = {};
           return body;
         });
     }
@@ -46,8 +55,8 @@
       // UI writes must use it rather than asking a signed-in BGM to re-enter
       // their name in every browser/device.
       whoami: function() { return request("whoami", {}); },
-      comments: function(identity, includeDeleted) {
-        return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted}));
+      comments: function(identity, includeDeleted, options) {
+        return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted}), options);
       },
       saveComment: function(comment) {
         required(comment.author_name, "author_name");
@@ -67,9 +76,9 @@
       receipts: function(identity) { return request("review_receipt_list", identity); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
       saveReviewSetItem: function(item) { return post("review_set_upsert", item); },
-      memory: function(identity) { return request("review_memory", identity); },
-      weeklyCommentary: function(identity, before, limit) {
-        return request("review_weekly_list", Object.assign({}, identity, {before: before || "", limit: limit || 26}));
+      memory: function(identity, refresh) { return request("review_memory", identity, {refresh: !!refresh, ttl: 300000}); },
+      weeklyCommentary: function(identity, before, limit, options) {
+        return request("review_weekly_list", Object.assign({}, identity, {before: before || "", limit: limit || 26}), options);
       },
       saveWeeklyNote: function(note) {
         required(note.bgm_author, "bgm_author");
@@ -89,8 +98,8 @@
       syncWeeklyDiscussion: function(identity) { return post("review_weekly_sync", identity); },
       askInSlack: function(message) { return post("review_slack_post", message); },
       scanSlack: function(identity) { return post("review_slack_scan", identity); },
-      suggestions: function(identity, includeDecided) {
-        return request("review_suggestion_list", Object.assign({}, identity, {include_decided: !!includeDecided}));
+      suggestions: function(identity, includeDecided, options) {
+        return request("review_suggestion_list", Object.assign({}, identity, {include_decided: !!includeDecided}), options);
       },
       granolaSuggestions: function(identity, includeDecided) {
         return request("review_suggestion_list", Object.assign({}, identity, {
@@ -126,7 +135,9 @@
       sourceInbox: function(identity, includeReconciled) {
         return request("review_source_inbox", Object.assign({}, identity, {include_reconciled: !!includeReconciled}));
       },
-      reconcileSource: function(match) { return post("review_source_reconcile", match); }
+      reconcileSource: function(match) { return post("review_source_reconcile", match); },
+      prefetch: function(action, params, ttl) { return request(action, params || {}, {ttl: ttl || CACHE_MS}).catch(function() { return null; }); },
+      clearCache: function() { cache = {}; inflight = {}; }
     };
   }
 
