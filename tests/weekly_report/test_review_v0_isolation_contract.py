@@ -14,6 +14,7 @@ REVIEW_PROXY = NOTES / "review_proxy_api.js"
 ACTIONS_PROXY = NOTES / "actions_proxy_api.js"
 GRANOLA_ADAPTER = NOTES / "granola_review_adapter.js"
 REVIEW_VIEW = ROOT / "scripts" / "weekly_report" / "review" / "review-view.js"
+REVIEW_CSS = ROOT / "scripts" / "weekly_report" / "review" / "review-view.css"
 NATIVE_API = ROOT / "scripts" / "weekly_report" / "review-app" / "src" / "api.ts"
 NATIVE_VIEW = ROOT / "scripts" / "weekly_report" / "review-app" / "src" / "review.tsx"
 CANONICAL_MOCKUP = ROOT / "docs" / "weekly-review" / "review-tab-redesign-mockup.html"
@@ -133,6 +134,7 @@ class ReviewV0UiContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.view = REVIEW_VIEW.read_text()
+        cls.css = REVIEW_CSS.read_text()
         cls.mockup = CANONICAL_MOCKUP.read_text()
 
     def assert_ui_contract(self, fragment: str):
@@ -203,7 +205,25 @@ class ReviewV0UiContract(unittest.TestCase):
         )[0]
         self.assertNotRegex(memory, r"savePerf|upsertPerf|deletePerf")
 
-    def test_granola_is_visibly_wip_until_workspace_access_is_verified(self):
+    def test_ce_drawer_navigation_captures_visible_local_drafts(self):
+        self.assertIn("function captureVisibleDrafts()", self.view)
+        self.assertIn(
+            "S.roleDrafts[roleDraftKey(el.dataset.roleInput)] = el.value", self.view
+        )
+        self.assertRegex(
+            self.view,
+            r"function openAnalyticsDrawer\(ceId\) \{\s+captureVisibleDrafts\(\);",
+        )
+
+    def test_ce_drawer_return_scrolls_only_the_bounded_queue(self):
+        self.assertIn("function revealQueueSelection(ceId)", self.view)
+        self.assertIn("panel.scrollTop = bottom - panel.clientHeight", self.view)
+        self.assertIn("active.focus({ preventScroll: true })", self.view)
+        self.assertNotIn("active.scrollIntoView", self.view)
+        self.assertIn(".rv-queue-panel{max-height:", self.css)
+        self.assertIn("overflow-y:auto", self.css)
+
+    def test_granola_stays_hidden_until_guarded_beta_is_approved(self):
         for fragment in (
             "Granola meeting",
             "WIP · meeting access is being connected",
@@ -211,6 +231,7 @@ class ReviewV0UiContract(unittest.TestCase):
         ):
             self.assert_ui_contract(fragment)
         self.assertNotIn('id="rv-granola-toggle"', self.view)
+        self.assertIn(".rv-granola-wip{display:none}", self.css)
 
     def test_native_review_uses_post_for_mutations_and_posts_to_slack(self):
         api = NATIVE_API.read_text()

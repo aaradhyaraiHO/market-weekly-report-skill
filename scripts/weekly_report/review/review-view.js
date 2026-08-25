@@ -102,7 +102,27 @@
       if (!S.byId[id]) { var q={ce_id:id,ce_name:ce.ce_name||("CE "+id),reason:"Opened from CE drawer",source:"drawer"}; S.queue.push(q); S.byId[id]=q; }
       return ce;
     }
+    function revealQueueSelection(ceId) {
+      var panel = root.querySelector("#rv-queue-review");
+      var active = root.querySelector('[data-select-ce="' + String(ceId).replace(/"/g, '\\"') + '"]');
+      if (!panel || !active) return;
+      var top = active.offsetTop - panel.offsetTop;
+      var bottom = top + active.offsetHeight;
+      if (top < panel.scrollTop) panel.scrollTop = top;
+      else if (bottom > panel.scrollTop + panel.clientHeight) panel.scrollTop = bottom - panel.clientHeight;
+      if (active.focus) active.focus({ preventScroll: true });
+    }
+    function captureVisibleDrafts() {
+      root.querySelectorAll("[data-role-input]").forEach(function (el) {
+        S.roleDrafts[roleDraftKey(el.dataset.roleInput)] = el.value;
+      });
+      var note = root.querySelector("#rv-note");
+      if (note) { S.noteDraft = note.value; S.drafts[String(S.selected)] = note.value; }
+      var slack = root.querySelector("#rv-slack-message");
+      if (slack) S.slackDrafts[String(S.selected)] = slack.value;
+    }
     function openAnalyticsDrawer(ceId) {
+      captureVisibleDrafts();
       var ce=ensureLocalCe(ceId);
       if (ce && ctx.openCeDrawer) ctx.openCeDrawer(String(ce.ce_id)); else toast("CE analytics drawer unavailable for this CE");
     }
@@ -997,7 +1017,7 @@
         else if(requested&&ensureLocalCe(requested))select(requested);else render();
         visibleOnce = true;
       },
-      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){select(ceId);var active=root.querySelector('[data-select-ce="'+String(ceId).replace(/"/g,'\\"')+'"]');if(active)active.scrollIntoView({block:"nearest"});return true;}return false; },
+      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){select(ceId);revealQueueSelection(ceId);return true;}return false; },
       prefetch: function(){refreshHeadline();if(!S.loaded)loadQueue();},
       onWeekChange: function () { if(S.selected&&S.noteDraft!=null)S.drafts[String(S.selected)]=S.noteDraft; Object.keys(S.ceRequestSeq).forEach(function(k){S.ceRequestSeq[k]++;}); S.selected = null; S.weekly = {}; S.suggestions = {}; S.ceLoadedAt={}; S.memoryCache={}; S.loaded = false; if (visibleOnce) loadQueue(); }
     };
