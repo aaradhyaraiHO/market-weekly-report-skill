@@ -50,6 +50,12 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn('note.note_type || "bgm"', CLIENT)
         self.assertIn('note.bgm_note || note.performance_note || note.bdm_note', CLIENT)
 
+    def test_slack_summary_is_visible_and_sync_releases_ui_immediately(self):
+        for fragment in ("function renderWeeklySummary", 'group("Findings"', 'group("Decisions"', 'group("Open points"', "summary_updated_at", "summary_delayed"):
+            self.assertIn(fragment, VIEW)
+        sync = VIEW.split("function syncThread()", 1)[1].split("function addGranola()", 1)[0]
+        self.assertLess(sync.index("render();"), sync.index("Promise.all([loadCe"))
+
 
 if __name__ == "__main__":
     unittest.main()

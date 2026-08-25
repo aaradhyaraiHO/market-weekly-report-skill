@@ -358,9 +358,19 @@
       if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
       return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+((editing||hasDraft)?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
     }
+    function renderWeeklySummary(weekly){
+      if(!weekly||!weekly.slack_post_ts)return "";
+      var summary=null;try{summary=weekly.summary_json?JSON.parse(weekly.summary_json):null;}catch(e){}
+      function group(label,rows){return rows&&rows.length?'<div class="rv-sum-group"><span class="rv-sum-label">'+label+'</span><ul>'+rows.map(function(row){return '<li>'+esc(typeof row==="string"?row:(row.text||row.body||""))+'</li>';}).join("")+'</ul></div>':"";}
+      var delayed=weekly.sync_status==="summary_delayed",status=delayed?"Summary delayed · Slack replies remain available":
+        (weekly.summary_updated_at?"Updated "+fmtWhen(weekly.summary_updated_at):"Waiting for replies");
+      var content=summary?(group("Findings",summary.findings)+group("Decisions",summary.decisions)+group("Open points",summary.open_points)):"";
+      return '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
+        (content?'<div class="rv-summary"><div class="rv-summary-head"><span>Slack thread summary</span></div>'+content+'</div>':'<div class="rv-summary rv-summary-empty">No summarized replies yet. Automatic sync checks active threads every five minutes.</div>');
+    }
     function renderCommentaryCard(q){
       var weekly=S.weekly[q.ce_id]||{},hasThread=!!weekly.slack_post_ts,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
-      var thread=hasThread?'<div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>':'';
+      var thread=hasThread?'<div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly):'';
       var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Start Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div><textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change any saved role note.">'+esc(slackText)+'</textarea>'+renderMentionPreview()+'<div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy||hasThread?' disabled':'')+'>'+(hasThread?'Discussion started':(S.mentionBusy?'Resolving names…':'Preview Slack post'))+'</button></div>'+thread+'</div>';
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">CE notes &amp; discussion</div><div class="rv-card-sub">Role notes save independently. Slack discussion is a separate message.</div></div></div><div class="rv-card-body rv-role-notes">'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+composer+'</div></section>';
     }
@@ -766,7 +776,8 @@
       api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) {
         if (res.weekly) S.weekly[S.selected] = res.weekly;
         toast(res.new_replies && res.new_replies.length ? "Summary updated from new replies" : "Summary is current");
-        return Promise.all([loadCe(S.selected), reloadWork()]);
+        render();
+        Promise.all([loadCe(S.selected), reloadWork()]).catch(function(){});
       }).catch(function () { toast("Could not summarize now · automatic sync will retry"); render(); });
     }
     function addGranola() {
