@@ -94,6 +94,31 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
     return query_df(sql, "ce_weekly_business", params)
 
 
+def ce_weekly_actual_revenue(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Weekly actual order revenue at CE grain, used for take rate.
+
+    The report headline remains predicted revenue. This follows the same order
+    eligibility contract as the CE drawer's channel and TGID tables.
+    """
+    mkt = "AND business_market = @market" if market else ""
+    sql = """
+    SELECT
+        combined_entity_id,
+        DATE_TRUNC(DATE(created_at), WEEK(SUNDAY)) AS week,
+        SUM(amount_revenue_usd) AS actual_revenue
+    FROM {tbl}
+    WHERE DATE(created_at) BETWEEN @start AND @end
+          {mkt}
+          AND order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
+          AND user_type = 'Customer'
+    GROUP BY 1, 2
+    """.format(tbl=config.FCT_ORDERS, mkt=mkt)
+    params = {"start": config.iso(start), "end": config.iso(end)}
+    if market:
+        params["market"] = market
+    return query_df(sql, "ce_weekly_actual_revenue", params)
+
+
 # --------------------------------------------------------------------------- #
 # Market-level trailing weekly revenue  (combined_entity_stats)
 # --------------------------------------------------------------------------- #

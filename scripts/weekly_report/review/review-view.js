@@ -106,10 +106,10 @@
       var panel = root.querySelector("#rv-queue-review");
       var active = root.querySelector('[data-select-ce="' + String(ceId).replace(/"/g, '\\"') + '"]');
       if (!panel || !active) return;
-      var top = active.offsetTop - panel.offsetTop;
-      var bottom = top + active.offsetHeight;
-      if (top < panel.scrollTop) panel.scrollTop = top;
-      else if (bottom > panel.scrollTop + panel.clientHeight) panel.scrollTop = bottom - panel.clientHeight;
+      var rowRect = active.getBoundingClientRect();
+      var panelRect = panel.getBoundingClientRect();
+      if (rowRect.top < panelRect.top) panel.scrollTop += rowRect.top - panelRect.top;
+      else if (rowRect.bottom > panelRect.bottom) panel.scrollTop += rowRect.bottom - panelRect.bottom;
       if (active.focus) active.focus({ preventScroll: true });
     }
     function captureVisibleDrafts() {

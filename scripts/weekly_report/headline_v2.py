@@ -619,7 +619,7 @@ def _ce_views(market, dimensions=None):
 
 
 _ADDITIVE_FIELDS = (
-    "revenue", "gbv", "orders", "clicks", "spend", "cm1", "cm2",
+    "revenue", "actual_revenue", "gbv", "orders", "clicks", "spend", "cm1", "cm2",
     "cm1_business", "gross_marketing_cost", "paid_impressions", "paid_clicks",
     "paid_conv_value", "paid_conversions", "paid_revenue", "paid_cm2",
     "sis_impr", "sis_elig", "organic_gbv", "gbv_completed", "ad_conversions",
@@ -646,6 +646,7 @@ def _aggregate_weekly(ces, series_key):
             present = [value for value in values if value is not None]
             row[field] = sum(present) if present else None
         revenue, gbv = row.get("revenue"), row.get("gbv")
+        actual_revenue = row.get("actual_revenue")
         orders, clicks = row.get("orders"), row.get("clicks")
         completed = row.get("gbv_completed")
         paid_clicks, paid_conversions = row.get("paid_clicks"), row.get("paid_conversions")
@@ -654,7 +655,8 @@ def _aggregate_weekly(ces, series_key):
             "aov": gbv / orders if gbv is not None and orders else None,
             "cvr_pct": 100.0 * (row.get("ad_conversions") or 0) / clicks if clicks else None,
             "cr_pct": 100.0 * completed / gbv if gbv and completed is not None else None,
-            "tr_pct": 100.0 * revenue / completed if completed and revenue is not None else None,
+            "tr_pct": 100.0 * (actual_revenue if actual_revenue is not None else revenue) / completed
+            if completed and (actual_revenue is not None or revenue is not None) else None,
             "roi_pct": 100.0 * cm1 / spend if spend and cm1 is not None else None,
             "roi1_pct": (
                 100.0 * row["cm1_business"] / row["gross_marketing_cost"]

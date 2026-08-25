@@ -82,7 +82,12 @@ def _to_date(s) -> dt.date:
 # --------------------------------------------------------------------------- #
 # Weekly metric row assembly (canon definitions; revenue = predicted)
 # --------------------------------------------------------------------------- #
-def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None) -> dict:
+def _weekly_metrics(
+    biz: pd.Series | None,
+    paid: pd.Series | None,
+    yoy_rev=None,
+    actual_revenue=None,
+) -> dict:
     b = biz if biz is not None else {}
     p = paid if paid is not None else {}
     revenue = float(b.get("revenue") or 0) if biz is not None else None
@@ -184,8 +189,12 @@ def _weekly_metrics(biz: pd.Series | None, paid: pd.Series | None, yoy_rev=None)
         "cvr_pct": _pct(ad_conv, clicks, gate=(0.0, config.CVR_MAX_PCT)) if biz is not None else None,
         # canon: AOV = GBV / orders
         "aov": _num(gbv / orders) if (orders and biz is not None) else None,
-        # canon: take rate = revenue / GBV completed
-        "tr_pct": _pct(revenue, gbv_comp) if biz is not None else None,
+        # Keep the report revenue headline predicted; calculate TR from actual
+        # order revenue so it reconciles to the drawer composition tables.
+        "actual_revenue": _num(actual_revenue),
+        "tr_pct": _pct(
+            actual_revenue if actual_revenue is not None else revenue, gbv_comp
+        ) if biz is not None else None,
         # canon: completion rate = GBV completed / GBV booked
         "cr_pct": _pct(gbv_comp, gbv) if biz is not None else None,
         "cm2": _num(revenue - ad_spend_total) if biz is not None else None,
@@ -531,7 +540,6 @@ def _attach_resource_breakdowns(
         ce["countries"] = countries
 
 
-_CHANNELS_TOP_N = 8
 _FUNNEL_STAGES = [
     # (mockup label, dataframe column, is_rate) — LP Users is a count (WoW/YoY as
     # % change); the three conversion stages are rates (WoW/YoY as pp deltas).
@@ -545,7 +553,7 @@ _FUNNEL_STAGES = [
 def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
     """
     Attach the A2 "hard re-source" drawer sections, matching the mockup contract:
-      ce['channels'] -> [{channel, rev, wow_pct, yoy_pct, share_pct}]   top-N by W0 rev
+      ce['channels'] -> [{channel, rev, wow_pct, yoy_pct, share_pct}]   all active channels
       ce['funnel']   -> {"LP Users"|"LP2S"|"S2C"|"C2O": {current, wow, yoy}}
     Both carry W0 + WoW + YoY off the three one-week windows the fetches emit.
     Revenue basis is actuals (see fetch.py). Each defaults to []/{} when empty.
@@ -575,10 +583,12 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
             total_w0 = sum(p.get("w0", 0.0) for p in pivot.values())
             total_wm1 = sum(p.get("wm1", 0.0) for p in pivot.values())
             total_ly = sum(p.get("ly", 0.0) for p in pivot.values())
-            ranked = sorted(pivot.items(), key=lambda kv: kv[1].get("w0", 0.0), reverse=True)
-            for channel, per in ranked[:_CHANNELS_TOP_N]:
+            ranked = sorted(
+                pivot.items(), key=lambda kv: kv[1].get("w0", 0.0), reverse=True
+            )
+            for channel, per in ranked:
                 w0 = per.get("w0", 0.0)
-                if w0 <= 0:
+                if not (w0 or per.get("wm1", 0.0) or per.get("ly", 0.0)):
                     continue
                 share_w0 = 100.0 * w0 / total_w0 if total_w0 else None
                 share_wm1 = 100.0 * per.get("wm1", 0.0) / total_wm1 if total_wm1 else None
@@ -798,6 +808,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
 
     # ---- fetch ----
     biz = fetch.ce_weekly_business(market, start, w0_end)
+    actual = fetch.ce_weekly_actual_revenue(market, start, w0_end)
     paid = fetch.ce_weekly_ads(market, start, w0_end)
     meta = fetch.ce_metadata(market, start, w0_end)
 
@@ -823,7 +834,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         d_funnel_g[_c] = pd.to_numeric(d_funnel_g[_c], errors="coerce").fillna(0.0)
     troas = fetch.troas_history(market, w0_start - dt.timedelta(days=config.TROAS_LOOKBACK_DAYS), w0_end)
 
-    for df in (biz, paid, ly, d_ads, d_biz):
+    for df in (biz, actual, paid, ly, d_ads, d_biz):
         if "week" in df:
             df["week"] = pd.to_datetime(df["week"]).dt.date
     if "report_date" in d_ads:
@@ -832,7 +843,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     if not troas.empty:
         troas["report_date"] = pd.to_datetime(troas["report_date"]).dt.date
 
-    for df in (biz, paid, meta, d_ads, d_biz, troas):
+    for df in (biz, actual, paid, meta, d_ads, d_biz, troas):
         if "combined_entity_id" in df:
             df["combined_entity_id"] = df["combined_entity_id"].astype(str)
 
@@ -843,6 +854,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
 
     # ---- per-CE assembly ----
     biz_idx = {(r["combined_entity_id"], r["week"]): r for _, r in biz.iterrows()}
+    actual_idx = {(r["combined_entity_id"], r["week"]): r["actual_revenue"]
+                  for _, r in actual.iterrows()}
     paid_idx = {(r["combined_entity_id"], r["week"]): r for _, r in paid.iterrows()}
     meta_idx = {r["combined_entity_id"]: r for _, r in meta.iterrows()}
 
@@ -856,7 +869,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             p = paid_idx.get((ce_id, wk))
             yoy = ly_rev.get((ce_id, wk))
             row = _weekly_metrics(b if b is not None else None,
-                                  p if p is not None else None, yoy_rev=yoy)
+                                  p if p is not None else None, yoy_rev=yoy,
+                                  actual_revenue=actual_idx.get((ce_id, wk)))
             row["week"] = config.iso(wk)
             weekly.append(row)
             if wk == w0_start and row["paid_contribution_pct"] is not None:
@@ -897,6 +911,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         ad_conv = float(bw["ad_conversions"].sum())
         gbv = float(bw["gbv"].sum())
         gbv_comp = float(bw["gbv_completed"].sum())
+        actual_rev = float(actual[actual["week"] == wk]["actual_revenue"].sum())
         organic = float(bw["organic_gbv"].sum())
         spend = float(pw["spend"].sum())
         coupon = float(pw["coupon_wallet"].sum())
@@ -951,8 +966,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "roi_pct": paid_roi,                 # Paid RoI (campaign, coupon-inclusive)
             "cvr_pct": _pct(ad_conv, clicks, gate=(0.0, config.CVR_MAX_PCT)),
             "aov": _num(gbv / orders) if orders else None,
-            # canon take rate = predicted revenue / completed GBV (Sheet A "TR%")
-            "tr_pct": _pct(rev, gbv_comp),
+            "actual_revenue": _num(actual_rev),
+            "tr_pct": _pct(actual_rev, gbv_comp),
             # completion rate = completed GBV / booked GBV (Sheet A "CR%")
             "cr_pct": _pct(gbv_comp, gbv),
             # canonical business ROI(1) = CM1(business) / Gross Marketing Cost

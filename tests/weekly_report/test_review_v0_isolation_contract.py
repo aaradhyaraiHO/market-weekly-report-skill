@@ -217,7 +217,7 @@ class ReviewV0UiContract(unittest.TestCase):
 
     def test_ce_drawer_return_scrolls_only_the_bounded_queue(self):
         self.assertIn("function revealQueueSelection(ceId)", self.view)
-        self.assertIn("panel.scrollTop = bottom - panel.clientHeight", self.view)
+        self.assertIn("panel.scrollTop += rowRect.bottom - panelRect.bottom", self.view)
         self.assertIn("active.focus({ preventScroll: true })", self.view)
         self.assertNotIn("active.scrollIntoView", self.view)
         self.assertIn(".rv-queue-panel{max-height:", self.css)

@@ -1622,9 +1622,10 @@ function rowHtml(r,topMovers,rf){
 // weekly row: r.w0 | r.w1 | lyRow(r)). Ratio metrics recompute as Σnum/Σden —
 // never an average of per-CE ratios.
 function _aggPeriod(rows, pick){
-  const a={rev:0,ord:0,clk:0,pclk:0,spd:0,cpw:0,cm1:0,gbv:0,gbvC:0,adConv:0,organic:0,prev:0};
+  const a={rev:0,actualRev:0,ord:0,clk:0,pclk:0,spd:0,cpw:0,cm1:0,gbv:0,gbvC:0,adConv:0,organic:0,prev:0};
   rows.forEach(r=>{ const w=pick(r); if(!w) return;
-    a.rev+=w.revenue||0; a.ord+=w.orders||0; a.clk+=w.clicks||0; a.pclk+=w.paid_clicks||0;
+    a.rev+=w.revenue||0; a.actualRev+=(w.actual_revenue!=null?w.actual_revenue:w.revenue)||0;
+    a.ord+=w.orders||0; a.clk+=w.clicks||0; a.pclk+=w.paid_clicks||0;
     a.spd+=w.spend||0; a.cpw+=w.coupon_wallet||0; a.cm1+=w.cm1||0; a.gbv+=w.gbv||0;
     a.gbvC+=w.gbv_completed||0; a.adConv+=w.ad_conversions||0; a.organic+=w.organic_gbv||0;
     a.prev+=w.paid_revenue||0; });   // prev = paid-attributed net revenue (for RPC)
@@ -1633,7 +1634,7 @@ function _aggPeriod(rows, pick){
 function _metricVal(a,k){ switch(k){
   case 'rev':return a.rev; case 'orders':return a.ord; case 'clicks':return a.clk;
   case 'cpc':return a.pclk?a.spd/a.pclk:null; case 'cvr':return a.clk?a.adConv/a.clk*100:null;
-  case 'aov':return a.ord?a.gbv/a.ord:null; case 'tr':return a.gbvC?a.rev/a.gbvC*100:null;
+  case 'aov':return a.ord?a.gbv/a.ord:null; case 'tr':return a.gbvC?a.actualRev/a.gbvC*100:null;
   case 'cr':return a.gbv?a.gbvC/a.gbv*100:null;
   case 'rpc':return a.pclk?a.prev/a.pclk:null;   // paid-attributed net revenue ÷ paid clicks
   case 'spend':return a.spd; case 'cm1':return a.cm1; case 'cm2':return a.prev-a.spd;

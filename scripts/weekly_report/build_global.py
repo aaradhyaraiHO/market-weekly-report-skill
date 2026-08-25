@@ -150,6 +150,10 @@ def build_global(week: str) -> dict:
     biz = fetch.ce_weekly_business(None, start, w0_end)
     print(f"    {len(biz)} rows")
 
+    print("  fetching actual order revenue (global)...")
+    actual = fetch.ce_weekly_actual_revenue(None, start, w0_end)
+    print(f"    {len(actual)} rows")
+
     print("  fetching ce_weekly_ads (global)...")
     paid = fetch.ce_weekly_ads(None, start, w0_end)
     print(f"    {len(paid)} rows")
@@ -186,13 +190,13 @@ def build_global(week: str) -> dict:
           f"daily_funnel_g={len(d_funnel_g)}, troas={len(troas)}")
 
     # ---- Type coercions (same as build_snapshot) ----
-    for df in (biz, paid, ly, d_ads, d_biz):
+    for df in (biz, actual, paid, ly, d_ads, d_biz):
         if "week" in df.columns:
             df["week"] = pd.to_datetime(df["week"]).dt.date
     for df in (d_ads, d_biz, d_funnel_g, troas):
         if not df.empty and "report_date" in df.columns:
             df["report_date"] = pd.to_datetime(df["report_date"]).dt.date
-    for df in (biz, paid, meta_df, d_ads, d_biz, d_funnel_g, troas):
+    for df in (biz, actual, paid, meta_df, d_ads, d_biz, d_funnel_g, troas):
         if "combined_entity_id" in df.columns:
             df["combined_entity_id"] = df["combined_entity_id"].astype(str)
 
@@ -202,6 +206,8 @@ def build_global(week: str) -> dict:
 
     # ---- 2. Per-CE assembly ----
     biz_idx = {(r["combined_entity_id"], r["week"]): r for _, r in biz.iterrows()}
+    actual_idx = {(r["combined_entity_id"], r["week"]): r["actual_revenue"]
+                  for _, r in actual.iterrows()}
     paid_idx = {(r["combined_entity_id"], r["week"]): r for _, r in paid.iterrows()}
     meta_idx = {r["combined_entity_id"]: r for _, r in meta_df.iterrows()}
 
@@ -230,6 +236,7 @@ def build_global(week: str) -> dict:
                 b if b is not None else None,
                 p if p is not None else None,
                 yoy_rev=yoy,
+                actual_revenue=actual_idx.get((ce_id, wk)),
             )
             row["week"] = config.iso(wk)
             weekly.append(row)
@@ -267,6 +274,7 @@ def build_global(week: str) -> dict:
         ad_conv = float(bw["ad_conversions"].sum())
         gbv = float(bw["gbv"].sum())
         gbv_comp = float(bw["gbv_completed"].sum())
+        actual_rev = float(actual[actual["week"] == wk]["actual_revenue"].sum())
         organic = float(bw["organic_gbv"].sum())
         spend = float(pw["spend"].sum())
         coupon = float(pw["coupon_wallet"].sum())
@@ -318,7 +326,8 @@ def build_global(week: str) -> dict:
             "roi_pct": paid_roi,
             "cvr_pct": _pct(ad_conv, clicks, gate=(0.0, config.CVR_MAX_PCT)),
             "aov": _num(gbv / orders) if orders else None,
-            "tr_pct": _pct(rev, gbv_comp),
+            "actual_revenue": _num(actual_rev),
+            "tr_pct": _pct(actual_rev, gbv_comp),
             "cr_pct": _pct(gbv_comp, gbv),
             "cm1_business": _num(cm1_business),
             "gross_marketing_cost": _num(gross_mktg_cost),
