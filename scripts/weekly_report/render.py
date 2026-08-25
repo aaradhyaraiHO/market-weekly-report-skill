@@ -113,6 +113,7 @@ def render(markets, template_path):
         "schema_version": markets[0]["meta"].get("schema_version", 1),
         "markets": markets,
         "notes_url": notes_url or None,
+        "actions_url": "/api/actions",
         "notes_channels": NOTES_SLACK_CHANNELS,
     }
     # escape '<' so a stray '</script>' in data can never close the tag early

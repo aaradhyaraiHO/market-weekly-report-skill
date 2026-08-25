@@ -1,6 +1,6 @@
 {
   "renderer": {
-    "payload_keys": ["markets", "notes_channels", "notes_url", "schema_version"],
+    "payload_keys": ["actions_url", "markets", "notes_channels", "notes_url", "schema_version"],
     "single_report_name": "report_north_america_2026-08-02.html",
     "title": "Weekly Ledger — North America — w/c 2026-08-02"
   },

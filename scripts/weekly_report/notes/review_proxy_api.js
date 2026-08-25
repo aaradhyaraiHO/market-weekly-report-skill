@@ -1,9 +1,23 @@
 import { createHmac } from "node:crypto";
 import { jwtVerify } from "jose";
 
-// REVIEW_PROXY_SECRET is deliberately unsupported: review mode owns separate credentials.
+// The legacy proxy secret name is deliberately unsupported; Review owns separate credentials.
 const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
 const REVIEW_ACTION = /^review_/;
+// Keep this boundary intentionally narrow.  The Review proxy is not a generic
+// tunnel to either Apps Script deployment; diagnostic/V1 routes must use the
+// legacy actions proxy instead.
+const REVIEW_ACTIONS = new Set([
+  "review_comment_list", "review_comment_upsert", "review_comment_delete",
+  "review_work_list", "review_work_upsert", "review_work_delete",
+  "review_receipt_list", "review_receipt_upsert",
+  "review_set_list", "review_set_upsert", "review_memory",
+  "review_weekly_list", "review_weekly_note_upsert", "review_weekly_note_delete",
+  "review_weekly_slack_post", "review_weekly_sync", "review_mention_resolve",
+  "review_suggestion_list", "review_suggestion_decide", "review_source_inbox",
+  "review_source_reconcile", "review_granola_link_submit",
+  "review_slack_post", "review_slack_scan",
+]);
 
 function parseCookies(header) {
   const output = {};
@@ -45,11 +59,16 @@ export default async function handler(req, res) {
 
   const base = `https://${req.headers.host || "market-notebook.vercel.app"}`;
   const incoming = new URL(req.url, base);
-  const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {})) : null;
+  let body = null;
+  if (req.method === "POST") {
+    try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); }
+    catch (_) { return res.status(400).json({ ok: false, error: "invalid JSON" }); }
+  }
   const params = req.method === "POST" ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value ?? "")])) : incoming.searchParams;
   if (params.get("action") === "whoami")
     return res.status(200).json({ ok: true, actor_email: actor.email, actor_name: actor.name });
-  if (!REVIEW_ACTION.test(params.get("action") || ""))
+  const action = params.get("action") || "";
+  if (!REVIEW_ACTION.test(action) || !REVIEW_ACTIONS.has(action))
     return res.status(400).json({ ok: false, error: "review action required" });
 
   const signingSecret = process.env.REVIEW_MODE_PROXY_SECRET;

@@ -432,7 +432,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertNotIn('p.owner || "", aNow', apps_script)
 
         self.assertIn("mmr_session", proxy)
-        self.assertIn("REVIEW_PROXY_SECRET", proxy)
+        self.assertIn("REVIEW_MODE_PROXY_SECRET", proxy)
         self.assertIn('params.set("actor_sig", signature)', proxy)
         self.assertIn('action") === "whoami"', proxy)
 
