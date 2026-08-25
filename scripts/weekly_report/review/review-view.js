@@ -353,7 +353,8 @@
     function roleDraftKey(role){return String(S.selected)+":"+role;}
     function renderRoleNote(weekly,role){
       var m=roleMeta(role),saved=!!(weekly&&weekly[m.key]&&!weekly[m.deleted]),editing=S.editingRole===role;
-      var draftKey=roleDraftKey(role),val=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey)?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
+      var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
+      if(role!=="bgm"&&!saved&&!editing&&!hasDraft)return '<button class="rv-role-collapsed" type="button" data-role-open="'+role+'" aria-expanded="false"><span><strong>'+esc(m.label)+'</strong><small>Add an independent '+esc(role)+' note</small></span><span aria-hidden="true">＋</span></button>';
       if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
       return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+(editing?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
     }
@@ -594,6 +595,7 @@
       bind("#rv-del-yes", deleteNote);
       bind("#rv-save-note", saveNote);
       root.querySelectorAll("[data-role-edit]").forEach(function(b){b.onclick=function(){S.editingRole=b.dataset.roleEdit;render();var el=root.querySelector('[data-role-input="'+S.editingRole+'"]');if(el)el.focus();};});
+      root.querySelectorAll("[data-role-open]").forEach(function(b){b.onclick=function(){S.editingRole=b.dataset.roleOpen;render();var el=root.querySelector('[data-role-input="'+S.editingRole+'"]');if(el)el.focus();};});
       root.querySelectorAll("[data-role-cancel]").forEach(function(b){b.onclick=function(){delete S.roleDrafts[roleDraftKey(b.dataset.roleCancel)];S.editingRole="";render();};});
       root.querySelectorAll("[data-role-save]").forEach(function(b){b.onclick=function(){saveRoleNote(b.dataset.roleSave,b);};});
       root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});

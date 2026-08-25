@@ -30,6 +30,11 @@
 #review-view .rv-search button{position:absolute;right:6px;border:0;background:transparent;width:30px;height:30px;border-radius:8px;cursor:pointer}
 #review-view .rv-role-notes{display:grid;gap:14px}
 #review-view .rv-role-note,#review-view .rv-slack-composer{padding:14px;border:1px solid var(--rv-g200);border-radius:12px;background:#fff}
+#review-view .rv-role-collapsed{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border:1px solid var(--rv-g200);border-radius:12px;background:var(--rv-g50);cursor:pointer;text-align:left}
+#review-view .rv-role-collapsed:hover{border-color:var(--rv-purps-200);background:var(--rv-purps-10)}
+#review-view .rv-role-collapsed:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-role-collapsed span:first-child{display:grid;gap:2px}
+#review-view .rv-role-collapsed small{font-size:12px;color:var(--rv-muted);font-weight:400}
 #review-view .rv-field-label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}
 #review-view .rv-role-note textarea,#review-view .rv-slack-composer textarea{width:100%;min-height:88px;padding:11px 12px;border:1px solid var(--rv-g400);border-radius:10px;resize:vertical}
 #review-view .rv-channel-preview{font-size:12px;color:var(--rv-muted);margin:-2px 0 8px}
