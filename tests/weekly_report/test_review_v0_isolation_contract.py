@@ -258,7 +258,9 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn('class="rv-trace"', self.view)
         self.assertIn("matching sources", self.view)
         self.assertIn("Accepted / open", self.view)
-        self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0])
+        action_card = self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0]
+        self.assertIn("dedupeSuggestions(sugg.filter", action_card)
+        self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", action_card)
 
     def test_completion_names_requirement_and_offers_inline_treatment(self):
         self.assertIn("Required: choose a review treatment before finishing", self.view)

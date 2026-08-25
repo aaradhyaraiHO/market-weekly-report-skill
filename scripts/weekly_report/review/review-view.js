@@ -560,7 +560,7 @@
 
     function renderActionsCard(q) {
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
-      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
+      var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
       var allWork = workFor(q.ce_id);
       var openItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) < 0; });
       var doneItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) >= 0; });
