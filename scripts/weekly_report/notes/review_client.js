@@ -79,6 +79,7 @@
       timeline: function(identity) { return request("review_timeline", identity, {ttl: 300000}); },
       saveTimelineEvent: function(event) { return post("review_timeline_event_upsert", event); },
       backlog: function(identity) { return request("review_backlog", identity, {ttl: 60000}); },
+      reconciliation: function(identity) { return request("review_reconciliation", identity, {ttl: 60000}); },
       recordTelemetry: function(event) { return post("review_telemetry_record", event); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
       saveReviewSetItem: function(item) { return post("review_set_upsert", item); },
@@ -102,7 +103,9 @@
         required(message.request_id, "request_id");
         return post("review_weekly_slack_post", message);
       },
+      threads: function(identity, options) { return request("review_thread_list", identity, options); },
       syncWeeklyDiscussion: function(identity) { return post("review_weekly_sync", identity); },
+      decideSummary: function(decision) { return post("review_summary_decide", decision); },
       askInSlack: function(message) { return post("review_slack_post", message); },
       scanSlack: function(identity) { return post("review_slack_scan", identity); },
       suggestions: function(identity, includeDecided, options) {

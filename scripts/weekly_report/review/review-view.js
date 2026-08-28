@@ -59,11 +59,11 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
+      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      threadOperation: "", newThreadReason: "", backlogView: "open",
+      threadOperation: "", newThreadReason: "", backlogView: "open", reconciliation: null,
       drafts: {}, outcomeDrafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
@@ -256,12 +256,14 @@
       return Promise.all([
         api.reviewSet(id).catch(function () { return { review_set: [] }; }),
         api.receipts({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { receipts: [] }; }),
-        api.work({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { work_items: [] }; })
+        api.work({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { work_items: [] }; }),
+        api.reconciliation({ market_slug:S.market_slug,week_start:S.week_start }).catch(function(){return null;})
       ]).then(function (res) {
         S.setRowsList = (res[0].review_set || []);
         S.setRows = {}; S.setRowsList.forEach(function (r) { S.setRows[String(r.ce_id)] = r; });
         S.receipts = {}; (res[1].receipts || []).forEach(function (r) { S.receipts[String(r.ce_id)] = r; });
         S.work = {}; (res[2].work_items || []).forEach(function (w) { var k = String(w.ce_id); (S.work[k] = S.work[k] || []).push(w); });
+        S.reconciliation=res[3]||null;
         buildQueue();
         var selectedCount=S.queue.filter(function(q){return shortlistState(q)==="selected";}).length;track("shortlist_size",{value_number:selectedCount,value_text:String(S.queue.length),idempotency_key:"shortlist:"+S.market_slug+":"+S.week_start+":"+selectedCount});
         if (!S.selected || !S.byId[S.selected]) {
@@ -284,7 +286,8 @@
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
         api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
         api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; }),
-        api.outcomes({ market_slug:S.market_slug,ce_id:ceId,week:S.week_start }).catch(function(){return {outcomes:[]};})
+        api.outcomes({ market_slug:S.market_slug,ce_id:ceId,week:S.week_start }).catch(function(){return {outcomes:[]};}),
+        api.threads({ market_slug:S.market_slug,ce_id:ceId },requestOptions).catch(function(){return {active_thread:null,threads:[]};})
       ]).then(function (res) {
         if(S.ceRequestSeq[ceId]!==seq)return;
         var rows = res[0].weekly || [];
@@ -293,6 +296,7 @@
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
         S.outcomes[ceId] = (res[3].outcomes || [])[0] || null;
+        S.threadRegistry[ceId] = {active:res[4].active_thread||null,threads:res[4].threads||[]};
         S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
@@ -427,7 +431,7 @@
         '<select class="rv-select" id="rv-treatment" aria-label="Review treatment">' +
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
         "</select>" + receipt + "</div></header>" +
-        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderOutcomeCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
+        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderOutcomeCard(q) + renderActionsCard(q) + renderReconciliationCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
         '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
         '<footer class="rv-footer"><span class="rv-foot-hint '+(reviewed?'finished':(t==='not_scheduled'?'blocked':'ready'))+'">' + esc(footHint) + "</span>" + (t==='not_scheduled'?'<label class="rv-footer-treatment"><span>Choose review treatment</span><select class="rv-select" id="rv-footer-treatment">'+TREATMENT_ORDER.map(function(v){return '<option value="'+v+'"'+(v===t?' selected':'')+'>'+esc(TREATMENT_LABELS[v])+'</option>';}).join('')+'</select></label>':'') + renderGranolaDock() +
@@ -460,33 +464,40 @@
     function renderRoleNote(weekly,role){
       var m=roleMeta(role),saved=!!(weekly&&weekly[m.key]&&!weekly[m.deleted]),editing=S.editingRole===role;
       var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
-      if(role!=="bgm"&&!saved&&!editing&&!hasDraft)return '<button class="rv-role-collapsed" type="button" data-role-open="'+role+'" aria-expanded="false"><span><strong>'+esc(m.label)+'</strong><small>Add an independent '+esc(role)+' note</small></span><span aria-hidden="true">＋</span></button>';
+      if(role!=="bgm"&&!saved)return "";
+      if(role!=="bgm"&&saved)return '<details class="rv-role-note rv-role-readonly"><summary><span><strong>'+esc(m.label)+'</strong><small>Historical · read-only · '+esc(weekly[m.author]||"Unknown author")+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-note-text">'+esc(weekly[m.key])+'</div></details>';
       if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
       return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+((editing||hasDraft)?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
     }
     function renderWeeklySummary(weekly){
       if(!weekly||!weekly.slack_post_ts)return "";
-      var summary=null;try{summary=weekly.summary_json?JSON.parse(weekly.summary_json):null;}catch(e){}
+      var approved=String(weekly.summary_status||"")==="approved",raw=approved?(weekly.summary_approved_json||weekly.summary_json):(weekly.summary_draft_json||""),summary=null;try{summary=raw?JSON.parse(raw):null;}catch(e){}
       function group(label,rows){return rows&&rows.length?'<div class="rv-sum-group"><span class="rv-sum-label">'+label+'</span><ul>'+rows.map(function(row){return '<li>'+esc(typeof row==="string"?row:(row.text||row.body||""))+'</li>';}).join("")+'</ul></div>':"";}
-      var delayed=weekly.sync_status==="summary_delayed",status=delayed?"Summary delayed · Slack replies remain available":
-        (weekly.summary_updated_at?"Updated "+fmtWhen(weekly.summary_updated_at):"Waiting for replies");
+      var delayed=weekly.sync_status==="summary_delayed",pending=String(weekly.summary_status)==="pending",rejected=String(weekly.summary_status)==="rejected",status=delayed?"Summary delayed · Slack replies remain available":
+        (approved?"Approved by "+(weekly.summary_approved_by||"BGM")+" · "+fmtWhen(weekly.summary_approved_at||weekly.summary_updated_at):(pending?"Draft summary awaiting BGM approval":(rejected?"Draft summary rejected":"Waiting for replies")));
       var content=summary?(group("Findings",summary.findings)+group("Decisions",summary.decisions)+group("Open points",summary.open_points)):"";
       return '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
-        (content?'<div class="rv-summary"><div class="rv-summary-head"><span>Slack thread summary</span></div>'+content+'</div>':'<div class="rv-summary rv-summary-empty">No summarized replies yet. Automatic sync checks active threads every five minutes.</div>');
+        (content?'<div class="rv-summary"><div class="rv-summary-head"><span>'+(approved?'Approved Slack summary':'AI draft · not yet CE Memory')+'</span></div>'+content+(pending?'<details class="rv-summary-approval"><summary>Review draft source</summary><textarea id="rv-summary-draft">'+esc(raw)+'</textarea><div class="rv-note-actions"><button class="rv-btn small primary" id="rv-summary-approve" type="button">Approve summary</button><button class="rv-btn small" id="rv-summary-reject" type="button">Reject</button><button class="rv-link" id="rv-summary-regenerate" type="button">Regenerate</button></div></details>':'')+'</div>':'<div class="rv-summary rv-summary-empty">No approved summary yet. Slack replies remain available at source.</div>');
     }
     function renderCommentaryCard(q){
-      var weekly=S.weekly[q.ce_id]||{},hasThread=!!weekly.slack_post_ts,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
-      var previousThread=(S.weeklyHist[q.ce_id]||[]).filter(function(row){return String(row.week_start)!==String(S.week_start)&&row.slack_post_ts;}).sort(function(a,b){return String(b.week_start||"").localeCompare(String(a.week_start||""));})[0]||null;
-      var thread=hasThread?'<details class="rv-thread-compact"><summary><span><strong>Slack discussion active</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Summary pending replies')+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-thread"><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||"#")+'" target="_blank" rel="noopener">Open Slack thread ↗</a><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly)+'</details>':'';
-      var priorChoice=!hasThread&&previousThread?'<div class="rv-thread-choice"><div><strong>Continue the existing CE discussion?</strong><span>Recommended · previous activity w/c '+esc(previousThread.week_start||"earlier")+(previousThread.slack_post_permalink?' · <a href="'+esc(previousThread.slack_post_permalink)+'" target="_blank" rel="noopener">Open prior thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue existing</button><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button></div></div>':'';
+      var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
+      var thread=hasWeekActivity?'<details class="rv-thread-compact"><summary><span><strong>Current-week Slack discussion</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Summary pending replies')+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-thread"><a class="rv-btn small primary" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open / continue current thread ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start new discussion</button><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly)+'</details>':'';
+      var priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Authoritative CE thread registry'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue existing <span class="hint">(recommended)</span></button><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button></div></div>':'';
       var newThread=S.threadOperation==="new_parent"?'<div class="rv-new-thread-choice"><label class="rv-field-label" for="rv-new-thread-reason">Why start a new discussion?</label><input id="rv-new-thread-reason" value="'+esc(S.newThreadReason||"")+'" placeholder="Issue, owner, scope, or channel changed (required)"><div class="rv-note-actions"><button class="rv-link" type="button" id="rv-new-thread-cancel">Cancel</button><button class="rv-btn small primary" type="button" id="rv-start-slack">Preview new Slack post</button></div></div>':'';
-      var normalStart=!hasThread&&!previousThread?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Preview Slack post')+'</button>':'';
-      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+priorChoice+newThread+'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change any saved role note."'+(hasThread?' disabled':'')+'>'+esc(slackText)+'</textarea>'+renderMentionPreview()+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">Slack discussion &amp; outcome context</div><div class="rv-card-sub">Discuss with the team in Slack. Optional role notes remain separate Review memory.</div></div></div><div class="rv-card-body rv-role-notes">'+composer+'<div class="rv-optional-notes"><div class="rv-section-label">Optional Review observations</div>'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></div></section>';
+      var normalStart=!hasWeekActivity&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'';
+      var canCompose=!hasWeekActivity||S.threadOperation==="new_parent"||S.threadOperation==="continue";
+      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+priorChoice+newThread+(canCompose?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">Slack discussion &amp; outcome context</div><div class="rv-card-sub">BGM controls the discussion and approval decisions. Observation is optional.</div></div></div><div class="rv-card-body rv-role-notes">'+composer+'<div class="rv-optional-notes"><div class="rv-section-label">Optional BGM observation</div>'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></div></section>';
     }
 
     function normalizedSuggestionBody(s) {
       return String((s && s.body) || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+    }
+    function renderReconciliationCard(q){
+      var r=S.reconciliation;if(!r)return "";
+      function count(key){return (r[key]||[]).filter(function(row){return !row.ce_id||String(row.ce_id)===String(q.ce_id);}).length;}
+      var rows=[["Completed since prior cycle",count("completed_since_prior")],["Open",count("open")],["Blocked / overdue",count("blocked_overdue")],["Carried forward",count("carried_forward")],["Evidence suggests completion",count("evidence_suggesting_completion")],["Revisit required",count("revisit_required")]];
+      return '<details class="rv-card rv-reconciliation"><summary><span><strong>Monday reconciliation</strong><small>Read-only work projection · no metric attribution</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-card-body"><div class="rv-recon-grid">'+rows.map(function(x){return '<span><strong>'+x[1]+'</strong>'+esc(x[0])+'</span>';}).join("")+'</div><p class="hint">'+esc((r.later_economic_outcome||{}).reason||"Later economic outcome is unavailable.")+'</p></div></details>';
     }
     function dedupeSuggestions(rows) {
       var seen = {}, out = [];
@@ -768,6 +779,9 @@
       var slackInput=root.querySelector("#rv-slack-message");if(slackInput)slackInput.oninput=function(){S.slackDrafts[String(S.selected)]=slackInput.value;S.mentionPreview=null;};
       var threadReason=root.querySelector("#rv-new-thread-reason");if(threadReason)threadReason.oninput=function(){S.newThreadReason=threadReason.value;S.mentionPreview=null;};
       bind("#rv-sync-thread", syncThread);
+      bind("#rv-summary-approve", function(){decideSummary("approved");});
+      bind("#rv-summary-reject", function(){decideSummary("rejected");});
+      bind("#rv-summary-regenerate", function(){decideSummary("regenerate");});
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; S.processing = false; render(); });
       bind("#rv-granola-add", addGranola);
@@ -902,7 +916,7 @@
     }
     function startSlack() {
       var weekly = S.weekly[S.selected];
-      if (weekly && weekly.slack_post_ts) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
+      if (weekly && weekly.slack_post_ts && S.threadOperation!=="new_parent") { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
       if (!ensureAuthor() || !api) return;
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var ta = root.querySelector("#rv-slack-message"); var text = ta ? ta.value.trim() : (S.slackDrafts[String(S.selected)] || "");
@@ -927,7 +941,7 @@
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, discussion_text: text, discussion_author: author(), request_id: reqId, report_url: location.href, thread_operation:S.threadOperation||"", replacement_reason:S.newThreadReason||"" }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; if(res.thread)S.threadRegistry[S.selected]={active:res.thread,threads:[res.thread].concat((S.threadRegistry[S.selected]||{}).threads||[])}; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
         .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · discussion kept locally"); });
     }
     function syncThread() {
@@ -939,6 +953,14 @@
         render();
         Promise.all([loadCe(S.selected), reloadWork()]).catch(function(){});
       }).catch(function () { toast("Could not summarize now · automatic sync will retry"); render(); });
+    }
+    function decideSummary(decision){
+      if(!api||S.asyncBusy.summary)return;
+      var draft=root.querySelector("#rv-summary-draft"),payload=Object.assign({},ident(S.selected),{decision:decision,decided_by:author()||"authenticated BGM"});
+      if(draft)payload.summary_json=draft.value;
+      S.asyncBusy.summary=true;var btn=root.querySelector("#rv-summary-"+decision);if(btn){btn.disabled=true;btn.textContent=decision==="approved"?"Approving…":"Saving…";}
+      api.decideSummary(payload).then(function(res){S.weekly[S.selected]=res.weekly;toast(decision==="approved"?"Summary approved for CE Memory":(decision==="rejected"?"Summary rejected":"Regeneration requested"));render();if(decision==="regenerate")syncThread();})
+        .catch(function(e){toast((e&&e.message)||"Could not update summary");render();}).finally(function(){delete S.asyncBusy.summary;});
     }
     function addGranola() {
       if (!ensureAuthor() || !api) return;
@@ -1108,7 +1130,7 @@
       var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
         var summary = null;
-        try { summary = w.summary_json ? JSON.parse(w.summary_json) : null; } catch (e) {}
+        try { summary = String(w.summary_status||"")==="approved" ? JSON.parse(w.summary_approved_json||w.summary_json||"") : null; } catch (e) {}
         var points = summary ? [].concat(summary.findings || [], summary.decisions || [], summary.open_points || []) : [];
         var slackStory = points.length ? '<div class="rv-memory-source"><div class="rv-source-label">✦ AI · Slack · thread summary</div><ul>' +
           points.map(function (p) { return "<li>" + esc(typeof p === "string" ? p : (p.text || p.body || "")) + "</li>"; }).join("") + "</ul>" +

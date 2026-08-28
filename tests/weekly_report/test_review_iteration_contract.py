@@ -39,12 +39,14 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn("roleDrafts", VIEW)
         self.assertIn("slackDrafts", VIEW)
 
-    def test_optional_role_notes_are_collapsed_until_needed(self):
-        self.assertIn('role!=="bgm"&&!saved&&!editing&&!hasDraft', VIEW)
-        self.assertIn('data-role-open=', VIEW)
-        self.assertIn('aria-expanded="false"', VIEW)
-        self.assertIn('root.querySelectorAll("[data-role-open]")', VIEW)
-        self.assertIn("editing||hasDraft", VIEW)
+    def test_non_bgm_role_notes_are_read_only_compatibility_memory(self):
+        role = VIEW.split("function renderRoleNote(weekly,role)", 1)[1].split(
+            "function renderWeeklySummary", 1
+        )[0]
+        self.assertIn('role!=="bgm"&&!saved)return ""', role)
+        self.assertIn('role!=="bgm"&&saved', role)
+        self.assertIn("Historical · read-only", role)
+        self.assertNotIn('data-role-open=', role)
 
     def test_client_keeps_legacy_note_compatibility(self):
         self.assertIn('note.note_type || "bgm"', CLIENT)

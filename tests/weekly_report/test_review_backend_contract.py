@@ -139,7 +139,7 @@ class ReviewBackendContract(unittest.TestCase):
         ):
             self.assertIn(f'"{field}"', self.backend)
         self.assertIn("function reviewWeeklyFor(market,ceId,week)", self.backend)
-        self.assertIn("if(current && current.slack_post_ts)", self.backend)
+        self.assertIn('if(current && current.slack_post_ts && String(p.thread_operation||"")!=="new_parent")', self.backend)
         self.assertIn("payload.client_msg_id=String(p.request_id)", self.backend)
         self.assertIn('next.sync_status="post_failed"', self.backend)
 
@@ -259,7 +259,9 @@ class ReviewBackendContract(unittest.TestCase):
     def test_weekly_slack_sync_aggregates_and_fails_closed(self):
         self.assertIn('mode:"weekly_thread_summary"', self.backend)
         self.assertIn('rec.sync_status="summary_delayed"', self.backend)
-        self.assertIn('rec.sync_status="summary_current"', self.backend)
+        self.assertIn('rec.sync_status="summary_pending_approval"', self.backend)
+        self.assertIn('rec.summary_status="pending"', self.backend)
+        self.assertIn('function reviewSummaryDecide(p)', self.backend)
         self.assertIn("reviewSyncActiveThreads", self.backend)
         self.assertIn("everyMinutes(5)", self.backend)
         self.assertIn("reviewSyncSlackPeople", self.backend)

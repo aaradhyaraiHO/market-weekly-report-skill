@@ -286,10 +286,15 @@ class ReviewV0UiContract(unittest.TestCase):
             "function normalizedSuggestionBody", 1
         )[0]
         self.assertIn("Slack discussion &amp; outcome context", card)
-        self.assertIn("Optional Review observations", card)
+        self.assertIn("Optional BGM observation", card)
         self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
         self.assertIn('renderRoleNote(weekly,"performance")', card)
         self.assertIn('renderRoleNote(weekly,"bdm")', card)
+        role = self.view.split("function renderRoleNote(weekly,role)", 1)[1].split(
+            "function renderWeeklySummary", 1
+        )[0]
+        self.assertIn('role!=="bgm"&&!saved)return ""', role)
+        self.assertIn("Historical · read-only", role)
 
     def test_outcome_completion_has_exact_local_and_server_backed_requirements(self):
         for fragment in (

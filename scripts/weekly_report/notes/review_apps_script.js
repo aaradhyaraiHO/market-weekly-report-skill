@@ -87,6 +87,8 @@ var REVIEW_TABLES = {
       "performance_updated_at","performance_note_deleted_at","bdm_note","bdm_author","bdm_updated_at",
       "bdm_note_deleted_at","slack_post_ts","slack_post_permalink","last_scanned_ts",
       "reply_count","contributors_json","summary_json","summary_upto_ts","summary_updated_at",
+      "summary_status","summary_draft_json","summary_approved_json","summary_approved_by",
+      "summary_approved_at","summary_rejected_at","summary_rejection_reason",
       "sync_status","last_error","last_post_request_id","version"]
   },
   suggestions: {
@@ -337,7 +339,8 @@ function reviewMutationGate(action,p){
     "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_telemetry_record","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
     "review_granola_link_submit",
-    "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync"];
+    "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync",
+    "review_summary_decide"];
   if(mutations.indexOf(action)<0)return null;
   // Verify the proxy signature against the *original* request before resolving
   // an ID-only mutation to its CE/market.  The resolver below deliberately
@@ -413,6 +416,13 @@ function reviewWeeklyBase(p,existing){
     contributors_json:(existing&&existing.contributors_json)||"[]",
     summary_json:(existing&&existing.summary_json)||"",summary_upto_ts:(existing&&existing.summary_upto_ts)||"",
     summary_updated_at:(existing&&existing.summary_updated_at)||"",
+    summary_status:(existing&&existing.summary_status)||"",
+    summary_draft_json:(existing&&existing.summary_draft_json)||"",
+    summary_approved_json:(existing&&existing.summary_approved_json)||"",
+    summary_approved_by:(existing&&existing.summary_approved_by)||"",
+    summary_approved_at:(existing&&existing.summary_approved_at)||"",
+    summary_rejected_at:(existing&&existing.summary_rejected_at)||"",
+    summary_rejection_reason:(existing&&existing.summary_rejection_reason)||"",
     sync_status:(existing&&existing.sync_status)||"draft",last_error:(existing&&existing.last_error)||"",
     last_post_request_id:(existing&&existing.last_post_request_id)||"",
     version:String(parseInt((existing&&existing.version)||"0",10)||0)
@@ -606,7 +616,7 @@ function reviewTimeline(p){
   var market=p.market_slug,ce=String(p.ce_id),events=reviewFilter(reviewRows("timeline"),{market_slug:market,ce_id:ce}).slice();
   function add(type,week,when,body,source,ref,url,actor,reviewId,workId){events.push({event_id:"projection:"+type+":"+String(ref||week||when),market_slug:market,ce_id:ce,review_week:ymd(week),event_type:type,occurred_at:when||week,recorded_at:when||week,approved_body:body||"",approval_state:"approved",source_type:source||"review",source_ref:ref||"",source_url:url||"",actor_name:actor||"",related_review_id:reviewId||"",related_work_id:workId||"",read_only:true});}
   reviewFilter(reviewRows("review_set"),{market_slug:market,ce_id:ce}).forEach(function(r){add(r.treatment&&r.treatment!=="not_scheduled"?"shortlist_selected":"candidate_created",r.week_start,r.updated_at,r.reason,"weekly_report",r.source);});
-  reviewFilter(reviewRows("weekly"),{market_slug:market,ce_id:ce}).forEach(function(r){if(r.bgm_note&&!r.note_deleted_at)add("bgm_observation",r.week_start,r.bgm_updated_at,r.bgm_note,"review",r.weekly_id,"",r.bgm_author);if(r.slack_post_ts)add("slack_discussion",r.week_start,r.slack_post_ts,"Slack discussion started or continued","slack",r.slack_post_ts,r.slack_post_permalink,r.bgm_author);if(r.summary_json)add("slack_summary",r.week_start,r.summary_updated_at,r.summary_json,"slack",r.summary_upto_ts,r.slack_post_permalink,"AI · approved source");});
+  reviewFilter(reviewRows("weekly"),{market_slug:market,ce_id:ce}).forEach(function(r){if(r.bgm_note&&!r.note_deleted_at)add("bgm_observation",r.week_start,r.bgm_updated_at,r.bgm_note,"review",r.weekly_id,"",r.bgm_author);if(r.slack_post_ts)add("slack_discussion",r.week_start,r.slack_post_ts,"Slack discussion started or continued","slack",r.slack_post_ts,r.slack_post_permalink,r.bgm_author);if(String(r.summary_status)==="approved"&&(r.summary_approved_json||r.summary_json))add("slack_summary",r.week_start,r.summary_approved_at||r.summary_updated_at,r.summary_approved_json||r.summary_json,"slack",r.summary_upto_ts,r.slack_post_permalink,r.summary_approved_by||"BGM");});
   reviewFilter(reviewRows("outcomes"),{market_slug:market,ce_id:ce}).forEach(function(r){add("outcome_approved",r.week_start,r.approved_at,r.decision,"review",r.outcome_id,"",r.approved_by,r.outcome_id);});
   reviewFilter(reviewRows("work"),{market_slug:market,ce_id:ce}).filter(function(r){return !r.deleted_at;}).forEach(function(r){add(r.closed_at?"work_completed":"work_opened",r.origin_week,r.updated_at,r.text,"review",r.source_ref,r.source_url,r.approved_by,"",r.work_id);});
   reviewFilter(reviewRows("receipts"),{market_slug:market,ce_id:ce}).forEach(function(r){add("review_finished",r.week_start,r.reviewed_at,r.summary,"review",r.receipt_id,"",r.reviewer,r.receipt_id);});
@@ -621,6 +631,22 @@ function reviewBacklog(p){
     blocked_overdue:work.filter(function(r){return !r.closed_at&&(r.status==="blocked"||(r.due_date&&ymd(r.due_date)<now));}),stale:work.filter(function(r){return !r.closed_at&&r.status==="stale";}),
     recently_completed:work.filter(function(r){return !!r.closed_at&&!r.archived_at;}).sort(function(a,b){return String(b.closed_at).localeCompare(String(a.closed_at));}).slice(0,100),
     archived:work.filter(function(r){return !!r.archived_at||r.status==="dismissed";})};
+}
+
+function reviewReconciliation(p){
+  var market=String(p.market_slug||""),week=ymd(p.week_start||p.week),start=new Date(week+"T00:00:00Z");
+  if(isNaN(start.getTime()))start=new Date();
+  var prior=new Date(start.getTime());prior.setUTCDate(prior.getUTCDate()-7);var priorWeek=ymd(prior),now=ymd(new Date());
+  var work=reviewRows("work").filter(function(r){return r.market_slug===market&&!r.deleted_at;});
+  function open(r){return !r.closed_at&&!r.archived_at;}
+  return {week_start:week,prior_cycle_start:priorWeek,
+    completed_since_prior:work.filter(function(r){return r.closed_at&&ymd(r.closed_at)>=priorWeek;}),
+    open:work.filter(open),
+    blocked_overdue:work.filter(function(r){return open(r)&&(r.status==="blocked"||(r.due_date&&ymd(r.due_date)<now));}),
+    carried_forward:work.filter(function(r){return open(r)&&reviewBool(r.carry_forward);}),
+    evidence_suggesting_completion:work.filter(function(r){return open(r)&&String(r.completion_evidence||"").trim();}),
+    revisit_required:work.filter(function(r){return open(r)&&(reviewBool(r.carry_forward)||r.status==="stale"||(r.next_review_date&&ymd(r.next_review_date)<=week));}),
+    later_economic_outcome:{status:"unavailable",reason:"An approved comparison contract is not configured; Review does not infer metric attribution."}};
 }
 
 function reviewWorkDelete(p) {
@@ -882,7 +908,7 @@ function doGet(e) {
   var getMutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
     "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_telemetry_record","review_set_upsert","review_source_reconcile","review_suggestion_decide",
     "review_granola_link_submit","review_weekly_note_upsert","review_weekly_note_delete",
-    "review_weekly_slack_post","review_weekly_sync","review_slack_post","review_slack_scan"];
+    "review_weekly_slack_post","review_weekly_sync","review_summary_decide","review_slack_post","review_slack_scan"];
   if(getMutations.indexOf(action)>=0)return jsonResp({ok:false,error:action+" requires POST"});
   if (action === "review_comment_list") {
     var comments = reviewFilter(reviewRows("comments"), p);
@@ -906,6 +932,7 @@ function doGet(e) {
   }
   if(action==="review_timeline")return jsonResp({ok:true,timeline:reviewTimeline(p)});
   if(action==="review_backlog")return jsonResp(Object.assign({ok:true},reviewBacklog(Object.assign({},p,{actor_name:readAccess.access&&readAccess.access.display_name||""}))));
+  if(action==="review_reconciliation")return jsonResp(Object.assign({ok:true},reviewReconciliation(p)));
   if (action === "review_set_list") {
     var setRows = reviewFilter(reviewRows("review_set"), p);
     return jsonResp({ok:true,review_set:setRows.filter(function(r){ return String(r.included) !== "false"; })});
@@ -931,6 +958,7 @@ function doGet(e) {
     return jsonResp({ok:true,weekly:weeklyPage.items,next_before:weeklyPage.next_before});
   }
   if (action === "review_mention_resolve") return reviewMentionResolve(p);
+  if (action === "review_thread_list") return jsonResp({ok:true,active_thread:reviewThreadFor(p.market_slug,p.ce_id),threads:reviewThreadsFor(p.market_slug,p.ce_id)});
   if (action === "review_memory") return reviewMemory(p);
 
   return jsonResp({ ok: false, error: "unknown action: " + action });
@@ -975,6 +1003,7 @@ function doPost(e) {
   if (action === "review_weekly_note_delete") return reviewWeeklyNoteDelete(payload);
   if (action === "review_weekly_slack_post") return reviewWeeklySlackPost(payload);
   if (action === "review_weekly_sync") return reviewWeeklySync(payload);
+  if (action === "review_summary_decide") return reviewSummaryDecide(payload);
   if (action === "review_slack_post") return reviewSlackPost(payload);
   if (action === "review_slack_scan") return reviewSlackScan(payload);
   return jsonResp({ok:false,error:"unsupported POST action: " + action});
@@ -995,6 +1024,30 @@ function reviewThreadFor(market, ceId) {
   return reviewThreadsFor(market,ceId).filter(function(r){
     return !r.binding_status || String(r.binding_status)==="active";
   })[0] || null;
+}
+
+function reviewSummaryDecide(p){
+  var err=reviewRequired(p,["market_slug","ce_id","week_start","decision","decided_by"]);if(err)return err;
+  var state=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
+  if(!state)return jsonResp({ok:false,error:"weekly commentary not found"});
+  var decision=String(p.decision||"").toLowerCase();
+  if(["approved","rejected","regenerate"].indexOf(decision)<0)return jsonResp({ok:false,error:"invalid summary decision"});
+  var trusted=reviewTrustedAuthor(p,p.decided_by),now=reviewNow(),draft=String(p.summary_json||state.summary_draft_json||"");
+  if(decision==="approved"){
+    var parsed=reviewJson(draft,null);if(!parsed)return jsonResp({ok:false,error:"approved summary must be valid JSON"});
+  }
+  var next=reviewWeeklyMutate(p,function(rec){
+    if(decision==="approved"){
+      rec.summary_status="approved";rec.summary_draft_json=draft;rec.summary_approved_json=draft;rec.summary_json=draft;
+      rec.summary_approved_by=trusted;rec.summary_approved_at=now;rec.summary_rejected_at="";rec.summary_rejection_reason="";rec.sync_status="summary_approved";
+    }else if(decision==="rejected"){
+      rec.summary_status="rejected";rec.summary_rejected_at=now;rec.summary_rejection_reason=String(p.reason||"");rec.sync_status="summary_rejected";
+    }else{
+      rec.summary_status="regenerate_requested";rec.summary_draft_json="";rec.summary_rejected_at="";rec.summary_rejection_reason="";rec.sync_status="summary_regenerate_requested";
+    }
+    rec.version=String((parseInt(rec.version,10)||0)+1);return rec;
+  });
+  return jsonResp({ok:true,weekly:next,decision:decision});
 }
 
 function reviewSlackPostCore(p) {
@@ -1068,7 +1121,7 @@ function reviewWeeklySlackPost(p){
   var err=reviewRequired(Object.assign({},p,{discussion_text:discussionText,discussion_author:discussionAuthor}),["market_slug","ce_id","ce_name","week_start","channel","discussion_text","discussion_author","request_id"]);
   if(err)return err;
   var current=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
-  if(current && current.slack_post_ts)
+  if(current && current.slack_post_ts && String(p.thread_operation||"")!=="new_parent")
     return jsonResp({ok:true,duplicate:true,weekly:current});
   var trustedAuthor=reviewTrustedAuthor(p,discussionAuthor);
   var mentions=reviewResolveMentions(discussionText,p.market_slug);
@@ -1159,8 +1212,8 @@ function reviewWeeklySyncCore(p){
   var next=reviewWeeklyMutate(p,function(rec){
     rec.last_scanned_ts=newest;rec.reply_count=String(raw.length);rec.contributors_json=JSON.stringify(contributors);
     if(ai.status==="ok"){
-      rec.summary_json=JSON.stringify(ai.summary);rec.summary_upto_ts=newest;rec.summary_updated_at=reviewNow();
-      rec.sync_status="summary_current";rec.last_error="";rec.version=String((parseInt(rec.version,10)||0)+1);
+      rec.summary_draft_json=JSON.stringify(ai.summary);rec.summary_status="pending";rec.summary_upto_ts=newest;rec.summary_updated_at=reviewNow();
+      rec.sync_status="summary_pending_approval";rec.last_error="";rec.version=String((parseInt(rec.version,10)||0)+1);
     }else if(raw.length){rec.sync_status="summary_delayed";rec.last_error=ai.status;}
     else{rec.sync_status="awaiting_replies";rec.last_error="";}
     return rec;
