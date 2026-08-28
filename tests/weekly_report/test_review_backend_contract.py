@@ -180,6 +180,7 @@ class ReviewBackendContract(unittest.TestCase):
             self.assertIn(message, receipt)
         self.assertIn('"review_outcome_list"', self.client)
         self.assertIn('post("review_outcome_upsert"', self.client)
+        self.assertIn("ymd(r.week_start)===ymd(p.week_start)", receipt)
 
     def test_work_contract_adds_carry_forward_and_measured_outcome_fields(self):
         for field in (
@@ -188,6 +189,7 @@ class ReviewBackendContract(unittest.TestCase):
             "parent_work_id", "carry_forward", "archived_at",
         ):
             self.assertIn(f'"{field}"', self.backend)
+        self.assertIn("p.carry_forward===undefined", self.backend)
 
     def test_timeline_projection_is_stable_ce_scoped_and_history_is_read_only(self):
         self.assertIn('sheet: "review_timeline_events"', self.backend)

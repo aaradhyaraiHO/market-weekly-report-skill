@@ -560,7 +560,7 @@ function reviewWorkUpsert(p) {
     measured_outcome:p.measured_outcome||(existing&&existing.measured_outcome)||"",approval_state:p.approval_state||(existing&&existing.approval_state)||"approved",
     approved_by:p.approved_by||(existing&&existing.approved_by)||reviewTrustedAuthor(p,""),approved_at:(existing&&existing.approved_at)||now,
     idempotency_key:p.idempotency_key||(existing&&existing.idempotency_key)||"",duplicate_of:p.duplicate_of||(existing&&existing.duplicate_of)||"",
-    parent_work_id:p.parent_work_id||(existing&&existing.parent_work_id)||"",carry_forward:String(reviewBool(p.carry_forward||(existing&&existing.carry_forward))),
+    parent_work_id:p.parent_work_id||(existing&&existing.parent_work_id)||"",carry_forward:String(reviewBool(p.carry_forward===undefined?(existing&&existing.carry_forward):p.carry_forward)),
     archived_at:p.archived_at||(existing&&existing.archived_at)||""
   };
   reviewWrite("work", existing, rec);
@@ -642,7 +642,7 @@ function reviewReceiptUpsert(p) {
   if(!outcome||!outcome.approved_at)return jsonResp({ok:false,error:"approved CE outcome is required"});
   var weekly=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
   if(!(weekly&&weekly.slack_post_ts)&&!reviewBool(outcome.no_discussion))return jsonResp({ok:false,error:"Slack discussion or explicit no-discussion outcome is required"});
-  var pending=reviewFilter(reviewRows("suggestions"),{market_slug:p.market_slug,ce_id:String(p.ce_id),week_start:ymd(p.week_start)}).filter(function(r){return !r.status||r.status==="pending";});
+  var pending=reviewFilter(reviewRows("suggestions"),{market_slug:p.market_slug,ce_id:String(p.ce_id)}).filter(function(r){return ymd(r.week_start)===ymd(p.week_start)&&(!r.status||r.status==="pending");});
   if(pending.length)return jsonResp({ok:false,error:"pending suggestions must be triaged before completion"});
   var unresolved=reviewFilter(reviewRows("work"),{market_slug:p.market_slug,ce_id:String(p.ce_id)}).filter(function(r){return !r.deleted_at&&!r.closed_at;});
   var unmanaged=unresolved.filter(function(r){return !(reviewBool(r.carry_forward)||(r.owner&&(r.due_date||r.next_review_date))||(r.kind==="check"&&(r.due_date||r.next_review_date)));});
