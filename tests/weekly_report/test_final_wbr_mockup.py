@@ -54,9 +54,12 @@ class FinalWbrMockupTest(unittest.TestCase):
             self.assertIn(text, self.view)
 
     def test_slack_is_not_duplicated_in_the_footer(self):
-        footer = self.view.split('<footer class="rv-footer">', 1)[1].split("</footer>", 1)[0]
-        self.assertNotIn("Slack", footer)
-        self.assertIn("Finish CE review", footer)
+        footer_renderer = self.view.split("function renderFinishBar", 1)[1].split(
+            "function roleMeta", 1
+        )[0]
+        self.assertNotIn("Start Slack discussion", footer_renderer)
+        self.assertNotIn("Open / continue thread", footer_renderer)
+        self.assertIn("Finish review", footer_renderer)
 
 
 if __name__ == "__main__":

@@ -164,7 +164,7 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("if(existing&&!existing.binding_id)", lifecycle)
         self.assertIn("slack_threads:threads.slice(0,25)", self.backend)
 
-    def test_outcome_and_completion_are_additive_and_server_enforced(self):
+    def test_legacy_outcomes_remain_readable_but_receipts_use_core_primitives(self):
         self.assertIn('sheet: "review_outcomes"', self.backend)
         for field in ("outcome_id", "outcome_type", "decision", "no_discussion", "approved_by", "approved_at"):
             self.assertIn(f'"{field}"', self.backend)
@@ -172,12 +172,15 @@ class ReviewBackendContract(unittest.TestCase):
             "function reviewSetUpsert", 1
         )[0]
         for message in (
-            "review treatment is required", "approved CE outcome is required",
-            "Slack discussion or explicit no-discussion outcome is required",
+            "review treatment is required",
+            "Slack discussion or concise no-discussion reason is required",
             "pending suggestions must be triaged before completion",
             "unresolved work needs an owner/date or explicit carry-forward",
         ):
             self.assertIn(message, receipt)
+        self.assertNotIn("approved CE outcome is required", receipt)
+        self.assertNotIn('reviewFind("outcomes"', receipt)
+        self.assertIn("no_discussion_reason", receipt)
         self.assertIn('"review_outcome_list"', self.client)
         self.assertIn('post("review_outcome_upsert"', self.client)
         self.assertIn("ymd(r.week_start)===ymd(p.week_start)", receipt)

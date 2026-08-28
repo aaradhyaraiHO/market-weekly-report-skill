@@ -48,7 +48,7 @@ var REVIEW_TABLES = {
   receipts: {
     sheet: "review_receipts",
     headers: ["receipt_id","market_slug","ce_id","ce_name","week_start","treatment",
-      "reviewer","reviewed_at","next_review_date","summary","open_work_count"]
+      "reviewer","reviewed_at","next_review_date","summary","open_work_count","no_discussion_reason"]
   },
   outcomes: {
     sheet: "review_outcomes",
@@ -664,10 +664,9 @@ function reviewReceiptUpsert(p) {
   var err = reviewRequired(p, ["market_slug","ce_id","week_start","treatment","reviewer"]);
   if (err) return err;
   if(p.treatment==="not_scheduled")return jsonResp({ok:false,error:"review treatment is required"});
-  var outcome=reviewFind("outcomes",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start);});
-  if(!outcome||!outcome.approved_at)return jsonResp({ok:false,error:"approved CE outcome is required"});
   var weekly=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
-  if(!(weekly&&weekly.slack_post_ts)&&!reviewBool(outcome.no_discussion))return jsonResp({ok:false,error:"Slack discussion or explicit no-discussion outcome is required"});
+  var noDiscussionReason=String(p.no_discussion_reason||"").trim();
+  if(!(weekly&&weekly.slack_post_ts)&&!noDiscussionReason)return jsonResp({ok:false,error:"Slack discussion or concise no-discussion reason is required"});
   var pending=reviewFilter(reviewRows("suggestions"),{market_slug:p.market_slug,ce_id:String(p.ce_id)}).filter(function(r){return ymd(r.week_start)===ymd(p.week_start)&&(!r.status||r.status==="pending");});
   if(pending.length)return jsonResp({ok:false,error:"pending suggestions must be triaged before completion"});
   var unresolved=reviewFilter(reviewRows("work"),{market_slug:p.market_slug,ce_id:String(p.ce_id)}).filter(function(r){return !r.deleted_at&&!r.closed_at;});
@@ -683,7 +682,8 @@ function reviewReceiptUpsert(p) {
     ce_id:String(p.ce_id), ce_name:p.ce_name || (existing && existing.ce_name) || "",
     week_start:ymd(p.week_start), treatment:p.treatment, reviewer:p.reviewer,
     reviewed_at:now, next_review_date:ymd(p.next_review_date || ""),
-    summary:p.summary||outcome.decision||"",open_work_count:String(unresolved.length)
+    summary:p.summary||"",open_work_count:String(unresolved.length),
+    no_discussion_reason:noDiscussionReason||(existing&&existing.no_discussion_reason)||""
   };
   reviewWrite("receipts", existing, rec);
   return jsonResp({ok:true, receipt:rec});

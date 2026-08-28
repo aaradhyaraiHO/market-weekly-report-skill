@@ -46,7 +46,9 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn('role!=="bgm"&&!saved)return ""', role)
         self.assertIn('role!=="bgm"&&saved', role)
         self.assertIn("Historical · read-only", role)
-        self.assertNotIn('data-role-open=', role)
+        self.assertNotIn('data-role-open="performance"', role)
+        self.assertNotIn('data-role-open="bdm"', role)
+        self.assertIn('data-role-open="bgm"', role)
 
     def test_client_keeps_legacy_note_compatibility(self):
         self.assertIn('note.note_type || "bgm"', CLIENT)

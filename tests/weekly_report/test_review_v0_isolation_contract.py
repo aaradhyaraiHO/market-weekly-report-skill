@@ -276,7 +276,7 @@ class ReviewV0UiContract(unittest.TestCase):
             'id="rv-continue-slack"', 'id="rv-new-slack"',
             'id="rv-new-thread-reason"', 'id="rv-new-thread-cancel"',
             "thread_operation", "replacement_reason",
-            "Continue existing", "Start a new discussion",
+            "Continue in Slack", "Start new discussion",
             "prior thread remains in CE Memory",
         ):
             self.assertIn(fragment, self.view)
@@ -285,8 +285,8 @@ class ReviewV0UiContract(unittest.TestCase):
         card = self.view.split("function renderCommentaryCard(q)", 1)[1].split(
             "function normalizedSuggestionBody", 1
         )[0]
-        self.assertIn("Slack discussion &amp; outcome context", card)
-        self.assertIn("Optional BGM observation", card)
+        self.assertIn("Discuss in Slack", card)
+        self.assertIn("Add optional BGM observation", self.view)
         self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
         self.assertIn('renderRoleNote(weekly,"performance")', card)
         self.assertIn('renderRoleNote(weekly,"bdm")', card)
@@ -296,26 +296,25 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn('role!=="bgm"&&!saved)return ""', role)
         self.assertIn("Historical · read-only", role)
 
-    def test_outcome_completion_has_exact_local_and_server_backed_requirements(self):
+    def test_core_completion_has_no_outcome_authoring_dependency(self):
         for fragment in (
-            "function completionBlockers(q)", "function renderOutcomeCard(q)",
-            'id="rv-outcome-type"', 'id="rv-outcome-decision"',
-            'id="rv-no-discussion"', 'id="rv-save-outcome"',
-            "approve a CE outcome", "triage ", "explicitly choose no discussion",
-            "assign/date or carry forward", "api.saveOutcome",
+            "function completionBlockers(q)", "noDiscussionDrafts",
+            'id="rv-no-discussion-reason"', "Triage ",
+            "Assign/date or carry forward", "api.finishReview",
         ):
             self.assertIn(fragment, self.view)
-        self.assertIn("outcomeDrafts", self.view)
+        for fragment in ("function renderOutcomeCard", 'id="rv-outcome-type"', 'id="rv-outcome-decision"', 'id="rv-save-outcome"', "api.saveOutcome"):
+            self.assertNotIn(fragment, self.view)
         self.assertNotIn("bgm_note) blockers.push", self.view)
 
-    def test_backlog_views_and_timeline_are_progressive_and_local(self):
+    def test_follow_through_groups_and_timeline_are_progressive_and_local(self):
         for fragment in (
-            'backlogView: "open"', "Needs approval", "Blocked / overdue",
-            "Recently completed", 'data-backlog-view', "timeline=res.timeline||[]",
+            "Suggested attention stays separate from committed work", "Suggested", "Open", "Later", "Completed",
+            "rv-focus-summary", "timeline=res.timeline||[]",
             "rv-timeline-event",
         ):
             self.assertIn(fragment, self.view)
-        self.assertIn("rv-backlog-tabs", self.css)
+        self.assertIn("rv-action-section+.rv-action-section", self.css)
 
     def test_nomination_requires_reason_and_uses_stable_ce_id(self):
         for fragment in (
@@ -336,7 +335,7 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn(".catch(function(){})", self.view)
         for event in (
             "shortlist_size", "treatment_selected", "slack_discussion_started",
-            "suggestion_triaged", "action_closed", "outcome_approved",
+            "suggestion_triaged", "action_closed",
             "review_completed", "review_return_usage",
         ):
             self.assertIn(f'"{event}"', self.view)
@@ -346,16 +345,18 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("normalizedSuggestionBody", self.view)
         self.assertIn('class="rv-trace"', self.view)
         self.assertIn("matching sources", self.view)
-        self.assertIn("Accepted / open", self.view)
+        self.assertIn("Agree follow-through", self.view)
         action_card = self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0]
         self.assertIn("dedupeSuggestions(sugg.filter", action_card)
         self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", action_card)
 
-    def test_completion_names_requirement_and_offers_inline_treatment(self):
-        self.assertIn("Required: choose a review treatment before finishing", self.view)
-        self.assertIn('id="rv-footer-treatment"', self.view)
+    def test_completion_checklist_links_to_the_actual_controls(self):
+        self.assertIn("function renderFinishBar", self.view)
+        self.assertIn('data-resolve=', self.view)
+        self.assertIn("function focusRequirement", self.view)
+        self.assertNotIn('id="rv-footer-treatment"', self.view)
         self.assertIn("Next unreviewed", self.view)
-        self.assertIn("?'finished'", self.view)
+        self.assertEqual(self.view.count('id="rv-treatment"'), 1)
 
     def test_memory_loading_is_structured_and_fail_soft(self):
         self.assertIn("function renderMemoryLoading()", self.view)

@@ -24,10 +24,10 @@ class ReviewP0CoreContract(unittest.TestCase):
         )[0]
         for text in (
             "Start Slack discussion",
-            "Continue existing",
-            "Start a new discussion",
-            "Open / continue current thread",
-            "Authoritative CE thread registry",
+            "Continue in Slack",
+            "Start new discussion",
+            "Open / continue thread",
+            "Use the durable CE thread",
         ):
             self.assertIn(text, card)
         self.assertIn('S.threadOperation==="new_parent"', card)
@@ -67,6 +67,23 @@ class ReviewP0CoreContract(unittest.TestCase):
         self.assertNotIn("reviewWrite(", block)
         self.assertIn('"review_reconciliation"', PROXY)
         self.assertIn("Monday reconciliation", VIEW)
+
+    def test_follow_through_separates_attention_from_committed_work(self):
+        actions = VIEW.split("function renderActionsCard(q)", 1)[1].split(
+            "function workRow(w)", 1
+        )[0]
+        for label in ("Suggested", "Open", "Later", "Completed"):
+            self.assertIn(label, actions)
+        self.assertIn("rv-focus-summary", actions)
+        self.assertIn("pending.slice(0,3)", actions)
+        self.assertIn("See ", actions)
+        self.assertIn("S.expandedSuggestion", actions)
+        self.assertNotIn("rv-check", actions)
+        committed = VIEW.split("function workRow(w)", 1)[1].split(
+            "function renderWorkEdit", 1
+        )[0]
+        self.assertIn("rv-check", committed)
+        self.assertIn("rv-trace", VIEW)
 
 
 if __name__ == "__main__":

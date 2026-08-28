@@ -63,8 +63,8 @@
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      threadOperation: "", newThreadReason: "", backlogView: "open", reconciliation: null,
-      drafts: {}, outcomeDrafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
+      threadOperation: "", newThreadReason: "", backlogView: "open", reconciliation: null, finishReasonOpen:false, showAllSuggestions:false,
+      drafts: {}, outcomeDrafts: {}, noDiscussionDrafts:{}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
     // Review mutations are BGM-only.  The server already has the authenticated
@@ -286,7 +286,6 @@
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
         api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
         api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; }),
-        api.outcomes({ market_slug:S.market_slug,ce_id:ceId,week:S.week_start }).catch(function(){return {outcomes:[]};}),
         api.threads({ market_slug:S.market_slug,ce_id:ceId },requestOptions).catch(function(){return {active_thread:null,threads:[]};})
       ]).then(function (res) {
         if(S.ceRequestSeq[ceId]!==seq)return;
@@ -295,8 +294,7 @@
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
-        S.outcomes[ceId] = (res[3].outcomes || [])[0] || null;
-        S.threadRegistry[ceId] = {active:res[4].active_thread||null,threads:res[4].threads||[]};
+        S.threadRegistry[ceId] = {active:res[3].active_thread||null,threads:res[3].threads||[]};
         S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
@@ -306,7 +304,7 @@
     function select(ceId) {
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = "";
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = ""; S.finishReasonOpen=false; S.showAllSuggestions=false;
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
       S.mentionPreview = null; S.threadOperation = ""; S.newThreadReason = ""; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
@@ -413,46 +411,44 @@
       var q = S.byId[S.selected];
       if (!q) return '<main class="rv-main"><div class="rv-workspace"><div class="rv-empty-state"><strong>Nothing to review</strong>' +
         "<span>No CE is flagged this week. Use ＋ Add CE to pull one in.</span></div></div></main>";
-      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id), blockers=completionBlockers(q);
+      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id), blockers=completionBlockers(q),treatmentHelp={live:"Discuss together now; finish after the live review.",async:"Collect input asynchronously and finish when follow-through is clear.",follow_up:"Use this CE only to close or advance existing work.",skip:"Defer this CE for the week; record remains in the queue.",not_scheduled:"Choose the review path before finishing."}[t];
       var receipt = reviewed
         ? '<span class="rv-receipt done">✓ Reviewed by ' + esc((S.receipts[q.ce_id] || {}).reviewer || author() || "BGM") + "</span>"
         : !blockers.length ? '<span class="rv-receipt">Ready to finish</span>'
-          : '<span class="rv-receipt">Choose how you’ll review this CE</span>';
-      var footHint = reviewed ? "Review saved — open work carries into next week"
-        : t === "not_scheduled" ? "Required: choose a review treatment before finishing"
-          : blockers.length ? "Required: "+blockers[0] : "Ready to finish — outcome approved and work handled";
+          : '<span class="rv-receipt">'+blockers.length+' item'+(blockers.length===1?'':'s')+' to resolve</span>';
       return '<main class="rv-main">' +
         '<div class="rv-mobile-current"><span><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+' · '+esc(TREATMENT_LABELS[t]||t)+'</small></span><button class="rv-btn" type="button" id="rv-browse-ces">Browse/search CEs</button></div>'+
         '<header class="rv-detail-head"><div class="rv-breadcrumb"><button class="rv-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + "</button> · " + esc(S.market) + "</div>" +
         '<div class="rv-title-line"><div><h1><button class="rv-title-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</button></h1>" +
         "<p>Record what you know, decide the follow-through, and mark it reviewed.</p></div>" +
         '<div class="rv-button-row"><button class="rv-btn" type="button" id="rv-open-drawer">Open CE drawer</button></div></div>' +
-        '<div class="rv-status-line"><label for="rv-treatment">Review as</label>' +
+        '<div class="rv-treatment-block"><div class="rv-step-line"><span class="rv-step">1</span><div><strong>Decide how to review</strong><span>'+esc(treatmentHelp)+'</span></div></div><div class="rv-status-line"><label for="rv-treatment">Review path</label>' +
         '<select class="rv-select" id="rv-treatment" aria-label="Review treatment">' +
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
-        "</select>" + receipt + "</div></header>" +
-        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderOutcomeCard(q) + renderActionsCard(q) + renderReconciliationCard(q) + renderMemoryRail(q) +
+        "</select>" + receipt + "</div></div></header>" +
+        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderReconciliationCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
         '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
-        '<footer class="rv-footer"><span class="rv-foot-hint '+(reviewed?'finished':(t==='not_scheduled'?'blocked':'ready'))+'">' + esc(footHint) + "</span>" + (t==='not_scheduled'?'<label class="rv-footer-treatment"><span>Choose review treatment</span><select class="rv-select" id="rv-footer-treatment">'+TREATMENT_ORDER.map(function(v){return '<option value="'+v+'"'+(v===t?' selected':'')+'>'+esc(TREATMENT_LABELS[v])+'</option>';}).join('')+'</select></label>':'') + renderGranolaDock() +
+        renderFinishBar(q,blockers,reviewed) + renderGranolaDock() +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next unreviewed →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (blockers.length || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
     }
 
     function completionBlockers(q){
-      var blockers=[],outcome=S.outcomes[q.ce_id],weekly=S.weekly[q.ce_id]||{},pending=(S.suggestions[q.ce_id]||[]).filter(function(s){return !s.status||s.status==="pending";});
-      if(treatmentFor(q.ce_id)==="not_scheduled")blockers.push("choose a review treatment before finishing");
-      if(!outcome||!outcome.approved_at)blockers.push("approve a CE outcome");
-      if(outcome&&!weekly.slack_post_ts&&String(outcome.no_discussion)!=="true")blockers.push("start Slack or explicitly choose no discussion");
-      if(pending.length)blockers.push("triage "+pending.length+" pending suggestion"+(pending.length===1?"":"s"));
+      var blockers=[],weekly=S.weekly[q.ce_id]||{},pending=(S.suggestions[q.ce_id]||[]).filter(function(s){return !s.status||s.status==="pending";});
+      if(treatmentFor(q.ce_id)==="not_scheduled")blockers.push({key:"treatment",label:"Choose a review path"});
+      if(!weekly.slack_post_ts&&!String(S.noDiscussionDrafts[q.ce_id]||"").trim())blockers.push({key:"discussion",label:"Start Slack or add a no-discussion reason"});
+      if(pending.length)blockers.push({key:"suggestions",label:"Triage "+pending.length+" pending suggestion"+(pending.length===1?"":"s")});
       var unmanaged=openWorkFor(q.ce_id).filter(function(w){return !(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(w.kind==="check"&&(w.due_date||w.next_review_date)));});
-      if(unmanaged.length)blockers.push("assign/date or carry forward "+unmanaged.length+" open item"+(unmanaged.length===1?"":"s"));
+      if(unmanaged.length)blockers.push({key:"work",label:"Assign/date or carry forward "+unmanaged.length+" open item"+(unmanaged.length===1?"":"s")});
       return blockers;
     }
-    function renderOutcomeCard(q){
-      var saved=S.outcomes[q.ce_id]||{},draft=S.outcomeDrafts[q.ce_id]||{},kind=draft.outcome_type||saved.outcome_type||"",decision=Object.prototype.hasOwnProperty.call(draft,"decision")?draft.decision:(saved.decision||""),noDiscussion=Object.prototype.hasOwnProperty.call(draft,"no_discussion")?draft.no_discussion:String(saved.no_discussion)==="true";
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span><div class="rv-card-headings"><div class="rv-card-title">Current outcome</div><div class="rv-card-sub">BGM-approved CE/week decision. A note is optional.</div></div></div><div class="rv-card-body"><div class="rv-outcome-grid"><label>Outcome type<select class="rv-select" id="rv-outcome-type"><option value="">Choose outcome</option>'+[["action_required","Action required"],["no_action_needed","No action needed"],["discussion_only","Discussion only"],["monitoring","Monitor / check later"],["other","Other decision"]].map(function(o){return '<option value="'+o[0]+'"'+(kind===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("")+'</select></label><label>Decision / outcome<textarea id="rv-outcome-decision" placeholder="What did the BGM decide?">'+esc(decision)+'</textarea></label><label class="rv-checkline"><input id="rv-no-discussion" type="checkbox"'+(noDiscussion?' checked':'')+'> No Slack discussion required for this outcome</label><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-save-outcome">'+(saved.approved_at?'Update approved outcome':'Approve outcome')+'</button></div></div></div></section>';
+    function renderFinishBar(q,blockers,reviewed){
+      var weekly=S.weekly[q.ce_id]||{},reason=S.noDiscussionDrafts[q.ce_id]||"";
+      var list=reviewed?'<span class="rv-finish-state done">✓ Reviewed</span>':(!blockers.length?'<span class="rv-finish-state ready">Ready to finish</span>':'<div class="rv-finish-checks" aria-label="Items required to finish">'+blockers.map(function(b){return '<button type="button" class="rv-finish-check" data-resolve="'+b.key+'"><span aria-hidden="true">○</span>'+esc(b.label)+'</button>';}).join("")+'</div>');
+      var reasonBox=!weekly.slack_post_ts&&S.finishReasonOpen?'<label class="rv-finish-reason" for="rv-no-discussion-reason"><span>Why is Slack not needed?</span><input id="rv-no-discussion-reason" value="'+esc(reason)+'" placeholder="Concise reason required"><button class="rv-btn small" id="rv-save-finish-reason" type="button">Use reason</button></label>':'';
+      return '<footer class="rv-footer"><div class="rv-finish-copy"><strong>Finish review</strong>'+list+reasonBox+'</div>';
     }
 
     function roleMeta(role) {
@@ -466,6 +462,7 @@
       var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
       if(role!=="bgm"&&!saved)return "";
       if(role!=="bgm"&&saved)return '<details class="rv-role-note rv-role-readonly"><summary><span><strong>'+esc(m.label)+'</strong><small>Historical · read-only · '+esc(weekly[m.author]||"Unknown author")+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-note-text">'+esc(weekly[m.key])+'</div></details>';
+      if(role==="bgm"&&!saved&&!editing&&!hasDraft)return '<button class="rv-role-collapsed" type="button" data-role-open="bgm" aria-expanded="false"><span><strong>Add optional BGM observation</strong><small>Use only for useful context not already captured in Slack.</small></span><span aria-hidden="true">＋</span></button>';
       if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
       return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+((editing||hasDraft)?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
     }
@@ -481,13 +478,13 @@
     }
     function renderCommentaryCard(q){
       var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
-      var thread=hasWeekActivity?'<details class="rv-thread-compact"><summary><span><strong>Current-week Slack discussion</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Summary pending replies')+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-thread"><a class="rv-btn small primary" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open / continue current thread ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start new discussion</button><button class="rv-btn small" type="button" id="rv-sync-thread">Summarize now</button></div>'+renderWeeklySummary(weekly)+'</details>':'';
-      var priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Authoritative CE thread registry'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue existing <span class="hint">(recommended)</span></button><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button></div></div>':'';
+      var thread=hasWeekActivity?'<div class="rv-thread-compact rv-thread-visible"><div class="rv-thread-status"><span><strong>Current Slack discussion</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Waiting for replies')+'</small></span><span class="rv-status-chip">Active</span></div><div class="rv-thread"><a class="rv-btn small primary" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open / continue thread ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start new</button><button class="rv-btn small ghost" type="button" id="rv-sync-thread">Refresh summary</button></div>'+renderWeeklySummary(weekly)+'</div>':'';
+      var priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Use the durable CE thread'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue in Slack</button><button class="rv-btn small" type="button" id="rv-new-slack">Start new discussion</button></div></div>':'';
       var newThread=S.threadOperation==="new_parent"?'<div class="rv-new-thread-choice"><label class="rv-field-label" for="rv-new-thread-reason">Why start a new discussion?</label><input id="rv-new-thread-reason" value="'+esc(S.newThreadReason||"")+'" placeholder="Issue, owner, scope, or channel changed (required)"><div class="rv-note-actions"><button class="rv-link" type="button" id="rv-new-thread-cancel">Cancel</button><button class="rv-btn small primary" type="button" id="rv-start-slack">Preview new Slack post</button></div></div>':'';
       var normalStart=!hasWeekActivity&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'';
       var canCompose=!hasWeekActivity||S.threadOperation==="new_parent"||S.threadOperation==="continue";
       var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+priorChoice+newThread+(canCompose?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">1</span><div class="rv-card-headings"><div class="rv-card-title">Slack discussion &amp; outcome context</div><div class="rv-card-sub">BGM controls the discussion and approval decisions. Observation is optional.</div></div></div><div class="rv-card-body rv-role-notes">'+composer+'<div class="rv-optional-notes"><div class="rv-section-label">Optional BGM observation</div>'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></div></section>';
+      return '<section class="rv-flow-section" id="rv-discussion-section"><div class="rv-card-head"><span class="rv-step">2</span><div class="rv-card-headings"><div class="rv-card-title">Discuss in Slack</div><div class="rv-card-sub">Keep the team conversation in its existing CE thread. Start new only when the BGM decides the context has changed.</div></div></div><div class="rv-card-body rv-role-notes">'+composer+'<div class="rv-optional-notes">'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></div></section>';
     }
 
     function normalizedSuggestionBody(s) {
@@ -626,12 +623,11 @@
     function renderActionsCard(q) {
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
       var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
-      var allWork = workFor(q.ce_id),today=new Date().toISOString().slice(0,10),view=S.backlogView||"open";
-      var openAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)<0&&!w.archived_at;}),doneAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)>=0&&!w.archived_at;});
-      var openItems=view==="mine"?openAll.filter(function(w){return author()&&String(w.owner||w.owner_id||"").toLowerCase()===author().toLowerCase();}):view==="blocked_overdue"?openAll.filter(function(w){return w.status==="blocked"||(w.due_date&&w.due_date<today);}):view==="stale"?openAll.filter(function(w){return w.status==="stale";}):view==="recently_completed"?doneAll:view==="archived"?allWork.filter(function(w){return w.archived_at||w.status==="dismissed";}):openAll;
-      var doneItems=view==="open"?doneAll:[];
-      var openN = openItems.length;
-      var suggHtml = (view==="needs_approval"||view==="open"?pending:[]).map(function (s) {
+      var allWork = workFor(q.ce_id),openAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)<0&&!w.archived_at;}),doneAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)>=0&&!w.archived_at;});
+      var laterItems=openAll.filter(function(w){return w.kind==="check"||String(w.carry_forward)==="true";}),openItems=openAll.filter(function(w){return laterItems.indexOf(w)<0;}),visibleSuggestions=S.showAllSuggestions?pending:pending.slice(0,3);
+      var nextCheck=laterItems.filter(function(w){return w.due_date||w.next_review_date;}).sort(function(a,b){return String(a.due_date||a.next_review_date).localeCompare(String(b.due_date||b.next_review_date));})[0];
+      var focus=[pending.length?pending.length+" suggestion"+(pending.length===1?"":"s")+" need review":"No suggestions waiting",openItems.length?openItems.length+" open action"+(openItems.length===1?"":"s"):"no open actions",nextCheck?"next check "+fmtDue(nextCheck.due_date||nextCheck.next_review_date):(laterItems.length?laterItems.length+" item"+(laterItems.length===1?"":"s")+" for later":"nothing scheduled")].join(" · ")+".";
+      var suggHtml = visibleSuggestions.map(function (s) {
         var isCheck = s.kind === "check", expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(s.kind) + '">' +
           '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isCheck?'Suggested check':'Suggested action')+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
@@ -644,18 +640,18 @@
           '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
       }).join("");
       var openHtml = openItems.map(workRow).join("");
-      var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
-        '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
-      var emptyState = (openItems.length || suggHtml || S.compose) ? "" :
-        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
+      var laterHtml=laterItems.map(workRow).join("");
+      var doneHtml = doneAll.length ? '<details class="rv-done"><summary>Completed · ' + doneAll.length + " recent</summary>" +
+        '<div class="rv-done-list">' + doneAll.slice(0,8).map(workRow).join("") + "</div></details>" : "";
+      var emptyState = (openItems.length || laterItems.length || suggHtml || S.compose) ? "" :
+        '<div class="rv-empty-state" style="margin-top:12px"><strong>No follow-through yet</strong><span>Add an action or schedule a check when the discussion creates work.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
-      var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
-      var backlogTabs=[["needs_approval","Needs approval",pending.length],["open","Open",openAll.length],["mine","Mine",allWork.filter(function(w){return author()&&String(w.owner||w.owner_id||"").toLowerCase()===author().toLowerCase()&&!w.closed_at;}).length],["blocked_overdue","Blocked / overdue",allWork.filter(function(w){return !w.closed_at&&(w.status==="blocked"||(w.due_date&&w.due_date<today));}).length],["stale","Stale",allWork.filter(function(w){return !w.closed_at&&w.status==="stale";}).length],["recently_completed","Recently completed",doneAll.length],["archived","Archived",allWork.filter(function(w){return w.archived_at||w.status==="dismissed";}).length]];
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">3</span>' +
-        '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
-        '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
+      var count = openAll.length ? openAll.length + " active" : (allWork.length ? "All done" : "No work yet");
+      return '<section class="rv-flow-section" id="rv-actions-section"><div class="rv-card-head"><span class="rv-step">3</span>' +
+        '<div class="rv-card-headings"><div class="rv-card-title">Agree follow-through</div>' +
+        '<div class="rv-card-sub">Suggested attention stays separate from committed work.</div></div>' +
         '<span class="rv-card-count">' + count + "</span></div>" +
-        '<div class="rv-card-body"><div class="rv-backlog-tabs" role="tablist">'+backlogTabs.map(function(tab){return '<button type="button" class="rv-filter-chip'+(view===tab[0]?' active':'')+'" data-backlog-view="'+tab[0]+'">'+tab[1]+' <span>'+tab[2]+'</span></button>';}).join("")+'</div>' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">'+(view==="open"?'Accepted / open':backlogTabs.filter(function(t){return t[0]===view;})[0][1])+' <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + emptyState + doneHtml +
+        '<div class="rv-card-body"><p class="rv-focus-summary">'+esc(focus)+'</p>' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">Open <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + (laterHtml?'<div class="rv-action-section"><div class="rv-action-heading">Later <span>'+laterItems.length+'</span></div>'+laterHtml+'</div>':'') + emptyState + doneHtml +
         composer +
         '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
         '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
@@ -665,6 +661,7 @@
       var src = w.source_type === "granola" ? "Granola" : w.source_type === "slack" ? "Slack" : w.source_type === "bgm_manual" ? "Manual" : (w.source_type || "");
       var srcLink = w.source_url ? '<a href="' + esc(w.source_url) + '" target="_blank" rel="noopener">' + esc(src || "source") + " ↗</a>" : esc(src);
       var meta = [w.owner ? esc(w.owner) : (isCheck ? "" : "no owner"), w.due_date ? (isCheck ? "returns " : "due ") + esc(fmtDue(w.due_date)) : "", srcLink].filter(Boolean).join(" · ");
+      var unmanaged=!done&&!w._pending&&!(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(isCheck&&(w.due_date||w.next_review_date)));
       var left = isCheck && w.due_date
         ? '<span class="rv-datebadge"><span class="m">' + MONTHS[(parseDate(w.due_date) || new Date()).getUTCMonth()] + '</span><span class="d">' + (parseDate(w.due_date) || new Date()).getUTCDate() + "</span></span>"
         : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
@@ -673,7 +670,7 @@
       return '<div class="rv-work' + (done ? " done" : "") + (w._pending ? " pending" : "") + '" data-work="' + esc(w.work_id) + '" data-pending="'+(w._pending?"true":"false")+'">' + left +
         '<div class="rv-work-main">' + (w._pending?'<div class="rv-work-kicker">Saving…</div>':(isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "")) +
         '<div class="rv-work-title">' + esc(w.text) + "</div>" +
-        '<div class="rv-work-meta">' + meta + "</div>" +
+        '<div class="rv-work-meta">' + meta + "</div>" +(unmanaged?'<button class="rv-work-requirement" type="button" data-work-edit="'+esc(w.work_id)+'">Add owner/date or carry forward to finish</button>':'')+
         '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select>" +
         (String(S.confirmDeleteWork || "") === String(w.work_id)
           ? '<span class="rv-delete-confirm">Remove this item?<button class="rv-link danger" type="button" data-work-delete-confirm="' + esc(w.work_id) + '">Delete</button><button class="rv-link" type="button" data-work-delete-cancel>Cancel</button></span>'
@@ -748,7 +745,6 @@
 
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
-      var footerTreatment=root.querySelector("#rv-footer-treatment");if(footerTreatment)footerTreatment.onchange=function(){setTreatment(footerTreatment.value);};
       bind("#rv-open-drawer", function () {
         openAnalyticsDrawer(S.selected);
       });
@@ -765,10 +761,9 @@
       root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
       root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
-      bind("#rv-save-outcome", saveOutcome);
-      var outcomeType=root.querySelector("#rv-outcome-type"),outcomeDecision=root.querySelector("#rv-outcome-decision"),noDiscussion=root.querySelector("#rv-no-discussion");
-      function captureOutcome(){S.outcomeDrafts[S.selected]={outcome_type:outcomeType?outcomeType.value:"",decision:outcomeDecision?outcomeDecision.value:"",no_discussion:!!(noDiscussion&&noDiscussion.checked)};}
-      if(outcomeType)outcomeType.onchange=captureOutcome;if(outcomeDecision)outcomeDecision.oninput=captureOutcome;if(noDiscussion)noDiscussion.onchange=captureOutcome;
+      root.querySelectorAll("[data-resolve]").forEach(function(b){b.onclick=function(){focusRequirement(b.dataset.resolve);};});
+      bind("#rv-save-finish-reason",function(){var input=root.querySelector("#rv-no-discussion-reason"),value=String(input?input.value:"").trim();if(!value){if(input)input.focus();toast("Add a concise reason");return;}S.noDiscussionDrafts[S.selected]=value;S.finishReasonOpen=false;render();toast("No-discussion reason ready for the review receipt");});
+      var finishReason=root.querySelector("#rv-no-discussion-reason");if(finishReason)finishReason.oninput=function(){S.noDiscussionDrafts[S.selected]=finishReason.value;};
       bind("#rv-continue-slack", function(){S.threadOperation="continue";startSlack();});
       bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
       bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";S.mentionPreview=null;render();});
@@ -798,6 +793,7 @@
         if (ig) ig.onclick = function () { decideSuggestionGroup(card, "rejected", {}); };
       });
       root.querySelectorAll("[data-sugg-expand]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=String(S.expandedSuggestion)===String(b.dataset.suggExpand)?"":b.dataset.suggExpand;render();var active=root.querySelector('[data-sugg-expand="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
+      bind("#rv-more-suggestions",function(){S.showAllSuggestions=!S.showAllSuggestions;render();var heading=root.querySelector("#rv-actions-section .rv-action-heading");if(heading&&heading.focus)heading.focus({preventScroll:true});});
       root.querySelectorAll("[data-backlog-view]").forEach(function(b){b.onclick=function(){S.backlogView=b.dataset.backlogView||"open";render();};});
       root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
       root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
@@ -1084,20 +1080,20 @@
       }).catch(function () {});
     }
     function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }
+    function focusRequirement(key){
+      var selector=key==="treatment"?"#rv-treatment":key==="discussion"?"#rv-discussion-section":key==="suggestions"?"#rv-actions-section .rv-action-heading":"#rv-actions-section .rv-work-requirement";
+      if(key==="discussion"&&!(S.weekly[S.selected]||{}).slack_post_ts){S.finishReasonOpen=true;render();var reason=root.querySelector("#rv-no-discussion-reason");if(reason){reason.focus({preventScroll:true});reason.scrollIntoView({block:"center",behavior:"smooth"});}return;}
+      var target=root.querySelector(selector);if(target){if(target.focus)target.focus({preventScroll:true});target.scrollIntoView({block:"center",behavior:"smooth"});}
+    }
     function finishReview() {
       var q = S.byId[S.selected], t = treatmentFor(q.ce_id);
       if (t === "not_scheduled") { root.querySelector("#rv-treatment").focus(); toast("Choose how you’ll review this CE"); return; }
       if (!ensureAuthor() || !api) return;
-      var blockers=completionBlockers(q);if(blockers.length){toast("Required: "+blockers[0]);return;}
-      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.outcomes[q.ce_id]||{}).decision || "" })
+      var blockers=completionBlockers(q);if(blockers.length){focusRequirement(blockers[0].key);toast(blockers[0].label);return;}
+      var weekly=S.weekly[q.ce_id]||{},summary="";try{if(String(weekly.summary_status)==="approved"){var parsed=JSON.parse(weekly.summary_approved_json||weekly.summary_json||"{}");summary=[].concat(parsed.findings||[],parsed.decisions||[]).map(function(x){return typeof x==="string"?x:(x.text||x.body||"");}).filter(Boolean).join(" · ");}}catch(e){}
+      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: summary, no_discussion_reason:String(S.noDiscussionDrafts[q.ce_id]||"").trim() })
         .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; track("review_completed",{ce_id:q.ce_id,idempotency_key:"review_completed:"+S.market_slug+":"+S.week_start+":"+q.ce_id});toast("CE review finished"); render(); })
         .catch(function () { toast("Could not save review receipt"); });
-    }
-    function saveOutcome(){
-      if(!ensureAuthor()||!api||S.asyncBusy.outcome)return;var q=S.byId[S.selected],kind=(root.querySelector("#rv-outcome-type")||{}).value||"",decision=(root.querySelector("#rv-outcome-decision")||{}).value||"";
-      if(!kind){toast("Choose an outcome type");return;}if(!decision.trim()){toast("Record the BGM decision");return;}
-      S.asyncBusy.outcome=true;var btn=root.querySelector("#rv-save-outcome");if(btn){btn.disabled=true;btn.textContent="Saving…";}
-      api.saveOutcome(Object.assign({},ident(S.selected),{outcome_type:kind,decision:decision.trim(),no_discussion:!!((root.querySelector("#rv-no-discussion")||{}).checked),approved_by:author()})).then(function(res){S.outcomes[q.ce_id]=res.outcome;delete S.outcomeDrafts[q.ce_id];track("outcome_approved",{ce_id:q.ce_id,value_number:decision.trim().length,value_text:kind});toast("Outcome approved");render();}).catch(function(e){toast((e&&e.message)||"Outcome save failed · draft kept locally");}).finally(function(){S.asyncBusy.outcome=false;});
     }
     function nextCe() {
       var open = S.queue.filter(function (x) { return !reviewedFor(x.ce_id) && String(x.ce_id) !== String(S.selected); });
