@@ -40,12 +40,20 @@ var REVIEW_TABLES = {
     sheet: "review_work_items",
     headers: ["work_id","market_slug","ce_id","ce_name","origin_week","kind","text",
       "owner","status","due_date","source_type","source_ref","source_url",
-      "created_at","updated_at","closed_at","deleted_at","deleted_by"]
+      "created_at","updated_at","closed_at","deleted_at","deleted_by",
+      "requester_id","owner_id","next_review_date","latest_update","expected_effect",
+      "completion_evidence","measured_outcome","approval_state","approved_by","approved_at",
+      "idempotency_key","duplicate_of","parent_work_id","carry_forward","archived_at"]
   },
   receipts: {
     sheet: "review_receipts",
     headers: ["receipt_id","market_slug","ce_id","ce_name","week_start","treatment",
       "reviewer","reviewed_at","next_review_date","summary","open_work_count"]
+  },
+  outcomes: {
+    sheet: "review_outcomes",
+    headers: ["outcome_id","market_slug","ce_id","ce_name","week_start","outcome_type",
+      "decision","no_discussion","approved_by","approved_at","created_at","updated_at"]
   },
   review_set: {
     sheet: "review_set",
@@ -313,7 +321,7 @@ function reviewTrustedAuthor(p,fallback) {
 
 function reviewMutationGate(action,p){
   var mutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_set_upsert","review_source_reconcile",
+    "review_receipt_upsert","review_outcome_upsert","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
     "review_granola_link_submit",
     "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync"];
@@ -516,13 +524,13 @@ function reviewWorkUpsert(p) {
   if (err) return err;
   if (["action","check"].indexOf(p.kind) < 0) return jsonResp({ok:false,error:"kind must be action or check"});
   var statuses=["needs_action","in_progress","awaiting_reply","already_actioned","self_recovering",
-    "monitoring","scheduled","no_action_needed","complete","cancelled"];
+    "monitoring","scheduled","blocked","stale","dismissed","no_action_needed","complete","cancelled"];
   if(statuses.indexOf(p.status)<0)return jsonResp({ok:false,error:"unsupported work status"});
   var existing = p.work_id ? reviewFind("work", function(r){ return r.work_id === p.work_id; }) : null;
   if (p.work_id && !existing) return jsonResp({ok:false,error:"work item not found"});
   if (existing && (existing.market_slug !== p.market_slug || String(existing.ce_id) !== String(p.ce_id)))
     return jsonResp({ok:false,error:"work identity is immutable"});
-  var now = reviewNow(), closed = ["complete","cancelled","no_action_needed"].indexOf(p.status) >= 0;
+  var now = reviewNow(), closed = ["complete","cancelled","dismissed","no_action_needed"].indexOf(p.status) >= 0;
   var rec = {
     work_id:existing ? existing.work_id : reviewId("wrk"), market_slug:p.market_slug,
     ce_id:String(p.ce_id), ce_name:p.ce_name || (existing && existing.ce_name) || "",
@@ -532,10 +540,28 @@ function reviewWorkUpsert(p) {
     source_type:p.source_type || "manual", source_ref:p.source_ref || "",
     source_url:p.source_url || "", created_at:(existing && existing.created_at) || now,
     updated_at:now, closed_at:closed ? ((existing && existing.closed_at) || now) : "",
-    deleted_at:(existing && existing.deleted_at) || "", deleted_by:(existing && existing.deleted_by) || ""
+    deleted_at:(existing && existing.deleted_at) || "", deleted_by:(existing && existing.deleted_by) || "",
+    requester_id:p.requester_id||(existing&&existing.requester_id)||"",owner_id:p.owner_id||(existing&&existing.owner_id)||"",
+    next_review_date:ymd(p.next_review_date||(existing&&existing.next_review_date)||""),latest_update:p.latest_update||(existing&&existing.latest_update)||"",
+    expected_effect:p.expected_effect||(existing&&existing.expected_effect)||"",completion_evidence:p.completion_evidence||(existing&&existing.completion_evidence)||"",
+    measured_outcome:p.measured_outcome||(existing&&existing.measured_outcome)||"",approval_state:p.approval_state||(existing&&existing.approval_state)||"approved",
+    approved_by:p.approved_by||(existing&&existing.approved_by)||reviewTrustedAuthor(p,""),approved_at:(existing&&existing.approved_at)||now,
+    idempotency_key:p.idempotency_key||(existing&&existing.idempotency_key)||"",duplicate_of:p.duplicate_of||(existing&&existing.duplicate_of)||"",
+    parent_work_id:p.parent_work_id||(existing&&existing.parent_work_id)||"",carry_forward:String(reviewBool(p.carry_forward||(existing&&existing.carry_forward))),
+    archived_at:p.archived_at||(existing&&existing.archived_at)||""
   };
   reviewWrite("work", existing, rec);
   return jsonResp({ok:true, work_item:rec});
+}
+
+function reviewOutcomeUpsert(p){
+  var err=reviewRequired(p,["market_slug","ce_id","week_start","outcome_type","decision","approved_by"]);if(err)return err;
+  var existing=reviewFind("outcomes",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start);});
+  var now=reviewNow(),rec={outcome_id:(existing&&existing.outcome_id)||reviewId("out"),market_slug:p.market_slug,
+    ce_id:String(p.ce_id),ce_name:p.ce_name||(existing&&existing.ce_name)||"",week_start:ymd(p.week_start),
+    outcome_type:String(p.outcome_type),decision:String(p.decision),no_discussion:String(reviewBool(p.no_discussion)),
+    approved_by:reviewTrustedAuthor(p,p.approved_by),approved_at:now,created_at:(existing&&existing.created_at)||now,updated_at:now};
+  reviewWrite("outcomes",existing,rec);return jsonResp({ok:true,outcome:rec});
 }
 
 function reviewWorkDelete(p) {
@@ -552,6 +578,16 @@ function reviewWorkDelete(p) {
 function reviewReceiptUpsert(p) {
   var err = reviewRequired(p, ["market_slug","ce_id","week_start","treatment","reviewer"]);
   if (err) return err;
+  if(p.treatment==="not_scheduled")return jsonResp({ok:false,error:"review treatment is required"});
+  var outcome=reviewFind("outcomes",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start);});
+  if(!outcome||!outcome.approved_at)return jsonResp({ok:false,error:"approved CE outcome is required"});
+  var weekly=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
+  if(!(weekly&&weekly.slack_post_ts)&&!reviewBool(outcome.no_discussion))return jsonResp({ok:false,error:"Slack discussion or explicit no-discussion outcome is required"});
+  var pending=reviewFilter(reviewRows("suggestions"),{market_slug:p.market_slug,ce_id:String(p.ce_id),week_start:ymd(p.week_start)}).filter(function(r){return !r.status||r.status==="pending";});
+  if(pending.length)return jsonResp({ok:false,error:"pending suggestions must be triaged before completion"});
+  var unresolved=reviewFilter(reviewRows("work"),{market_slug:p.market_slug,ce_id:String(p.ce_id)}).filter(function(r){return !r.deleted_at&&!r.closed_at;});
+  var unmanaged=unresolved.filter(function(r){return !(reviewBool(r.carry_forward)||(r.owner&&(r.due_date||r.next_review_date))||(r.kind==="check"&&(r.due_date||r.next_review_date)));});
+  if(unmanaged.length)return jsonResp({ok:false,error:"unresolved work needs an owner/date or explicit carry-forward"});
   var existing = reviewFind("receipts", function(r){
     return r.market_slug === p.market_slug && String(r.ce_id) === String(p.ce_id) &&
       ymd(r.week_start) === ymd(p.week_start);
@@ -561,8 +597,8 @@ function reviewReceiptUpsert(p) {
     receipt_id:(existing && existing.receipt_id) || reviewId("rcp"), market_slug:p.market_slug,
     ce_id:String(p.ce_id), ce_name:p.ce_name || (existing && existing.ce_name) || "",
     week_start:ymd(p.week_start), treatment:p.treatment, reviewer:p.reviewer,
-    reviewed_at:now, next_review_date:ymd(p.next_review_date || ""), summary:p.summary || "",
-    open_work_count:String(p.open_work_count || "0")
+    reviewed_at:now, next_review_date:ymd(p.next_review_date || ""),
+    summary:p.summary||outcome.decision||"",open_work_count:String(unresolved.length)
   };
   reviewWrite("receipts", existing, rec);
   return jsonResp({ok:true, receipt:rec});
@@ -777,7 +813,7 @@ function doGet(e) {
   // from the legacy diagnostic Apps Script, whose GET action contract remains
   // unchanged in apps_script.js.
   var getMutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_set_upsert","review_source_reconcile","review_suggestion_decide",
+    "review_receipt_upsert","review_outcome_upsert","review_set_upsert","review_source_reconcile","review_suggestion_decide",
     "review_granola_link_submit","review_weekly_note_upsert","review_weekly_note_delete",
     "review_weekly_slack_post","review_weekly_sync","review_slack_post","review_slack_scan"];
   if(getMutations.indexOf(action)>=0)return jsonResp({ok:false,error:action+" requires POST"});
@@ -797,6 +833,9 @@ function doGet(e) {
   if (action === "review_receipt_list") {
     var receiptPage=reviewPage(reviewFilter(reviewRows("receipts"),p),p,"reviewed_at",52);
     return jsonResp({ok:true,receipts:receiptPage.items,next_before:receiptPage.next_before});
+  }
+  if(action==="review_outcome_list"){
+    return jsonResp({ok:true,outcomes:reviewFilter(reviewRows("outcomes"),p).sort(function(a,b){return String(b.updated_at||"").localeCompare(String(a.updated_at||""));})});
   }
   if (action === "review_set_list") {
     var setRows = reviewFilter(reviewRows("review_set"), p);
@@ -858,6 +897,7 @@ function doPost(e) {
   if (action === "review_work_upsert") return reviewWorkUpsert(payload);
   if (action === "review_work_delete") return reviewWorkDelete(payload);
   if (action === "review_receipt_upsert") return reviewReceiptUpsert(payload);
+  if (action === "review_outcome_upsert") return reviewOutcomeUpsert(payload);
   if (action === "review_set_upsert") return reviewSetUpsert(payload);
   if (action === "review_source_reconcile") return reviewSourceReconcile(payload);
   if (action === "review_weekly_note_upsert") return reviewWeeklyNoteUpsert(payload);

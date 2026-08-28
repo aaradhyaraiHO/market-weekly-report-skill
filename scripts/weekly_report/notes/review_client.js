@@ -74,6 +74,8 @@
       },
       finishReview: function(receipt) { return post("review_receipt_upsert", receipt); },
       receipts: function(identity) { return request("review_receipt_list", identity); },
+      outcomes: function(identity) { return request("review_outcome_list", identity); },
+      saveOutcome: function(outcome) { return post("review_outcome_upsert", outcome); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
       saveReviewSetItem: function(item) { return post("review_set_upsert", item); },
       memory: function(identity, refresh) { return request("review_memory", identity, {refresh: !!refresh, ttl: 300000}); },

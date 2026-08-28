@@ -22,13 +22,14 @@
   var WORK_STATUS = [
     ["needs_action", "Needs action"], ["already_actioned", "Already actioned"],
     ["self_recovering", "Self-recovering"], ["monitoring", "Monitoring"],
-    ["no_action_needed", "No action needed"], ["complete", "Complete"]
+    ["blocked", "Blocked"], ["stale", "Stale"], ["no_action_needed", "No action needed"],
+    ["complete", "Complete"], ["dismissed", "Archived / dismissed"]
   ];
   var CHECK_STATUS = [
     ["scheduled", "Scheduled"], ["monitoring", "Monitoring"],
     ["self_recovering", "Self-recovering"], ["complete", "Complete"]
   ];
-  var CLOSED = ["complete", "cancelled", "no_action_needed"];
+  var CLOSED = ["complete", "cancelled", "dismissed", "no_action_needed"];
   var MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   // Primary posting routes mirror alert/market_channels.json. Alternate market
   // channels remain read/mention sources; one discussion must have one stable home.
@@ -58,12 +59,12 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
+      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
       threadOperation: "", newThreadReason: "",
-      drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
+      drafts: {}, outcomeDrafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
     // Review mutations are BGM-only.  The server already has the authenticated
@@ -277,7 +278,8 @@
       var call=Promise.all([
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
         api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
-        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; })
+        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; }),
+        api.outcomes({ market_slug:S.market_slug,ce_id:ceId,week:S.week_start }).catch(function(){return {outcomes:[]};})
       ]).then(function (res) {
         if(S.ceRequestSeq[ceId]!==seq)return;
         var rows = res[0].weekly || [];
@@ -285,6 +287,7 @@
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
+        S.outcomes[ceId] = (res[3].outcomes || [])[0] || null;
         S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
@@ -396,13 +399,14 @@
       var q = S.byId[S.selected];
       if (!q) return '<main class="rv-main"><div class="rv-workspace"><div class="rv-empty-state"><strong>Nothing to review</strong>' +
         "<span>No CE is flagged this week. Use ＋ Add CE to pull one in.</span></div></div></main>";
-      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id);
+      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id), blockers=completionBlockers(q);
       var receipt = reviewed
         ? '<span class="rv-receipt done">✓ Reviewed by ' + esc((S.receipts[q.ce_id] || {}).reviewer || author() || "BGM") + "</span>"
-        : t !== "not_scheduled" ? '<span class="rv-receipt">Ready to finish</span>'
+        : !blockers.length ? '<span class="rv-receipt">Ready to finish</span>'
           : '<span class="rv-receipt">Choose how you’ll review this CE</span>';
       var footHint = reviewed ? "Review saved — open work carries into next week"
-        : t === "not_scheduled" ? "Required: choose a review treatment before finishing" : "Ready to finish — treatment selected and work saved";
+        : t === "not_scheduled" ? "Required: choose a review treatment before finishing"
+          : blockers.length ? "Required: "+blockers[0] : "Ready to finish — outcome approved and work handled";
       return '<main class="rv-main">' +
         '<div class="rv-mobile-current"><span><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+' · '+esc(TREATMENT_LABELS[t]||t)+'</small></span><button class="rv-btn" type="button" id="rv-browse-ces">Browse/search CEs</button></div>'+
         '<header class="rv-detail-head"><div class="rv-breadcrumb"><button class="rv-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + "</button> · " + esc(S.market) + "</div>" +
@@ -413,13 +417,28 @@
         '<select class="rv-select" id="rv-treatment" aria-label="Review treatment">' +
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
         "</select>" + receipt + "</div></header>" +
-        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
+        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderOutcomeCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
         '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
         '<footer class="rv-footer"><span class="rv-foot-hint '+(reviewed?'finished':(t==='not_scheduled'?'blocked':'ready'))+'">' + esc(footHint) + "</span>" + (t==='not_scheduled'?'<label class="rv-footer-treatment"><span>Choose review treatment</span><select class="rv-select" id="rv-footer-treatment">'+TREATMENT_ORDER.map(function(v){return '<option value="'+v+'"'+(v===t?' selected':'')+'>'+esc(TREATMENT_LABELS[v])+'</option>';}).join('')+'</select></label>':'') + renderGranolaDock() +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next unreviewed →</button>' +
-        '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
+        '<button class="rv-btn primary" type="button" id="rv-finish"' + (blockers.length || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
+    }
+
+    function completionBlockers(q){
+      var blockers=[],outcome=S.outcomes[q.ce_id],weekly=S.weekly[q.ce_id]||{},pending=(S.suggestions[q.ce_id]||[]).filter(function(s){return !s.status||s.status==="pending";});
+      if(treatmentFor(q.ce_id)==="not_scheduled")blockers.push("choose a review treatment before finishing");
+      if(!outcome||!outcome.approved_at)blockers.push("approve a CE outcome");
+      if(outcome&&!weekly.slack_post_ts&&String(outcome.no_discussion)!=="true")blockers.push("start Slack or explicitly choose no discussion");
+      if(pending.length)blockers.push("triage "+pending.length+" pending suggestion"+(pending.length===1?"":"s"));
+      var unmanaged=openWorkFor(q.ce_id).filter(function(w){return !(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(w.kind==="check"&&(w.due_date||w.next_review_date)));});
+      if(unmanaged.length)blockers.push("assign/date or carry forward "+unmanaged.length+" open item"+(unmanaged.length===1?"":"s"));
+      return blockers;
+    }
+    function renderOutcomeCard(q){
+      var saved=S.outcomes[q.ce_id]||{},draft=S.outcomeDrafts[q.ce_id]||{},kind=draft.outcome_type||saved.outcome_type||"",decision=Object.prototype.hasOwnProperty.call(draft,"decision")?draft.decision:(saved.decision||""),noDiscussion=Object.prototype.hasOwnProperty.call(draft,"no_discussion")?draft.no_discussion:String(saved.no_discussion)==="true";
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span><div class="rv-card-headings"><div class="rv-card-title">Current outcome</div><div class="rv-card-sub">BGM-approved CE/week decision. A note is optional.</div></div></div><div class="rv-card-body"><div class="rv-outcome-grid"><label>Outcome type<select class="rv-select" id="rv-outcome-type"><option value="">Choose outcome</option>'+[["action_required","Action required"],["no_action_needed","No action needed"],["discussion_only","Discussion only"],["monitoring","Monitor / check later"],["other","Other decision"]].map(function(o){return '<option value="'+o[0]+'"'+(kind===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("")+'</select></label><label>Decision / outcome<textarea id="rv-outcome-decision" placeholder="What did the BGM decide?">'+esc(decision)+'</textarea></label><label class="rv-checkline"><input id="rv-no-discussion" type="checkbox"'+(noDiscussion?' checked':'')+'> No Slack discussion required for this outcome</label><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-save-outcome">'+(saved.approved_at?'Update approved outcome':'Approve outcome')+'</button></div></div></div></section>';
     }
 
     function roleMeta(role) {
@@ -609,7 +628,7 @@
         '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
       var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span>' +
+      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">3</span>' +
         '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
         '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
         '<span class="rv-card-count">' + count + "</span></div>" +
@@ -646,6 +665,7 @@
         '<div class="rv-work-edit-grid"><input type="text" data-edit-owner value="' + esc(w.owner || "") + '" placeholder="Owner' + (isCheck ? " (optional)" : "") + '">' +
         '<input type="date" data-edit-due value="' + esc(w.due_date || "") + '">' +
         '<select class="rv-select" data-edit-status>' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<label class="rv-checkline"><input type="checkbox" data-edit-carry'+(String(w.carry_forward)==="true"?' checked':'')+'> Explicitly carry this unresolved item into the next review</label>'+
         '<div class="rv-work-edit-actions"><button class="rv-btn small" type="button" data-work-edit-cancel>Cancel</button>' +
         '<button class="rv-btn small primary" type="button" data-work-edit-save="' + esc(w.work_id) + '">Save changes</button></div></div></div>';
     }
@@ -721,6 +741,10 @@
       root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
       root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
+      bind("#rv-save-outcome", saveOutcome);
+      var outcomeType=root.querySelector("#rv-outcome-type"),outcomeDecision=root.querySelector("#rv-outcome-decision"),noDiscussion=root.querySelector("#rv-no-discussion");
+      function captureOutcome(){S.outcomeDrafts[S.selected]={outcome_type:outcomeType?outcomeType.value:"",decision:outcomeDecision?outcomeDecision.value:"",no_discussion:!!(noDiscussion&&noDiscussion.checked)};}
+      if(outcomeType)outcomeType.onchange=captureOutcome;if(outcomeDecision)outcomeDecision.oninput=captureOutcome;if(noDiscussion)noDiscussion.onchange=captureOutcome;
       bind("#rv-continue-slack", function(){S.threadOperation="continue";startSlack();});
       bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
       bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";S.mentionPreview=null;render();});
@@ -997,13 +1021,14 @@
       var owner = (row.querySelector("[data-edit-owner]") || {}).value || "";
       var due = (row.querySelector("[data-edit-due]") || {}).value || "";
       var status = (row.querySelector("[data-edit-status]") || {}).value || w.status;
+      var carry=!!((row.querySelector("[data-edit-carry]")||{}).checked);
       if (!text.trim()) { row.querySelector("[data-edit-text]").focus(); toast("Describe the work item first"); return; }
       if (w.kind === "action" && status === "needs_action" && !owner.trim()) { row.querySelector("[data-edit-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (w.kind === "check" && !due) { row.querySelector("[data-edit-due]").focus(); toast("Choose the next review date"); return; }
       S.editingWork = null;
       saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week,
         kind: w.kind, text: text.trim(), owner: owner.trim(), due_date: due, status: status,
-        source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
+        carry_forward:carry,source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
     }
     function deleteWork(workId) {
       if (!ensureAuthor() || !api) return;
@@ -1024,9 +1049,16 @@
       var q = S.byId[S.selected], t = treatmentFor(q.ce_id);
       if (t === "not_scheduled") { root.querySelector("#rv-treatment").focus(); toast("Choose how you’ll review this CE"); return; }
       if (!ensureAuthor() || !api) return;
-      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.weekly[q.ce_id] && S.weekly[q.ce_id].bgm_note) || "" })
+      var blockers=completionBlockers(q);if(blockers.length){toast("Required: "+blockers[0]);return;}
+      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.outcomes[q.ce_id]||{}).decision || "" })
         .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; toast("CE review finished"); render(); })
         .catch(function () { toast("Could not save review receipt"); });
+    }
+    function saveOutcome(){
+      if(!ensureAuthor()||!api||S.asyncBusy.outcome)return;var q=S.byId[S.selected],kind=(root.querySelector("#rv-outcome-type")||{}).value||"",decision=(root.querySelector("#rv-outcome-decision")||{}).value||"";
+      if(!kind){toast("Choose an outcome type");return;}if(!decision.trim()){toast("Record the BGM decision");return;}
+      S.asyncBusy.outcome=true;var btn=root.querySelector("#rv-save-outcome");if(btn){btn.disabled=true;btn.textContent="Saving…";}
+      api.saveOutcome(Object.assign({},ident(S.selected),{outcome_type:kind,decision:decision.trim(),no_discussion:!!((root.querySelector("#rv-no-discussion")||{}).checked),approved_by:author()})).then(function(res){S.outcomes[q.ce_id]=res.outcome;delete S.outcomeDrafts[q.ce_id];toast("Outcome approved");render();}).catch(function(e){toast((e&&e.message)||"Outcome save failed · draft kept locally");}).finally(function(){S.asyncBusy.outcome=false;});
     }
     function nextCe() {
       var open = S.queue.filter(function (x) { return !reviewedFor(x.ce_id) && String(x.ce_id) !== String(S.selected); });

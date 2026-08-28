@@ -164,6 +164,31 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("if(existing&&!existing.binding_id)", lifecycle)
         self.assertIn("slack_threads:threads.slice(0,25)", self.backend)
 
+    def test_outcome_and_completion_are_additive_and_server_enforced(self):
+        self.assertIn('sheet: "review_outcomes"', self.backend)
+        for field in ("outcome_id", "outcome_type", "decision", "no_discussion", "approved_by", "approved_at"):
+            self.assertIn(f'"{field}"', self.backend)
+        receipt = self.backend.split("function reviewReceiptUpsert(p)", 1)[1].split(
+            "function reviewSetUpsert", 1
+        )[0]
+        for message in (
+            "review treatment is required", "approved CE outcome is required",
+            "Slack discussion or explicit no-discussion outcome is required",
+            "pending suggestions must be triaged before completion",
+            "unresolved work needs an owner/date or explicit carry-forward",
+        ):
+            self.assertIn(message, receipt)
+        self.assertIn('"review_outcome_list"', self.client)
+        self.assertIn('post("review_outcome_upsert"', self.client)
+
+    def test_work_contract_adds_carry_forward_and_measured_outcome_fields(self):
+        for field in (
+            "next_review_date", "latest_update", "expected_effect", "completion_evidence",
+            "measured_outcome", "approval_state", "idempotency_key", "duplicate_of",
+            "parent_work_id", "carry_forward", "archived_at",
+        ):
+            self.assertIn(f'"{field}"', self.backend)
+
     def test_weekly_slack_sync_aggregates_and_fails_closed(self):
         self.assertIn('mode:"weekly_thread_summary"', self.backend)
         self.assertIn('rec.sync_status="summary_delayed"', self.backend)

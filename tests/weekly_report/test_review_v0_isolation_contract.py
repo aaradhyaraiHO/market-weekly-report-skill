@@ -291,6 +291,18 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn('renderRoleNote(weekly,"performance")', card)
         self.assertIn('renderRoleNote(weekly,"bdm")', card)
 
+    def test_outcome_completion_has_exact_local_and_server_backed_requirements(self):
+        for fragment in (
+            "function completionBlockers(q)", "function renderOutcomeCard(q)",
+            'id="rv-outcome-type"', 'id="rv-outcome-decision"',
+            'id="rv-no-discussion"', 'id="rv-save-outcome"',
+            "approve a CE outcome", "triage ", "explicitly choose no discussion",
+            "assign/date or carry forward", "api.saveOutcome",
+        ):
+            self.assertIn(fragment, self.view)
+        self.assertIn("outcomeDrafts", self.view)
+        self.assertNotIn("bgm_note) blockers.push", self.view)
+
     def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
         self.assertIn("function dedupeSuggestions(rows)", self.view)
         self.assertIn("normalizedSuggestionBody", self.view)
