@@ -281,6 +281,16 @@ class ReviewV0UiContract(unittest.TestCase):
         ):
             self.assertIn(fragment, self.view)
 
+    def test_slack_is_primary_and_compatibility_notes_remain_separate(self):
+        card = self.view.split("function renderCommentaryCard(q)", 1)[1].split(
+            "function normalizedSuggestionBody", 1
+        )[0]
+        self.assertIn("Slack discussion &amp; outcome context", card)
+        self.assertIn("Optional Review observations", card)
+        self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
+        self.assertIn('renderRoleNote(weekly,"performance")', card)
+        self.assertIn('renderRoleNote(weekly,"bdm")', card)
+
     def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
         self.assertIn("function dedupeSuggestions(rows)", self.view)
         self.assertIn("normalizedSuggestionBody", self.view)
