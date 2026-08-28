@@ -61,9 +61,9 @@
       queue: [], byId: {}, selected: null, loaded: false,
       receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      threadOperation: "", newThreadReason: "",
+      threadOperation: "", newThreadReason: "", backlogView: "open",
       drafts: {}, outcomeDrafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
@@ -220,7 +220,9 @@
         return (!needle || haystack.indexOf(needle) >= 0) &&
           (S.queueFilter === "all" || state === S.queueFilter) &&
           (!S.queueReason || String(q.reason || "") === S.queueReason) &&
-          (!S.queueCategory || String(meta.category || "") === S.queueCategory);
+          (!S.queueCategory || String(meta.category || "") === S.queueCategory) &&
+          (!S.queueOwner || String(meta.owner || meta.bgm_owner || "") === S.queueOwner) &&
+          (!S.queueTaskForce || String(meta.task_force || "") === S.queueTaskForce);
       });
     }
 
@@ -325,6 +327,8 @@
       var counts={all:total,needs_review:0,in_progress:0,reviewed:0};S.queue.forEach(function(q){counts[queueState(q)]++;});
       var reasons=Array.from(new Set(S.queue.map(function(q){return String(q.reason||"");}).filter(Boolean))).sort();
       var categories=Array.from(new Set(S.queue.map(function(q){return String(ceMeta(q.ce_id).category||"");}).filter(Boolean))).sort();
+      var owners=Array.from(new Set(S.queue.map(function(q){var m=ceMeta(q.ce_id);return String(m.owner||m.bgm_owner||"");}).filter(Boolean))).sort();
+      var taskForces=Array.from(new Set(S.queue.map(function(q){return String(ceMeta(q.ce_id).task_force||"");}).filter(Boolean))).sort();
       var rows = visibleQueue.length ? renderQueueGroups(visibleQueue) :
         (needle?'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>':
         '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>');
@@ -340,7 +344,9 @@
         '<div class="rv-queue-filters" role="group" aria-label="Filter review status">'+
         [['all','All'],['needs_review','Needs review'],['in_progress','In progress'],['reviewed','Reviewed']].map(function(f){return '<button type="button" class="rv-filter-chip'+(S.queueFilter===f[0]?' active':'')+'" data-queue-filter="'+f[0]+'">'+f[1]+' <span>'+counts[f[0]]+'</span></button>';}).join('')+'</div>'+
         '<div class="rv-queue-selects"><select id="rv-reason-filter" aria-label="Filter by review reason"><option value="">All reasons</option>'+reasons.map(function(v){return '<option'+(S.queueReason===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'+
-        '<select id="rv-category-filter" aria-label="Filter by category"><option value="">All categories</option>'+categories.map(function(v){return '<option'+(S.queueCategory===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
+        '<select id="rv-category-filter" aria-label="Filter by category"><option value="">All categories</option>'+categories.map(function(v){return '<option'+(S.queueCategory===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'+
+        (owners.length?'<select id="rv-owner-filter" aria-label="Filter by owner"><option value="">All owners</option>'+owners.map(function(v){return '<option'+(S.queueOwner===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>':'')+
+        (taskForces.length?'<select id="rv-task-force-filter" aria-label="Filter by task force"><option value="">All task forces</option>'+taskForces.map(function(v){return '<option'+(S.queueTaskForce===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>':'')+'</div>'+
         '<div class="rv-queue-label">Review queue</div>' + picker +
         '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div></aside>";
     }
@@ -377,6 +383,7 @@
     }
     function renderPicker() {
       return '<div class="rv-picker" id="rv-picker"><input id="rv-picker-input" type="search" placeholder="Add a CE to this week’s review…" value="' + esc(S.pickerQuery || "") + '">' +
+        '<input id="rv-nomination-reason" type="text" placeholder="Nomination reason (required)" value="'+esc(S.nominationReason||"")+'">'+
         '<div class="rv-picker-results" id="rv-picker-results">' + renderPickerResults() + "</div></div>";
     }
     function renderPickerResults() {
@@ -605,11 +612,12 @@
     function renderActionsCard(q) {
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
       var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
-      var allWork = workFor(q.ce_id);
-      var openItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) < 0; });
-      var doneItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) >= 0; });
+      var allWork = workFor(q.ce_id),today=new Date().toISOString().slice(0,10),view=S.backlogView||"open";
+      var openAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)<0&&!w.archived_at;}),doneAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)>=0&&!w.archived_at;});
+      var openItems=view==="mine"?openAll.filter(function(w){return author()&&String(w.owner||w.owner_id||"").toLowerCase()===author().toLowerCase();}):view==="blocked_overdue"?openAll.filter(function(w){return w.status==="blocked"||(w.due_date&&w.due_date<today);}):view==="stale"?openAll.filter(function(w){return w.status==="stale";}):view==="recently_completed"?doneAll:view==="archived"?allWork.filter(function(w){return w.archived_at||w.status==="dismissed";}):openAll;
+      var doneItems=view==="open"?doneAll:[];
       var openN = openItems.length;
-      var suggHtml = pending.map(function (s) {
+      var suggHtml = (view==="needs_approval"||view==="open"?pending:[]).map(function (s) {
         var isCheck = s.kind === "check", expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(s.kind) + '">' +
           '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isCheck?'Suggested check':'Suggested action')+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
@@ -624,15 +632,16 @@
       var openHtml = openItems.map(workRow).join("");
       var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
         '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
-      var emptyState = (openItems.length || pending.length || S.compose) ? "" :
+      var emptyState = (openItems.length || suggHtml || S.compose) ? "" :
         '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
       var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
+      var backlogTabs=[["needs_approval","Needs approval",pending.length],["open","Open",openAll.length],["mine","Mine",allWork.filter(function(w){return author()&&String(w.owner||w.owner_id||"").toLowerCase()===author().toLowerCase()&&!w.closed_at;}).length],["blocked_overdue","Blocked / overdue",allWork.filter(function(w){return !w.closed_at&&(w.status==="blocked"||(w.due_date&&w.due_date<today));}).length],["stale","Stale",allWork.filter(function(w){return !w.closed_at&&w.status==="stale";}).length],["recently_completed","Recently completed",doneAll.length],["archived","Archived",allWork.filter(function(w){return w.archived_at||w.status==="dismissed";}).length]];
       return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">3</span>' +
         '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
         '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
         '<span class="rv-card-count">' + count + "</span></div>" +
-        '<div class="rv-card-body">' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">Accepted / open <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + emptyState + doneHtml +
+        '<div class="rv-card-body"><div class="rv-backlog-tabs" role="tablist">'+backlogTabs.map(function(tab){return '<button type="button" class="rv-filter-chip'+(view===tab[0]?' active':'')+'" data-backlog-view="'+tab[0]+'">'+tab[1]+' <span>'+tab[2]+'</span></button>';}).join("")+'</div>' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">'+(view==="open"?'Accepted / open':backlogTabs.filter(function(t){return t[0]===view;})[0][1])+' <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + emptyState + doneHtml +
         composer +
         '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
         '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
@@ -721,6 +730,7 @@
       var search=root.querySelector("#rv-search-ce");
       if(search)search.oninput=function(){S.queueQuery=search.value;var clear=root.querySelector("#rv-clear-search");if(clear)clear.hidden=!String(S.queueQuery||"").trim();var panel=root.querySelector("#rv-queue-review");if(panel){var matches=visibleQueueRows();panel.innerHTML=matches.length?renderQueueGroups(matches):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Clear search or adjust the local filters.</span></div>';wire();}};
       bind("#rv-clear-search",function(){S.queueQuery="";render();var el=root.querySelector("#rv-search-ce");if(el)el.focus();});
+      [["#rv-owner-filter","queueOwner"],["#rv-task-force-filter","queueTaskForce"]].forEach(function(pair){var el=root.querySelector(pair[0]);if(el)el.onchange=function(){S[pair[1]]=el.value;render();};});
 
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
@@ -771,6 +781,7 @@
         if (ig) ig.onclick = function () { decideSuggestionGroup(card, "rejected", {}); };
       });
       root.querySelectorAll("[data-sugg-expand]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=String(S.expandedSuggestion)===String(b.dataset.suggExpand)?"":b.dataset.suggExpand;render();var active=root.querySelector('[data-sugg-expand="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
+      root.querySelectorAll("[data-backlog-view]").forEach(function(b){b.onclick=function(){S.backlogView=b.dataset.backlogView||"open";render();};});
       root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
       root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
       root.querySelectorAll("[data-comment-save]").forEach(function (b) { b.onclick = function () { saveImportedComment(b.dataset.commentSave); }; });
@@ -840,9 +851,12 @@
     }
     function addCe(ceId) {
       if (!api) return;
+      var reasonInput=root.querySelector("#rv-nomination-reason"),reason=String(reasonInput?reasonInput.value:S.nominationReason||"").trim();
+      if(!reason){if(reasonInput)reasonInput.focus();toast("Add a nomination reason first");return;}S.nominationReason=reason;
       var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(ceId); }) || { ce_id: ceId };
-      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", treatment: "not_scheduled", reason: "Added to review", source: "manual" })
-        .then(function () { S.adding = false; S.pickerQuery = ""; return loadQueue().then(function () { select(ceId); }); })
+      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", treatment: "not_scheduled", reason: reason, source: "nomination" })
+        .then(function () { return api.saveTimelineEvent({market_slug:S.market_slug,ce_id:String(ceId),ce_name:ce.ce_name||"",review_week:S.week_start,event_type:"nomination",approved_body:reason,approved_by:author()||"authenticated reviewer",idempotency_key:"nomination:"+S.week_start+":"+String(ceId)}); })
+        .then(function () { S.adding = false; S.pickerQuery = ""; S.nominationReason=""; return loadQueue().then(function () { select(ceId); }); })
         .then(function () { toast("CE added to this week’s review"); })
         .catch(function () { toast("Could not add CE"); });
     }
@@ -1086,7 +1100,7 @@
       // older aliases as a compatibility fallback, but prefer the canonical
       // names so CE Memory always contains the BGM note and Slack summary that
       // were just written in Review mode.
-      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [], threads=res.slack_threads||[];
+      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [], threads=res.slack_threads||[],timeline=res.timeline||[];
       var legacy = res.historical_comments || res.legacy_notes || res.legacyNotes || [], sourceStatus=res.historical_source_status||{};
       var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
@@ -1100,7 +1114,8 @@
           '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
       var threadHistory=threads.map(function(t){return '<article class="rv-week-card"><div class="rv-week-head">Slack discussion<span>'+esc(t.binding_status||"active")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(t.created_reason||"CE discussion")+'</div><p>'+(t.slack_permalink?'<a class="rv-source-link" href="'+esc(t.slack_permalink)+'" target="_blank" rel="noopener">Open source thread ↗</a>':'Permalink unavailable')+'</p><div class="rv-source-meta">'+[t.created_by?t.created_by:"",t.replacement_week?"w/c "+t.replacement_week:"",t.replaced_reason?"Replaced: "+t.replaced_reason:""].filter(Boolean).map(esc).join(" · ")+'</div></div></article>';}).join("");
-      var storyPanel = (story+threadHistory) || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
+      var timelinePanel=timeline.map(function(e){return '<article class="rv-week-card rv-timeline-event"><div class="rv-week-head">'+esc(String(e.event_type||"event").replace(/_/g," "))+'<span>'+esc(e.review_week||fmtWhen(e.occurred_at)||"")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(e.source_type||"Review")+(e.approval_state?' · '+esc(e.approval_state):'')+'</div><p>'+esc(e.approved_body||e.original_body||"—")+'</p><div class="rv-source-meta">'+[e.actor_name||"",e.related_work_id?"Work "+e.related_work_id:""].filter(Boolean).map(esc).join(" · ")+(e.source_url?' · <a class="rv-source-link" href="'+esc(e.source_url)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'</div></div></article>';}).join("");
+      var storyPanel = timelinePanel || (story+threadHistory) || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
       var legacyPanel = legacy.map(function (n) {
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start || "date unavailable") + "<span>" + esc(n.author_name || "author unavailable") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Historical CE comment · read-only</div><p>' + esc(n.body || "—") + "</p>" +

@@ -189,6 +189,48 @@ class ReviewBackendContract(unittest.TestCase):
         ):
             self.assertIn(f'"{field}"', self.backend)
 
+    def test_timeline_projection_is_stable_ce_scoped_and_history_is_read_only(self):
+        self.assertIn('sheet: "review_timeline_events"', self.backend)
+        for field in (
+            "event_id", "review_week", "event_type", "source_ref", "approval_state",
+            "related_review_id", "related_work_id", "supersedes_event_id", "idempotency_key",
+        ):
+            self.assertIn(f'"{field}"', self.backend)
+        timeline = self.backend.split("function reviewTimeline(p)", 1)[1].split(
+            "function reviewBacklog", 1
+        )[0]
+        self.assertIn("ce=String(p.ce_id)", timeline)
+        self.assertIn("candidate_created", timeline)
+        self.assertIn("slack_discussion", timeline)
+        self.assertIn("outcome_approved", timeline)
+        self.assertIn("work_completed", timeline)
+        self.assertIn("review_finished", timeline)
+        self.assertIn("read_only:true", timeline)
+        self.assertIn("performance_history", self.backend)
+        self.assertIn("historical_comment", self.backend)
+
+    def test_unified_backlog_views_do_not_infer_stale_threshold(self):
+        backlog = self.backend.split("function reviewBacklog(p)", 1)[1].split(
+            "function reviewWorkDelete", 1
+        )[0]
+        for view in (
+            "needs_approval", "open", "mine", "blocked_overdue", "stale",
+            "recently_completed", "archived",
+        ):
+            self.assertIn(view, backlog)
+        self.assertIn('r.status==="stale"', backlog)
+        self.assertNotIn("staleDays", backlog)
+        self.assertIn('"review_backlog"', self.client)
+
+    def test_nomination_and_metric_events_are_idempotent_human_approved_only(self):
+        event = self.backend.split("function reviewTimelineEventUpsert(p)", 1)[1].split(
+            "function reviewTimeline(p)", 1
+        )[0]
+        self.assertIn('"nomination","metric_outcome","completion_evidence"', event)
+        self.assertIn("idempotency_key", event)
+        self.assertIn('approval_state:"approved"', event)
+        self.assertNotIn("reviewSlackPost", event)
+
     def test_weekly_slack_sync_aggregates_and_fails_closed(self):
         self.assertIn('mode:"weekly_thread_summary"', self.backend)
         self.assertIn('rec.sync_status="summary_delayed"', self.backend)

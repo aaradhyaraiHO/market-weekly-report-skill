@@ -43,6 +43,7 @@
 #review-view .rv-new-thread-choice input{width:100%;min-height:40px;margin-top:6px;padding:9px 11px;border:1px solid var(--rv-g400);border-radius:9px;background:#fff}#review-view .rv-new-thread-choice .rv-note-actions{margin-top:8px}
 #review-view .rv-optional-notes{display:grid;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--rv-g200)}#review-view .rv-section-label{color:var(--rv-muted);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 #review-view .rv-outcome-grid{display:grid;gap:12px}#review-view .rv-outcome-grid label{display:grid;gap:6px;color:var(--rv-ink);font-size:12px;font-weight:600}#review-view .rv-outcome-grid textarea{min-height:84px;padding:10px 12px;border:1px solid var(--rv-g400);border-radius:10px;resize:vertical;font:inherit}#review-view .rv-outcome-grid .rv-checkline{display:flex;grid-template-columns:auto 1fr;align-items:center;gap:8px;font-weight:500}#review-view .rv-outcome-grid .rv-checkline input{width:18px;height:18px}
+#review-view .rv-backlog-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--rv-g200)}
 #review-view [data-work]._pending,#review-view [data-work][data-pending="true"]{opacity:.68}
 .rv-ce-identity,.rv-title-link{color:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;cursor:pointer}
 .rv-ce-identity:hover,.rv-ce-identity:focus,.rv-title-link:hover,.rv-title-link:focus{text-decoration-color:currentColor;outline:none}

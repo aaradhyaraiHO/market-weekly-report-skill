@@ -55,6 +55,13 @@ var REVIEW_TABLES = {
     headers: ["outcome_id","market_slug","ce_id","ce_name","week_start","outcome_type",
       "decision","no_discussion","approved_by","approved_at","created_at","updated_at"]
   },
+  timeline: {
+    sheet: "review_timeline_events",
+    headers: ["event_id","market_slug","ce_id","ce_name","review_week","event_type",
+      "source_type","source_ref","source_url","actor_id","actor_name","actor_role",
+      "occurred_at","recorded_at","original_body","approved_body","approval_state",
+      "approved_by","approved_at","related_review_id","related_work_id","supersedes_event_id","idempotency_key"]
+  },
   review_set: {
     sheet: "review_set",
     headers: ["market_slug","week_start","ce_id","ce_name","position","treatment",
@@ -321,7 +328,7 @@ function reviewTrustedAuthor(p,fallback) {
 
 function reviewMutationGate(action,p){
   var mutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_outcome_upsert","review_set_upsert","review_source_reconcile",
+    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
     "review_granola_link_submit",
     "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync"];
@@ -564,6 +571,42 @@ function reviewOutcomeUpsert(p){
   reviewWrite("outcomes",existing,rec);return jsonResp({ok:true,outcome:rec});
 }
 
+function reviewTimelineEventUpsert(p){
+  var err=reviewRequired(p,["market_slug","ce_id","review_week","event_type","approved_body","approved_by","idempotency_key"]);if(err)return err;
+  if(["nomination","metric_outcome","completion_evidence"].indexOf(String(p.event_type))<0)
+    return jsonResp({ok:false,error:"unsupported manual timeline event type"});
+  var existing=reviewFind("timeline",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&String(r.idempotency_key)===String(p.idempotency_key);});
+  if(existing)return jsonResp({ok:true,duplicate:true,event:existing});
+  var now=reviewNow(),rec={event_id:reviewId("evt"),market_slug:p.market_slug,ce_id:String(p.ce_id),ce_name:p.ce_name||"",
+    review_week:ymd(p.review_week),event_type:String(p.event_type),source_type:p.source_type||"human",source_ref:p.source_ref||"",
+    source_url:p.source_url||"",actor_id:p.actor_id||"",actor_name:reviewTrustedAuthor(p,p.approved_by),actor_role:p.actor_role||"bgm",
+    occurred_at:p.occurred_at||now,recorded_at:now,original_body:p.original_body||p.approved_body,approved_body:p.approved_body,
+    approval_state:"approved",approved_by:reviewTrustedAuthor(p,p.approved_by),approved_at:now,related_review_id:p.related_review_id||"",
+    related_work_id:p.related_work_id||"",supersedes_event_id:p.supersedes_event_id||"",idempotency_key:p.idempotency_key};
+  reviewWrite("timeline",null,rec);return jsonResp({ok:true,event:rec});
+}
+
+function reviewTimeline(p){
+  var market=p.market_slug,ce=String(p.ce_id),events=reviewFilter(reviewRows("timeline"),{market_slug:market,ce_id:ce}).slice();
+  function add(type,week,when,body,source,ref,url,actor,reviewId,workId){events.push({event_id:"projection:"+type+":"+String(ref||week||when),market_slug:market,ce_id:ce,review_week:ymd(week),event_type:type,occurred_at:when||week,recorded_at:when||week,approved_body:body||"",approval_state:"approved",source_type:source||"review",source_ref:ref||"",source_url:url||"",actor_name:actor||"",related_review_id:reviewId||"",related_work_id:workId||"",read_only:true});}
+  reviewFilter(reviewRows("review_set"),{market_slug:market,ce_id:ce}).forEach(function(r){add(r.treatment&&r.treatment!=="not_scheduled"?"shortlist_selected":"candidate_created",r.week_start,r.updated_at,r.reason,"weekly_report",r.source);});
+  reviewFilter(reviewRows("weekly"),{market_slug:market,ce_id:ce}).forEach(function(r){if(r.bgm_note&&!r.note_deleted_at)add("bgm_observation",r.week_start,r.bgm_updated_at,r.bgm_note,"review",r.weekly_id,"",r.bgm_author);if(r.slack_post_ts)add("slack_discussion",r.week_start,r.slack_post_ts,"Slack discussion started or continued","slack",r.slack_post_ts,r.slack_post_permalink,r.bgm_author);if(r.summary_json)add("slack_summary",r.week_start,r.summary_updated_at,r.summary_json,"slack",r.summary_upto_ts,r.slack_post_permalink,"AI · approved source");});
+  reviewFilter(reviewRows("outcomes"),{market_slug:market,ce_id:ce}).forEach(function(r){add("outcome_approved",r.week_start,r.approved_at,r.decision,"review",r.outcome_id,"",r.approved_by,r.outcome_id);});
+  reviewFilter(reviewRows("work"),{market_slug:market,ce_id:ce}).filter(function(r){return !r.deleted_at;}).forEach(function(r){add(r.closed_at?"work_completed":"work_opened",r.origin_week,r.updated_at,r.text,"review",r.source_ref,r.source_url,r.approved_by,"",r.work_id);});
+  reviewFilter(reviewRows("receipts"),{market_slug:market,ce_id:ce}).forEach(function(r){add("review_finished",r.week_start,r.reviewed_at,r.summary,"review",r.receipt_id,"",r.reviewer,r.receipt_id);});
+  return events.sort(function(a,b){return String(b.occurred_at||b.recorded_at||"").localeCompare(String(a.occurred_at||a.recorded_at||""));}).slice(0,250);
+}
+
+function reviewBacklog(p){
+  var market=p.market_slug,now=ymd(new Date()),actor=String(p.actor_name||"").toLowerCase();
+  var work=reviewRows("work").filter(function(r){return r.market_slug===market&&!r.deleted_at;});
+  var suggestions=reviewRows("suggestions").filter(function(r){return r.market_slug===market&&(!r.status||r.status==="pending");});
+  return {needs_approval:suggestions,open:work.filter(function(r){return !r.closed_at&&!r.archived_at;}),mine:work.filter(function(r){return !r.closed_at&&actor&&String(r.owner||r.owner_id||"").toLowerCase()===actor;}),
+    blocked_overdue:work.filter(function(r){return !r.closed_at&&(r.status==="blocked"||(r.due_date&&ymd(r.due_date)<now));}),stale:work.filter(function(r){return !r.closed_at&&r.status==="stale";}),
+    recently_completed:work.filter(function(r){return !!r.closed_at&&!r.archived_at;}).sort(function(a,b){return String(b.closed_at).localeCompare(String(a.closed_at));}).slice(0,100),
+    archived:work.filter(function(r){return !!r.archived_at||r.status==="dismissed";})};
+}
+
 function reviewWorkDelete(p) {
   var err = reviewRequired(p, ["work_id","deleted_by"]); if (err) return err;
   var existing = reviewFind("work", function(r){ return r.work_id === p.work_id; });
@@ -789,11 +832,15 @@ function reviewMemory(p) {
   };});
   var openWork=work.filter(function(r){return !r.closed_at;});
   var recentClosed=work.filter(function(r){return !!r.closed_at;}).slice(0,25);
+  var timeline=reviewTimeline(p);
+  perfHistory.forEach(function(r){timeline.push({event_id:"history:perf:"+String(r.source_row||r.week_start),market_slug:p.market_slug,ce_id:String(p.ce_id),review_week:r.week_start,event_type:"performance_history",source_type:"historical_sheet",occurred_at:r.updated_at||r.week_start,approved_body:r.action_text,actor_name:r.owner,approval_state:"read_only",read_only:true});});
+  legacyComments.forEach(function(r){timeline.push({event_id:"history:comment:"+String(r.source_row||r.week_start),market_slug:p.market_slug,ce_id:String(p.ce_id),review_week:r.week_start,event_type:"historical_comment",source_type:"historical_sheet",source_url:r.slack_permalink,occurred_at:r.created_at||r.week_start,approved_body:r.body,actor_name:r.author_name,approval_state:"read_only",read_only:true});});
+  timeline.sort(function(a,b){return String(b.occurred_at||b.recorded_at||"").localeCompare(String(a.occurred_at||a.recorded_at||""));});
   return jsonResp({ok:true, identity:{market_slug:p.market_slug,ce_id:String(p.ce_id)},
     counts:{comments:comments.length,weekly_commentary:weekly.length,open_work:openWork.length,receipts:receipts.length,
       source_suggestions:suggestions.length},
     weekly_commentary:weekly.slice(0,52),comments:comments.slice(0,25),work_items:openWork.concat(recentClosed),receipts:receipts.slice(0,12),
-    source_suggestions:suggestions.slice(0,25),slack_thread:reviewThreadFor(p.market_slug,p.ce_id),slack_threads:threads.slice(0,25),
+    source_suggestions:suggestions.slice(0,25),slack_thread:reviewThreadFor(p.market_slug,p.ce_id),slack_threads:threads.slice(0,25),timeline:timeline,
     perf_history:perfHistory,historical_comments:legacyComments,
     historical_source_status:{actions:{unavailable:historicalActions.unavailable,skipped_missing_ce_id:historicalActions.skipped_missing_ce_id||0,duplicates:historicalActions.duplicates||0},
       comments:{unavailable:historicalComments.unavailable,skipped_missing_ce_id:historicalComments.skipped_missing_ce_id||0,duplicates:historicalComments.duplicates||0}},
@@ -813,7 +860,7 @@ function doGet(e) {
   // from the legacy diagnostic Apps Script, whose GET action contract remains
   // unchanged in apps_script.js.
   var getMutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_outcome_upsert","review_set_upsert","review_source_reconcile","review_suggestion_decide",
+    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_set_upsert","review_source_reconcile","review_suggestion_decide",
     "review_granola_link_submit","review_weekly_note_upsert","review_weekly_note_delete",
     "review_weekly_slack_post","review_weekly_sync","review_slack_post","review_slack_scan"];
   if(getMutations.indexOf(action)>=0)return jsonResp({ok:false,error:action+" requires POST"});
@@ -837,6 +884,8 @@ function doGet(e) {
   if(action==="review_outcome_list"){
     return jsonResp({ok:true,outcomes:reviewFilter(reviewRows("outcomes"),p).sort(function(a,b){return String(b.updated_at||"").localeCompare(String(a.updated_at||""));})});
   }
+  if(action==="review_timeline")return jsonResp({ok:true,timeline:reviewTimeline(p)});
+  if(action==="review_backlog")return jsonResp(Object.assign({ok:true},reviewBacklog(Object.assign({},p,{actor_name:readAccess.access&&readAccess.access.display_name||""}))));
   if (action === "review_set_list") {
     var setRows = reviewFilter(reviewRows("review_set"), p);
     return jsonResp({ok:true,review_set:setRows.filter(function(r){ return String(r.included) !== "false"; })});
@@ -898,6 +947,7 @@ function doPost(e) {
   if (action === "review_work_delete") return reviewWorkDelete(payload);
   if (action === "review_receipt_upsert") return reviewReceiptUpsert(payload);
   if (action === "review_outcome_upsert") return reviewOutcomeUpsert(payload);
+  if (action === "review_timeline_event_upsert") return reviewTimelineEventUpsert(payload);
   if (action === "review_set_upsert") return reviewSetUpsert(payload);
   if (action === "review_source_reconcile") return reviewSourceReconcile(payload);
   if (action === "review_weekly_note_upsert") return reviewWeeklyNoteUpsert(payload);

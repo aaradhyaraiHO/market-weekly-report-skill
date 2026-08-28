@@ -303,6 +303,29 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("outcomeDrafts", self.view)
         self.assertNotIn("bgm_note) blockers.push", self.view)
 
+    def test_backlog_views_and_timeline_are_progressive_and_local(self):
+        for fragment in (
+            'backlogView: "open"', "Needs approval", "Blocked / overdue",
+            "Recently completed", 'data-backlog-view', "timeline=res.timeline||[]",
+            "rv-timeline-event",
+        ):
+            self.assertIn(fragment, self.view)
+        self.assertIn("rv-backlog-tabs", self.css)
+
+    def test_nomination_requires_reason_and_uses_stable_ce_id(self):
+        for fragment in (
+            'id="rv-nomination-reason"', "Add a nomination reason first",
+            'source: "nomination"', 'event_type:"nomination"',
+            'idempotency_key:"nomination:"+S.week_start+":"+String(ceId)',
+        ):
+            self.assertIn(fragment, self.view)
+
+    def test_owner_and_task_force_filters_render_only_when_metadata_exists(self):
+        self.assertIn("owners.length?", self.view)
+        self.assertIn("taskForces.length?", self.view)
+        self.assertIn('id="rv-owner-filter"', self.view)
+        self.assertIn('id="rv-task-force-filter"', self.view)
+
     def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
         self.assertIn("function dedupeSuggestions(rows)", self.view)
         self.assertIn("normalizedSuggestionBody", self.view)
