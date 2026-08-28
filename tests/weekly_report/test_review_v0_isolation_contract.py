@@ -252,6 +252,35 @@ class ReviewV0UiContract(unittest.TestCase):
         ):
             self.assertIn(fragment, self.view)
 
+    def test_candidate_and_shortlist_reuse_existing_treatments(self):
+        for fragment in (
+            "function shortlistState(q)", 'return "candidate"',
+            'return "selected"', 'return "skipped"', 'return "reviewed"',
+            'id="rv-shortlist-guide"', "Recommended: 3–5 CEs. The BGM decides.",
+            "function renderQueueGroups(rows)", "Selected this week", "Candidates",
+            "Skipped / deferred", "Reviewed",
+        ):
+            self.assertIn(fragment, self.view)
+        self.assertNotIn("review_candidate_upsert", self.view)
+        self.assertNotIn("review_shortlist_upsert", self.view)
+
+    def test_next_ce_prefers_selected_then_candidates(self):
+        next_ce = self.view.split("function nextCe()", 1)[1].split(
+            "function openMemory()", 1
+        )[0]
+        self.assertIn('state==="selected"?0', next_ce)
+        self.assertIn('state==="candidate"?1', next_ce)
+
+    def test_existing_thread_offers_explicit_continue_or_new_parent(self):
+        for fragment in (
+            'id="rv-continue-slack"', 'id="rv-new-slack"',
+            'id="rv-new-thread-reason"', 'id="rv-new-thread-cancel"',
+            "thread_operation", "replacement_reason",
+            "Continue existing", "Start a new discussion",
+            "prior thread remains in CE Memory",
+        ):
+            self.assertIn(fragment, self.view)
+
     def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
         self.assertIn("function dedupeSuggestions(rows)", self.view)
         self.assertIn("normalizedSuggestionBody", self.view)

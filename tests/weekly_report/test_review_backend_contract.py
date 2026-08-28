@@ -71,7 +71,7 @@ class ReviewBackendContract(unittest.TestCase):
 
     def test_slack_thread_identity_excludes_week(self):
         match = re.search(
-            r"function reviewThreadFor\(market, ceId\) \{(?P<body>.*?)\n\}",
+            r"function reviewThreadsFor\(market, ceId\) \{(?P<body>.*?)\n\}",
             self.backend,
             re.DOTALL,
         )
@@ -139,9 +139,30 @@ class ReviewBackendContract(unittest.TestCase):
         ):
             self.assertIn(f'"{field}"', self.backend)
         self.assertIn("function reviewWeeklyFor(market,ceId,week)", self.backend)
-        self.assertIn("current.last_post_request_id===p.request_id", self.backend)
+        self.assertIn("if(current && current.slack_post_ts)", self.backend)
         self.assertIn("payload.client_msg_id=String(p.request_id)", self.backend)
         self.assertIn('next.sync_status="post_failed"', self.backend)
+
+    def test_ce_thread_lifecycle_is_additive_and_stable_id_scoped(self):
+        for field in (
+            "binding_id", "binding_status", "created_reason", "replaced_reason",
+            "predecessor_binding_id", "successor_binding_id", "created_by",
+            "weekly_starter_ts", "weekly_starter_week", "last_post_request_id",
+        ):
+            self.assertIn(f'"{field}"', self.backend)
+        lifecycle = self.backend.split("function reviewSlackPostCore(p)", 1)[1].split(
+            "function reviewSlackPost(p)", 1
+        )[0]
+        self.assertIn('operation="new_parent"', lifecycle)
+        self.assertIn("replacement reason is required", lifecycle)
+        self.assertIn('operation==="continue"', lifecycle)
+        self.assertIn("predecessor_binding_id", lifecycle)
+        self.assertIn("successor_binding_id", lifecycle)
+        self.assertIn('reviewWrite("threads",null,record)', lifecycle)
+        self.assertIn('existing.binding_status="replaced"', lifecycle)
+        self.assertIn("existing.last_post_request_id", lifecycle)
+        self.assertIn("if(existing&&!existing.binding_id)", lifecycle)
+        self.assertIn("slack_threads:threads.slice(0,25)", self.backend)
 
     def test_weekly_slack_sync_aggregates_and_fails_closed(self):
         self.assertIn('mode:"weekly_thread_summary"', self.backend)

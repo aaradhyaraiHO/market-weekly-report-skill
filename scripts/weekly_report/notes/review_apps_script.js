@@ -55,7 +55,10 @@ var REVIEW_TABLES = {
   threads: {
     sheet: "ce_threads",
     headers: ["market_slug","ce_id","ce_name","slack_channel","slack_thread_ts",
-      "slack_permalink","created_at","updated_at","last_scanned_ts"]
+      "slack_permalink","created_at","updated_at","last_scanned_ts",
+      "binding_id","binding_status","created_reason","replaced_reason",
+      "predecessor_binding_id","successor_binding_id","created_by",
+      "replacement_week","weekly_starter_ts","weekly_starter_week","last_post_request_id"]
   },
   weekly: {
     sheet: "review_weekly_commentary",
@@ -196,7 +199,7 @@ function reviewWrite(kind, existing, record) {
     var row = existing ? existing._row : sh.getLastRow() + 1;
     sh.getRange(row, 1, 1, vals.length).setValues([vals]);
     ["week_start","origin_week","due_date","next_review_date","slack_thread_ts",
-      "last_scanned_ts"].forEach(function(h) {
+      "last_scanned_ts","weekly_starter_ts"].forEach(function(h) {
         var col = def.headers.indexOf(h) + 1;
         // Sheets eagerly coerces a Slack timestamp such as 1787552580.536449
         // into a number, silently dropping precision.  Store identity/time keys
@@ -734,7 +737,7 @@ function reviewMemory(p) {
   var receipts = reviewFilter(reviewRows("receipts"), f).sort(function(a,b){ return String(b.week_start).localeCompare(String(a.week_start)); });
   var weekly = reviewFilter(reviewRows("weekly"), f).sort(function(a,b){ return String(b.week_start).localeCompare(String(a.week_start)); });
   var suggestions = reviewFilter(reviewRows("suggestions"), f).sort(function(a,b){ return String(b.created_at).localeCompare(String(a.created_at)); });
-  var thread = reviewFind("threads", function(r){ return r.market_slug===p.market_slug && String(r.ce_id)===String(p.ce_id); });
+  var threads = reviewThreadsFor(p.market_slug,p.ce_id);
   var historicalActions=reviewHistoricalRows("actions",p.market_slug,p.ce_id);
   var historicalComments=reviewHistoricalRows("notes",p.market_slug,p.ce_id);
   var perfHistory=historicalActions.rows.map(function(row){return {
@@ -754,7 +757,7 @@ function reviewMemory(p) {
     counts:{comments:comments.length,weekly_commentary:weekly.length,open_work:openWork.length,receipts:receipts.length,
       source_suggestions:suggestions.length},
     weekly_commentary:weekly.slice(0,52),comments:comments.slice(0,25),work_items:openWork.concat(recentClosed),receipts:receipts.slice(0,12),
-    source_suggestions:suggestions.slice(0,25),slack_thread:thread || null,
+    source_suggestions:suggestions.slice(0,25),slack_thread:reviewThreadFor(p.market_slug,p.ce_id),slack_threads:threads.slice(0,25),
     perf_history:perfHistory,historical_comments:legacyComments,
     historical_source_status:{actions:{unavailable:historicalActions.unavailable,skipped_missing_ce_id:historicalActions.skipped_missing_ce_id||0,duplicates:historicalActions.duplicates||0},
       comments:{unavailable:historicalComments.unavailable,skipped_missing_ce_id:historicalComments.skipped_missing_ce_id||0,duplicates:historicalComments.duplicates||0}},
@@ -870,10 +873,17 @@ function doPost(e) {
 // This mapping is (market, CE), not (market, CE, week). Every week's questions
 // and replies stay in one durable CE
 // thread. The BGM supplies free-form text and may mention any Slack user.
-function reviewThreadFor(market, ceId) {
-  return reviewFind("threads", function(r){
+function reviewThreadsFor(market, ceId) {
+  return reviewRows("threads").filter(function(r){
     return r.market_slug === market && String(r.ce_id) === String(ceId);
-  });
+  }).sort(function(a,b){return String(b.created_at||"").localeCompare(String(a.created_at||""));});
+}
+
+function reviewThreadFor(market, ceId) {
+  // Blank status is a legacy active binding. Identity is stable market + CE ID.
+  return reviewThreadsFor(market,ceId).filter(function(r){
+    return !r.binding_status || String(r.binding_status)==="active";
+  })[0] || null;
 }
 
 function reviewSlackPostCore(p) {
@@ -885,30 +895,58 @@ function reviewSlackPostCore(p) {
   var token = PropertiesService.getScriptProperties().getProperty("SLACK_BOT_TOKEN");
   if (!token) return {ok:false,error:"SLACK_BOT_TOKEN not set in Script properties"};
   var existing = reviewThreadFor(p.market_slug,p.ce_id);
-  if (existing && existing.slack_channel && existing.slack_channel !== p.channel)
+  var operation=String(p.thread_operation||(existing?"continue":"start"));
+  if(["start","continue","new_parent"].indexOf(operation)<0)
+    return {ok:false,error:"invalid Slack thread operation"};
+  if(!existing&&operation==="continue")
+    return {ok:false,error:"no existing CE thread to continue"};
+  if(existing&&operation==="start")operation="new_parent";
+  if(existing&&operation==="new_parent"&&!String(p.replacement_reason||"").trim())
+    return {ok:false,error:"replacement reason is required to start a new CE discussion",thread:existing};
+  if (existing && existing.slack_channel && existing.slack_channel !== p.channel && operation!=="new_parent")
     return {ok:false,error:"CE thread already belongs to another Slack channel",thread:existing};
+  if(existing&&p.request_id&&String(existing.last_post_request_id||"")===String(p.request_id))
+    return {ok:true,duplicate:true,operation:operation,thread:existing,
+      posted_ts:String(existing.weekly_starter_ts||existing.slack_thread_ts||""),
+      posted_permalink:getPermalink(token,p.channel,String(existing.weekly_starter_ts||existing.slack_thread_ts||""))};
+  var reuse=!!existing&&operation==="continue";
+  if(existing&&!existing.binding_id)existing.binding_id=reviewId("thb");
 
   var header = "*Weekly Review · " + (p.ce_name || ("CE " + p.ce_id)) + "*";
   var context = "_" + p.market_slug + " · CE " + p.ce_id + " · W/C " + ymd(p.week_start) + "_";
-  var body = (existing ? "" : (header + "\n" + context + "\n")) + p.text +
+  var body = (reuse ? "" : (header + "\n" + context + "\n")) + p.text +
     "\n_— " + p.author + "_" + (p.report_url ? "\n<" + p.report_url + "|Open CE review>" : "");
   var payload = {channel:p.channel,text:body,username:"Weekly Market Review",icon_emoji:":memo:",unfurl_links:false};
   if(p.request_id)payload.client_msg_id=String(p.request_id);
-  if (existing && existing.slack_thread_ts) payload.thread_ts=String(existing.slack_thread_ts);
+  if (reuse && existing.slack_thread_ts) payload.thread_ts=String(existing.slack_thread_ts);
   var resp = UrlFetchApp.fetch("https://slack.com/api/chat.postMessage",{
     method:"post",contentType:"application/json; charset=utf-8",
     headers:{Authorization:"Bearer " + token},payload:JSON.stringify(payload),muteHttpExceptions:true});
   var result = JSON.parse(resp.getContentText());
   if (!result.ok) return {ok:false,error:"slack: " + (result.error || "unknown")};
-  var now=reviewNow(), anchor=(existing && String(existing.slack_thread_ts)) || String(result.ts);
+  var now=reviewNow(),bindingId=reuse?(existing.binding_id||reviewId("thb")):reviewId("thb");
+  var anchor=reuse?String(existing.slack_thread_ts):String(result.ts);
   var permalink=getPermalink(token,p.channel,anchor);
   var record={market_slug:p.market_slug,ce_id:String(p.ce_id),ce_name:p.ce_name||"",
     slack_channel:p.channel,slack_thread_ts:anchor,
-    slack_permalink:permalink || (existing && existing.slack_permalink) || "",
-    created_at:(existing && existing.created_at)||now,updated_at:now,
-    last_scanned_ts:(existing && existing.last_scanned_ts)||anchor};
-  reviewWrite("threads",existing,record);
-  return {ok:true,thread:record,posted_ts:String(result.ts),posted_permalink:getPermalink(token,p.channel,String(result.ts))};
+    slack_permalink:permalink || (reuse && existing.slack_permalink) || "",
+    created_at:(reuse && existing.created_at)||now,updated_at:now,
+    last_scanned_ts:(reuse && existing.last_scanned_ts)||anchor,
+    binding_id:bindingId,binding_status:"active",
+    created_reason:reuse?(existing.created_reason||"legacy"):String(p.replacement_reason||"first_discussion"),
+    replaced_reason:"",predecessor_binding_id:reuse?(existing.predecessor_binding_id||""):(existing&&existing.binding_id||""),
+    successor_binding_id:"",created_by:p.author||"",replacement_week:reuse?(existing.replacement_week||""):ymd(p.week_start),
+    weekly_starter_ts:String(result.ts),weekly_starter_week:ymd(p.week_start),last_post_request_id:String(p.request_id||"")};
+  if(reuse)reviewWrite("threads",existing,record);
+  else{
+    reviewWrite("threads",null,record);
+    if(existing){
+      existing.binding_status="replaced";
+      existing.replaced_reason=String(p.replacement_reason||"");existing.successor_binding_id=bindingId;
+      existing.updated_at=now;reviewWrite("threads",existing,existing);
+    }
+  }
+  return {ok:true,operation:operation,thread:record,posted_ts:String(result.ts),posted_permalink:getPermalink(token,p.channel,String(result.ts))};
 }
 
 function reviewSlackPost(p){return jsonResp(reviewSlackPostCore(p));}
@@ -919,7 +957,7 @@ function reviewWeeklySlackPost(p){
   var err=reviewRequired(Object.assign({},p,{discussion_text:discussionText,discussion_author:discussionAuthor}),["market_slug","ce_id","ce_name","week_start","channel","discussion_text","discussion_author","request_id"]);
   if(err)return err;
   var current=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
-  if(current && current.last_post_request_id===p.request_id && current.slack_post_ts)
+  if(current && current.slack_post_ts)
     return jsonResp({ok:true,duplicate:true,weekly:current});
   var trustedAuthor=reviewTrustedAuthor(p,discussionAuthor);
   var mentions=reviewResolveMentions(discussionText,p.market_slug);
@@ -932,7 +970,8 @@ function reviewWeeklySlackPost(p){
   });
   var posted=reviewSlackPostCore({market_slug:p.market_slug,ce_id:p.ce_id,ce_name:p.ce_name,
     week_start:p.week_start,channel:p.channel,text:mentions.resolved_text,author:trustedAuthor,
-    report_url:p.report_url||"",request_id:p.request_id});
+    report_url:p.report_url||"",request_id:p.request_id,thread_operation:p.thread_operation||"",
+    replacement_reason:p.replacement_reason||""});
   var finalState=reviewWeeklyMutate(p,function(next){
     next.last_post_request_id=p.request_id;
     if(!posted.ok){next.sync_status="post_failed";next.last_error=posted.error||"Slack post failed";return next;}
@@ -940,7 +979,7 @@ function reviewWeeklySlackPost(p){
     next.last_scanned_ts=posted.posted_ts;next.sync_status="awaiting_replies";next.last_error="";return next;
   });
   if(!posted.ok)return jsonResp({ok:false,error:posted.error,weekly:finalState,retryable:true});
-  return jsonResp({ok:true,weekly:finalState,thread:posted.thread,mentions:mentions.matches});
+  return jsonResp({ok:true,operation:posted.operation,weekly:finalState,thread:posted.thread,mentions:mentions.matches});
 }
 
 function reviewJson(value,fallback){try{return value?JSON.parse(value):fallback;}catch(err){return fallback;}}
