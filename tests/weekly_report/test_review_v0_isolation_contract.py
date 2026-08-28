@@ -326,6 +326,16 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn('id="rv-owner-filter"', self.view)
         self.assertIn('id="rv-task-force-filter"', self.view)
 
+    def test_pilot_telemetry_is_fail_soft_and_covers_core_funnel(self):
+        self.assertIn("function track(event,fields)", self.view)
+        self.assertIn(".catch(function(){})", self.view)
+        for event in (
+            "shortlist_size", "treatment_selected", "slack_discussion_started",
+            "suggestion_triaged", "action_closed", "outcome_approved",
+            "review_completed", "review_return_usage",
+        ):
+            self.assertIn(f'"{event}"', self.view)
+
     def test_action_inbox_deduplicates_and_hides_trace_by_default(self):
         self.assertIn("function dedupeSuggestions(rows)", self.view)
         self.assertIn("normalizedSuggestionBody", self.view)

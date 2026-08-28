@@ -62,6 +62,11 @@ var REVIEW_TABLES = {
       "occurred_at","recorded_at","original_body","approved_body","approval_state",
       "approved_by","approved_at","related_review_id","related_work_id","supersedes_event_id","idempotency_key"]
   },
+  telemetry: {
+    sheet: "review_pilot_telemetry",
+    headers: ["telemetry_id","market_slug","ce_id","week_start","event_type","value_number",
+      "value_text","actor_name","session_id","idempotency_key","occurred_at"]
+  },
   review_set: {
     sheet: "review_set",
     headers: ["market_slug","week_start","ce_id","ce_name","position","treatment",
@@ -89,13 +94,14 @@ var REVIEW_TABLES = {
     headers: ["suggestion_id","market_slug","ce_id","ce_name","week_start","source_type",
       "source_author","source_ref","source_url","kind","body","proposed_owner","proposed_due_date",
       "confidence","status","created_at","decided_by","decided_at","decision_destination",
-      "accepted_body","accepted_owner","accepted_due_date"]
+      "accepted_body","accepted_owner","accepted_due_date","idempotency_key","provider_meeting_id","access_scope"]
   },
   inbox: {
     sheet: "review_source_inbox",
     headers: ["source_item_id","source_type","source_ref","source_url","source_author",
       "occurred_at","market_slug","week_start","candidate_ce_id","candidate_ce_name",
-      "match_confidence","match_status","kind","body","created_at","reconciled_by","reconciled_at"]
+      "match_confidence","match_status","kind","body","created_at","reconciled_by","reconciled_at",
+      "provider_meeting_id","access_scope","content_hash","idempotency_key"]
   },
   access: {
     sheet: "bgm_access",
@@ -328,7 +334,7 @@ function reviewTrustedAuthor(p,fallback) {
 
 function reviewMutationGate(action,p){
   var mutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_set_upsert","review_source_reconcile",
+    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_telemetry_record","review_set_upsert","review_source_reconcile",
     "review_suggestion_decide","review_slack_post","review_slack_scan",
     "review_granola_link_submit",
     "review_weekly_note_upsert","review_weekly_note_delete","review_weekly_slack_post","review_weekly_sync"];
@@ -586,6 +592,16 @@ function reviewTimelineEventUpsert(p){
   reviewWrite("timeline",null,rec);return jsonResp({ok:true,event:rec});
 }
 
+function reviewTelemetryRecord(p){
+  var err=reviewRequired(p,["market_slug","week_start","event_type","idempotency_key"]);if(err)return err;
+  var existing=reviewFind("telemetry",function(r){return r.market_slug===p.market_slug&&String(r.idempotency_key)===String(p.idempotency_key);});
+  if(existing)return jsonResp({ok:true,duplicate:true,telemetry:existing});
+  var rec={telemetry_id:reviewId("tel"),market_slug:p.market_slug,ce_id:String(p.ce_id||""),week_start:ymd(p.week_start),
+    event_type:String(p.event_type),value_number:p.value_number==null?"":String(p.value_number),value_text:String(p.value_text||""),
+    actor_name:reviewTrustedAuthor(p,p.actor_name||""),session_id:String(p.session_id||""),idempotency_key:String(p.idempotency_key),occurred_at:p.occurred_at||reviewNow()};
+  reviewWrite("telemetry",null,rec);return jsonResp({ok:true,telemetry:rec});
+}
+
 function reviewTimeline(p){
   var market=p.market_slug,ce=String(p.ce_id),events=reviewFilter(reviewRows("timeline"),{market_slug:market,ce_id:ce}).slice();
   function add(type,week,when,body,source,ref,url,actor,reviewId,workId){events.push({event_id:"projection:"+type+":"+String(ref||week||when),market_slug:market,ce_id:ce,review_week:ymd(week),event_type:type,occurred_at:when||week,recorded_at:when||week,approved_body:body||"",approval_state:"approved",source_type:source||"review",source_ref:ref||"",source_url:url||"",actor_name:actor||"",related_review_id:reviewId||"",related_work_id:workId||"",read_only:true});}
@@ -666,8 +682,9 @@ function reviewSetUpsert(p) {
 function reviewSuggestionRecord(p) {
   if (["slack","granola"].indexOf(String(p.source_type).toLowerCase()) < 0)
     return {ok:false,error:"source_type must be slack or granola"};
+  var stableKey=String(p.idempotency_key||[p.source_type,p.source_ref,p.ce_id,p.kind,String(p.body||"").toLowerCase().replace(/\s+/g," ").trim()].join(":"));
   var duplicate = reviewFind("suggestions", function(r){
-    return r.source_type === p.source_type && r.source_ref === p.source_ref && r.kind === p.kind;
+    return String(r.idempotency_key||"")===stableKey||(r.source_type === p.source_type && r.source_ref === p.source_ref && String(r.ce_id)===String(p.ce_id) && r.kind === p.kind);
   });
   if (duplicate) return {ok:true,duplicate:true,suggestion:duplicate};
   var rec = {
@@ -676,7 +693,8 @@ function reviewSuggestionRecord(p) {
     source_author:p.source_author || "", source_ref:p.source_ref, source_url:p.source_url || "", kind:p.kind, body:p.body,
     proposed_owner:p.proposed_owner || "", proposed_due_date:ymd(p.proposed_due_date || ""),
     confidence:p.confidence || "", status:"pending", created_at:reviewNow(), decided_by:"", decided_at:"",
-    decision_destination:"",accepted_body:"",accepted_owner:"",accepted_due_date:""
+    decision_destination:"",accepted_body:"",accepted_owner:"",accepted_due_date:"",idempotency_key:stableKey,
+    provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||""
   };
   reviewWrite("suggestions", null, rec);
   return {ok:true,suggestion:rec};
@@ -705,7 +723,8 @@ function reviewSourceIngestRecord(p) {
     market_slug:p.market_slug,week_start:ymd(p.week_start),candidate_ce_id:String(p.candidate_ce_id||""),
     candidate_ce_name:p.candidate_ce_name||"",match_confidence:p.match_confidence||"",
     match_status:p.match_status||"unmatched",kind:p.kind,body:p.body,created_at:reviewNow(),
-    reconciled_by:"",reconciled_at:""};
+    reconciled_by:"",reconciled_at:"",provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||"",
+    content_hash:p.content_hash||"",idempotency_key:p.idempotency_key||[p.source_type,p.source_ref,p.kind].join(":")};
   reviewWrite("inbox",null,rec);
   return {ok:true,queued_for_reconciliation:true,inbox_item:rec};
 }
@@ -767,7 +786,8 @@ function reviewGranolaLinkSubmit(p){
     week_start:ymd(p.week_start),candidate_ce_id:String(p.ce_id),candidate_ce_name:p.ce_name,
     match_confidence:"bgm_attached",match_status:"awaiting_import",kind:"comment",
     body:"Granola meeting attached by "+p.submitted_by+"; awaiting source extraction.",created_at:reviewNow(),
-    reconciled_by:"",reconciled_at:""};
+    reconciled_by:"",reconciled_at:"",provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||"",
+    content_hash:p.content_hash||"",idempotency_key:ref};
   reviewWrite("inbox",null,rec);
   var pull=reviewGranolaPullLink(p,url);
   return jsonResp({ok:true,inbox_item:rec,pull:pull});
@@ -860,7 +880,7 @@ function doGet(e) {
   // from the legacy diagnostic Apps Script, whose GET action contract remains
   // unchanged in apps_script.js.
   var getMutations=["review_comment_upsert","review_comment_delete","review_work_upsert","review_work_delete",
-    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_set_upsert","review_source_reconcile","review_suggestion_decide",
+    "review_receipt_upsert","review_outcome_upsert","review_timeline_event_upsert","review_telemetry_record","review_set_upsert","review_source_reconcile","review_suggestion_decide",
     "review_granola_link_submit","review_weekly_note_upsert","review_weekly_note_delete",
     "review_weekly_slack_post","review_weekly_sync","review_slack_post","review_slack_scan"];
   if(getMutations.indexOf(action)>=0)return jsonResp({ok:false,error:action+" requires POST"});
@@ -948,6 +968,7 @@ function doPost(e) {
   if (action === "review_receipt_upsert") return reviewReceiptUpsert(payload);
   if (action === "review_outcome_upsert") return reviewOutcomeUpsert(payload);
   if (action === "review_timeline_event_upsert") return reviewTimelineEventUpsert(payload);
+  if (action === "review_telemetry_record") return reviewTelemetryRecord(payload);
   if (action === "review_set_upsert") return reviewSetUpsert(payload);
   if (action === "review_source_reconcile") return reviewSourceReconcile(payload);
   if (action === "review_weekly_note_upsert") return reviewWeeklyNoteUpsert(payload);

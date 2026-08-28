@@ -79,6 +79,7 @@
       timeline: function(identity) { return request("review_timeline", identity, {ttl: 300000}); },
       saveTimelineEvent: function(event) { return post("review_timeline_event_upsert", event); },
       backlog: function(identity) { return request("review_backlog", identity, {ttl: 60000}); },
+      recordTelemetry: function(event) { return post("review_telemetry_record", event); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
       saveReviewSetItem: function(item) { return post("review_set_upsert", item); },
       memory: function(identity, refresh) { return request("review_memory", identity, {refresh: !!refresh, ttl: 300000}); },

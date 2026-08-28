@@ -12,6 +12,7 @@ const REVIEW_ACTIONS = new Set([
   "review_work_list", "review_work_upsert", "review_work_delete",
   "review_receipt_list", "review_receipt_upsert", "review_outcome_list", "review_outcome_upsert",
   "review_timeline", "review_timeline_event_upsert", "review_backlog",
+  "review_telemetry_record",
   "review_set_list", "review_set_upsert", "review_memory",
   "review_weekly_list", "review_weekly_note_upsert", "review_weekly_note_delete",
   "review_weekly_slack_post", "review_weekly_sync", "review_mention_resolve",

@@ -231,6 +231,29 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('approval_state:"approved"', event)
         self.assertNotIn("reviewSlackPost", event)
 
+    def test_guarded_source_provenance_and_idempotency_are_additive(self):
+        for field in ("provider_meeting_id", "access_scope", "content_hash", "idempotency_key"):
+            self.assertIn(f'"{field}"', self.backend)
+        suggestion = self.backend.split("function reviewSuggestionRecord(p)", 1)[1].split(
+            "function reviewSourceIngestRecord", 1
+        )[0]
+        self.assertIn("stableKey", suggestion)
+        self.assertIn("String(r.ce_id)===String(p.ce_id)", suggestion)
+        self.assertIn('String(p.match_status)==="exact"', self.backend)
+        granola = self.backend.split("function reviewGranolaLinkSubmit(p)", 1)[1].split(
+            "function reviewSuggestionDecide", 1
+        )[0]
+        self.assertNotIn("reviewSlackPost", granola)
+
+    def test_pilot_telemetry_is_idempotent_and_review_scoped(self):
+        self.assertIn('sheet: "review_pilot_telemetry"', self.backend)
+        telemetry = self.backend.split("function reviewTelemetryRecord(p)", 1)[1].split(
+            "function reviewTimeline(p)", 1
+        )[0]
+        self.assertIn("idempotency_key", telemetry)
+        self.assertIn("reviewTrustedAuthor", telemetry)
+        self.assertIn('post("review_telemetry_record"', self.client)
+
     def test_weekly_slack_sync_aggregates_and_fails_closed(self):
         self.assertIn('mode:"weekly_thread_summary"', self.backend)
         self.assertIn('rec.sync_status="summary_delayed"', self.backend)

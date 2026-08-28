@@ -84,6 +84,8 @@
     // ---- small helpers ---------------------------------------------------
     function author() { try { return localStorage.getItem("wr_author") || ""; } catch (e) { return ""; } }
     function setAuthor(v) { try { localStorage.setItem("wr_author", String(v || "").trim()); } catch (e) {} }
+    function sessionId(){try{var id=sessionStorage.getItem("wr_review_session");if(!id){id="rvs_"+Date.now()+"_"+Math.random().toString(36).slice(2);sessionStorage.setItem("wr_review_session",id);}return id;}catch(e){return "session";}}
+    function track(event,fields){if(!api||typeof api.recordTelemetry!=="function")return;var f=fields||{},key=[event,S.market_slug,S.week_start,f.ce_id||S.selected||"",f.value_text||"",sessionId()].join(":");api.recordTelemetry({market_slug:S.market_slug,ce_id:String(f.ce_id||S.selected||""),week_start:S.week_start,event_type:event,value_number:f.value_number,value_text:f.value_text||"",actor_name:author(),session_id:sessionId(),idempotency_key:f.idempotency_key||key}).catch(function(){});}
     function ident(ceId) {
       var ce = S.byId[String(ceId)] || {};
       return { market_slug: S.market_slug, ce_id: String(ceId), ce_name: ce.ce_name || "", week_start: S.week_start };
@@ -261,6 +263,7 @@
         S.receipts = {}; (res[1].receipts || []).forEach(function (r) { S.receipts[String(r.ce_id)] = r; });
         S.work = {}; (res[2].work_items || []).forEach(function (w) { var k = String(w.ce_id); (S.work[k] = S.work[k] || []).push(w); });
         buildQueue();
+        var selectedCount=S.queue.filter(function(q){return shortlistState(q)==="selected";}).length;track("shortlist_size",{value_number:selectedCount,value_text:String(S.queue.length),idempotency_key:"shortlist:"+S.market_slug+":"+S.week_start+":"+selectedCount});
         if (!S.selected || !S.byId[S.selected]) {
           var firstOpen = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); })[0];
           S.selected = (firstOpen || S.queue[0] || {}).ce_id || null;
@@ -819,7 +822,7 @@
       if (!api) { toast("Review backend unavailable"); return; }
       var q = S.byId[S.selected];
       api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: q.ce_id, ce_name: q.ce_name, treatment: value, reason: q.reason || "", source: q.source || "flag" })
-        .then(function (res) { S.setRows[q.ce_id] = res.review_set_item || { treatment: value }; render(); })
+        .then(function (res) { S.setRows[q.ce_id] = res.review_set_item || { treatment: value }; track("treatment_selected",{ce_id:q.ce_id,value_text:value}); render(); })
         .catch(function () { toast("Could not save treatment"); });
     }
     function runExtract() {
@@ -924,7 +927,7 @@
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, discussion_text: text, discussion_author: author(), request_id: reqId, report_url: location.href, thread_operation:S.threadOperation||"", replacement_reason:S.newThreadReason||"" }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
         .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · discussion kept locally"); });
     }
     function syncThread() {
@@ -975,7 +978,7 @@
       if (!api) return;
       var calls = [api.decideSuggestion(Object.assign({ suggestion_id:primary, decision:decision, decided_by:author() }, fields || {}))];
       duplicates.forEach(function (sid) { calls.push(api.decideSuggestion({ suggestion_id:sid, decision:"rejected", decided_by:author(), duplicate_of:primary })); });
-      Promise.all(calls).then(function(){toast(decision==="approved"?(duplicates.length?"Added · duplicate suggestions archived":"Added"):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
+      Promise.all(calls).then(function(){track("suggestion_triaged",{value_number:duplicates.length+1,value_text:decision,idempotency_key:"suggestion:"+primary+":"+decision});toast(decision==="approved"?(duplicates.length?"Added · duplicate suggestions archived":"Added"):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
@@ -1051,7 +1054,7 @@
         S.confirmDeleteWork = null; toast("Work item deleted · audit retained"); return reloadWork();
       }).catch(function () { toast("Could not delete work item"); });
     }
-    function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
+    function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { if(CLOSED.indexOf(item.status)>=0)track("action_closed",{ce_id:item.ce_id,value_text:item.status,idempotency_key:"action_closed:"+item.work_id+":"+item.status});toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
     function reloadWork() {
       if (!api) return Promise.resolve();
       return api.work({ market_slug: S.market_slug, week: S.week_start }).then(function (res) {
@@ -1065,14 +1068,14 @@
       if (!ensureAuthor() || !api) return;
       var blockers=completionBlockers(q);if(blockers.length){toast("Required: "+blockers[0]);return;}
       api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.outcomes[q.ce_id]||{}).decision || "" })
-        .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; toast("CE review finished"); render(); })
+        .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; track("review_completed",{ce_id:q.ce_id,idempotency_key:"review_completed:"+S.market_slug+":"+S.week_start+":"+q.ce_id});toast("CE review finished"); render(); })
         .catch(function () { toast("Could not save review receipt"); });
     }
     function saveOutcome(){
       if(!ensureAuthor()||!api||S.asyncBusy.outcome)return;var q=S.byId[S.selected],kind=(root.querySelector("#rv-outcome-type")||{}).value||"",decision=(root.querySelector("#rv-outcome-decision")||{}).value||"";
       if(!kind){toast("Choose an outcome type");return;}if(!decision.trim()){toast("Record the BGM decision");return;}
       S.asyncBusy.outcome=true;var btn=root.querySelector("#rv-save-outcome");if(btn){btn.disabled=true;btn.textContent="Saving…";}
-      api.saveOutcome(Object.assign({},ident(S.selected),{outcome_type:kind,decision:decision.trim(),no_discussion:!!((root.querySelector("#rv-no-discussion")||{}).checked),approved_by:author()})).then(function(res){S.outcomes[q.ce_id]=res.outcome;delete S.outcomeDrafts[q.ce_id];toast("Outcome approved");render();}).catch(function(e){toast((e&&e.message)||"Outcome save failed · draft kept locally");}).finally(function(){S.asyncBusy.outcome=false;});
+      api.saveOutcome(Object.assign({},ident(S.selected),{outcome_type:kind,decision:decision.trim(),no_discussion:!!((root.querySelector("#rv-no-discussion")||{}).checked),approved_by:author()})).then(function(res){S.outcomes[q.ce_id]=res.outcome;delete S.outcomeDrafts[q.ce_id];track("outcome_approved",{ce_id:q.ce_id,value_number:decision.trim().length,value_text:kind});toast("Outcome approved");render();}).catch(function(e){toast((e&&e.message)||"Outcome save failed · draft kept locally");}).finally(function(){S.asyncBusy.outcome=false;});
     }
     function nextCe() {
       var open = S.queue.filter(function (x) { return !reviewedFor(x.ce_id) && String(x.ce_id) !== String(S.selected); });
@@ -1165,6 +1168,7 @@
         if (refreshHeadline() || !S.loaded) loadQueue().then(function(){if(requested&&ensureLocalCe(requested))select(requested);});
         else if(requested&&ensureLocalCe(requested))select(requested);else render();
         visibleOnce = true;
+        track("review_return_usage",{idempotency_key:"return:"+S.market_slug+":"+S.week_start+":"+sessionId()});
       },
       focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){S.queueRevealUntil=Date.now()+2500;select(ceId);revealQueueSelection(ceId);return true;}return false; },
       prefetch: function(){refreshHeadline();if(!S.loaded)loadQueue();},
