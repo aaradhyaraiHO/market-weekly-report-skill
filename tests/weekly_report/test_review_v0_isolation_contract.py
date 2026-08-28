@@ -285,7 +285,8 @@ class ReviewV0UiContract(unittest.TestCase):
         card = self.view.split("function renderCommentaryCard(q)", 1)[1].split(
             "function normalizedSuggestionBody", 1
         )[0]
-        self.assertIn("Discuss in Slack", card)
+        self.assertIn("Discussion highlights", card)
+        self.assertIn("rv-module-surface", card)
         self.assertIn("Add optional BGM observation", self.view)
         self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
         self.assertIn('renderRoleNote(weekly,"performance")', card)
@@ -309,12 +310,14 @@ class ReviewV0UiContract(unittest.TestCase):
 
     def test_follow_through_groups_and_timeline_are_progressive_and_local(self):
         for fragment in (
-            "Suggested attention stays separate from committed work", "Suggested", "Open", "Later", "Completed",
+            "Actions &amp; follow-ups", "Needs review", "Open", "Later", "Completed",
+            "suggested from this Slack discussion", "rv-action-tabs",
             "rv-focus-summary", "timeline=res.timeline||[]",
             "rv-timeline-event",
         ):
             self.assertIn(fragment, self.view)
-        self.assertIn("rv-action-section+.rv-action-section", self.css)
+        self.assertIn(".rv-action-surface", self.css)
+        self.assertIn(".rv-action-tab.active", self.css)
 
     def test_nomination_requires_reason_and_uses_stable_ce_id(self):
         for fragment in (
@@ -345,15 +348,39 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("normalizedSuggestionBody", self.view)
         self.assertIn('class="rv-trace"', self.view)
         self.assertIn("matching sources", self.view)
-        self.assertIn("Agree follow-through", self.view)
+        self.assertIn("Actions &amp; follow-ups", self.view)
         action_card = self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0]
         self.assertIn("dedupeSuggestions(sugg.filter", action_card)
         self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", action_card)
+        self.assertIn("rv-suggestion-text", action_card)
+        self.assertIn("data-sugg-edit", action_card)
+        self.assertNotIn("data-sugg-expand", action_card)
+
+    def test_approved_visual_hierarchy_keeps_source_and_state_distinct(self):
+        summary = self.view.split("function renderWeeklySummary", 1)[1].split(
+            "function renderCommentaryCard", 1
+        )[0]
+        actions = self.view.split("function renderActionsCard", 1)[1].split(
+            "function workRow", 1
+        )[0]
+        for fragment in (
+            "Draft discussion summary", "Needs BGM approval", "Approve summary",
+            "Discussion highlights", "Actions &amp; follow-ups",
+        ):
+            self.assertIn(fragment, self.view)
+        self.assertIn("rv-summary-surface", summary)
+        self.assertIn("rv-source-bridge", actions)
+        self.assertIn("rv-suggestion-main", actions)
+        self.assertIn("data-sugg-accept", actions)
+        self.assertIn("data-sugg-ignore", actions)
+        self.assertIn("position:static", self.css.split(".rv-footer", 1)[1].split("}", 1)[0])
 
     def test_completion_checklist_links_to_the_actual_controls(self):
         self.assertIn("function renderFinishBar", self.view)
         self.assertIn('data-resolve=', self.view)
         self.assertIn("function focusRequirement", self.view)
+        self.assertIn('S.workTab="needs"', self.view)
+        self.assertIn('data-work-tab="needs"', self.view)
         self.assertNotIn('id="rv-footer-treatment"', self.view)
         self.assertIn("Next unreviewed", self.view)
         self.assertEqual(self.view.count('id="rv-treatment"'), 1)

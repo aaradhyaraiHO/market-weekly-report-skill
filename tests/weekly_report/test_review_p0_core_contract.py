@@ -47,7 +47,7 @@ class ReviewP0CoreContract(unittest.TestCase):
             "function wireMemory", 1
         )[0]
         self.assertIn('String(w.summary_status||"")==="approved"', memory)
-        for action in ("Approve summary", "Reject", "Regenerate"):
+        for action in ("Approve summary", "Dismiss", "Regenerate"):
             self.assertIn(action, VIEW)
 
     def test_reconciliation_is_read_only_and_does_not_infer_attribution(self):
@@ -72,15 +72,17 @@ class ReviewP0CoreContract(unittest.TestCase):
         actions = VIEW.split("function renderActionsCard(q)", 1)[1].split(
             "function workRow(w)", 1
         )[0]
-        for label in ("Suggested", "Open", "Later", "Completed"):
+        for label in ("Needs review", "Open", "Later", "Completed"):
             self.assertIn(label, actions)
         self.assertIn("rv-focus-summary", actions)
         self.assertIn("pending.slice(0,3)", actions)
         self.assertIn("See ", actions)
         self.assertIn("S.expandedSuggestion", actions)
         self.assertIn('s.kind === "comment" || !s.kind', actions)
-        self.assertIn("Suggested observation", actions)
-        self.assertIn("Add observation", actions)
+        self.assertIn("Approve observation", actions)
+        self.assertIn("suggested from", actions)
+        self.assertIn("rv-suggestion-text", actions)
+        self.assertIn("rv-inline-actions", actions)
         self.assertIn('isComment?"comment":s.kind', actions)
         self.assertNotIn("rv-check", actions)
         committed = VIEW.split("function workRow(w)", 1)[1].split(

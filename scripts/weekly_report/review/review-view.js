@@ -61,7 +61,7 @@
       queue: [], byId: {}, selected: null, loaded: false,
       receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", mentionPreview: null, mentionBusy: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", workTab: "needs", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
       threadOperation: "", newThreadReason: "", backlogView: "open", reconciliation: null, finishReasonOpen:false, showAllSuggestions:false,
       drafts: {}, outcomeDrafts: {}, noDiscussionDrafts:{}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
@@ -473,8 +473,10 @@
       var delayed=weekly.sync_status==="summary_delayed",pending=String(weekly.summary_status)==="pending",rejected=String(weekly.summary_status)==="rejected",status=delayed?"Summary delayed · Slack replies remain available":
         (approved?"Approved by "+(weekly.summary_approved_by||"BGM")+" · "+fmtWhen(weekly.summary_approved_at||weekly.summary_updated_at):(pending?"Draft summary awaiting BGM approval":(rejected?"Draft summary rejected":"Waiting for replies")));
       var content=summary?(group("Findings",summary.findings)+group("Decisions",summary.decisions)+group("Open points",summary.open_points)):"";
-      return '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
-        (content?'<div class="rv-summary"><div class="rv-summary-head"><span>'+(approved?'Approved Slack summary':'AI draft · not yet CE Memory')+'</span></div>'+content+(pending?'<details class="rv-summary-approval"><summary>Review draft source</summary><textarea id="rv-summary-draft">'+esc(raw)+'</textarea><div class="rv-note-actions"><button class="rv-btn small primary" id="rv-summary-approve" type="button">Approve summary</button><button class="rv-btn small" id="rv-summary-reject" type="button">Reject</button><button class="rv-link" id="rv-summary-regenerate" type="button">Regenerate</button></div></details>':'')+'</div>':'<div class="rv-summary rv-summary-empty">No approved summary yet. Slack replies remain available at source.</div>');
+      return '<div class="rv-summary-surface'+(approved?' approved':'')+'"><div class="rv-summary-title"><div><span class="rv-origin slack">Slack</span><strong>'+(approved?'Approved discussion summary':'Draft discussion summary')+'</strong></div><span class="rv-attention-chip '+(approved?'approved':'')+'">'+(approved?'Approved':'Needs BGM approval')+'</span></div>'+
+        '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
+        (content?'<div class="rv-summary">'+content+'</div>':'<div class="rv-summary rv-summary-empty">No summary is available yet. Slack replies remain available at source.</div>')+
+        (pending?'<div class="rv-summary-actions"><button class="rv-btn small primary" id="rv-summary-approve" type="button">Approve summary</button><details class="rv-summary-approval"><summary class="rv-btn small">Edit</summary><textarea id="rv-summary-draft">'+esc(raw)+'</textarea></details><button class="rv-btn small" id="rv-summary-reject" type="button">Dismiss</button><button class="rv-link" id="rv-summary-regenerate" type="button">Regenerate</button></div>':'')+'</div>';
     }
     function renderCommentaryCard(q){
       var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
@@ -484,7 +486,7 @@
       var normalStart=!hasWeekActivity&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'';
       var canCompose=!hasWeekActivity||S.threadOperation==="new_parent"||S.threadOperation==="continue";
       var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+priorChoice+newThread+(canCompose?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
-      return '<section class="rv-flow-section" id="rv-discussion-section"><div class="rv-card-head"><span class="rv-step">2</span><div class="rv-card-headings"><div class="rv-card-title">Discuss in Slack</div><div class="rv-card-sub">Keep the team conversation in its existing CE thread. Start new only when the BGM decides the context has changed.</div></div></div><div class="rv-card-body rv-role-notes">'+composer+'<div class="rv-optional-notes">'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></div></section>';
+      return '<section class="rv-flow-section rv-discussion-module" id="rv-discussion-section"><div class="rv-module-head"><span class="rv-module-icon" aria-hidden="true">↗</span><div><div class="rv-card-title">Discussion highlights</div><div class="rv-card-sub">What the team discussed, what needs BGM approval, and the source thread.</div></div></div><div class="rv-module-surface"><div class="rv-card-body rv-role-notes">'+composer+'</div></div><div class="rv-optional-notes"><span class="rv-section-label">Optional context &amp; history</span>'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></section>';
     }
 
     function normalizedSuggestionBody(s) {
@@ -629,15 +631,18 @@
       var focus=[pending.length?pending.length+" suggestion"+(pending.length===1?"":"s")+" need review":"No suggestions waiting",openItems.length?openItems.length+" open action"+(openItems.length===1?"":"s"):"no open actions",nextCheck?"next check "+fmtDue(nextCheck.due_date||nextCheck.next_review_date):(laterItems.length?laterItems.length+" item"+(laterItems.length===1?"":"s")+" for later":"nothing scheduled")].join(" · ")+".";
       var suggHtml = visibleSuggestions.map(function (s) {
         var isCheck = s.kind === "check", isComment = s.kind === "comment" || !s.kind, expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
-        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(isComment?"comment":s.kind) + '">' +
-          '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isComment?'Suggested observation':(isCheck?'Suggested check':'Suggested action'))+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
+        var owner=s.proposed_owner||"",due=s.proposed_due_date||"",needsFields=!isComment&&((!isCheck&&!owner)|| (isCheck&&!due));
+        var sourceLine=(isComment?'Observation':(isCheck?'Check':'Action'))+' suggested from '+sourceName(s)+(s.created_at?' · '+fmtWhen(s.created_at):'')+(trace.length>1?' · '+trace.length+' matching sources':'');
+        var proposal=[owner?'Owner '+owner:'',due?(isCheck?'Next check ':'Due ')+fmtDue(due):''].filter(Boolean).join(' · ');
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(isComment?"comment":s.kind) + '" data-body="'+esc(s.body||'')+'" data-owner="'+esc(owner)+'" data-due="'+esc(due)+'">' +
+          '<div class="rv-suggestion-main"><div class="rv-sugg-meta">'+esc(sourceLine)+'</div><div class="rv-suggestion-text">'+esc(s.body||'Untitled suggestion')+'</div>'+(proposal?'<div class="rv-suggestion-proposal">'+esc(proposal)+'</div>':'')+'</div>'+
+          '<div class="rv-inline-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>'+(isComment?'Approve observation':(isCheck?'Approve check':'Approve action'))+'</button><button class="rv-btn small" type="button" data-sugg-edit="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'">Edit</button><button class="rv-link" type="button" data-sugg-ignore>Dismiss</button></div>'+
           (expanded?'<div class="rv-sugg-detail"><textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isComment ? "observation" : (isCheck ? "check" : "action")) + '">' + esc(s.body || "") + "</textarea>" +
           (isComment?'':'<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
-          '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
-          '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(owner) + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<input type="date" data-w-due value="' + esc(due) + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>") +
-          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isComment ? "Add observation" : (isCheck ? "Schedule check" : "Create action")) + "</button>" +
-          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
+          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>'+(needsFields?'Complete &amp; approve':'Save &amp; approve')+'</button><button class="rv-btn small" type="button" data-sugg-edit="">Cancel</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
       }).join("");
       var openHtml = openItems.map(workRow).join("");
       var laterHtml=laterItems.map(workRow).join("");
@@ -647,14 +652,12 @@
         '<div class="rv-empty-state" style="margin-top:12px"><strong>No follow-through yet</strong><span>Add an action or schedule a check when the discussion creates work.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
       var count = openAll.length ? openAll.length + " active" : (allWork.length ? "All done" : "No work yet");
-      return '<section class="rv-flow-section" id="rv-actions-section"><div class="rv-card-head"><span class="rv-step">3</span>' +
-        '<div class="rv-card-headings"><div class="rv-card-title">Agree follow-through</div>' +
-        '<div class="rv-card-sub">Suggested attention stays separate from committed work.</div></div>' +
-        '<span class="rv-card-count">' + count + "</span></div>" +
-        '<div class="rv-card-body"><p class="rv-focus-summary">'+esc(focus)+'</p>' + (suggHtml?'<div class="rv-action-section"><div class="rv-action-heading">Suggested <span>'+pending.length+'</span></div>'+suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')+'</div>':'') + (openHtml?'<div class="rv-action-section"><div class="rv-action-heading">Open <span>'+openItems.length+'</span></div>'+openHtml+'</div>':'') + (laterHtml?'<div class="rv-action-section"><div class="rv-action-heading">Later <span>'+laterItems.length+'</span></div>'+laterHtml+'</div>':'') + emptyState + doneHtml +
+      var tabs=[['needs','Needs review',pending.length],['open','Open',openItems.length],['later','Later',laterItems.length],['completed','Completed',doneAll.length]];
+      var active=S.workTab||'needs',panel=active==='needs'?(suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')):active==='open'?(openHtml||'<div class="rv-empty-state"><strong>No open work</strong><span>Approved actions will appear here.</span></div>'):active==='later'?(laterHtml||'<div class="rv-empty-state"><strong>Nothing scheduled</strong><span>Checks and explicit carry-forward items will appear here.</span></div>'):(doneHtml||'<div class="rv-empty-state"><strong>No completed work</strong><span>Recent completed items will appear here.</span></div>');
+      return '<section class="rv-flow-section rv-actions-module" id="rv-actions-section"><div class="rv-module-head"><span class="rv-module-icon attention" aria-hidden="true">✓</span><div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div><div class="rv-card-sub">Review suggestions separately from work the team has already committed to.</div></div><span class="rv-card-count">'+count+'</span></div>' +
+        '<div class="rv-source-bridge"><span aria-hidden="true">↓</span><strong>'+pending.length+' follow-up'+(pending.length===1?'':'s')+' suggested from this Slack discussion</strong></div><div class="rv-action-surface"><p class="rv-focus-summary">'+esc(focus)+'</p><div class="rv-action-tabs" role="tablist">'+tabs.map(function(t){return '<button type="button" role="tab" class="rv-action-tab'+(active===t[0]?' active':'')+'" aria-selected="'+(active===t[0]?'true':'false')+'" data-work-tab="'+t[0]+'">'+t[1]+' <span>'+t[2]+'</span></button>';}).join('')+'</div><div class="rv-action-panel">'+panel+emptyState+'</div>' +
         composer +
-        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
-        '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
+        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button><button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
     }
     function workRow(w) {
       var done = CLOSED.indexOf(w.status) >= 0, isCheck = w.kind === "check";
@@ -792,8 +795,9 @@
         if (acc) acc.onclick = function () { acceptSuggestion(card); };
         if (ig) ig.onclick = function () { decideSuggestionGroup(card, "rejected", {}); };
       });
-      root.querySelectorAll("[data-sugg-expand]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=String(S.expandedSuggestion)===String(b.dataset.suggExpand)?"":b.dataset.suggExpand;render();var active=root.querySelector('[data-sugg-expand="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
-      bind("#rv-more-suggestions",function(){S.showAllSuggestions=!S.showAllSuggestions;render();var heading=root.querySelector("#rv-actions-section .rv-action-heading");if(heading&&heading.focus)heading.focus({preventScroll:true});});
+      root.querySelectorAll("[data-sugg-edit]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=b.dataset.suggEdit&&String(S.expandedSuggestion)!==String(b.dataset.suggEdit)?b.dataset.suggEdit:"";render();var active=root.querySelector('[data-sugg-edit="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
+      root.querySelectorAll("[data-work-tab]").forEach(function(b){b.onclick=function(){S.workTab=b.dataset.workTab||"needs";render();};});
+      bind("#rv-more-suggestions",function(){S.showAllSuggestions=!S.showAllSuggestions;render();var heading=root.querySelector('#rv-actions-section [data-work-tab="needs"]');if(heading&&heading.focus)heading.focus({preventScroll:true});});
       root.querySelectorAll("[data-backlog-view]").forEach(function(b){b.onclick=function(){S.backlogView=b.dataset.backlogView||"open";render();};});
       root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
       root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
@@ -980,15 +984,19 @@
     }
     function acceptSuggestion(card) {
       var kind = card.dataset.kind, sid = card.dataset.suggestion;
-      var body = ((card.querySelector("[data-sugg-body]") || {}).value || "").trim();
+      var body = ((card.querySelector("[data-sugg-body]") || {}).value || card.dataset.body || "").trim();
       if (!body) { var bodyEl = card.querySelector("[data-sugg-body]"); if (bodyEl) bodyEl.focus(); toast("Keep or edit the suggestion text first"); return; }
       if (kind === "comment") { decideSuggestionGroup(card, "approved", { destination: "comment", body: body }); return; }
       if (!ensureAuthor()) return;
-      var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
-      var due = (card.querySelector("[data-w-due]") || {}).value || "";
+      var owner = (card.querySelector("[data-w-owner]") || {}).value || card.dataset.owner || "";
+      var due = (card.querySelector("[data-w-due]") || {}).value || card.dataset.due || "";
       var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
-      if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
-      if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
+      if ((kind === "action" && status === "needs_action" && !owner.trim()) || (kind === "check" && !due)) {
+        S.expandedSuggestion=sid; render();
+        var missing=root.querySelector(kind === "check"?'[data-suggestion="'+String(sid).replace(/"/g,'')+'"] [data-w-due]':'[data-suggestion="'+String(sid).replace(/"/g,'')+'"] [data-w-owner]');
+        if(missing)missing.focus({preventScroll:true});
+        toast(kind === "check"?"Choose the next review date":"Confirm an owner for work that needs action"); return;
+      }
       decideSuggestionGroup(card, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
     }
     function decideSuggestionGroup(card, decision, fields) {
@@ -1081,7 +1089,13 @@
     }
     function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }
     function focusRequirement(key){
-      var selector=key==="treatment"?"#rv-treatment":key==="discussion"?"#rv-discussion-section":key==="suggestions"?"#rv-actions-section .rv-action-heading":"#rv-actions-section .rv-work-requirement";
+      if(key==="suggestions"&&S.workTab!=="needs"){S.workTab="needs";render();}
+      if(key==="work"){
+        var unmanaged=openWorkFor(S.selected).filter(function(w){return !(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(w.kind==="check"&&(w.due_date||w.next_review_date)));})[0];
+        var neededTab=unmanaged&&(unmanaged.kind==="check"||String(unmanaged.carry_forward)==="true")?"later":"open";
+        if(S.workTab!==neededTab){S.workTab=neededTab;render();}
+      }
+      var selector=key==="treatment"?"#rv-treatment":key==="discussion"?"#rv-discussion-section":key==="suggestions"?'#rv-actions-section [data-work-tab="needs"]':"#rv-actions-section .rv-work-requirement";
       if(key==="discussion"&&!(S.weekly[S.selected]||{}).slack_post_ts){S.finishReasonOpen=true;render();var reason=root.querySelector("#rv-no-discussion-reason");if(reason){reason.focus({preventScroll:true});reason.scrollIntoView({block:"center",behavior:"smooth"});}return;}
       var target=root.querySelector(selector);if(target){if(target.focus)target.focus({preventScroll:true});target.scrollIntoView({block:"center",behavior:"smooth"});}
     }
