@@ -436,7 +436,7 @@
     }
 
     function completionBlockers(q){
-      var blockers=[],weekly=S.weekly[q.ce_id]||{},pending=(S.suggestions[q.ce_id]||[]).filter(function(s){return !s.status||s.status==="pending";});
+      var blockers=[],weekly=S.weekly[q.ce_id]||{},pending=dedupeSuggestions((S.suggestions[q.ce_id]||[]).filter(function(s){return (!s.decided_at&&(!s.status||s.status==="pending"))&&(s.kind==="action"||s.kind==="check"||s.kind==="comment"||!s.kind); }));
       if(treatmentFor(q.ce_id)==="not_scheduled")blockers.push({key:"treatment",label:"Choose a review path"});
       if(!weekly.slack_post_ts&&!String(S.noDiscussionDrafts[q.ce_id]||"").trim())blockers.push({key:"discussion",label:"Start Slack or add a no-discussion reason"});
       if(pending.length)blockers.push({key:"suggestions",label:"Triage "+pending.length+" pending suggestion"+(pending.length===1?"":"s")});
@@ -621,22 +621,22 @@
     }
 
     function renderActionsCard(q) {
-      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check" || s.kind === "comment" || !s.kind; });
       var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
       var allWork = workFor(q.ce_id),openAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)<0&&!w.archived_at;}),doneAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)>=0&&!w.archived_at;});
       var laterItems=openAll.filter(function(w){return w.kind==="check"||String(w.carry_forward)==="true";}),openItems=openAll.filter(function(w){return laterItems.indexOf(w)<0;}),visibleSuggestions=S.showAllSuggestions?pending:pending.slice(0,3);
       var nextCheck=laterItems.filter(function(w){return w.due_date||w.next_review_date;}).sort(function(a,b){return String(a.due_date||a.next_review_date).localeCompare(String(b.due_date||b.next_review_date));})[0];
       var focus=[pending.length?pending.length+" suggestion"+(pending.length===1?"":"s")+" need review":"No suggestions waiting",openItems.length?openItems.length+" open action"+(openItems.length===1?"":"s"):"no open actions",nextCheck?"next check "+fmtDue(nextCheck.due_date||nextCheck.next_review_date):(laterItems.length?laterItems.length+" item"+(laterItems.length===1?"":"s")+" for later":"nothing scheduled")].join(" · ")+".";
       var suggHtml = visibleSuggestions.map(function (s) {
-        var isCheck = s.kind === "check", expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
-        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(s.kind) + '">' +
-          '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isCheck?'Suggested check':'Suggested action')+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
-          (expanded?'<div class="rv-sugg-detail"><textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
-          '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
+        var isCheck = s.kind === "check", isComment = s.kind === "comment" || !s.kind, expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(isComment?"comment":s.kind) + '">' +
+          '<button class="rv-sugg-summary" type="button" data-sugg-expand="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'"><span>'+suggestionSource(s)+'<small>'+(isComment?'Suggested observation':(isCheck?'Suggested check':'Suggested action'))+(trace.length>1?' · '+trace.length+' matching sources':'')+'</small></span><strong>'+esc(s.body||'Untitled suggestion')+'</strong><span class="rv-sugg-chevron" aria-hidden="true">⌄</span></button>' +
+          (expanded?'<div class="rv-sugg-detail"><textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isComment ? "observation" : (isCheck ? "check" : "action")) + '">' + esc(s.body || "") + "</textarea>" +
+          (isComment?'':'<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
           '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
           '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
-          '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
-          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isCheck ? "Schedule check" : "Create action") + "</button>" +
+          '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>") +
+          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isComment ? "Add observation" : (isCheck ? "Schedule check" : "Create action")) + "</button>" +
           '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
       }).join("");
       var openHtml = openItems.map(workRow).join("");

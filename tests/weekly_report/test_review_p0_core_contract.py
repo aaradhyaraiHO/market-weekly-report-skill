@@ -78,12 +78,23 @@ class ReviewP0CoreContract(unittest.TestCase):
         self.assertIn("pending.slice(0,3)", actions)
         self.assertIn("See ", actions)
         self.assertIn("S.expandedSuggestion", actions)
+        self.assertIn('s.kind === "comment" || !s.kind', actions)
+        self.assertIn("Suggested observation", actions)
+        self.assertIn("Add observation", actions)
+        self.assertIn('isComment?"comment":s.kind', actions)
         self.assertNotIn("rv-check", actions)
         committed = VIEW.split("function workRow(w)", 1)[1].split(
             "function renderWorkEdit", 1
         )[0]
         self.assertIn("rv-check", committed)
         self.assertIn("rv-trace", VIEW)
+
+    def test_completion_counts_the_same_deduplicated_suggestions_the_inbox_shows(self):
+        blockers = VIEW.split("function completionBlockers(q)", 1)[1].split(
+            "function renderFinishBar", 1
+        )[0]
+        self.assertIn("dedupeSuggestions", blockers)
+        self.assertIn('s.kind==="comment"', blockers)
 
 
 if __name__ == "__main__":
