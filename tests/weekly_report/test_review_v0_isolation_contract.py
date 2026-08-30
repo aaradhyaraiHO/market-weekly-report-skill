@@ -276,7 +276,7 @@ class ReviewV0UiContract(unittest.TestCase):
             'id="rv-continue-slack"', 'id="rv-new-slack"',
             'id="rv-new-thread-reason"', 'id="rv-new-thread-cancel"',
             "thread_operation", "replacement_reason",
-            "Continue in Slack", "Start new discussion",
+            "Continue Slack discussion #", "Start a new discussion",
             "prior thread remains in CE Memory",
         ):
             self.assertIn(fragment, self.view)
@@ -287,7 +287,7 @@ class ReviewV0UiContract(unittest.TestCase):
         )[0]
         self.assertIn("Discussion highlights", card)
         self.assertIn("rv-module-surface", card)
-        self.assertIn("Add optional BGM observation", self.view)
+        self.assertIn("BGM observation · Optional", self.view)
         self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
         self.assertIn('renderRoleNote(weekly,"performance")', card)
         self.assertIn('renderRoleNote(weekly,"bdm")', card)
@@ -311,7 +311,7 @@ class ReviewV0UiContract(unittest.TestCase):
     def test_follow_through_groups_and_timeline_are_progressive_and_local(self):
         for fragment in (
             "Actions &amp; follow-ups", "Needs review", "Open", "Later", "Completed",
-            "suggested from this Slack discussion", "rv-action-tabs",
+            "suggested from ", "Slack discussion #", "rv-action-tabs",
             "rv-focus-summary", "timeline=res.timeline||[]",
             "rv-timeline-event",
         ):
@@ -364,7 +364,7 @@ class ReviewV0UiContract(unittest.TestCase):
             "function workRow", 1
         )[0]
         for fragment in (
-            "Draft discussion summary", "Needs BGM approval", "Approve summary",
+            "Draft summary", "Needs BGM approval", "Approve summary",
             "Discussion highlights", "Actions &amp; follow-ups",
         ):
             self.assertIn(fragment, self.view)

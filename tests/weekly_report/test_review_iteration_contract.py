@@ -55,10 +55,21 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn('note.bgm_note || note.performance_note || note.bdm_note', CLIENT)
 
     def test_slack_summary_is_visible_and_sync_releases_ui_immediately(self):
-        for fragment in ("function renderWeeklySummary", 'group("Findings"', 'group("Decisions"', 'group("Open points"', "summary_updated_at", "summary_delayed"):
+        for fragment in ("function renderWeeklySummary", 'group("Finding"', 'group("Decision"', 'group("Open question"', "rv-summary-bullets", "summary_updated_at", "summary_delayed"):
             self.assertIn(fragment, VIEW)
         sync = VIEW.split("function syncThread()", 1)[1].split("function addGranola()", 1)[0]
         self.assertLess(sync.index("render();"), sync.index("Promise.all([loadCe"))
+
+    def test_current_thread_continue_opens_composer_instead_of_navigating(self):
+        self.assertIn('id="rv-continue-slack"', VIEW)
+        self.assertIn('S.threadOperation="continue";S.mentionPreview=null;render()', VIEW)
+        self.assertIn('S.threadOperation==="continue"?\'<button class="rv-btn small primary"', VIEW)
+        self.assertIn('weekly.slack_post_ts && !S.threadOperation', VIEW)
+
+    def test_approved_suggestion_moves_to_a_visible_destination(self):
+        self.assertIn('S.workTab=destination==="check"?"later":"open"', VIEW)
+        self.assertIn('Approved · moved to Later', VIEW)
+        self.assertIn('Approved · moved to Open', VIEW)
 
     def test_memory_drawer_survives_ce_hydration_render(self):
         self.assertIn("memoryOpen: false", VIEW)

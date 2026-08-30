@@ -59,7 +59,7 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
+      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, threadRegistryLoaded:{}, threadRegistryError:{}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
       processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", workTab: "needs", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
@@ -286,7 +286,7 @@
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
         api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
         api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; }),
-        api.threads({ market_slug:S.market_slug,ce_id:ceId },requestOptions).catch(function(){return {active_thread:null,threads:[]};})
+        api.threads({ market_slug:S.market_slug,ce_id:ceId },requestOptions).catch(function(){return {__thread_error:true};})
       ]).then(function (res) {
         if(S.ceRequestSeq[ceId]!==seq)return;
         var rows = res[0].weekly || [];
@@ -294,7 +294,8 @@
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
-        S.threadRegistry[ceId] = {active:res[3].active_thread||null,threads:res[3].threads||[]};
+        if(res[3].__thread_error){S.threadRegistryError[ceId]=true;delete S.threadRegistryLoaded[ceId];}
+        else{S.threadRegistry[ceId] = {active:res[3].active_thread||null,threads:res[3].threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];}
         S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
@@ -462,31 +463,35 @@
       var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
       if(role!=="bgm"&&!saved)return "";
       if(role!=="bgm"&&saved)return '<details class="rv-role-note rv-role-readonly"><summary><span><strong>'+esc(m.label)+'</strong><small>Historical · read-only · '+esc(weekly[m.author]||"Unknown author")+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-note-text">'+esc(weekly[m.key])+'</div></details>';
-      if(role==="bgm"&&!saved&&!editing&&!hasDraft)return '<button class="rv-role-collapsed" type="button" data-role-open="bgm" aria-expanded="false"><span><strong>Add optional BGM observation</strong><small>Use only for useful context not already captured in Slack.</small></span><span aria-hidden="true">＋</span></button>';
+      if(role==="bgm"&&!saved&&!editing&&!hasDraft)return '<div class="rv-bgm-observation-surface"><span><strong>BGM observation · Optional</strong><small>Add useful context not already captured in Slack.</small></span><button class="rv-btn small" type="button" data-role-open="bgm" aria-expanded="false">Add observation</button></div>';
       if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
       return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+((editing||hasDraft)?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
     }
     function renderWeeklySummary(weekly){
       if(!weekly||!weekly.slack_post_ts)return "";
+      var discussionNumber=String(weekly.slack_discussion_number||""),discussionLabel=discussionNumber?"Slack discussion #"+discussionNumber:"Current Slack discussion";
       var approved=String(weekly.summary_status||"")==="approved",raw=approved?(weekly.summary_approved_json||weekly.summary_json):(weekly.summary_draft_json||""),summary=null;try{summary=raw?JSON.parse(raw):null;}catch(e){}
-      function group(label,rows){return rows&&rows.length?'<div class="rv-sum-group"><span class="rv-sum-label">'+label+'</span><ul>'+rows.map(function(row){return '<li>'+esc(typeof row==="string"?row:(row.text||row.body||""))+'</li>';}).join("")+'</ul></div>':"";}
+      function group(label,rows){return rows&&rows.length?rows.map(function(row){return '<li><strong>'+label+':</strong> '+esc(typeof row==="string"?row:(row.text||row.body||""))+'</li>';}).join(""):"";}
       var delayed=weekly.sync_status==="summary_delayed",pending=String(weekly.summary_status)==="pending",rejected=String(weekly.summary_status)==="rejected",status=delayed?"Summary delayed · Slack replies remain available":
         (approved?"Approved by "+(weekly.summary_approved_by||"BGM")+" · "+fmtWhen(weekly.summary_approved_at||weekly.summary_updated_at):(pending?"Draft summary awaiting BGM approval":(rejected?"Draft summary rejected":"Waiting for replies")));
-      var content=summary?(group("Findings",summary.findings)+group("Decisions",summary.decisions)+group("Open points",summary.open_points)):"";
-      return '<div class="rv-summary-surface'+(approved?' approved':'')+'"><div class="rv-summary-title"><div><span class="rv-origin slack">Slack</span><strong>'+(approved?'Approved discussion summary':'Draft discussion summary')+'</strong></div><span class="rv-attention-chip '+(approved?'approved':'')+'">'+(approved?'Approved':'Needs BGM approval')+'</span></div>'+
+      var content=summary?'<ul class="rv-summary-bullets">'+(group("Finding",summary.findings)+group("Decision",summary.decisions)+group("Open question",summary.open_points))+'</ul>':"";
+      var finding=summary&&summary.findings&&summary.findings.length?(typeof summary.findings[0]==="string"?summary.findings[0]:(summary.findings[0].text||summary.findings[0].body||"")):"";
+      return '<div class="rv-summary-surface'+(approved?' approved':'')+'" data-thread-binding-id="'+esc(weekly.thread_binding_id||"")+'" data-slack-discussion-number="'+esc(discussionNumber)+'"><div class="rv-summary-title"><div><span class="rv-origin slack">Slack</span><strong>'+esc(discussionLabel)+' · '+(approved?'Approved summary':'Draft summary')+'</strong></div><span class="rv-attention-chip '+(approved?'approved':'')+'">'+(approved?'Approved':'Needs BGM approval')+'</span></div>'+
         '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
-        (content?'<div class="rv-summary">'+content+'</div>':'<div class="rv-summary rv-summary-empty">No summary is available yet. Slack replies remain available at source.</div>')+
+        (approved?'<div class="rv-summary-principal"><strong>Finding</strong><span>'+esc(finding||"Approved summary available")+'</span></div><details class="rv-summary-details"><summary>View details</summary><div class="rv-summary">'+content+'</div></details>':(content?'<div class="rv-summary">'+content+'</div>':'<div class="rv-summary rv-summary-empty">No summary is available yet. Slack replies remain available at source.</div>'))+
         (pending?'<div class="rv-summary-actions"><button class="rv-btn small primary" id="rv-summary-approve" type="button">Approve summary</button><details class="rv-summary-approval"><summary class="rv-btn small">Edit</summary><textarea id="rv-summary-draft">'+esc(raw)+'</textarea></details><button class="rv-btn small" id="rv-summary-reject" type="button">Dismiss</button><button class="rv-link" id="rv-summary-regenerate" type="button">Regenerate</button></div>':'')+'</div>';
     }
     function renderCommentaryCard(q){
-      var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
-      var thread=hasWeekActivity?'<div class="rv-thread-compact rv-thread-visible"><div class="rv-thread-status"><span><strong>Current Slack discussion</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Waiting for replies')+'</small></span><span class="rv-status-chip">Active</span></div><div class="rv-thread"><a class="rv-btn small primary" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open / continue thread ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start new</button><button class="rv-btn small ghost" type="button" id="rv-sync-thread">Refresh summary</button></div>'+renderWeeklySummary(weekly)+'</div>':'';
-      var priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Use the durable CE thread'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue in Slack</button><button class="rv-btn small" type="button" id="rv-new-slack">Start new discussion</button></div></div>':'';
+      var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},registryLoaded=!!S.threadRegistryLoaded[q.ce_id],registryError=!!S.threadRegistryError[q.ce_id],binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
+      var discussionNumber=String(weekly.slack_discussion_number||(registry.threads||[]).length||1);
+      var thread=hasWeekActivity?'<div class="rv-thread-compact rv-thread-visible"><div class="rv-thread-status"><span><strong>Slack discussion #'+esc(discussionNumber)+'</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Waiting for replies')+'</small></span><span class="rv-status-chip">Active</span></div><div class="rv-thread"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue Slack discussion #'+esc(discussionNumber)+'</button><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open in Slack ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button><button class="rv-btn small ghost" type="button" id="rv-sync-thread">Refresh summary</button></div>'+renderWeeklySummary(weekly)+'</div>':'';
+      var priorNumber=String((registry.threads||[]).length||1),priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Use the durable CE thread'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue Slack discussion #'+esc(priorNumber)+'</button><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button></div></div>':'';
       var newThread=S.threadOperation==="new_parent"?'<div class="rv-new-thread-choice"><label class="rv-field-label" for="rv-new-thread-reason">Why start a new discussion?</label><input id="rv-new-thread-reason" value="'+esc(S.newThreadReason||"")+'" placeholder="Issue, owner, scope, or channel changed (required)"><div class="rv-note-actions"><button class="rv-link" type="button" id="rv-new-thread-cancel">Cancel</button><button class="rv-btn small primary" type="button" id="rv-start-slack">Preview new Slack post</button></div></div>':'';
-      var normalStart=!hasWeekActivity&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'';
+      var registryState=!hasWeekActivity&&!registryLoaded?(registryError?'<div class="rv-thread-discovery error"><strong>Could not check the existing CE thread</strong><span>Retry before starting a discussion so Review does not create a duplicate.</span><button class="rv-btn small" type="button" id="rv-retry-threads">Retry thread check</button></div>':'<div class="rv-thread-discovery" role="status"><strong>Checking the existing CE thread…</strong><span>Slack options will appear when the CE thread registry responds.</span></div>'):'';
+      var normalStart=S.threadOperation==="continue"?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Preview Slack message')+'</button>':(!hasWeekActivity&&registryLoaded&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'');
       var canCompose=!hasWeekActivity||S.threadOperation==="new_parent"||S.threadOperation==="continue";
-      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+priorChoice+newThread+(canCompose?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
-      return '<section class="rv-flow-section rv-discussion-module" id="rv-discussion-section"><div class="rv-module-head"><span class="rv-module-icon" aria-hidden="true">↗</span><div><div class="rv-card-title">Discussion highlights</div><div class="rv-card-sub">What the team discussed, what needs BGM approval, and the source thread.</div></div></div><div class="rv-module-surface"><div class="rv-card-body rv-role-notes">'+composer+'</div></div><div class="rv-optional-notes"><span class="rv-section-label">Optional context &amp; history</span>'+renderRoleNote(weekly,"bgm")+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</div></section>';
+      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+registryState+priorChoice+newThread+(canCompose&&registryLoaded?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
+      return '<section class="rv-flow-section rv-discussion-module" id="rv-discussion-section"><div class="rv-module-head"><span class="rv-module-icon" aria-hidden="true">↗</span><div><div class="rv-card-title">Discussion highlights</div><div class="rv-card-sub">What the team discussed, what needs BGM approval, and the source thread.</div></div></div><div class="rv-module-surface"><div class="rv-card-body rv-role-notes">'+composer+'</div></div><div class="rv-optional-notes">'+renderRoleNote(weekly,"bgm")+'<details class="rv-history-notes"><summary>Historical Performance and BDM notes · read-only</summary>'+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</details></div></section>';
     }
 
     function normalizedSuggestionBody(s) {
@@ -655,9 +660,8 @@
       var tabs=[['needs','Needs review',pending.length],['open','Open',openItems.length],['later','Later',laterItems.length],['completed','Completed',doneAll.length]];
       var active=S.workTab||'needs',panel=active==='needs'?(suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')):active==='open'?(openHtml||'<div class="rv-empty-state"><strong>No open work</strong><span>Approved actions will appear here.</span></div>'):active==='later'?(laterHtml||'<div class="rv-empty-state"><strong>Nothing scheduled</strong><span>Checks and explicit carry-forward items will appear here.</span></div>'):(doneHtml||'<div class="rv-empty-state"><strong>No completed work</strong><span>Recent completed items will appear here.</span></div>');
       return '<section class="rv-flow-section rv-actions-module" id="rv-actions-section"><div class="rv-module-head"><span class="rv-module-icon attention" aria-hidden="true">✓</span><div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div><div class="rv-card-sub">Review suggestions separately from work the team has already committed to.</div></div><span class="rv-card-count">'+count+'</span></div>' +
-        '<div class="rv-source-bridge"><span aria-hidden="true">↓</span><strong>'+pending.length+' follow-up'+(pending.length===1?'':'s')+' suggested from this Slack discussion</strong></div><div class="rv-action-surface"><p class="rv-focus-summary">'+esc(focus)+'</p><div class="rv-action-tabs" role="tablist">'+tabs.map(function(t){return '<button type="button" role="tab" class="rv-action-tab'+(active===t[0]?' active':'')+'" aria-selected="'+(active===t[0]?'true':'false')+'" data-work-tab="'+t[0]+'">'+t[1]+' <span>'+t[2]+'</span></button>';}).join('')+'</div><div class="rv-action-panel">'+panel+emptyState+'</div>' +
-        composer +
-        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button><button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
+        '<div class="rv-source-bridge"><span aria-hidden="true">↓</span><strong>'+pending.length+' follow-up'+(pending.length===1?'':'s')+' suggested from '+esc((S.weekly[q.ce_id]||{}).slack_discussion_number?'Slack discussion #'+(S.weekly[q.ce_id]||{}).slack_discussion_number:'the active Slack discussion')+'</strong></div><div class="rv-action-surface"><p class="rv-focus-summary">'+esc(focus)+'</p><div class="rv-action-tabs" role="tablist">'+tabs.map(function(t){return '<button type="button" role="tab" class="rv-action-tab'+(active===t[0]?' active':'')+'" aria-selected="'+(active===t[0]?'true':'false')+'" data-work-tab="'+t[0]+'">'+t[1]+' <span>'+t[2]+'</span></button>';}).join('')+'</div><div class="rv-action-panel">'+panel+emptyState+'</div>' +
+        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button><button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div>'+composer+'</div></section>';
     }
     function workRow(w) {
       var done = CLOSED.indexOf(w.status) >= 0, isCheck = w.kind === "check";
@@ -764,10 +768,11 @@
       root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
       root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
+      bind("#rv-retry-threads",function(){delete S.ceLoadedAt[S.selected];delete S.threadRegistryError[S.selected];loadCe(S.selected);render();});
       root.querySelectorAll("[data-resolve]").forEach(function(b){b.onclick=function(){focusRequirement(b.dataset.resolve);};});
       bind("#rv-save-finish-reason",function(){var input=root.querySelector("#rv-no-discussion-reason"),value=String(input?input.value:"").trim();if(!value){if(input)input.focus();toast("Add a concise reason");return;}S.noDiscussionDrafts[S.selected]=value;S.finishReasonOpen=false;render();toast("No-discussion reason ready for the review receipt");});
       var finishReason=root.querySelector("#rv-no-discussion-reason");if(finishReason)finishReason.oninput=function(){S.noDiscussionDrafts[S.selected]=finishReason.value;};
-      bind("#rv-continue-slack", function(){S.threadOperation="continue";startSlack();});
+      bind("#rv-continue-slack", function(){S.threadOperation="continue";S.mentionPreview=null;render();var message=root.querySelector("#rv-slack-message");if(message)message.focus({preventScroll:true});});
       bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
       bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";S.mentionPreview=null;render();});
       bind("#rv-confirm-slack", postSlack);
@@ -813,8 +818,8 @@
       root.querySelectorAll("[data-work-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = null; render(); }; });
       root.querySelectorAll("[data-work-edit-save]").forEach(function (b) { b.onclick = function () { saveWorkEdit(b.dataset.workEditSave); }; });
       root.querySelectorAll("[data-work-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingWork = null; render(); }; });
-      bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
-      bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
+      bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
+      bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
       bind("#rv-c-cancel", function () { S.compose = ""; render(); });
       bind("#rv-c-save", saveCompose);
       bind("#rv-next-ce", nextCe);
@@ -916,7 +921,7 @@
     }
     function startSlack() {
       var weekly = S.weekly[S.selected];
-      if (weekly && weekly.slack_post_ts && S.threadOperation!=="new_parent") { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
+      if (weekly && weekly.slack_post_ts && !S.threadOperation) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
       if (!ensureAuthor() || !api) return;
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
       var ta = root.querySelector("#rv-slack-message"); var text = ta ? ta.value.trim() : (S.slackDrafts[String(S.selected)] || "");
@@ -956,7 +961,7 @@
     }
     function decideSummary(decision){
       if(!api||S.asyncBusy.summary)return;
-      var draft=root.querySelector("#rv-summary-draft"),payload=Object.assign({},ident(S.selected),{decision:decision,decided_by:author()||"authenticated BGM"});
+      var weekly=S.weekly[S.selected]||{},draft=root.querySelector("#rv-summary-draft"),payload=Object.assign({},ident(S.selected),{decision:decision,decided_by:author()||"authenticated BGM",thread_binding_id:weekly.thread_binding_id||"",slack_discussion_number:weekly.slack_discussion_number||""});
       if(draft)payload.summary_json=draft.value;
       S.asyncBusy.summary=true;var btn=root.querySelector("#rv-summary-"+decision);if(btn){btn.disabled=true;btn.textContent=decision==="approved"?"Approving…":"Saving…";}
       api.decideSummary(payload).then(function(res){S.weekly[S.selected]=res.weekly;toast(decision==="approved"?"Summary approved for CE Memory":(decision==="rejected"?"Summary rejected":"Regeneration requested"));render();if(decision==="regenerate")syncThread();})
@@ -1002,9 +1007,10 @@
     function decideSuggestionGroup(card, decision, fields) {
       var primary = card.dataset.suggestion, duplicates = String(card.dataset.duplicateIds || "").split(",").filter(Boolean);
       if (!api) return;
+      var destination=fields&&fields.destination;
       var calls = [api.decideSuggestion(Object.assign({ suggestion_id:primary, decision:decision, decided_by:author() }, fields || {}))];
       duplicates.forEach(function (sid) { calls.push(api.decideSuggestion({ suggestion_id:sid, decision:"rejected", decided_by:author(), duplicate_of:primary })); });
-      Promise.all(calls).then(function(){track("suggestion_triaged",{value_number:duplicates.length+1,value_text:decision,idempotency_key:"suggestion:"+primary+":"+decision});toast(decision==="approved"?(duplicates.length?"Added · duplicate suggestions archived":"Added"):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
+      Promise.all(calls).then(function(){track("suggestion_triaged",{value_number:duplicates.length+1,value_text:decision,idempotency_key:"suggestion:"+primary+":"+decision});if(decision==="approved"&&destination!=="comment")S.workTab=destination==="check"?"later":"open";toast(decision==="approved"?(destination==="check"?"Approved · moved to Later":destination==="action"?"Approved · moved to Open":(duplicates.length?"Added · duplicate suggestions archived":"Added")):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
@@ -1096,7 +1102,7 @@
         if(S.workTab!==neededTab){S.workTab=neededTab;render();}
       }
       var selector=key==="treatment"?"#rv-treatment":key==="discussion"?"#rv-discussion-section":key==="suggestions"?'#rv-actions-section [data-work-tab="needs"]':"#rv-actions-section .rv-work-requirement";
-      if(key==="discussion"&&!(S.weekly[S.selected]||{}).slack_post_ts){S.finishReasonOpen=true;render();var reason=root.querySelector("#rv-no-discussion-reason");if(reason){reason.focus({preventScroll:true});reason.scrollIntoView({block:"center",behavior:"smooth"});}return;}
+      if(key==="discussion"&&!(S.weekly[S.selected]||{}).slack_post_ts){var slackAction=root.querySelector("#rv-continue-slack,#rv-start-slack,#rv-retry-threads,#rv-discussion-section");if(slackAction){if(slackAction.focus)slackAction.focus({preventScroll:true});slackAction.scrollIntoView({block:"center",behavior:"smooth"});}return;}
       var target=root.querySelector(selector);if(target){if(target.focus)target.focus({preventScroll:true});target.scrollIntoView({block:"center",behavior:"smooth"});}
     }
     function finishReview() {
