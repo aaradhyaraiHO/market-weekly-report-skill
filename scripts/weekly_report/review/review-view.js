@@ -61,9 +61,9 @@
       queue: [], byId: {}, selected: null, loaded: false,
       receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, threadRegistryLoaded:{}, threadRegistryError:{}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
       loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", workTab: "needs", mentionPreview: null, mentionBusy: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, composeDrafts: {}, composeByCe: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", workTab: "needs", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      threadOperation: "", newThreadReason: "", backlogView: "open", reconciliation: null, finishReasonOpen:false, showAllSuggestions:false,
+      threadOperation: "", threadOperationByCe: {}, newThreadReason: "", newThreadReasonDrafts: {}, backlogView: "open", reconciliation: null, finishReasonOpen:false, showAllSuggestions:false,
       drafts: {}, outcomeDrafts: {}, noDiscussionDrafts:{}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
@@ -124,6 +124,19 @@
       if (note) { S.noteDraft = note.value; S.drafts[String(S.selected)] = note.value; }
       var slack = root.querySelector("#rv-slack-message");
       if (slack) S.slackDrafts[String(S.selected)] = slack.value;
+      var reason = root.querySelector("#rv-new-thread-reason");
+      if (reason) S.newThreadReasonDrafts[String(S.selected)] = reason.value;
+      if (S.threadOperation) S.threadOperationByCe[String(S.selected)] = S.threadOperation;
+      if (S.compose) {
+        var composeKey=composeDraftKey(S.selected,S.compose);
+        S.composeByCe[String(S.selected)]=S.compose;
+        S.composeDrafts[composeKey]={
+          text:(root.querySelector("#rv-c-text")||{}).value||"",
+          owner:(root.querySelector("#rv-c-owner")||{}).value||"",
+          due:(root.querySelector("#rv-c-due")||{}).value||"",
+          status:(root.querySelector("#rv-c-status")||{}).value||(S.compose==="check"?"scheduled":"needs_action")
+        };
+      }
     }
     function openAnalyticsDrawer(ceId) {
       captureVisibleDrafts();
@@ -303,12 +316,13 @@
     }
 
     function select(ceId) {
+      captureVisibleDrafts();
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = ""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = ""; S.finishReasonOpen=false; S.showAllSuggestions=false;
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = S.composeByCe[S.selected]||""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = ""; S.finishReasonOpen=false; S.showAllSuggestions=false;
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
-      S.mentionPreview = null; S.threadOperation = ""; S.newThreadReason = ""; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
+      S.mentionPreview = null; S.threadOperation = S.threadOperationByCe[S.selected]||""; S.newThreadReason = S.newThreadReasonDrafts[S.selected]||""; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
       syncUrl(S.selected);
       render();
       if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
@@ -458,6 +472,7 @@
         {label:"BGM note",key:"bgm_note",author:"bgm_author",updated:"bgm_updated_at",deleted:"note_deleted_at"};
     }
     function roleDraftKey(role){return String(S.selected)+":"+role;}
+    function composeDraftKey(ceId,kind){return [S.market_slug,S.week_start,String(ceId),String(kind)].join(":");}
     function renderRoleNote(weekly,role){
       var m=roleMeta(role),saved=!!(weekly&&weekly[m.key]&&!weekly[m.deleted]),editing=S.editingRole===role;
       var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
@@ -701,11 +716,11 @@
         '<button class="rv-btn small primary" type="button" data-work-edit-save="' + esc(w.work_id) + '">Save changes</button></div></div></div>';
     }
     function renderCompose(kind) {
-      var isCheck = kind === "check";
-      return '<div class="rv-compose" style="display:block"><div class="row1"><input type="text" id="rv-c-text" placeholder="' + (isCheck ? "What should we revisit next week?" : "What needs to happen?") + '"></div>' +
-        '<div class="row2"><input type="text" id="rv-c-owner" placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '">' +
-        '<input type="date" id="rv-c-due">' +
-        '<select class="rv-select" id="rv-c-status">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
+      var isCheck = kind === "check",draft=S.composeDrafts[composeDraftKey(S.selected,kind)]||{},defaultStatus=isCheck?"scheduled":"needs_action";
+      return '<div class="rv-compose" style="display:block"><div class="row1"><input type="text" id="rv-c-text" value="'+esc(draft.text||'')+'" placeholder="' + (isCheck ? "What should we revisit next week?" : "What needs to happen?") + '"></div>' +
+        '<div class="row2"><input type="text" id="rv-c-owner" value="'+esc(draft.owner||'')+'" placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '">' +
+        '<input type="date" id="rv-c-due" value="'+esc(draft.due||'')+'">' +
+        '<select class="rv-select" id="rv-c-status">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, draft.status||defaultStatus) + "</select></div>" +
         '<div class="foot"><button class="rv-btn small" type="button" id="rv-c-cancel">Cancel</button>' +
         '<button class="rv-btn small primary" type="button" id="rv-c-save">' + (isCheck ? "Schedule check" : "Create action") + "</button></div></div>";
     }
@@ -776,15 +791,15 @@
       root.querySelectorAll("[data-resolve]").forEach(function(b){b.onclick=function(){focusRequirement(b.dataset.resolve);};});
       bind("#rv-save-finish-reason",function(){var input=root.querySelector("#rv-no-discussion-reason"),value=String(input?input.value:"").trim();if(!value){if(input)input.focus();toast("Add a concise reason");return;}S.noDiscussionDrafts[S.selected]=value;S.finishReasonOpen=false;render();toast("No-discussion reason ready for the review receipt");});
       var finishReason=root.querySelector("#rv-no-discussion-reason");if(finishReason)finishReason.oninput=function(){S.noDiscussionDrafts[S.selected]=finishReason.value;};
-      bind("#rv-continue-slack", function(){S.threadOperation="continue";S.mentionPreview=null;render();var message=root.querySelector("#rv-slack-message");if(message)message.focus({preventScroll:true});});
-      bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
-      bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";S.mentionPreview=null;render();});
+      bind("#rv-continue-slack", function(){S.threadOperation="continue";S.threadOperationByCe[String(S.selected)]="continue";S.mentionPreview=null;render();var message=root.querySelector("#rv-slack-message");if(message)message.focus({preventScroll:true});});
+      bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.threadOperationByCe[String(S.selected)]="new_parent";S.newThreadReason=S.newThreadReasonDrafts[String(S.selected)]||"";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
+      bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";delete S.threadOperationByCe[String(S.selected)];delete S.newThreadReasonDrafts[String(S.selected)];S.mentionPreview=null;render();});
       bind("#rv-confirm-slack", postSlack);
       bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-slack-message"); if (n) n.focus(); });
       var noteInput = root.querySelector("#rv-note");
       if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.drafts[S.selected]=S.noteDraft; S.mentionPreview = null; };
       var slackInput=root.querySelector("#rv-slack-message");if(slackInput)slackInput.oninput=function(){S.slackDrafts[String(S.selected)]=slackInput.value;S.mentionPreview=null;};
-      var threadReason=root.querySelector("#rv-new-thread-reason");if(threadReason)threadReason.oninput=function(){S.newThreadReason=threadReason.value;S.mentionPreview=null;};
+      var threadReason=root.querySelector("#rv-new-thread-reason");if(threadReason)threadReason.oninput=function(){S.newThreadReason=threadReason.value;S.newThreadReasonDrafts[String(S.selected)]=threadReason.value;S.mentionPreview=null;};
       bind("#rv-sync-thread", syncThread);
       bind("#rv-summary-approve", function(){decideSummary("approved");});
       bind("#rv-summary-reject", function(){decideSummary("rejected");});
@@ -822,9 +837,10 @@
       root.querySelectorAll("[data-work-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = null; render(); }; });
       root.querySelectorAll("[data-work-edit-save]").forEach(function (b) { b.onclick = function () { saveWorkEdit(b.dataset.workEditSave); }; });
       root.querySelectorAll("[data-work-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingWork = null; render(); }; });
-      bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
-      bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
-      bind("#rv-c-cancel", function () { S.compose = ""; render(); });
+      bind("#rv-add-action", function () { captureVisibleDrafts();S.compose = S.compose === "action" ? "" : "action";if(S.compose)S.composeByCe[String(S.selected)]=S.compose;else delete S.composeByCe[String(S.selected)];render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
+      bind("#rv-add-check", function () { captureVisibleDrafts();S.compose = S.compose === "check" ? "" : "check";if(S.compose)S.composeByCe[String(S.selected)]=S.compose;else delete S.composeByCe[String(S.selected)];render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
+      ["#rv-c-text","#rv-c-owner","#rv-c-due","#rv-c-status"].forEach(function(sel){var el=root.querySelector(sel);if(el)el.oninput=el.onchange=function(){captureVisibleDrafts();};});
+      bind("#rv-c-cancel", function () { delete S.composeDrafts[composeDraftKey(S.selected,S.compose)];delete S.composeByCe[String(S.selected)];S.compose = ""; render(); });
       bind("#rv-c-save", saveCompose);
       bind("#rv-next-ce", nextCe);
       bind("#rv-finish", finishReview);
@@ -950,7 +966,7 @@
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
       api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, discussion_text: text, discussion_author: author(), request_id: reqId, report_url: location.href, thread_operation:S.threadOperation||"", replacement_reason:S.newThreadReason||"" }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; if(res.thread)S.threadRegistry[S.selected]={active:res.thread,threads:[res.thread].concat((S.threadRegistry[S.selected]||{}).threads||[])}; delete S.slackDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
+        .then(function (res) { S.weekly[S.selected] = res.weekly; if(res.thread)S.threadRegistry[S.selected]={active:res.thread,threads:[res.thread].concat((S.threadRegistry[S.selected]||{}).threads||[])}; delete S.slackDrafts[String(S.selected)];delete S.threadOperationByCe[String(S.selected)];delete S.newThreadReasonDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
         .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · discussion kept locally"); });
     }
     function syncThread() {
@@ -1045,16 +1061,16 @@
     function saveCompose() {
       if (!ensureAuthor() || !api) return;
       if(S.asyncBusy.createWork)return;
-      var kind = S.compose, text = root.querySelector("#rv-c-text").value.trim();
+      var kind = S.compose,composeKey=composeDraftKey(S.selected,kind), text = root.querySelector("#rv-c-text").value.trim();
       if (!text) { root.querySelector("#rv-c-text").focus(); toast("Describe it first"); return; }
       var owner = root.querySelector("#rv-c-owner").value.trim(), due = root.querySelector("#rv-c-due").value, status = root.querySelector("#rv-c-status").value;
       if (kind === "action" && status === "needs_action" && !owner) { root.querySelector("#rv-c-owner").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { root.querySelector("#rv-c-due").focus(); toast("Choose the next review date"); return; }
       S.asyncBusy.createWork=true;
       var started=performance.now(),tempId="pending_"+Date.now()+"_"+hash(text+owner+due),item={ work_id:tempId,market_slug:S.market_slug,ce_id:S.selected,ce_name:(S.byId[S.selected]||{}).ce_name,origin_week:S.week_start,kind:kind,text:text,owner:owner,due_date:due,status:status,source_type:"bgm_manual",_pending:true };
-      (S.work[String(S.selected)]=S.work[String(S.selected)]||[]).push(item);S.compose="";render();toast(kind==="check"?"Scheduling check…":"Creating action…");
-      api.saveWork(Object.assign({},item,{work_id:""})).then(function(res){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list[idx]=res.work_item||Object.assign({},item,{work_id:(res.work_item||{}).work_id||tempId,_pending:false});console.info("review_work_persist_ms",Math.round(performance.now()-started));toast(kind==="check"?"Check scheduled":"Action created");render();return reloadWork();})
-        .catch(function(){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list.splice(idx,1);S.compose=kind;toast("Could not save work item · rolled back");render();})
+      S.composeDrafts[composeKey]={text:text,owner:owner,due:due,status:status};(S.work[String(S.selected)]=S.work[String(S.selected)]||[]).push(item);S.compose="";delete S.composeByCe[String(S.selected)];render();toast(kind==="check"?"Scheduling check…":"Creating action…");
+      api.saveWork(Object.assign({},item,{work_id:""})).then(function(res){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list[idx]=res.work_item||Object.assign({},item,{work_id:(res.work_item||{}).work_id||tempId,_pending:false});delete S.composeDrafts[composeKey];console.info("review_work_persist_ms",Math.round(performance.now()-started));toast(kind==="check"?"Check scheduled":"Action created");render();return reloadWork();})
+        .catch(function(){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list.splice(idx,1);S.compose=kind;S.composeByCe[String(item.ce_id)]=kind;toast("Could not save work item · rolled back");render();})
         .finally(function(){S.asyncBusy.createWork=false;});
     }
     function toggleWork(workId) {

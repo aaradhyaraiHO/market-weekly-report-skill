@@ -39,6 +39,25 @@ class ReviewIterationContract(unittest.TestCase):
         self.assertIn("roleDrafts", VIEW)
         self.assertIn("slackDrafts", VIEW)
 
+    def test_manual_work_and_thread_choice_drafts_survive_ce_switches(self):
+        for fragment in (
+            "composeDrafts",
+            "composeByCe",
+            "composeDraftKey(S.selected,S.compose)",
+            "captureVisibleDrafts();",
+            'S.compose = S.composeByCe[S.selected]||""',
+            "newThreadReasonDrafts",
+            "threadOperationByCe",
+        ):
+            self.assertIn(fragment, VIEW)
+        compose = VIEW.split("function renderCompose(kind)", 1)[1].split(
+            "function renderMemoryRail", 1
+        )[0]
+        self.assertIn("draft.text", compose)
+        self.assertIn("draft.owner", compose)
+        self.assertIn("draft.due", compose)
+        self.assertIn("draft.status", compose)
+
     def test_non_bgm_role_notes_are_read_only_compatibility_memory(self):
         role = VIEW.split("function renderRoleNote(weekly,role)", 1)[1].split(
             "function renderWeeklySummary", 1
@@ -62,7 +81,9 @@ class ReviewIterationContract(unittest.TestCase):
 
     def test_current_thread_continue_opens_composer_instead_of_navigating(self):
         self.assertIn('id="rv-continue-slack"', VIEW)
-        self.assertIn('S.threadOperation="continue";S.mentionPreview=null;render()', VIEW)
+        self.assertIn('S.threadOperation="continue"', VIEW)
+        self.assertIn('S.threadOperationByCe[String(S.selected)]="continue"', VIEW)
+        self.assertIn('S.mentionPreview=null;render()', VIEW)
         self.assertIn('S.threadOperation==="continue"?\'<button class="rv-btn small primary"', VIEW)
         self.assertIn('weekly.slack_post_ts && !S.threadOperation', VIEW)
 
