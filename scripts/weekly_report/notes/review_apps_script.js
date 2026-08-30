@@ -1127,7 +1127,11 @@ function reviewWeeklySlackPost(p){
   var err=reviewRequired(Object.assign({},p,{discussion_text:discussionText,discussion_author:discussionAuthor}),["market_slug","ce_id","ce_name","week_start","channel","discussion_text","discussion_author","request_id"]);
   if(err)return err;
   var current=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
-  if(current && current.slack_post_ts && String(p.thread_operation||"")!=="new_parent")
+  // A weekly record can already point at the active CE thread and still accept
+  // additional BGM replies. Only the same request is a duplicate; treating all
+  // continuations as duplicates makes the UI report success without posting.
+  if(current && current.slack_post_ts && p.request_id &&
+      String(current.last_post_request_id||"")===String(p.request_id))
     return jsonResp({ok:true,duplicate:true,weekly:current});
   var trustedAuthor=reviewTrustedAuthor(p,discussionAuthor);
   var mentions=reviewResolveMentions(discussionText,p.market_slug);

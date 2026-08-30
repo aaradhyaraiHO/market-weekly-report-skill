@@ -139,7 +139,8 @@ class ReviewBackendContract(unittest.TestCase):
         ):
             self.assertIn(f'"{field}"', self.backend)
         self.assertIn("function reviewWeeklyFor(market,ceId,week)", self.backend)
-        self.assertIn('if(current && current.slack_post_ts && String(p.thread_operation||"")!=="new_parent")', self.backend)
+        self.assertNotIn('if(current && current.slack_post_ts && String(p.thread_operation||"")!=="new_parent")', self.backend)
+        self.assertIn('String(current.last_post_request_id||"")===String(p.request_id)', self.backend)
         self.assertIn("payload.client_msg_id=String(p.request_id)", self.backend)
         self.assertIn('next.sync_status="post_failed"', self.backend)
 
