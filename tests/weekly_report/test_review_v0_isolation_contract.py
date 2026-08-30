@@ -318,6 +318,7 @@ class ReviewV0UiContract(unittest.TestCase):
             self.assertIn(fragment, self.view)
         self.assertIn(".rv-action-surface", self.css)
         self.assertIn(".rv-action-tab.active", self.css)
+        self.assertNotIn('e.related_work_id?"Work "+e.related_work_id', self.view)
 
     def test_nomination_requires_reason_and_uses_stable_ce_id(self):
         for fragment in (
