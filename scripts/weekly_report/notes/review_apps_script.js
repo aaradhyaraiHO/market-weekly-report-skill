@@ -89,7 +89,8 @@ var REVIEW_TABLES = {
       "reply_count","contributors_json","summary_json","summary_upto_ts","summary_updated_at",
       "summary_status","summary_draft_json","summary_approved_json","summary_approved_by",
       "summary_approved_at","summary_rejected_at","summary_rejection_reason",
-      "sync_status","last_error","last_post_request_id","version"]
+      "sync_status","last_error","last_post_request_id","version",
+      "thread_binding_id","slack_discussion_number"]
   },
   suggestions: {
     sheet: "review_source_suggestions",
@@ -1027,9 +1028,14 @@ function reviewThreadFor(market, ceId) {
 }
 
 function reviewSummaryDecide(p){
-  var err=reviewRequired(p,["market_slug","ce_id","week_start","decision","decided_by"]);if(err)return err;
+  var err=reviewRequired(p,["market_slug","ce_id","week_start","decision","decided_by","thread_binding_id","slack_discussion_number"]);if(err)return err;
   var state=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
   if(!state)return jsonResp({ok:false,error:"weekly commentary not found"});
+  if(!state.thread_binding_id||!state.slack_discussion_number)
+    return jsonResp({ok:false,error:"weekly summary is not bound to an exact Slack discussion"});
+  if(String(state.thread_binding_id)!==String(p.thread_binding_id)||
+      String(state.slack_discussion_number)!==String(p.slack_discussion_number))
+    return jsonResp({ok:false,error:"stale Slack discussion summary binding"});
   var decision=String(p.decision||"").toLowerCase();
   if(["approved","rejected","regenerate"].indexOf(decision)<0)return jsonResp({ok:false,error:"invalid summary decision"});
   var trusted=reviewTrustedAuthor(p,p.decided_by),now=reviewNow(),draft=String(p.summary_json||state.summary_draft_json||"");
@@ -1140,6 +1146,8 @@ function reviewWeeklySlackPost(p){
     next.last_post_request_id=p.request_id;
     if(!posted.ok){next.sync_status="post_failed";next.last_error=posted.error||"Slack post failed";return next;}
     next.slack_post_ts=posted.posted_ts;next.slack_post_permalink=posted.posted_permalink||posted.thread.slack_permalink||"";
+    next.thread_binding_id=String(posted.thread.binding_id||"");
+    next.slack_discussion_number=String(reviewThreadsFor(p.market_slug,p.ce_id).length||1);
     next.last_scanned_ts=posted.posted_ts;next.sync_status="awaiting_replies";next.last_error="";return next;
   });
   if(!posted.ok)return jsonResp({ok:false,error:posted.error,weekly:finalState,retryable:true});
