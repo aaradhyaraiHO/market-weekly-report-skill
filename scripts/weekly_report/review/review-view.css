@@ -163,6 +163,11 @@
 .rv-reconciliation>summary>span:last-child{width:24px;height:24px;display:grid;place-items:center;flex:none;color:var(--rv-muted);font-size:14px;transition-property:transform;transition-duration:120ms}
 .rv-reconciliation[open]>summary>span:last-child{transform:rotate(180deg)}
 .rv-reconciliation>summary:hover{background:var(--rv-g50)}
+.rv-reconciliation>.rv-card-body{padding:4px 16px 16px;border-top:1px solid var(--rv-g200)}
+.rv-recon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:12px;overflow:hidden;border:1px solid var(--rv-g200);border-radius:10px;background:var(--rv-g200)}
+.rv-recon-grid>span{min-width:0;padding:12px;display:grid;gap:3px;background:var(--rv-white);color:var(--rv-muted);font-size:12px;line-height:17px;text-wrap:pretty}
+.rv-recon-grid>span strong{color:var(--rv-ink);font-size:18px;line-height:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.rv-reconciliation .hint{margin:12px 2px 0;color:var(--rv-muted);font-size:12px;line-height:18px;text-wrap:pretty}
 .rv-flow-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--rv-g200);background:transparent}
 .rv-flow-section .rv-card-head{padding:0 0 14px;border-bottom:0}.rv-flow-section .rv-card-body{padding:0}
 .rv-module-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}.rv-module-head .rv-card-count{margin-left:auto}
@@ -411,5 +416,7 @@
   .rv-finish-copy{width:100%;flex-basis:100%}.rv-finish-checks{padding-bottom:2px}.rv-finish-reason{align-items:stretch;flex-wrap:wrap}.rv-finish-reason>span{width:100%}.rv-finish-reason input{min-width:0;flex:1}
   .rv-module-head{align-items:flex-start}.rv-module-head .rv-card-count{display:none}.rv-source-bridge{margin-left:0}.rv-action-tabs{padding:0 6px}.rv-action-panel{padding:10px}.rv-inline-actions .rv-btn{min-height:44px}.rv-summary-title{align-items:flex-start}.rv-summary-title>div{align-items:flex-start;flex-direction:column}.rv-attention-chip{margin-top:2px}
   .rv-reconciliation>summary{min-height:64px;padding:12px 14px;align-items:flex-start}.rv-reconciliation>summary strong{font-size:15px;line-height:20px}.rv-reconciliation>summary small{font-size:12px;line-height:17px}
+  .rv-reconciliation>.rv-card-body{padding:4px 14px 14px}.rv-recon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rv-granola-dock{min-width:0;width:100%;order:3}
 }
+@media(max-width:520px){.rv-recon-grid{grid-template-columns:1fr}}
