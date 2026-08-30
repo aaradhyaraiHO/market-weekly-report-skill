@@ -155,6 +155,14 @@
 .rv-card-sub{max-width:720px;margin-top:3px;color:var(--rv-muted);font-size:14px;line-height:20px;font-weight:400}
 .rv-card-count{color:var(--rv-muted);font-size:13px;white-space:nowrap}
 .rv-card-body{padding:8px 20px 18px}
+.rv-reconciliation>summary{min-height:56px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;list-style:none;cursor:pointer}
+.rv-reconciliation>summary::-webkit-details-marker{display:none}
+.rv-reconciliation>summary>span:first-child{min-width:0;display:grid;gap:2px}
+.rv-reconciliation>summary strong{font-size:16px;line-height:22px;font-weight:600;text-wrap:balance}
+.rv-reconciliation>summary small{display:block;color:var(--rv-muted);font-size:13px;line-height:18px;font-weight:400;text-wrap:pretty}
+.rv-reconciliation>summary>span:last-child{width:24px;height:24px;display:grid;place-items:center;flex:none;color:var(--rv-muted);font-size:14px;transition-property:transform;transition-duration:120ms}
+.rv-reconciliation[open]>summary>span:last-child{transform:rotate(180deg)}
+.rv-reconciliation>summary:hover{background:var(--rv-g50)}
 .rv-flow-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--rv-g200);background:transparent}
 .rv-flow-section .rv-card-head{padding:0 0 14px;border-bottom:0}.rv-flow-section .rv-card-body{padding:0}
 .rv-module-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}.rv-module-head .rv-card-count{margin-left:auto}
@@ -402,5 +410,6 @@
   .rv-footer{padding:14px;flex-wrap:wrap}
   .rv-finish-copy{width:100%;flex-basis:100%}.rv-finish-checks{padding-bottom:2px}.rv-finish-reason{align-items:stretch;flex-wrap:wrap}.rv-finish-reason>span{width:100%}.rv-finish-reason input{min-width:0;flex:1}
   .rv-module-head{align-items:flex-start}.rv-module-head .rv-card-count{display:none}.rv-source-bridge{margin-left:0}.rv-action-tabs{padding:0 6px}.rv-action-panel{padding:10px}.rv-inline-actions .rv-btn{min-height:44px}.rv-summary-title{align-items:flex-start}.rv-summary-title>div{align-items:flex-start;flex-direction:column}.rv-attention-chip{margin-top:2px}
+  .rv-reconciliation>summary{min-height:64px;padding:12px 14px;align-items:flex-start}.rv-reconciliation>summary strong{font-size:15px;line-height:20px}.rv-reconciliation>summary small{font-size:12px;line-height:17px}
   .rv-granola-dock{min-width:0;width:100%;order:3}
 }
