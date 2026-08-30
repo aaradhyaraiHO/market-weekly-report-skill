@@ -90,7 +90,8 @@ var REVIEW_TABLES = {
       "summary_status","summary_draft_json","summary_approved_json","summary_approved_by",
       "summary_approved_at","summary_rejected_at","summary_rejection_reason",
       "sync_status","last_error","last_post_request_id","version",
-      "thread_binding_id","slack_discussion_number"]
+      "thread_binding_id","slack_discussion_number",
+      "summary_thread_binding_id","summary_slack_discussion_number"]
   },
   suggestions: {
     sheet: "review_source_suggestions",
@@ -424,6 +425,8 @@ function reviewWeeklyBase(p,existing){
     summary_approved_at:(existing&&existing.summary_approved_at)||"",
     summary_rejected_at:(existing&&existing.summary_rejected_at)||"",
     summary_rejection_reason:(existing&&existing.summary_rejection_reason)||"",
+    summary_thread_binding_id:(existing&&existing.summary_thread_binding_id)||"",
+    summary_slack_discussion_number:(existing&&existing.summary_slack_discussion_number)||"",
     sync_status:(existing&&existing.sync_status)||"draft",last_error:(existing&&existing.last_error)||"",
     last_post_request_id:(existing&&existing.last_post_request_id)||"",
     version:String(parseInt((existing&&existing.version)||"0",10)||0)
@@ -1036,6 +1039,9 @@ function reviewSummaryDecide(p){
   if(String(state.thread_binding_id)!==String(p.thread_binding_id)||
       String(state.slack_discussion_number)!==String(p.slack_discussion_number))
     return jsonResp({ok:false,error:"stale Slack discussion summary binding"});
+  if(String(state.summary_thread_binding_id||"")!==String(state.thread_binding_id)||
+      String(state.summary_slack_discussion_number||"")!==String(state.slack_discussion_number))
+    return jsonResp({ok:false,error:"summary belongs to a different Slack discussion"});
   var decision=String(p.decision||"").toLowerCase();
   if(["approved","rejected","regenerate"].indexOf(decision)<0)return jsonResp({ok:false,error:"invalid summary decision"});
   var trusted=reviewTrustedAuthor(p,p.decided_by),now=reviewNow(),draft=String(p.summary_json||state.summary_draft_json||"");
@@ -1121,6 +1127,26 @@ function reviewSlackPostCore(p) {
 
 function reviewSlackPost(p){return jsonResp(reviewSlackPostCore(p));}
 
+function reviewArchiveApprovedSummary(state){
+  if(!state||String(state.summary_status||"")!=="approved"||
+      !(state.summary_approved_json||state.summary_json))return null;
+  var binding=String(state.summary_thread_binding_id||state.thread_binding_id||"");
+  var number=String(state.summary_slack_discussion_number||state.slack_discussion_number||"");
+  var key="slack_summary:"+String(state.weekly_id||"")+":"+binding+":"+number;
+  var existing=reviewFind("timeline",function(r){return String(r.idempotency_key||"")===key;});
+  if(existing)return existing;
+  var rec={event_id:reviewId("evt"),market_slug:state.market_slug,ce_id:String(state.ce_id),
+    ce_name:state.ce_name||"",review_week:ymd(state.week_start),event_type:"slack_summary",
+    source_type:"slack",source_ref:binding||state.summary_upto_ts||"",
+    source_url:state.slack_post_permalink||"",actor_id:"",actor_name:state.summary_approved_by||"BGM",
+    actor_role:"bgm",occurred_at:state.summary_approved_at||state.summary_updated_at||reviewNow(),
+    recorded_at:reviewNow(),original_body:state.summary_approved_json||state.summary_json,
+    approved_body:state.summary_approved_json||state.summary_json,approval_state:"approved",
+    approved_by:state.summary_approved_by||"BGM",approved_at:state.summary_approved_at||state.summary_updated_at||reviewNow(),
+    related_review_id:state.weekly_id||"",related_work_id:"",supersedes_event_id:"",idempotency_key:key};
+  reviewWrite("timeline",null,rec);return rec;
+}
+
 function reviewWeeklySlackPost(p){
   var discussionText=p.discussion_text!=null?p.discussion_text:p.bgm_note;
   var discussionAuthor=p.discussion_author!=null?p.discussion_author:p.bgm_author;
@@ -1146,12 +1172,20 @@ function reviewWeeklySlackPost(p){
     week_start:p.week_start,channel:p.channel,text:mentions.resolved_text,author:trustedAuthor,
     report_url:p.report_url||"",request_id:p.request_id,thread_operation:p.thread_operation||"",
     replacement_reason:p.replacement_reason||""});
+  if(posted.ok&&posted.operation==="new_parent")reviewArchiveApprovedSummary(current);
   var finalState=reviewWeeklyMutate(p,function(next){
     next.last_post_request_id=p.request_id;
     if(!posted.ok){next.sync_status="post_failed";next.last_error=posted.error||"Slack post failed";return next;}
     next.slack_post_ts=posted.posted_ts;next.slack_post_permalink=posted.posted_permalink||posted.thread.slack_permalink||"";
     next.thread_binding_id=String(posted.thread.binding_id||"");
     next.slack_discussion_number=String(reviewThreadsFor(p.market_slug,p.ce_id).length||1);
+    if(posted.operation==="new_parent"){
+      next.summary_json="";next.summary_upto_ts="";next.summary_updated_at="";next.summary_status="";
+      next.summary_draft_json="";next.summary_approved_json="";next.summary_approved_by="";next.summary_approved_at="";
+      next.summary_rejected_at="";next.summary_rejection_reason="";
+      next.summary_thread_binding_id="";next.summary_slack_discussion_number="";
+      next.reply_count="0";next.contributors_json="[]";
+    }
     next.last_scanned_ts=posted.posted_ts;next.sync_status="awaiting_replies";next.last_error="";return next;
   });
   if(!posted.ok)return jsonResp({ok:false,error:posted.error,weekly:finalState,retryable:true});
@@ -1225,6 +1259,8 @@ function reviewWeeklySyncCore(p){
     rec.last_scanned_ts=newest;rec.reply_count=String(raw.length);rec.contributors_json=JSON.stringify(contributors);
     if(ai.status==="ok"){
       rec.summary_draft_json=JSON.stringify(ai.summary);rec.summary_status="pending";rec.summary_upto_ts=newest;rec.summary_updated_at=reviewNow();
+      rec.summary_thread_binding_id=String(state.thread_binding_id||"");
+      rec.summary_slack_discussion_number=String(state.slack_discussion_number||"");
       rec.sync_status="summary_pending_approval";rec.last_error="";rec.version=String((parseInt(rec.version,10)||0)+1);
     }else if(raw.length){rec.sync_status="summary_delayed";rec.last_error=ai.status;}
     else{rec.sync_status="awaiting_replies";rec.last_error="";}
