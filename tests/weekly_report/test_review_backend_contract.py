@@ -382,6 +382,17 @@ class ReviewBackendContract(unittest.TestCase):
                       'action === "action_list"', 'action === "action_upsert"'):
             self.assertIn(route, legacy)
 
+    def test_summary_approval_is_bound_to_exact_slack_discussion(self):
+        for field in ('"thread_binding_id"', '"slack_discussion_number"'):
+            self.assertIn(field, self.backend)
+        self.assertIn('weekly summary is not bound to an exact Slack discussion', self.backend)
+        self.assertIn('stale Slack discussion summary binding', self.backend)
+        self.assertIn('next.thread_binding_id=String(posted.thread.binding_id||"")', self.backend)
+        self.assertIn('next.slack_discussion_number=String(reviewThreadsFor(p.market_slug,p.ce_id).length||1)', self.backend)
+        review_ui = (ROOT / "scripts" / "weekly_report" / "review" / "review-view.js").read_text()
+        self.assertIn('thread_binding_id:weekly.thread_binding_id||""', review_ui)
+        self.assertIn('slack_discussion_number:weekly.slack_discussion_number||""', review_ui)
+
     def test_server_side_ingest_payload_keeps_exact_and_unmatched_items(self):
         ingest = load_ingest()
         items = [

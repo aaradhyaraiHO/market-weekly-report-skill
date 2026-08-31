@@ -24,14 +24,18 @@ class ReviewP0CoreContract(unittest.TestCase):
         )[0]
         for text in (
             "Start Slack discussion",
-            "Continue in Slack",
-            "Start new discussion",
-            "Open / continue thread",
+            "Continue Slack discussion #",
+            "Start a new discussion",
             "Use the durable CE thread",
         ):
             self.assertIn(text, card)
         self.assertIn('S.threadOperation==="new_parent"', card)
         self.assertIn("Why start a new discussion?", card)
+        for text in (
+            "threadRegistryLoaded", "Checking the existing CE thread",
+            "Could not check the existing CE thread", 'id="rv-retry-threads"',
+        ):
+            self.assertIn(text, VIEW)
 
     def test_summary_requires_bgm_approval_before_timeline_or_memory(self):
         sync = BACKEND.split("function reviewWeeklySyncCore(p)", 1)[1].split(

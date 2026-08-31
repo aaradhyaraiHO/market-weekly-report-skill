@@ -1,365 +1,550 @@
-# Weekly Report V2 — Review Mode
+# Weekly Report V2 — Weekly Collection Review
 
-Status: proposed product and integration contract, 2026-08-14.
+Status: build-ready product specification, updated 2026-08-28 from the
+authenticated live North America Review and the integrated `main` candidate.
 
-Review is a first-class V2 mode for turning the published weekly into a durable,
-collaborative record. It connects three workflows:
+## Product definition
 
-1. BGM review notes, mentions and weekly note history;
-2. lightweight audits discussed with the right people in Slack; and
-3. meeting evidence and follow-ups extracted from Granola transcripts.
+Weekly Collection Review helps a BGM decide which Combined Entities (CEs) need
+attention, move the cross-functional discussion to Slack, approve the useful
+outcomes, and retain a durable record of what was tried and whether it worked.
 
-Review is downstream of the weekly build. A Review, Granola or Slack failure
-must never block, alter or republish the canonical weekly report.
-
-Public inspection of Market Glance shows that it already implements much of
-this workflow: WBR Audit selection/runs, immutable history, governed owner to
-Slack mappings, dedicated CE threads, market summaries, and reconciliation into
-Actions, Open Topics and Decisions. This document is therefore the cross-product
-Review contract. The default recommendation is for Market Glance to own the
-workflow state while the weekly owns metric/signal evidence. Do not implement a
-parallel Review database in the weekly repository unless joint backend discovery
-proves that the existing capability cannot satisfy the contract.
-
-## Grounded operating model: Growth running notes
-
-The reference workflow is `Weekly DB America` → `26 H2 Running Notes`, observed
-around `AC9` on 2026-08-14. It establishes the product behavior Review must
-preserve:
-
-- one stable row per CE with CE ID/name, DRI and current performance metrics;
-- an explicit review choice with `Yes`, `No`, `Offline`, and
-  `Time permitting, otherwise asynch`;
-- common evidence links and durable learnings separate from weekly commentary;
-- one commentary column per report week;
-- multiple named contributors appending observations, questions, replies,
-  decisions and actions in the same CE/week context; and
-- prior-week columns retained side by side so the next meeting can close the
-  loop.
-
-For example, the referenced CE/week commentary does not contain a single formal
-“note.” It combines a commercial update, metric interpretation, a funnel issue,
-a question to another owner, a reply, and evidence links. Review must therefore
-model a conversation and outcome, not merely provide a textarea or task form.
-
-The Sheet is a strong behavioral reference but a weak scalable data model:
-people are embedded in free text, events have no individual timestamps or
-status, actions are not reliably extractable, and every new week widens the
-table. V2 preserves the workflow while storing it as CE/week events and rendering
-the familiar weekly history vertically.
-
-## User outcome
-
-For every market/week, a reviewer can answer:
-
-- what was reviewed;
-- what the BGM or meeting participants said;
-- who was notified;
-- which Slack discussion is authoritative;
-- what decision or action followed;
-- what was not discussed and still needs review; and
-- whether the item was resolved in a later week.
-
-## Existing substrate and gaps
-
-The current report already supports one CE note per week, prior-week note
-history, author text, an Apps Script/Sheet store, and creation or reuse of a
-Slack thread. These are useful migration inputs, not the final Review model.
-
-The generated weekly alone cannot safely provide the requested mode because:
-
-- saving a second note overwrites the CE/week row instead of appending an event;
-- author is free text and cannot safely resolve a notifying Slack mention;
-- the note-created Slack thread can diverge from the weekly alert thread;
-- there is no review-cycle, reviewed/not-reviewed or completion model;
-- actions, decisions and comments are not separate typed records;
-- there is no transcript source, excerpt provenance or CE-match confidence;
-- generated content has no review/approval state; and
-- the Sheet/Apps Script backend is not an identity- or permission-aware system.
-
-Market Glance appears to address several of those gaps, but authenticated
-verification is still required for its append-only guarantees, permissions,
-thread idempotency, CE lineage, API stability and metric alignment.
-
-## Product surface
-
-### Weekly Review inbox
-
-The Review mode opens on one market/week and shows:
-
-- **Needs review** — priority report signals without reviewed evidence;
-- **Meeting covered** — items matched to transcript evidence;
-- **Discussing** — items with an active Slack thread;
-- **Awaiting owner** — decision exists but owner/target date is missing;
-- **Follow up** — open actions carried into the current week; and
-- **Resolved** — reviewed items with an outcome, retained in history.
-
-Every row retains the canonical CE, signal, bucket, metric basis and report
-deep-link. Review filters may hide rows but cannot change those facts.
-
-The minimum selection states mirror Growth's actual practice:
-
-| State | Meaning |
-|---|---|
-| **Review live** | discuss this CE in the weekly meeting |
-| **Review async** | send/share for written input; no meeting time required |
-| **Offline** | owner will handle outside the weekly |
-| **Skip** | explicitly reviewed and not worth discussion this week |
-| **Unreviewed** | no choice has been made |
-
-These replace the literal Sheet dropdown labels with clearer product language
-while preserving their semantics. Selection is per CE + report week and records
-who selected it and why it entered the queue.
-
-### Review workspace inside the current report
-
-Review opens as a focused layer over the existing weekly, not a new dashboard.
-
-For each selected CE it shows:
-
-1. **Evidence header** — CE, market, DRI, current Revenue/ROI/CM2, WoW/4-week/
-   YoY movement and “why surfaced.”
-2. **This week's discussion** — chronological named contributions, questions,
-   replies and source links.
-3. **Outcome** — decision, action, owner and expected check date when one exists;
-   “discussion only” is also an explicit valid outcome.
-4. **Prior context** — last one to two weekly discussions and unresolved items,
-   collapsed by default.
-5. **Share** — preview and send the reviewed summary to the governed Slack
-   thread; saving notes alone never notifies.
-
-The review queue supports previous/next CE, keyboard navigation, progress
-(`reviewed / selected`) and autosaved drafts. Closing Review returns the user to
-the same report section, filters and CE.
-
-### Notes and weekly threads
-
-Opening a review item shows an append-only timeline grouped by report week.
-Timeline events can be a note, reply, decision, action, status change, Slack
-message reference or meeting-derived suggestion.
-
-The primary authoring control can remain conversational. Structured decisions,
-actions, owner and due/check date are extracted into editable suggestions or
-added explicitly; they must not force every comment into a form before the team
-can record what was discussed.
-
-Manual note behavior:
-
-1. a reviewer writes a note and optionally selects people from governed identity
-   search;
-2. saving the note records it without notifying anyone;
-3. **Notify and share** previews the target Slack thread and resolved mentions;
-4. explicit confirmation posts one idempotent message and records its Slack ID;
-5. later replies sync into the timeline without replacing the original note.
-
-Typed `@name` text alone must not imply a notification. The backend must resolve
-an internal person ID to a Slack user or user-group ID and display exactly who
-will be notified before the write.
-
-### Slack thread topology
-
-Slack does not support nested threads, so V2 uses two linked levels:
-
-- one **weekly review hub** for market-level status and uncovered items; and
-- the existing **per-CE alert thread** for CE-specific RCA, notes and actions.
-
-Review must reuse the registered alert thread when it exists. It creates a new
-CE/week thread only when no authoritative alert thread exists, and stores the
-reason. A single thread registry is shared by alerts, Review and follow-ups.
-
-The report UI presents the per-week timeline even when its events live across
-the hub and CE threads.
-
-## Lite audits
-
-A lite audit is a small, explicit review object—not a screenshot or free-form
-Slack post. It contains:
-
-- market and report week;
-- CE(s) or market-level scope;
-- reason for review and triggering signal;
-- compact evidence with metric basis and report link;
-- question or decision needed;
-- requested reviewers/owners;
-- status and due/review date; and
-- authoritative Slack thread binding.
-
-Lifecycle:
+The operating model is deliberately simple:
 
 ```text
-draft -> ready -> posted -> discussing -> decided -> resolved
-                                  |                     |
-                                  +----> needs_followup -+
+Review identifies and prioritizes
+        -> Slack hosts the discussion
+        -> AI proposes summaries and actions
+        -> BGM approves or edits
+        -> Review stores CE memory and open work
+        -> later metrics show whether the intervention worked
 ```
 
-Only `posted` and later states imply an external Slack write. Draft generation,
-report builds and view changes are no-write operations.
+Review is downstream of the canonical weekly report. Review, Slack, AI, history,
+or Granola failures must never block, alter, or republish weekly analytics.
 
-The Slack message should be concise: why this needs attention, the minimum
-evidence, the question, resolved mentions and a deep-link. Detailed tables stay
-in the weekly report.
+## Product principles
 
-## Granola transcript workflow
+1. The BGM is the moderator and final owner of the weekly shortlist.
+2. Alerts and team nominations create candidates; they do not dictate the agenda.
+3. Slack is the cross-functional discussion surface.
+4. Review is the prioritization, approval, memory, and action-control surface.
+5. AI removes transcription work but never silently becomes human judgment.
+6. One CE has one stable identity and a continuous, source-linked history.
+7. Actions from every source enter one backlog rather than separate Slack,
+   Granola, Performance, and BGM backlogs.
+8. Weekly workload stays bounded: normally three to five selected CEs per BGM or
+   task force, with explicit carry-forward exceptions.
+9. The weekly ritual remains even when most detailed discussion is asynchronous.
+10. Market configuration may differ, but identity, authorization, provenance,
+    and action-state contracts do not.
 
-The source requirement is the full transcript, not only an AI-enhanced meeting
-summary. The proposed flow is:
+## Current live baseline
 
-1. ingest eligible WBR notes/transcripts into a centrally governed store;
-2. associate the meeting to a market and report week from configured calendar,
-   folder and meeting metadata;
-3. preserve note ID, owner, meeting time, transcript location and access scope;
-4. extract candidate comments, decisions, actions, owners and due dates;
-5. match candidates to CEs/signals using exact IDs first, then governed aliases;
-6. attach transcript excerpts/timestamps and a confidence result;
-7. compare covered CEs against the report's review queue;
-8. place unmatched or low-confidence candidates in a human reconciliation queue;
-9. let a reviewer accept, edit or reject suggestions; and
-10. after approval, write accepted events to Review and optionally to the
-    authoritative Slack thread.
+The authenticated North America production report for week `2026-08-16`,
+inspected on 2026-08-28, currently provides:
 
-Generated suggestions never silently become human comments, completed actions
-or notifying Slack messages. The UI distinguishes `meeting-derived`,
-`human-authored` and `Slack-synced` events.
+- a Review tab inside the complete Market Notebook V2 report;
+- an alert-derived queue (48 CEs in the observed North America report), plus
+  manual CE additions;
+- CE search and stable CE IDs;
+- review treatments: `not_scheduled`, `live`, `async`, `follow_up`, and `skip`;
+- one BGM note per market × CE × week;
+- one persistent Slack discussion thread per market × CE, with weekly starter
+  boundaries and a stored permalink;
+- automatic and on-demand Slack reply summarization into findings, decisions,
+  and open points;
+- source-derived action/check suggestions that require human acceptance;
+- structured actions and scheduled checks with status, owner, dates, edit, soft
+  delete, and carry-forward;
+- a review receipt and next-CE flow;
+- CE Memory containing weekly notes, Slack summaries, work, receipts, and
+  source-linked history;
+- read-only historical Performance actions when the sidecar is available;
+- Review-to-CE-drawer and CE-drawer-to-Review navigation;
+- authenticated BGM/GM/admin access through the isolated Review proxy; and
+- isolated Review Apps Script/Sheet storage, separate from legacy diagnostic
+  notes and `/api/actions` routes.
 
-Granola's current API can return a note with transcript, summary, attendees and
-calendar metadata. Access depends on plan and key scope: a personal key sees the
-member's accessible notes; an Enterprise key can cover the Team space. The
-centralization design must therefore be approved before the integration is a
-release dependency.
+The integrated `main` candidate additionally contains responsive CE browsing,
+local status/reason/category filters, independent queue scrolling, clearer
+completion guidance, progressive CE Memory loading, hidden action trace details,
+and suggestion deduplication. These improvements are not treated as production
+behavior until the complete site is explicitly deployed and verified.
 
-## Cross-product logical contracts
+## Current gaps this specification resolves
 
-These are interoperability requirements. They do not imply that the weekly
-repository owns the backing tables.
+The current live product is functional but does not yet implement the intended
+weekly operating model:
 
-### Review cycle
+- every flagged CE enters one large queue; candidates and the BGM shortlist are
+  not clearly separated;
+- `not_scheduled` dominates the queue and does not communicate whether the BGM
+  has considered the CE;
+- the Slack action is present, but the page still visually encourages in-app
+  commentary before discussion;
+- Performance and BDM note inputs create the impression of a second discussion
+  destination;
+- completion is driven mainly by treatment/receipt state rather than a captured
+  outcome and triaged suggestions;
+- the live action suggestion UI can expose internal source identifiers;
+- CE history exists in multiple blocks but is not yet a single business timeline
+  connecting signal, discussion, decision, action, completion, and metric outcome;
+- ageing, overdue, stale, and cross-week backlog management are incomplete; and
+- Granola is not ready to be a core launch dependency.
+
+## Users and authorization
+
+### BGM
+
+The BGM can:
+
+- review automated candidates and team nominations;
+- select, defer, skip, or remove CEs from the weekly shortlist;
+- start or continue the authoritative Slack discussion;
+- add an optional BGM observation;
+- approve, edit, merge, or reject AI suggestions;
+- create, assign, update, dismiss, and complete work;
+- approve the weekly outcome; and
+- finish or reopen a CE review.
+
+### Performance, BDM, and BizOps
+
+These roles can:
+
+- nominate a CE for BGM consideration;
+- participate in the relevant Slack thread;
+- view approved Review context within their authorized market scope;
+- respond to or provide evidence for assigned actions; and
+- update an assigned action only when the access model explicitly permits it.
+
+They are not expected to duplicate Slack discussion in role-specific Review
+textareas. Existing Performance/BDM notes remain readable for compatibility but
+are collapsed and removed from the normal authoring path.
+
+### Admin
+
+An admin can configure access, owner mappings, task forces, Slack routes, and
+operational diagnostics. Slack-channel membership alone never grants Review
+access.
+
+### Access contract
+
+- The report session supplies verified Google identity.
+- The isolated Review backend enforces active BGM/GM/admin market scope.
+- Service identities may ingest suggestions but cannot impersonate a person.
+- Every mutation records the verified actor.
+- Market and CE scope are verified server-side before data is returned or changed.
+- Legacy diagnostic action authorization and routes remain unchanged.
+
+## Weekly workflow
+
+### 1. Build the candidate inbox
+
+Candidates originate from:
+
+- Losing Money and RPC/CM1 diagnostic signals;
+- other approved weekly report signals;
+- BDM, Performance, or BizOps nominations submitted by the cutoff;
+- a BGM manual addition; and
+- unresolved work or a follow-up carried from an earlier week.
+
+Each candidate shows:
+
+- CE name and stable CE ID;
+- market, BGM/BDM/Performance ownership when available;
+- why it was flagged and the important metric movement;
+- lifecycle/category and current business scale;
+- last reviewed date and current cooldown;
+- open/overdue work;
+- active Slack-thread state; and
+- source of the candidate.
+
+Alerts remain read-only evidence. Candidate handling cannot change canonical
+bucket membership or metric calculations.
+
+### 2. BGM creates the shortlist
+
+The Review queue is divided into:
+
+- **Candidates** — not yet considered for the week;
+- **Selected this week** — `live`, `async`, or `follow_up` treatment;
+- **Skipped/deferred** — considered but not selected; and
+- **Reviewed** — completed with a receipt.
+
+The existing `review_set` record and treatment values remain the initial storage
+contract. No migration is required to introduce the visible candidate/shortlist
+separation.
+
+The interface recommends a shortlist of three to five CEs and highlights repeated
+hero selection, recent-review cooldowns, smaller overlooked CEs, and carried work.
+These are decision aids only; the BGM retains final authority.
+
+### 3. Start or continue Slack discussion
+
+When no authoritative CE thread exists, the available CTA is **Start Slack
+discussion**. When prior discussion exists, the BGM chooses between:
+
+- **Continue existing discussion** — recommended and shown with the previous
+  thread date, summary, open work, and permalink; or
+- **Start a new discussion** — a secondary action available at the BGM's
+  discretion when the issue, owner/scope, channel, or review context warrants a
+  new parent thread.
+
+The product must neither force reuse merely because a binding exists nor create a
+new parent merely because the report week changed. Starting a new discussion
+requires a lightweight reason and confirmation. The old and new bindings remain
+linked in CE Memory with the acting BGM and both permalinks. Continuing reuses the
+existing binding and creates at most one idempotent weekly starter/re-entry
+message to define that week's summary window.
+
+The starter preview contains:
+
+- CE and stable ID;
+- review reason and minimum relevant evidence;
+- BGM, BDM, Performance, or BizOps mentions resolved through governed identity
+  mappings;
+- previous outcome and open work; and
+- a deep-link to the exact market/week/CE Review state.
+
+Posting requires an explicit preview/confirmation, stable idempotency key, known
+market channel, and resolved mentions. Ambiguous names fail closed. The returned
+thread timestamp and permalink are retained.
+
+### 4. Capture discussion outcomes
+
+The five-minute Slack sync and on-demand summarization retain attributed human
+replies and propose:
+
+- findings;
+- decisions;
+- open points;
+- actions; and
+- scheduled checks.
+
+The source thread remains the evidence. The summary is a compact, source-linked
+representation, not a replacement transcript.
+
+### 5. BGM approves suggestions
+
+Every AI-derived item begins as `pending`. The BGM can accept, edit, merge,
+reject, or defer it. Only approved items become authoritative commentary or work.
+
+The suggestion inbox:
+
+- deduplicates with stable source/idempotency keys and normalized content;
+- hides raw source IDs behind optional trace details;
+- separates Suggested, Accepted/open, and Archived;
+- expands only the item being reviewed; and
+- never infers an owner from Slack membership or free-text mentions.
+
+### 6. Finish the CE review
+
+A CE is ready to finish when:
+
+- the BGM selected a treatment;
+- a Slack discussion exists, or the BGM explicitly chose a no-discussion outcome;
+- a concise decision/outcome is present, including `no action needed` when valid;
+- pending action/check suggestions have been accepted, merged, rejected, or
+  deferred; and
+- unresolved work has an owner/check date or an explicit carry-forward state.
+
+A BGM note is optional and cannot be a completion requirement. Finishing writes
+one receipt while open work continues independently into later weeks.
+
+### 7. Monday reconciliation
+
+The next weekly cycle shows:
+
+- actions completed since the prior review;
+- still-open, blocked, overdue, and stale actions;
+- explicit Slack evidence suggesting completion;
+- CEs needing another review; and
+- metric movement since the intervention.
+
+AI may suggest completion from explicit evidence, but the pilot requires a human
+to confirm it.
+
+## Review UI information architecture
+
+### Weekly header
+
+Show market/week, task-force or owner filter, candidates, selected count,
+reviewed progress, and open/overdue actions.
+
+### CE browser
+
+Support immediate local search by CE name or stable ID and filters for candidate,
+selected, in progress, reviewed, reason, category, owner, and task force.
+
+Desktop can retain a bounded independently scrolling queue. Narrow layouts show
+the selected CE immediately and place browse/search/filter controls in an
+on-demand panel. Selecting a far-queue CE must never scroll the document away
+from the main workspace.
+
+Each row has one primary selection control plus a separate CE-detail/drawer
+control. Nested interactive elements are prohibited.
+
+### Selected CE workspace
+
+Order the surface as:
+
+1. **Why this CE** — signal, metrics, ownership, prior-review context.
+2. **Slack discussion** — status, channel preview, primary CTA, compact summary.
+3. **Current outcome** — approved BGM decision/observation, optional BGM note.
+4. **Actions and checks** — suggested, accepted/open, blocked/overdue, archived.
+5. **CE Memory** — progressive read-only timeline and source links.
+6. **Finish and next CE** — sticky but non-obscuring completion state.
+
+Navigation-only actions render immediately and do not wait for network requests.
+Unsaved local drafts survive CE switches, drawer round trips, filters, and Review
+tab navigation.
+
+## CE history and memory
+
+The required end state is one chronological CE timeline answering:
+
+> What went wrong, what did we observe, what did we try, who owned it, what
+> happened, and did the economics improve?
+
+Material event types include:
+
+- signal triggered;
+- candidate created or nominated;
+- selected, skipped, or carried forward;
+- Slack discussion started/continued;
+- Slack or Granola summary approved;
+- BGM observation or decision recorded;
+- Performance diagnosis retained;
+- action/check proposed, accepted, updated, blocked, completed, or dismissed;
+- completion evidence added;
+- review finished/reopened; and
+- later RPC, CM, ROI, or revenue outcome attached.
+
+All joins use stable CE IDs. Names are display fallbacks only. Raw Slack and
+meeting content remains linked evidence; the normal timeline shows concise,
+approved material events.
+
+### Timeline event contract
 
 ```text
-review_cycle_id, market_slug, week_start, report_artifact_id,
-status, required_count, reviewed_count, opened_at, closed_at
+event_id
+market_slug, ce_id, ce_name
+review_week, event_type
+source_type, source_ref, source_url
+actor_id, actor_name, actor_role
+occurred_at, recorded_at
+original_body, approved_body
+approval_state, approved_by, approved_at
+related_review_id, related_work_id
+supersedes_event_id
 ```
 
-### Review item
+Events are append-only. Corrections supersede prior events; deletion is a
+tombstone. History loads fail-soft and never blocks the current report.
+
+The current isolated Sheet remains the operational store during the pilot.
+PostgreSQL migration should preserve the same stable IDs and event semantics and
+should not be coupled to the first UX iteration.
+
+## Unified action backlog
+
+Slack-derived, Granola-derived, Performance-originated, and manually created work
+all enter one backlog.
+
+### Work contract
 
 ```text
-review_item_id, review_cycle_id, scope_type, scope_id,
-signal_key, bucket_key, priority, status, owner_id, due_at,
-canonical_report_deep_link, created_at, updated_at
+work_id
+market_slug, ce_id, ce_name, origin_week
+kind (action | check)
+text, requester_id, owner_id
+created_at, due_date, next_review_date
+status, latest_update
+source_type, source_ref, source_url
+expected_effect, completion_evidence, measured_outcome
+approval_state, approved_by, approved_at
+idempotency_key, duplicate_of, parent_work_id
+deleted_at, deleted_by
 ```
 
-`scope_id` is the stable CID for CE scope. A review item references report
-evidence; it does not copy or recalculate bucket truth.
-
-### Review event
+### States
 
 ```text
-event_id, review_item_id, event_type, body, actor_id, source_type,
-source_ref, provenance_excerpt, provenance_time, mentions[],
-approval_state, created_at, supersedes_event_id
+proposed -> accepted -> open -> complete
+                    |-> blocked
+                    |-> monitoring
+                    |-> no_action_needed
+                    |-> stale
+                    |-> dismissed
 ```
 
-Events are append-only. Corrections supersede an event instead of erasing it.
+The primary backlog views are Needs approval, Open, Mine, Blocked/overdue,
+Stale, Recently completed, and Archived.
 
-### Thread binding
+Rules:
 
-```text
-thread_binding_id, market_slug, week_start, scope_type, scope_id,
-purpose, channel_id, parent_ts, permalink, source, created_at
-```
+- carry open work forward without recreating it;
+- deduplicate retries and equivalent source suggestions;
+- require owner confirmation for accepted actions;
+- permit ownerless scheduled checks only when explicitly intended;
+- surface ageing and overdue state;
+- suggest completion only with source evidence;
+- keep old completed/dismissed work out of the primary workload; and
+- do not turn every observation into an action.
 
-Uniqueness is enforced for market + week + scope + purpose. Post requests use a
-stable idempotency key derived from review event and target thread.
+## Granola boundary
 
-### Meeting source
+Granola is a guarded beta, not a dependency for the core Slack-first pilot.
 
-```text
-meeting_source_id, provider, provider_note_id, market_slug, week_start,
-meeting_at, owner_identity, access_scope, transcript_hash,
-ingested_at, processing_status
-```
+When enabled, it must:
 
-Raw transcript retention, encryption, deletion and excerpt policy require
-Security/Legal/Data approval. The product can store only approved excerpts and
-a source reference if retaining full transcripts is not permitted.
+- ingest through a server-side integration;
+- retain meeting ID, source URL, author, time, and access scope;
+- match exact CE IDs first and governed names/aliases only as candidates;
+- send ambiguous/unmatched records to a reconciliation inbox;
+- create pending suggestions, never approved history or Slack posts;
+- use stable source-derived idempotency keys; and
+- require the BGM to accept or edit before publishing.
 
-## Identity and permissions
+No Granola-derived content may automatically notify Slack.
 
-Review requires authenticated identity. At minimum:
+## Data and integration ownership
 
-- BGM/reviewer can author notes and approve meeting suggestions;
-- owner can reply and update assigned actions;
-- market admin can manage shared review presets and mappings;
-- service identity can ingest and propose but cannot impersonate a person; and
-- Slack writes record both the approving human and posting service.
+- **Weekly report/BigQuery:** authoritative CE identity, metrics, diagnostic
+  membership, and evidence.
+- **Slack:** authoritative cross-functional conversation and source replies.
+- **Granola:** meeting transcript source when the guarded beta is enabled.
+- **Isolated Review backend:** shortlist state, BGM notes, approvals, summaries,
+  work, receipts, thread registry, and CE Memory during the pilot.
+- **Legacy diagnostic service:** existing V1/V2 diagnostic actions only; it is not
+  a Review backend.
 
-Email-to-Slack matching is a bootstrap, not the durable identity key. Store an
-internal person ID with verified Slack and Granola identities.
+Review never calls or modifies `action_upsert` or `action_delete`. The legacy
+`/api/actions` behavior, `publish_weekly.py`, and `notes/apps_script.js` remain
+outside this product slice.
 
-## Rollout that cannot affect the weekly
+## Reliability and latency
 
-### R0 — ownership and contract validation
+- Overview/All CEs/Review navigation, CE selection, drawer opening, and CE focus
+  update locally and immediately.
+- Every asynchronous action shows immediate pending feedback and deduplicates
+  repeated clicks.
+- Identity/access is prefetched; CE history is cached by market × week × CE.
+- Repeated requests are debounced and stale CE responses are ignored/cancelled.
+- Optimistic action creation reconciles or rolls back after persistence.
+- Slack, AI, Granola, and history delays show explicit fail-soft states.
+- A missing optional source cannot block selection, analytics, or completion with
+  an explicitly recorded fallback outcome.
 
-- freeze current note/action behavior with regression fixtures;
-- inspect the authenticated Market Glance APIs and backing guarantees;
-- compare its performance snapshot and CE identity to the weekly;
-- agree Review/event/thread/identity ownership and contracts;
-- generate integration, Slack and transcript outputs as previews only.
+## Two-week pilot
 
-### R1 — read-only integration pilot
+### Included
 
-- weekly report links to Market Glance audit/commitment timelines;
-- weekly shows read-only review/owner/status returned by the shared contract;
-- Market Glance shadows a pinned weekly artifact/run ID;
-- metric, CE and owner mismatches are measured before any source cutover;
-- one market behind a feature flag;
-- production weekly build remains unchanged.
+- candidate versus selected-this-week presentation;
+- BGM selection and bounded-shortlist guidance;
+- owner/task-force filters where metadata exists;
+- Start/continue Slack as the dominant CTA;
+- optional BGM observation;
+- Slack summary suggestion and approval;
+- deduplicated action/check suggestions;
+- unified open-work backlog;
+- basic chronological CE timeline;
+- outcome-based completion; and
+- Monday reconciliation.
 
-### R2 — canonical evidence binding
+### Deferred
 
-- new Market Glance audits bind to weekly run, signal and CE IDs;
-- audit messages link to the canonical weekly evidence;
-- existing alert and audit thread topology is reconciled;
-- idempotency and test-channel delivery are verified by the workflow owner.
+- Granola as an automatic production source;
+- automatic action completion without approval;
+- advanced causal attribution of metric outcomes;
+- cross-market benchmarking;
+- complex dependencies between actions; and
+- broad multi-role in-app commentary.
 
-### R3 — Granola shadow ingestion
+### Success measures
 
-- central eligible-transcript source approved;
-- ingest and extract after the meeting, never during weekly build;
-- show proposed mappings, uncovered CEs and draft follow-ups;
-- no action/comment/Slack writes from generated output.
+- candidate and selected counts;
+- shortlist size and mix;
+- selected CEs with meaningful Slack participation;
+- time to first Slack response;
+- participation by role;
+- AI-summary acceptance/edit/rejection rate;
+- action acceptance, closure, and duplicate rate;
+- median and oldest open-action age;
+- repeated hero-selection and smaller-CE coverage;
+- manual typing required per CE;
+- weekly meeting duration;
+- review completion rate; and
+- return usage in week two.
 
-### R4 — reviewed automation
+## Build plan on top of the current live product
 
-- accepted suggestions create Market Glance/shared Review events and action drafts;
-- approved output can update the authoritative Slack thread;
-- scheduled reconciliation reports failures without blocking the weekly.
+### Slice 1 — Candidate and shortlist semantics
 
-## Safety and acceptance gates
+- Reuse existing alert queue, manual additions, `review_set`, and treatments.
+- Present untreated items as Candidates and selected treatments separately.
+- Add shortlist count/guidance, owner/task-force filtering, recent-review context,
+  and Next selected/unreviewed navigation.
+- Do not change diagnostic bucket calculations.
 
-- V1 report artifact and publish path are byte/contract unchanged during pilot.
-- Review reads a pinned `report_artifact_id`, never an in-progress build.
-- Review jobs have separate credentials, queues, logs and failure alerts.
-- Every external write has target preview, human authorization and idempotency.
-- Reprocessing a transcript or report produces no duplicate note or Slack post.
-- Missing transcript access is visible and creates no inferred meeting coverage.
-- Low-confidence CE/person matches cannot notify or assign automatically.
-- Deleting a personal view cannot delete Review events or Slack bindings.
-- Slack reply ingestion preserves author, timestamp and permalink.
-- Meeting-derived claims link to approved provenance.
-- Rollback disables Review flags/jobs without changing V1 generation.
+### Slice 2 — Slack-first workspace
 
-## Decisions required before implementation
+- Make Start/continue Slack the dominant CTA.
+- Show thread state and compact approved summary first.
+- Collapse optional BGM observation and compatibility role notes.
+- Remove Performance/BDM note creation from the normal flow after confirming
+  read compatibility for existing records.
 
-1. Which markets and meetings constitute the first pilot?
-2. Is the weekly alert CE thread the authoritative discussion location?
-3. Who may notify individuals or user groups from Review?
-4. Is Review send always confirm-first, or can approved rules auto-post later?
-5. Which Granola workspace/folder owns WBR transcripts?
-6. Is an Enterprise API key and Team-space access available?
-7. May full transcripts be centrally retained, or only indexed/referenced?
-8. What retention and deletion policy applies to transcripts and excerpts?
-9. Who approves meeting-derived comments/actions before they become records?
-10. What state closes a review item, and who can reopen it?
-11. Does Market Glance become the authoritative Review/commitment/thread store?
-12. Which versioned API or table contract will ingest the weekly run and expose
-    read-only workflow status back to the report?
+### Slice 3 — Outcome and completion
+
+- Add an explicit approved outcome/decision state.
+- Require treatment, outcome, and suggestion triage rather than note entry.
+- Preserve existing receipts and open-work carry-forward.
+
+### Slice 4 — Timeline and backlog
+
+- Compose existing weekly commentary, source suggestions, work, receipts, Slack
+  links, and read-only Performance history into the timeline contract.
+- Add ageing/overdue/stale backlog views and Monday reconciliation.
+- Preserve source links and existing stable work IDs.
+
+### Slice 5 — Guarded automation
+
+- Run Granola ingestion in suggestion-only beta after the manual Slack-first
+  workflow is stable.
+- Add measured metric outcome events without recalculating report analytics in
+  the browser.
+
+## Release acceptance criteria
+
+- All 17 market reports plus Headout retain complete current and dated artifacts.
+- A BGM can reduce the candidate pool to a three-to-five-CE shortlist.
+- Start/continue Slack previews and posts to the configured market channel with
+  exactly-once behavior.
+- Existing CE threads are reused and weekly summaries remain time-bounded.
+- No Performance/BDM app comment is required to complete a review.
+- Pending AI items cannot silently become approved history or work.
+- Suggestions are deduplicated and normal UI hides internal trace IDs.
+- Open work carries across weeks without duplication.
+- CE Memory joins by stable CE ID and fails softly when history is missing.
+- Review/drawer navigation preserves CE, market, week, document position, and
+  drafts on desktop and narrow layouts.
+- BGM/GM/admin market access passes and unauthorized access fails clearly.
+- Legacy `/api/actions`, `action_upsert`, and `action_delete` contracts remain
+  unchanged.
+- The complete weekly-report suite, complete-site preflight, authenticated
+  current/dated route checks, and legacy action guard pass before deployment.
+
+## Decisions to confirm during Slice 1
+
+1. Is the default shortlist limit advisory or enforced?
+2. What is the nomination cutoff and who can nominate through the app?
+3. Which reason options and context should be shown when a BGM elects to start a
+   new Slack parent thread instead of continuing the prior discussion?
+4. Which outcome types are sufficient to finish without an action?
+5. After how many days does open work become overdue or stale?
+6. Who may confirm completion evidence during the pilot?
+7. Which owner/task-force metadata source is authoritative where ownership is
+   incomplete?
+8. How long should raw Slack reply and Granola transcript evidence be retained?
