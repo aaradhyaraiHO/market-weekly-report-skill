@@ -1,5 +1,27 @@
 # Granola auto-ingest — setup runbook
 
+## Current product status · 31 Aug 2026
+
+The guarded ingestion contracts are implemented in the repository, but Granola
+is **not part of the core Review launch** and is not authorized for production
+activation yet. Activate it only after the manual Slack/BGM Review workflow has
+been stable in production for 24–48 hours.
+
+The beta contract is intentionally suggestion-only:
+
+- an exact `market_slug + review_week + stable CE ID` match may create pending
+  comment/action/check suggestions;
+- ambiguous or unmatched items go to `review_source_inbox`;
+- a BGM must approve, edit or reject every suggestion;
+- nothing posts automatically to Slack;
+- nothing writes automatically to the legacy Losing Money/RPC tables;
+- retries are idempotent and retain the Granola link/transcript provenance.
+
+A later Losing Money/RPC extension should surface approved Granola suggestions
+beside the matching CE row and require an explicit BGM write through the existing
+legacy action/comment contract. It must not add a second writer or change
+`/api/actions`, `action_upsert` or `action_delete`.
+
 Turns the deployed `/api/granola-review` endpoint into a live pipeline: a Granola meeting →
 AI-extracted, source-linked comment/action/check suggestions → the Review tab's Granola card
 (exact CE match) or the reconciliation inbox (ambiguous/unmatched). Nothing enters CE Memory,
@@ -22,14 +44,15 @@ Review tab → Commentary / Actions Granola card (pending, BGM approves)
 | Var | Purpose | Value |
 |-----|---------|-------|
 | `GRANOLA_WEBHOOK_SECRET`      | auth for the inbound webhook (`x-granola-secret`) | *(from chat)* |
-| `REVIEW_INGEST_SECRET`        | sent to Apps Script; **must equal** the Apps Script property below | *(from chat)* |
-| `REVIEW_AI_WEBHOOK_SECRET_V2` | shared secret between granola-review (sender) and review-summary (validator) | *(from chat)* |
+| `REVIEW_MODE_INGEST_SECRET`   | sent to Apps Script; **must equal** the Apps Script property below | *(secret store)* |
+| `REVIEW_MODE_AI_WEBHOOK_SECRET` | shared secret between granola-review and review-summary | *(secret store)* |
+| `REVIEW_MODE_AI_WEBHOOK_URL`  | authenticated Review summary/extraction endpoint | *(deployment URL)* |
 | `ANTHROPIC_API_KEY`           | Haiku extraction in review-summary.js | *(likely already set — verify)* |
 | `REVIEW_AI_MODEL`             | optional; default `claude-haiku-4-5-20251001` | *(leave unset)* |
-| `REVIEW_APPS_SCRIPT_URL`      | optional; defaults to the current Apps Script exec URL | *(leave unset)* |
+| `REVIEW_MODE_APPS_SCRIPT_URL` | isolated Review Apps Script deployment URL | *(deployment URL)* |
 
 ## 2. Apps Script property  (Extensions → Apps Script → Project Settings → Script properties)
-- `REVIEW_INGEST_SECRET` = **the same value** you set on Vercel above.
+- `REVIEW_MODE_INGEST_SECRET` = **the same value** you set on Vercel above.
 - Then redeploy the web app: Deploy → Manage deployments → New version.
 
 ## 3. Redeploy Vercel
