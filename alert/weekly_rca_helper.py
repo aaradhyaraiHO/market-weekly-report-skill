@@ -31,6 +31,7 @@ import argparse
 import datetime
 import json
 import logging
+import math
 import sys
 import urllib.parse
 from pathlib import Path
@@ -49,6 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("weekly_rca_helper")
 
 WOW_SQL = Path(__file__).parent / "sql" / "ce_revenue_cvr_drop_ids.sql"
+LY_PERIOD_SQL = Path(__file__).parent / "sql" / "ce_revenue_cvr_drop_ids_ly_period.sql"
 RECENT_LABEL = "L4W avg"   # Long-term Context recent-baseline column label (weekly)
 
 OMNI_DASHBOARD_URL = "https://headout.omniapp.co/dashboards/5368ab53"
@@ -91,19 +93,132 @@ def _sql_quote(ce_id: str) -> str:
     return "'" + ce_id.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
+def _query_config() -> bigquery.QueryJobConfig:
+    return bigquery.QueryJobConfig(
+        maximum_bytes_billed=MAX_BYTES_BILLED,
+        labels=JOB_LABELS,
+    )
+
+
+def _safe_ratio(numerator, denominator):
+    """Return a finite ratio or None for nullable/invalid warehouse values."""
+    try:
+        numerator = float(numerator)
+        denominator = float(denominator)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numerator) or not math.isfinite(denominator) or denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _load_context_period(
+    client: bigquery.Client,
+    ce_ids: list[str],
+    period_start: datetime.date,
+    period_end: datetime.date,
+    label: str,
+):
+    quoted = ", ".join(_sql_quote(c) for c in ce_ids)
+    sql = LY_PERIOD_SQL.read_text()
+    sql = (
+        sql.replace("{{CE_IDS}}", quoted)
+        .replace("{{PERIOD_START}}", period_start.isoformat())
+        .replace("{{PERIOD_END}}", period_end.isoformat())
+    )
+    log.info("Running partition-pruned %s context query (%s..%s)…", label, period_start, period_end)
+    df = client.query(sql, job_config=_query_config()).to_dataframe()
+    log.info("Returned %d %s context rows", len(df), label)
+    return df
+
+
+def _attach_l4w_context(df, client: bigquery.Client, ce_ids: list[str], week_start: str):
+    post_start = datetime.date.fromisoformat(week_start)
+    metrics = (
+        "revenue", "count_orders", "gross_bookings",
+        "gross_bookings_completed", "traffic", "converters",
+    )
+    totals: dict[str, dict[str, float]] = {}
+    for index in range(4):
+        period_start = post_start - datetime.timedelta(days=35 - index * 7)
+        period_end = period_start + datetime.timedelta(days=6)
+        context = _load_context_period(
+            client, ce_ids, period_start, period_end, f"l4w_{index + 1}"
+        )
+        for _, row in context.iterrows():
+            ce_id = str(row["combined_entity_id"])
+            bucket = totals.setdefault(ce_id, {metric: 0.0 for metric in metrics})
+            for metric in metrics:
+                value = row.get(metric)
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(number):
+                    bucket[metric] += number
+
+    mapping = {
+        "l4w_total_revenue": "revenue",
+        "l4w_count_orders": "count_orders",
+        "l4w_gross_bookings": "gross_bookings",
+        "l4w_gross_bookings_completed": "gross_bookings_completed",
+        "l4w_traffic": "traffic",
+        "l4w_converters": "converters",
+    }
+    for target, source in mapping.items():
+        df[target] = df["combined_entity_id"].map(
+            lambda value: totals.get(str(value), {}).get(source)
+        )
+    df["l4w_avg_weekly_revenue"] = df["l4w_total_revenue"] / 4.0
+    df["l4w_cvr"] = df.apply(
+        lambda row: _safe_ratio(row.get("l4w_converters"), row.get("l4w_traffic")),
+        axis=1,
+    )
+    return df
+
+
+def _attach_ly_context(df, client: bigquery.Client, ce_ids: list[str], week_start: str):
+    post_start = datetime.date.fromisoformat(week_start)
+    periods = {
+        "ly_pre": (post_start - datetime.timedelta(days=371), post_start - datetime.timedelta(days=365)),
+        "ly_post": (post_start - datetime.timedelta(days=364), post_start - datetime.timedelta(days=358)),
+    }
+    for prefix, (period_start, period_end) in periods.items():
+        context = _load_context_period(client, ce_ids, period_start, period_end, prefix)
+        by_id = {
+            str(row["combined_entity_id"]): row
+            for _, row in context.iterrows()
+        }
+        for source, target in (
+            ("revenue", f"{prefix}_revenue"),
+            ("count_orders", f"{prefix}_count_orders"),
+            ("gross_bookings", f"{prefix}_gross_bookings"),
+            ("gross_bookings_completed", f"{prefix}_gross_bookings_completed"),
+            ("traffic", f"{prefix}_traffic"),
+            ("converters", f"{prefix}_converters"),
+        ):
+            df[target] = df["combined_entity_id"].map(
+                lambda value: by_id.get(str(value), {}).get(source)
+            )
+        df[f"{prefix}_cvr"] = df.apply(
+            lambda row: _safe_ratio(
+                row.get(f"{prefix}_converters"), row.get(f"{prefix}_traffic")
+            ),
+            axis=1,
+        )
+    return df
+
+
 def run_wow_query(ce_ids: list[str], week_start: str):
     sql = WOW_SQL.read_text()
     quoted = ", ".join(_sql_quote(c) for c in ce_ids)
     sql = sql.replace("{{CE_IDS}}", quoted).replace("{{WEEK_START}}", week_start)
     log.info("Running WoW RCA query for %d CE(s), week starting %s…", len(ce_ids), week_start)
     client = bigquery.Client(project=PROJECT_ID)
-    job_config = bigquery.QueryJobConfig(
-        maximum_bytes_billed=MAX_BYTES_BILLED,
-        labels=JOB_LABELS,
-    )
-    df = client.query(sql, job_config=job_config).to_dataframe()
-    log.info("Returned %d rows", len(df))
-    return df
+    df = client.query(sql, job_config=_query_config()).to_dataframe()
+    log.info("Returned %d base rows", len(df))
+    df = _attach_l4w_context(df, client, ce_ids, week_start)
+    return _attach_ly_context(df, client, ce_ids, week_start)
 
 
 def ce_header_block(name: str, ce_id: str) -> dict:

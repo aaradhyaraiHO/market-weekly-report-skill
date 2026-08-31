@@ -54,10 +54,12 @@ ce_revenue_raw AS (
 
     FROM `headout-analytics.analytics_reporting.combined_entity_stats`
 
-    WHERE (
-            DATE(report_timestamp) BETWEEN (SELECT pre_start  FROM date_windows) AND (SELECT pre_end  FROM date_windows)
-            OR DATE(report_timestamp) BETWEEN (SELECT post_start FROM date_windows) AND (SELECT post_end FROM date_windows)
-        )
+    -- Keep the partition column bare and the bounds compile-time constant so
+    -- BigQuery prunes the monthly report_timestamp partitions.  The former
+    -- DATE(report_timestamp) + scalar-subquery predicates scanned the table
+    -- repeatedly and pushed the weekly RCA above the byte cap.
+    WHERE report_timestamp >= TIMESTAMP(DATE('{{WEEK_START}}') - INTERVAL 7 DAY)
+        AND report_timestamp <  TIMESTAMP(DATE('{{WEEK_START}}') + INTERVAL 7 DAY)
         AND combined_entity_id IN ({{CE_IDS}})
 
     GROUP BY 1, 2
@@ -125,10 +127,8 @@ funnel_raw AS (
     --   - 30-day funnel completion window  (applied per-step in our SELECT)
     --   - NO page_type filter — Omni does not restrict by page type, so we don't either
     WHERE (advertising_channel_type <> 'PERFORMANCE_MAX' OR advertising_channel_type IS NULL)
-        AND (
-            event_date BETWEEN (SELECT pre_start  FROM date_windows) AND (SELECT pre_end  FROM date_windows)
-            OR event_date BETWEEN (SELECT post_start FROM date_windows) AND (SELECT post_end FROM date_windows)
-        )
+        AND event_date BETWEEN DATE('{{WEEK_START}}') - INTERVAL 7 DAY
+                           AND DATE('{{WEEK_START}}') + INTERVAL 6 DAY
         AND combined_entity_id IN ({{CE_IDS}})
 
 ),
@@ -225,149 +225,50 @@ ce_metadata AS (
 -- ============================================================================
 
 l4w_revenue AS (
-
     SELECT
-        TRIM(combined_entity_id) AS combined_entity_id,
-        SUM(sum_revenue_predicted) AS l4w_total_revenue,   -- predicted = report's default revenue basis
-        SUM(count_orders) AS l4w_count_orders,
-        SUM(sum_order_value) AS l4w_gross_bookings,
-        SUM(sum_order_value_completed) AS l4w_gross_bookings_completed
-
-    FROM `headout-analytics.analytics_reporting.combined_entity_stats`
-
-    WHERE DATE(report_timestamp) BETWEEN (SELECT l4w_start FROM date_windows)
-                                     AND (SELECT l4w_end   FROM date_windows)
-        AND combined_entity_id IN ({{CE_IDS}})
-
-    GROUP BY 1
+        CAST(NULL AS STRING) AS combined_entity_id,
+        CAST(NULL AS FLOAT64) AS l4w_total_revenue,
+        CAST(NULL AS FLOAT64) AS l4w_count_orders,
+        CAST(NULL AS FLOAT64) AS l4w_gross_bookings,
+        CAST(NULL AS FLOAT64) AS l4w_gross_bookings_completed
+    FROM UNNEST(CAST([] AS ARRAY<STRING>)) AS combined_entity_id
 
 ),
 
 l4w_funnel AS (
-
     SELECT
-        TRIM(combined_entity_id) AS combined_entity_id,
-        COUNT(DISTINCT user_id) AS l4w_traffic,
-        COUNT(DISTINCT IF(
-            has_order_completed
-                AND DATE_DIFF(order_completed_timestamp, session_start_timestamp, DAY) <= 30,
-            user_id, NULL
-        )) AS l4w_converters
-
-    FROM `headout-analytics.analytics_reporting.mixpanel_user_page_funnel_progression`
-
-    WHERE (advertising_channel_type <> 'PERFORMANCE_MAX' OR advertising_channel_type IS NULL)
-        AND event_date BETWEEN (SELECT l4w_start FROM date_windows)
-                           AND (SELECT l4w_end   FROM date_windows)
-        AND combined_entity_id IN ({{CE_IDS}})
-
-    GROUP BY 1
+        CAST(NULL AS STRING) AS combined_entity_id,
+        CAST(NULL AS INT64) AS l4w_traffic,
+        CAST(NULL AS INT64) AS l4w_converters
+    FROM UNNEST(CAST([] AS ARRAY<STRING>)) AS combined_entity_id
 
 ),
 
-ly_revenue_raw AS (
-
-    SELECT
-        TRIM(combined_entity_id) AS combined_entity_id,
-        CASE
-            WHEN DATE(report_timestamp) BETWEEN (SELECT ly_pre_start  FROM date_windows) AND (SELECT ly_pre_end  FROM date_windows) THEN 'ly_pre'
-            WHEN DATE(report_timestamp) BETWEEN (SELECT ly_post_start FROM date_windows) AND (SELECT ly_post_end FROM date_windows) THEN 'ly_post'
-        END AS ly_period,
-        SUM(sum_revenue_predicted) AS revenue,   -- predicted = report's default revenue basis
-        SUM(count_orders) AS count_orders,
-        SUM(sum_order_value) AS gross_bookings,
-        SUM(sum_order_value_completed) AS gross_bookings_completed
-
-    FROM `headout-analytics.analytics_reporting.combined_entity_stats`
-
-    WHERE (
-            DATE(report_timestamp) BETWEEN (SELECT ly_pre_start  FROM date_windows) AND (SELECT ly_pre_end  FROM date_windows)
-            OR DATE(report_timestamp) BETWEEN (SELECT ly_post_start FROM date_windows) AND (SELECT ly_post_end FROM date_windows)
-        )
-        AND combined_entity_id IN ({{CE_IDS}})
-
-    GROUP BY 1, 2
-
-),
-
+-- Prior-year context is loaded in two separately partition-pruned seven-day
+-- jobs by weekly_rca_helper.py. Keeping it out of this base query prevents the
+-- two historical funnel partitions from combining into one >80 GiB job.
 ly_revenue_pivoted AS (
-
     SELECT
-        combined_entity_id,
-        SUM(IF(ly_period = 'ly_pre',  revenue, 0))                  AS ly_pre_revenue,
-        SUM(IF(ly_period = 'ly_post', revenue, 0))                  AS ly_post_revenue,
-        SUM(IF(ly_period = 'ly_pre',  count_orders, 0))             AS ly_pre_count_orders,
-        SUM(IF(ly_period = 'ly_post', count_orders, 0))             AS ly_post_count_orders,
-        SUM(IF(ly_period = 'ly_pre',  gross_bookings, 0))           AS ly_pre_gross_bookings,
-        SUM(IF(ly_period = 'ly_post', gross_bookings, 0))           AS ly_post_gross_bookings,
-        SUM(IF(ly_period = 'ly_pre',  gross_bookings_completed, 0)) AS ly_pre_gross_bookings_completed,
-        SUM(IF(ly_period = 'ly_post', gross_bookings_completed, 0)) AS ly_post_gross_bookings_completed
-
-    FROM ly_revenue_raw
-
-    WHERE ly_period IS NOT NULL
-
-    GROUP BY 1
-
-),
-
-ly_funnel_raw AS (
-
-    SELECT
-        TRIM(combined_entity_id) AS combined_entity_id,
-        CASE
-            WHEN event_date BETWEEN (SELECT ly_pre_start  FROM date_windows) AND (SELECT ly_pre_end  FROM date_windows) THEN 'ly_pre'
-            WHEN event_date BETWEEN (SELECT ly_post_start FROM date_windows) AND (SELECT ly_post_end FROM date_windows) THEN 'ly_post'
-        END AS ly_period,
-        user_id,
-        has_order_completed,
-        order_completed_timestamp,
-        session_start_timestamp
-
-    FROM `headout-analytics.analytics_reporting.mixpanel_user_page_funnel_progression`
-
-    WHERE (advertising_channel_type <> 'PERFORMANCE_MAX' OR advertising_channel_type IS NULL)
-        AND (
-            event_date BETWEEN (SELECT ly_pre_start  FROM date_windows) AND (SELECT ly_pre_end  FROM date_windows)
-            OR event_date BETWEEN (SELECT ly_post_start FROM date_windows) AND (SELECT ly_post_end FROM date_windows)
-        )
-        AND combined_entity_id IN ({{CE_IDS}})
-
-),
-
-ly_funnel_aggregated AS (
-
-    SELECT
-        combined_entity_id,
-        ly_period,
-        COUNT(DISTINCT user_id) AS traffic,
-        COUNT(DISTINCT IF(
-            has_order_completed
-                AND DATE_DIFF(order_completed_timestamp, session_start_timestamp, DAY) <= 30,
-            user_id, NULL
-        )) AS converters
-
-    FROM ly_funnel_raw
-
-    WHERE ly_period IS NOT NULL
-
-    GROUP BY 1, 2
-
+        CAST(NULL AS STRING) AS combined_entity_id,
+        CAST(NULL AS FLOAT64) AS ly_pre_revenue,
+        CAST(NULL AS FLOAT64) AS ly_post_revenue,
+        CAST(NULL AS FLOAT64) AS ly_pre_count_orders,
+        CAST(NULL AS FLOAT64) AS ly_post_count_orders,
+        CAST(NULL AS FLOAT64) AS ly_pre_gross_bookings,
+        CAST(NULL AS FLOAT64) AS ly_post_gross_bookings,
+        CAST(NULL AS FLOAT64) AS ly_pre_gross_bookings_completed,
+        CAST(NULL AS FLOAT64) AS ly_post_gross_bookings_completed
+    FROM UNNEST(CAST([] AS ARRAY<STRING>)) AS combined_entity_id
 ),
 
 ly_funnel_pivoted AS (
-
     SELECT
-        combined_entity_id,
-        SUM(IF(ly_period = 'ly_pre',  traffic, 0))    AS ly_pre_traffic,
-        SUM(IF(ly_period = 'ly_post', traffic, 0))    AS ly_post_traffic,
-        SUM(IF(ly_period = 'ly_pre',  converters, 0)) AS ly_pre_converters,
-        SUM(IF(ly_period = 'ly_post', converters, 0)) AS ly_post_converters
-
-    FROM ly_funnel_aggregated
-
-    GROUP BY 1
-
+        CAST(NULL AS STRING) AS combined_entity_id,
+        CAST(NULL AS INT64) AS ly_pre_traffic,
+        CAST(NULL AS INT64) AS ly_post_traffic,
+        CAST(NULL AS INT64) AS ly_pre_converters,
+        CAST(NULL AS INT64) AS ly_post_converters
+    FROM UNNEST(CAST([] AS ARRAY<STRING>)) AS combined_entity_id
 ),
 
 final AS (
