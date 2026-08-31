@@ -92,6 +92,16 @@ class WeeklyAlertV2Contract(unittest.TestCase):
         self.assertNotIn("Losing Money", rendered)
         self.assertNotIn("RPC Fluctuations", rendered)
 
+        alert_1_blocks = payload["messages"][0]["blocks"]
+        self.assertIn("Open this market's weekly report", alert_1_blocks[1]["text"]["text"])
+        alert_2_blocks = payload["messages"][1]["blocks"]
+        self.assertIn("Open the weekly report", alert_2_blocks[1]["text"]["text"])
+
+    def test_uk_and_benelux_tag_uday_as_the_bgm(self):
+        configured = json.loads(weekly_alert_v2.DEFAULT_BGMS.read_text())["markets"]
+        self.assertEqual(configured["united_kingdom"]["slack_user_ids"], ["U044MT6TCEN"])
+        self.assertEqual(configured["benelux"]["slack_user_ids"], ["U044MT6TCEN"])
+
     def test_alert_1_uses_native_table_cells_for_each_v1_kpi(self):
         payload = weekly_alert_v2.build_payload(self.headline, self.bgms)
         tables = [

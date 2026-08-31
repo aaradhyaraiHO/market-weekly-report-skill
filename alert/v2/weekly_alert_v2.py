@@ -322,8 +322,12 @@ def build_alert_1(
         f"📊 *{headline['market']} — Weekly Review*  ·  "
         f"_{headline['week_start']} → {headline['week_end']}_"
     )
+    links = f"📊 *<{report_url}|Open this market's weekly report →>*"
+    if feedback_canvas_url:
+        links += f"   ·   📝 *<{feedback_canvas_url}|Add report feedback →>*"
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": title}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": links}},
         *alert_1_kpi_blocks(headline, kpis),
     ]
 
@@ -334,10 +338,6 @@ def build_alert_1(
             lines.append(_okr_line(row, slug))
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}})
 
-    links = f"📊 *<{report_url}|Open this market's weekly report →>*"
-    if feedback_canvas_url:
-        links += f"   ·   📝 *<{feedback_canvas_url}|Add report feedback →>*"
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": links}})
     return blocks
 
 
@@ -414,6 +414,8 @@ def build_alert_2(headline: dict, report_url: str) -> tuple[list[dict], list[dic
         {"type": "section", "text": {"type": "mrkdwn", "text":
             f"📈 *{headline['market']} — Top 5 & Bottom 5*\n"
             "Source order and comparisons are taken directly from the V2 market headline."}},
+        {"type": "section", "text": {"type": "mrkdwn", "text":
+            f"📊 *<{report_url}|Open the weekly report →>*"}},
         {"type": "section", "text": {"type": "mrkdwn", "text": "*Top 5*"}},
         _table_block(_mover_table_rows(top, "top"), ["left", "right", "right", "right", "right", "right"])
         if top else {"type": "section", "text": {"type": "mrkdwn", "text": "—"}},
@@ -422,8 +424,6 @@ def build_alert_2(headline: dict, report_url: str) -> tuple[list[dict], list[dic
         if bottom else {"type": "section", "text": {"type": "mrkdwn", "text": "—"}},
         {"type": "section", "text": {"type": "mrkdwn", "text":
             "🧵 Per-CE weekly alerts in thread ↓"}},
-        {"type": "section", "text": {"type": "mrkdwn", "text":
-            f"📊 *<{report_url}|Open the weekly report →>*"}},
     ]
     ids = _unique_ids(top + bottom)
     return blocks, [{"$rca": ce_id} for ce_id in ids], ids
