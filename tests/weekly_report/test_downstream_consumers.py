@@ -181,6 +181,11 @@ class DownstreamConsumerCoverage(unittest.TestCase):
 
         self.assertEqual(calls, [])
 
+    def test_csee_and_nordics_remain_adjacent_in_all_market_runs(self):
+        slugs = run_weekly.slugs_for("all")
+        csee_index = slugs.index("csee")
+        self.assertEqual(slugs[csee_index + 1], "nordics")
+
     def test_run_weekly_alert_v2_live_preflight_requires_token_and_clean_ledger(self):
         with tempfile.TemporaryDirectory(prefix="weekly-alert-v2-live-preflight-") as tmp:
             tmp = Path(tmp)

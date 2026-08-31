@@ -53,6 +53,10 @@ MARKETS = {
     "united_kingdom": "United Kingdom",
     "iberia": "Iberia",
     "csee": "CSEE",
+    # Keep the shared CSEE/Nordics operating group adjacent in every all-market
+    # build, publish, readiness check, and alert batch. They remain distinct
+    # report/data grains and post as consecutive parents to the same channel.
+    "nordics": "Nordics",
     "east_asia": "East Asia",
     "sea": "South East Asia",
     "uae": "United Arab Emirates",
@@ -64,7 +68,6 @@ MARKETS = {
     # channel — they alert into the shared regional GM channels (UK / CSEE / Iberia); Mexico
     # has its own #mkt-mexico. business_market strings verified against combined_entity_stats.
     "benelux": "Benelux",
-    "nordics": "Nordics",
     "south_america": "South America",
     "mexico_central_america": "Mexico & Central America",
 }
