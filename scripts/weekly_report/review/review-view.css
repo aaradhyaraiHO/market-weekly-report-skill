@@ -354,9 +354,11 @@
 .rv-granola-dock{display:flex;align-items:center;gap:8px;min-width:min(440px,42vw)}
 .rv-granola-dock input{min-width:0;flex:1;min-height:40px;padding:9px 12px;border:1px solid var(--rv-g400);border-radius:10px;background:#fff;font-size:13px}
 .rv-granola-dock input:focus{outline:2px solid var(--rv-purps);outline-offset:0;border-color:var(--rv-purps)}
-.rv-granola-wip{display:none}
-.rv-granola-wip strong{font-weight:600;color:var(--rv-ink)}
-.rv-granola-wip span{color:var(--rv-muted)}
+.rv-granola-wip{margin-top:18px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px;border-top:1px solid var(--rv-g200);color:var(--rv-muted)}
+.rv-granola-wip-label{flex:none;padding:3px 8px;border-radius:999px;background:var(--rv-g200);color:var(--rv-g600);font-size:11px;font-weight:600;line-height:16px}
+.rv-granola-wip-copy{display:grid;gap:2px;min-width:0}
+.rv-granola-wip-copy strong{color:var(--rv-ink);font-size:13px;font-weight:600;line-height:18px}
+.rv-granola-wip-copy small{color:var(--rv-muted);font-size:12px;line-height:18px;text-wrap:pretty}
 
 .rv-drawer-wrap{position:fixed;inset:0;z-index:60;display:flex;justify-content:flex-end;background:rgba(17,17,17,.42)}
 .rv-drawer-wrap[hidden]{display:none}

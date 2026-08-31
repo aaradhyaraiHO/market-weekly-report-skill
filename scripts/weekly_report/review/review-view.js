@@ -443,8 +443,8 @@
         "</select>" + receipt + "</div></div></header>" +
         '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderReconciliationCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
-        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
-        renderFinishBar(q,blockers,reviewed) + renderGranolaDock() +
+        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div>" + renderGranolaDock() + "</div>" +
+        renderFinishBar(q,blockers,reviewed) +
         '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next unreviewed →</button>' +
         '<button class="rv-btn primary" type="button" id="rv-finish"' + (blockers.length || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
@@ -609,10 +609,9 @@
     }
 
     function renderGranolaDock() {
-      // Keep this visible, but do not offer a broken control across markets:
-      // the Granola workspace key still needs verified note access. The
-      // underlying extractor stays isolated in Preview until then.
-      return '<div class="rv-granola-wip" role="note"><strong>Granola meeting</strong><span>WIP · meeting access is being connected</span></div>';
+      // Status only: the guarded beta remains inactive and exposes no ingest
+      // control until exact CE matching and approval gates are verified.
+      return '<div class="rv-granola-wip" role="note" aria-label="Granola integration work in progress"><span class="rv-granola-wip-label">Work in progress</span><span class="rv-granola-wip-copy"><strong>Granola meeting capture</strong><small>Meeting notes and transcripts will suggest observations and follow-ups for BGM approval. Not active yet.</small></span></div>';
     }
 
     function renderImportedComment(c) {

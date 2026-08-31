@@ -405,15 +405,20 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("missing history never blocks this report", self.view)
         self.assertIn(".rv-skeleton", self.css)
 
-    def test_granola_stays_hidden_until_guarded_beta_is_approved(self):
+    def test_granola_is_a_noninteractive_wip_notice_until_beta_approval(self):
         for fragment in (
-            "Granola meeting",
-            "WIP · meeting access is being connected",
+            "Granola meeting capture",
+            "Work in progress",
+            "Not active yet.",
             "api.ingestGranolaLink",
         ):
             self.assert_ui_contract(fragment)
         self.assertNotIn('id="rv-granola-toggle"', self.view)
-        self.assertIn(".rv-granola-wip{display:none}", self.css)
+        self.assertIn('aria-label="Granola integration work in progress"', self.view)
+        self.assertIn(".rv-granola-wip{margin-top:18px", self.css)
+        workspace = self.view.split("'<div class=\"rv-workspace\">'", 1)[1].split("function completionBlockers", 1)[0]
+        self.assertLess(workspace.index("renderMemoryRail(q)"), workspace.index("renderGranolaDock()"))
+        self.assertLess(workspace.index("renderGranolaDock()"), workspace.index("renderFinishBar(q,blockers,reviewed)"))
 
     def test_native_review_uses_post_for_mutations_and_posts_to_slack(self):
         api = NATIVE_API.read_text()

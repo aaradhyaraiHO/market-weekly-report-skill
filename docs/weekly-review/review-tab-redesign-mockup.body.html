@@ -19,23 +19,48 @@
   --rv-shadow-3:0 6px 16px 5px rgba(17,17,17,.10),0 1px 8px rgba(17,17,17,.05);
   --rv-hd:halyard-display,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --rv-ht:halyard-text,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:300;-webkit-font-smoothing:antialiased;
+  color:var(--rv-ink); font-family:var(--rv-ht); font-weight:400;-webkit-font-smoothing:antialiased;
 }
 #review-view[hidden]{display:none}
 #review-view *{box-sizing:border-box}
 #review-view button,#review-view select,#review-view textarea,#review-view input{font:inherit;color:inherit}
+#review-view .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#review-view .rv-search{display:flex;align-items:center;margin:12px 0;position:relative}
+#review-view .rv-search input{width:100%;height:40px;padding:8px 38px 8px 12px;border:1px solid var(--rv-g300);border-radius:10px;background:#fff}
+#review-view .rv-search input:focus{outline:2px solid var(--rv-purps);border-color:transparent}
+#review-view .rv-search button{position:absolute;right:6px;border:0;background:transparent;width:30px;height:30px;border-radius:8px;cursor:pointer}
+#review-view .rv-role-notes{display:grid;gap:14px}
+#review-view .rv-role-note,#review-view .rv-slack-composer{padding:14px;border:1px solid var(--rv-g200);border-radius:12px;background:#fff}
+#review-view .rv-role-collapsed{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border:1px solid var(--rv-g200);border-radius:12px;background:var(--rv-g50);cursor:pointer;text-align:left}
+#review-view .rv-role-collapsed:hover{border-color:var(--rv-purps-200);background:var(--rv-purps-10)}
+#review-view .rv-role-collapsed:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-role-collapsed span:first-child{display:grid;gap:2px}
+#review-view .rv-role-collapsed small{font-size:14px;line-height:20px;color:var(--rv-muted);font-weight:400}
+#review-view .rv-field-label{display:block;font-size:14px;line-height:20px;font-weight:600;margin-bottom:7px}
+#review-view .rv-role-note textarea,#review-view .rv-slack-composer textarea{width:100%;min-height:88px;padding:11px 12px;border:1px solid var(--rv-g400);border-radius:10px;resize:vertical}
+#review-view .rv-channel-preview{font-size:13px;line-height:18px;color:var(--rv-muted);margin:-2px 0 10px}
+#review-view .rv-thread-choice,#review-view .rv-new-thread-choice{margin:8px 0 12px;padding:11px 12px;border:1px solid var(--rv-g200);border-radius:10px;background:var(--rv-g50)}
+#review-view .rv-thread-choice>div:first-child{display:grid;gap:3px}#review-view .rv-thread-choice span{color:var(--rv-muted);font-size:12px}#review-view .rv-thread-choice .rv-note-actions{margin-top:10px;justify-content:flex-start}
+#review-view .rv-thread-discovery{margin:10px 0;padding:14px;display:grid;gap:4px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-g50)}#review-view .rv-thread-discovery strong{font-size:14px;font-weight:600}#review-view .rv-thread-discovery span{color:var(--rv-muted);font-size:13px;line-height:18px}#review-view .rv-thread-discovery .rv-btn{justify-self:start;margin-top:8px}#review-view .rv-thread-discovery.error{border-color:var(--rv-amber-200);background:var(--rv-amber-200)}
+#review-view .rv-new-thread-choice input{width:100%;min-height:40px;margin-top:6px;padding:9px 11px;border:1px solid var(--rv-g400);border-radius:9px;background:#fff}#review-view .rv-new-thread-choice .rv-note-actions{margin-top:8px}
+#review-view .rv-optional-notes{display:grid;gap:10px;margin-top:20px;padding-top:18px;border-top:1px solid var(--rv-g200)}#review-view .rv-section-label{color:var(--rv-muted);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none}
+#review-view .rv-bgm-observation-surface{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 2px}#review-view .rv-bgm-observation-surface>span{display:grid;gap:3px}#review-view .rv-bgm-observation-surface strong{font-size:14px;line-height:20px;font-weight:600}#review-view .rv-bgm-observation-surface small{color:var(--rv-muted);font-size:13px;line-height:18px}#review-view .rv-role-note textarea[data-role-input="bgm"]{width:100%;min-height:112px;padding:12px 14px;border:1px solid var(--rv-g400);border-radius:10px;outline:0;color:var(--rv-ink);background:var(--rv-white);font-family:var(--rv-ht);font-size:13px;line-height:20px;font-weight:400;resize:vertical}#review-view .rv-role-note textarea[data-role-input="bgm"]:focus{border-color:var(--rv-purps);outline:2px solid rgba(128,0,255,.28);outline-offset:1px}#review-view .rv-history-notes{padding:12px 2px;border-top:1px solid var(--rv-g200)}#review-view .rv-history-notes>summary{min-height:40px;display:flex;align-items:center;color:var(--rv-muted);font-size:13px;font-weight:500;cursor:pointer}
+#review-view .rv-outcome-grid{display:grid;gap:12px}#review-view .rv-outcome-grid label{display:grid;gap:6px;color:var(--rv-ink);font-size:12px;font-weight:600}#review-view .rv-outcome-grid textarea{min-height:84px;padding:10px 12px;border:1px solid var(--rv-g400);border-radius:10px;resize:vertical;font:inherit}#review-view .rv-outcome-grid .rv-checkline{display:flex;grid-template-columns:auto 1fr;align-items:center;gap:8px;font-weight:500}#review-view .rv-outcome-grid .rv-checkline input{width:18px;height:18px}
+#review-view .rv-backlog-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--rv-g200)}
+#review-view [data-work]._pending,#review-view [data-work][data-pending="true"]{opacity:.68}
 .rv-ce-identity,.rv-title-link{color:inherit;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;cursor:pointer}
 .rv-ce-identity:hover,.rv-ce-identity:focus,.rv-title-link:hover,.rv-title-link:focus{text-decoration-color:currentColor;outline:none}
 .rv-title-link{border:0;background:transparent;padding:0;font:inherit;text-align:left}
 
-.rv-layout{display:grid;grid-template-columns:312px minmax(0,1fr);min-height:calc(100vh - 64px)}
-.rv-side{padding:24px 20px;border-right:1px solid var(--rv-line);background:var(--rv-white)}
-.rv-eyebrow{color:var(--rv-purps-700);font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase}
-.rv-side h2{margin:8px 0 4px;font-family:var(--rv-hd);font-size:21px;line-height:28px;font-weight:600}
+.rv-layout{display:grid;grid-template-columns:320px minmax(0,1fr);min-height:calc(100vh - 80px);background:var(--rv-g50)}
+.rv-side{padding:24px 20px;border-right:1px solid var(--rv-g200);background:var(--rv-white)}
+.rv-mobile-side-head,.rv-mobile-current{display:none}
+.rv-eyebrow{color:var(--rv-purps-700);font-size:12px;font-weight:600;letter-spacing:.2px;text-transform:none}
+.rv-side h2{margin:8px 0 4px;font-family:var(--rv-ht);font-size:19px;line-height:24px;font-weight:600;text-wrap:balance}
 .rv-subtle{color:var(--rv-muted);font-size:13px}
-.rv-queue-label{margin:22px 0 10px;color:var(--rv-g600);font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase}
+.rv-queue-label{margin:24px 0 10px;color:var(--rv-g700);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none}
 .rv-side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
-.rv-addce{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid var(--rv-purps-200);border-radius:999px;background:var(--rv-white);color:var(--rv-purps-700);font-size:13px;font-weight:600;cursor:pointer;transition:background-color .14s}
+.rv-addce{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:0 12px;border:1px solid var(--rv-g300);border-radius:8px;background:var(--rv-white);color:var(--rv-purps-700);font-size:13px;font-weight:500;cursor:pointer;transition-property:color,background-color,border-color,transform;transition-duration:120ms}
 .rv-addce:hover{background:var(--rv-purps-20)}
 .rv-picker{margin:12px 0;padding:12px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
 .rv-picker[hidden]{display:none}
@@ -58,44 +83,56 @@
 .rv-queue-tabs{margin:18px 0 12px;padding:3px;display:grid;grid-template-columns:1fr 1fr;border-radius:12px;background:var(--rv-g200)}
 .rv-queue-tab{min-height:38px;border:0;border-radius:10px;background:transparent;color:var(--rv-muted);cursor:pointer;font-size:13px}
 .rv-queue-tab.active{background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:var(--rv-shadow-1)}
+.rv-queue-panel{max-height:calc(100vh - 292px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:2px}
+.rv-queue-filters{display:flex;gap:6px;flex-wrap:wrap}
+#review-view .rv-filter-chip{min-height:40px;padding:8px 12px;border:1px solid var(--rv-g300);border-radius:999px;background:#fff;color:var(--rv-muted);font-size:13px;font-weight:400;cursor:pointer}
+.rv-filter-chip span{font-variant-numeric:tabular-nums}
+.rv-filter-chip.active{border-color:var(--rv-purps-200);background:var(--rv-purps-20);color:var(--rv-purps-700);font-weight:600}
+.rv-queue-selects{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.rv-queue-selects select{width:100%;min-height:40px;padding:8px 28px 8px 10px;border:1px solid var(--rv-g300);border-radius:8px;background:#fff;font-size:13px}
 .rv-queue-panel[hidden]{display:none}
-.rv-queue-meta{margin:6px 0 12px;color:var(--rv-muted);font-size:12px}
-.rv-ce-row{position:relative;width:100%;margin-bottom:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;border:1px solid var(--rv-line);border-radius:14px;background:#fff;text-align:left;cursor:pointer;transition:background-color .14s,border-color .14s}
+.rv-queue-meta{margin:8px 0 14px;color:var(--rv-muted);font-size:13px;line-height:18px}
+.rv-ce-row-wrap{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:4px;margin-bottom:6px}
+.rv-ce-row{position:relative;width:100%;min-height:64px;padding:12px;display:flex;align-items:flex-start;gap:10px;border:1px solid transparent;border-radius:10px;background:#fff;text-align:left;cursor:pointer;transition-property:background-color,border-color,transform;transition-duration:120ms}
 .rv-ce-row:hover{border-color:var(--rv-purps-200);background:var(--rv-purps-10)}
-.rv-ce-row.active{border-color:var(--rv-purps-200);background:var(--rv-purps-20)}
+.rv-ce-row.active{border-color:transparent;background:var(--rv-purps-20);box-shadow:inset 3px 0 0 var(--rv-purps)}
 .rv-ce-row.reviewed{opacity:.7}
 .rv-ce-row.reviewed .rv-dot{background:var(--rv-green-700)}
 .rv-dot{width:8px;height:8px;margin-top:6px;flex:none;border-radius:50%;background:var(--rv-amber-800)}
 .rv-ce-copy{min-width:0;flex:1}
-.rv-ce-copy strong{display:block;font-size:15px;font-weight:600;line-height:20px}
-.rv-ce-copy small{display:block;margin-top:3px;color:var(--rv-muted);font-size:12px}
+.rv-ce-copy strong{display:block;font-size:15px;font-weight:600;line-height:20px;text-wrap:pretty}
+.rv-ce-copy small{display:block;margin-top:4px;color:var(--rv-muted);font-size:13px;line-height:18px}
 .rv-ce-tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.rv-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;background:var(--rv-g200);color:var(--rv-muted);font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.rv-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:var(--rv-g200);color:var(--rv-muted);font-size:11px;font-weight:500;letter-spacing:0;text-transform:none}
 .rv-chip.done{background:var(--rv-green-200);color:var(--rv-green-700)}
-.rv-ce-remove{position:absolute;top:10px;right:10px;width:22px;height:22px;border:0;border-radius:50%;background:transparent;color:var(--rv-g500);font-size:15px;line-height:1;cursor:pointer}
+.rv-ce-details{width:40px;min-height:40px;align-self:center;border:1px solid var(--rv-g300);border-radius:8px;background:#fff;color:var(--rv-purps-700);cursor:pointer}
+.rv-ce-details:hover{background:var(--rv-purps-20);border-color:var(--rv-purps-200)}
+.rv-ce-remove{position:absolute;top:2px;right:34px;width:28px;height:28px;border:0;border-radius:50%;background:transparent;color:var(--rv-g500);font-size:15px;line-height:1;cursor:pointer}
 .rv-ce-remove:hover{background:var(--rv-g200);color:var(--rv-red-600)}
 .rv-empty-queue{margin-top:8px;padding:16px;border:1px dashed var(--rv-g400);border-radius:14px;background:var(--rv-g50);text-align:center}
 .rv-empty-queue strong{display:block;font-weight:600}
 .rv-empty-queue span{display:block;margin-top:4px;color:var(--rv-muted);font-size:12px}
 
 .rv-main{min-width:0;display:flex;flex-direction:column}
-.rv-detail-head{padding:26px 32px 22px;border-bottom:1px solid var(--rv-line);background:var(--rv-white)}
+.rv-detail-head{padding:24px 32px 20px;border-bottom:1px solid var(--rv-g200);background:var(--rv-white)}
 .rv-breadcrumb{color:var(--rv-muted);font-size:12px}
 .rv-title-line{margin-top:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
-.rv-title-line h1{margin:0;font-family:var(--rv-hd);font-size:30px;line-height:38px;font-weight:600;letter-spacing:.2px}
-.rv-title-line p{max-width:640px;margin:6px 0 0;color:var(--rv-muted)}
+.rv-title-line h1{margin:0;font-family:var(--rv-hd);font-size:28px;line-height:34px;font-weight:600;letter-spacing:-.25px;text-wrap:balance}
+.rv-title-line p{max-width:680px;margin:8px 0 0;color:var(--rv-muted);font-size:15px;line-height:22px}
 /* treatment + finish live in the header as a clear "how are you reviewing this?" step */
+.rv-treatment-block{margin-top:18px;padding-top:16px;border-top:1px solid var(--rv-g200)}
+.rv-step-line{display:flex;align-items:center;gap:10px}.rv-step-line>div{display:grid;gap:1px}.rv-step-line strong{font-size:14px;font-weight:600}.rv-step-line span:not(.rv-step){color:var(--rv-muted);font-size:12px}
 .rv-status-line{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .rv-status-line label{color:var(--rv-muted);font-size:13px}
 .rv-select{min-height:40px;padding:9px 34px 9px 14px;border:1px solid var(--rv-g400);border-radius:10px;background:var(--rv-white) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 12px center;-webkit-appearance:none;appearance:none;cursor:pointer;font-size:14px}
 .rv-receipt{color:var(--rv-muted);font-size:13px}
 .rv-receipt.done{color:var(--rv-green-700);font-weight:600}
-.rv-workspace{flex:1;max-width:1120px;margin:0 auto;width:100%;padding:24px 32px 120px}
+.rv-workspace{flex:1;max-width:1120px;margin:0 auto;width:100%;padding:32px 40px 48px}
 
-.rv-btn{min-height:40px;padding:10px 16px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-white);font-size:14px;font-weight:600;cursor:pointer;transition:background-color .14s,border-color .14s,transform .1s}
+.rv-btn{min-height:40px;padding:0 14px;border:1px solid var(--rv-g300);border-radius:8px;background:var(--rv-white);font-size:14px;font-weight:500;cursor:pointer;transition-property:color,background-color,border-color,transform;transition-duration:120ms}
 .rv-btn:hover{background:var(--rv-g100)}
 .rv-btn:active{transform:scale(.96)}
-.rv-btn.primary{border-color:var(--rv-purps);background:var(--rv-purps);color:#fff;box-shadow:var(--rv-shadow-1)}
+.rv-btn.primary{border-color:var(--rv-purps);background:var(--rv-purps);color:#fff;box-shadow:none}
 .rv-btn.primary:hover{background:var(--rv-purps-600)}
 .rv-btn.ghost{border-color:var(--rv-purps-200);background:#fff;color:var(--rv-purps-700)}
 .rv-btn.ghost:hover{background:var(--rv-purps-20)}
@@ -111,14 +148,38 @@
 .rv-av.none{background:var(--rv-g200);color:var(--rv-g500)}
 
 /* cards */
-.rv-card{overflow:hidden;margin-bottom:20px;border:1px solid var(--rv-line);border-radius:16px;background:var(--rv-white);box-shadow:var(--rv-shadow-1)}
-.rv-card-head{padding:18px 20px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid var(--rv-g200)}
-.rv-step{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--rv-g900);color:#fff;font-size:12px;font-weight:700}
+.rv-card{overflow:hidden;margin-bottom:16px;border:1px solid var(--rv-g200);border-radius:16px;background:var(--rv-white);box-shadow:none}
+.rv-card-head{padding:16px 20px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid var(--rv-g200)}
+.rv-step{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--rv-purps-20);color:var(--rv-purps-700);font-size:14px;font-weight:600}
 .rv-card-headings{flex:1;min-width:0}
-.rv-card-title{font-size:16px;font-weight:600;line-height:20px}
-.rv-card-sub{margin-top:2px;color:var(--rv-muted);font-size:13px}
+.rv-card-title{font-family:var(--rv-hd);font-size:20px;font-weight:600;line-height:26px}
+.rv-card-sub{max-width:720px;margin-top:3px;color:var(--rv-muted);font-size:14px;line-height:20px;font-weight:400}
 .rv-card-count{color:var(--rv-muted);font-size:13px;white-space:nowrap}
-.rv-card-body{padding:8px 20px 16px}
+.rv-card-body{padding:8px 20px 18px}
+.rv-reconciliation>summary{min-height:56px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;list-style:none;cursor:pointer}
+.rv-reconciliation>summary::-webkit-details-marker{display:none}
+.rv-reconciliation>summary>span:first-child{min-width:0;display:grid;gap:2px}
+.rv-reconciliation>summary strong{font-size:16px;line-height:22px;font-weight:600;text-wrap:balance}
+.rv-reconciliation>summary small{display:block;color:var(--rv-muted);font-size:13px;line-height:18px;font-weight:400;text-wrap:pretty}
+.rv-reconciliation>summary>span:last-child{width:24px;height:24px;display:grid;place-items:center;flex:none;color:var(--rv-muted);font-size:14px;transition-property:transform;transition-duration:120ms}
+.rv-reconciliation[open]>summary>span:last-child{transform:rotate(180deg)}
+.rv-reconciliation>summary:hover{background:var(--rv-g50)}
+.rv-reconciliation>.rv-card-body{padding:4px 16px 16px;border-top:1px solid var(--rv-g200)}
+.rv-recon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:12px;overflow:hidden;border:1px solid var(--rv-g200);border-radius:10px;background:var(--rv-g200)}
+.rv-recon-grid>span{min-width:0;padding:12px;display:grid;gap:3px;background:var(--rv-white);color:var(--rv-muted);font-size:12px;line-height:17px;text-wrap:pretty}
+.rv-recon-grid>span strong{color:var(--rv-ink);font-size:18px;line-height:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.rv-reconciliation .hint{margin:12px 2px 0;color:var(--rv-muted);font-size:12px;line-height:18px;text-wrap:pretty}
+.rv-flow-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--rv-g200);background:transparent}
+.rv-flow-section .rv-card-head{padding:0 0 14px;border-bottom:0}.rv-flow-section .rv-card-body{padding:0}
+.rv-module-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}.rv-module-head .rv-card-count{margin-left:auto}
+.rv-module-icon{width:34px;height:34px;display:grid;place-items:center;flex:none;border-radius:10px;background:var(--rv-blue-200);color:var(--rv-blue-700);font-size:16px;font-weight:700}.rv-module-icon.attention{background:var(--rv-purps-20);color:var(--rv-purps-700)}
+.rv-module-surface{overflow:hidden;border:1px solid var(--rv-g300);border-left:4px solid var(--rv-blue-700);border-radius:12px;background:#fff;box-shadow:var(--rv-shadow-1)}
+.rv-module-surface .rv-slack-composer{border:0;border-radius:0}.rv-discussion-module .rv-optional-notes{opacity:.88}
+.rv-thread-visible{padding:14px;border:1px solid var(--rv-g200);border-radius:12px;background:var(--rv-g50)}
+.rv-thread-status{display:flex;align-items:center;justify-content:space-between;gap:12px}.rv-thread-status>span:first-child{display:grid;gap:2px}.rv-thread-status small{color:var(--rv-muted);font-size:12px}
+.rv-status-chip{padding:4px 8px;border-radius:999px;background:var(--rv-green-200);color:var(--rv-green-700);font-size:10px;font-weight:700;text-transform:uppercase}
+.rv-thread-visible .rv-thread{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}.rv-thread-visible .rv-sync-status{margin-top:12px}
+.rv-work-requirement{margin-top:7px;padding:4px 0;border:0;background:transparent;color:var(--rv-amber-800);font-size:12px;font-weight:600;text-align:left;cursor:pointer}.rv-work-requirement:hover{text-decoration:underline}
 
 /* granola band */
 .rv-source-band{margin:12px 0 4px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px;border-radius:12px;background:var(--rv-purps-10)}
@@ -134,13 +195,39 @@
 
 /* granola suggestion */
 .rv-sugg{margin:12px 0;padding:14px 16px;border:1px solid var(--rv-purps-200);border-radius:12px;background:#fff}
-.rv-sugg-meta{display:flex;gap:6px;align-items:center;color:var(--rv-purps-700);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.rv-sugg:first-child{margin-top:0}.rv-sugg{background:var(--rv-purps-10)}
+.rv-suggestion-main{display:grid;gap:6px}.rv-suggestion-text{font-size:16px;font-weight:500;line-height:23px;white-space:normal}.rv-suggestion-proposal{color:var(--rv-muted);font-size:13px;line-height:18px}
+.rv-inline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}.rv-inline-actions .rv-link{min-height:34px;padding:0 4px}
+.rv-action-section{margin-top:10px}
+.rv-action-section+.rv-action-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--rv-g200)}
+.rv-focus-summary{margin:0 0 14px;color:var(--rv-muted);font-size:14px;line-height:20px;font-weight:400;text-wrap:pretty}
+.rv-see-more{min-height:40px;margin-top:4px}
+.rv-action-heading{display:flex;align-items:center;gap:7px;color:var(--rv-muted);font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.rv-action-heading span{padding:2px 6px;border-radius:999px;background:var(--rv-g200);font-variant-numeric:tabular-nums}
+.rv-sugg-summary{width:100%;min-height:44px;display:grid;grid-template-columns:minmax(110px,auto) minmax(0,1fr) 24px;align-items:center;gap:12px;border:0;background:transparent;text-align:left;cursor:pointer}
+.rv-sugg-summary>span:first-child{display:grid;gap:4px}.rv-sugg-summary small{color:var(--rv-muted);font-size:10px;font-weight:600;text-transform:uppercase}
+.rv-sugg-summary>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600}
+.rv-sugg-chevron{text-align:center;color:var(--rv-muted);transition-property:transform;transition-duration:120ms}
+.rv-sugg-summary[aria-expanded="true"] .rv-sugg-chevron{transform:rotate(180deg)}
+.rv-sugg-detail{padding-top:8px;border-top:1px solid var(--rv-g200)}
+.rv-trace{margin-top:10px;color:var(--rv-muted);font-size:11px}.rv-trace summary{cursor:pointer;font-weight:600}.rv-trace ul{margin:6px 0 0;padding-left:18px;overflow-wrap:anywhere}
+.rv-sugg-meta{display:flex;gap:6px;align-items:center;color:var(--rv-purps-700);font-size:12px;line-height:17px;font-weight:600;letter-spacing:0;text-transform:none}
 .rv-sugg p{margin:8px 0 12px;color:var(--rv-ink);font-size:14px;line-height:20px}
 .rv-sugg-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rv-origin{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:var(--rv-purps-20);color:var(--rv-purps-700)}
 .rv-origin.slack{background:var(--rv-blue-200);color:var(--rv-blue-700)}
 .rv-sugg-edit{width:100%;min-height:72px;margin:10px 0;padding:10px 12px;resize:vertical;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-g50);font-size:14px;line-height:20px}
 .rv-sugg-edit:focus{outline:2px solid var(--rv-purps);outline-offset:0;border-color:var(--rv-purps);background:#fff}
+.rv-summary-surface{margin-top:12px;padding:16px;border:1px solid var(--rv-blue-200);border-left:4px solid var(--rv-blue-700);border-radius:12px;background:#f7fbff}.rv-summary-surface.approved{border-color:var(--rv-green-200);border-left-color:var(--rv-green-700);background:var(--rv-green-100)}
+.rv-summary-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.rv-summary-title>div{display:flex;align-items:center;gap:8px}.rv-summary-title strong{font-size:14px}
+.rv-attention-chip{padding:4px 8px;border-radius:999px;background:var(--rv-purps-20);color:var(--rv-purps-700);font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap}.rv-attention-chip.approved{background:var(--rv-green-200);color:var(--rv-green-700)}
+.rv-summary-surface .rv-summary{margin-top:12px;padding:0;border:0;background:transparent}.rv-summary-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid rgba(15,67,189,.15)}
+.rv-summary-approval{display:inline-block}.rv-summary-approval>summary{display:flex;align-items:center;list-style:none}.rv-summary-approval>summary::-webkit-details-marker{display:none}.rv-summary-approval[open]{display:block;width:100%;order:5}.rv-summary-approval textarea{width:100%;min-height:112px;margin-top:8px;padding:10px 12px;border:1px solid var(--rv-g400);border-radius:10px;background:#fff;font-family:monospace;font-size:12px}
+.rv-summary-principal{display:grid;gap:3px;margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--rv-white);font-size:14px;line-height:20px}.rv-summary-principal strong{font-size:12px;color:var(--rv-muted);font-weight:600}.rv-summary-details{margin-top:8px}.rv-summary-details>summary{min-height:40px;display:inline-flex;align-items:center;color:var(--rv-purps-700);font-size:13px;font-weight:600;cursor:pointer}.rv-summary-details[open]>summary{margin-bottom:8px}
+.rv-source-bridge{margin:0 0 10px 46px;display:flex;align-items:center;gap:8px;color:var(--rv-purps-700);font-size:12px}.rv-source-bridge span{font-size:18px}.rv-source-bridge strong{font-weight:600}
+.rv-action-surface{overflow:hidden;border:1px solid var(--rv-g300);border-radius:12px;background:#fff}.rv-action-surface>.rv-focus-summary{margin:0;padding:14px 16px 10px}
+.rv-action-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 12px;border-bottom:1px solid var(--rv-g200)}#review-view .rv-action-tab{min-height:44px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--rv-muted);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}.rv-action-tab span{margin-left:3px;font-variant-numeric:tabular-nums}.rv-action-tab.active{border-bottom-color:var(--rv-purps);color:var(--rv-purps-700);font-weight:600}
+.rv-action-panel{padding:12px 16px}.rv-action-surface>.rv-compose,.rv-action-surface>.rv-add-row{margin-left:16px;margin-right:16px}.rv-action-surface>.rv-add-row{margin-bottom:16px}
 
 /* note read card (Eevee: avatar + name·role + meta + edit/delete links) */
 .rv-note{margin:14px 0}
@@ -174,6 +261,10 @@
 
 /* CE Slack thread strip + AI summary brought back from Slack */
 .rv-thread{margin-top:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--rv-purps-200);border-radius:12px;background:var(--rv-purps-10)}
+.rv-thread-compact{margin-top:12px;border:1px solid var(--rv-g200);border-radius:10px;background:var(--rv-g50)}
+.rv-thread-compact>summary{min-height:44px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none}
+.rv-thread-compact>summary::-webkit-details-marker{display:none}.rv-thread-compact>summary span:first-child{display:grid;gap:2px}.rv-thread-compact>summary strong{font-size:13px}.rv-thread-compact>summary small{color:var(--rv-muted);font-size:11px}
+.rv-thread-compact .rv-thread{margin:0;border:0;border-top:1px solid var(--rv-g200);border-radius:0}
 .rv-thread .rv-thread-copy{flex:1;min-width:0}
 .rv-thread strong{font-size:13px;font-weight:600}
 .rv-thread span{display:block;color:var(--rv-muted);font-size:12px}
@@ -192,6 +283,10 @@
 .rv-sum-label{display:block;color:var(--rv-muted);font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;margin-bottom:2px}
 .rv-sum-group ul{margin:0;padding-left:18px}
 .rv-sum-group li{color:var(--rv-g800);font-size:14px;line-height:20px;margin-top:2px}
+.rv-summary-bullets{display:grid;gap:7px;margin:0;padding-left:20px}
+.rv-summary-bullets li{padding-left:2px;color:var(--rv-g800);font-size:14px;line-height:20px}
+.rv-summary-bullets li::marker{color:var(--rv-purps)}
+.rv-summary-bullets strong{font-weight:600}
 
 /* actions & follow-ups — task rows */
 .rv-work{padding:16px 0;border-top:1px solid var(--rv-g200);display:flex;gap:12px;align-items:flex-start}
@@ -239,7 +334,7 @@
 .rv-add-row{margin-top:14px;display:flex;gap:8px}
 
 /* memory rail + drawer */
-.rv-memory-rail{width:100%;margin-top:4px;padding:16px;display:flex;align-items:center;gap:12px;border:1px solid var(--rv-purps-200);border-radius:14px;background:var(--rv-purps-10);text-align:left;cursor:pointer}
+.rv-memory-rail{width:100%;margin-top:4px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--rv-g200);border-radius:12px;background:var(--rv-white);text-align:left;cursor:pointer;transition-property:background-color,border-color,transform;transition-duration:120ms}
 .rv-memory-rail:hover{background:var(--rv-purps-20)}
 .rv-memory-icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border-radius:10px;background:var(--rv-purps-20);color:var(--rv-purps-700);font-size:18px}
 .rv-memory-copy{flex:1;min-width:0}
@@ -249,28 +344,38 @@
 .rv-resource-state{margin-top:14px;display:flex;align-items:center;gap:8px;color:var(--rv-g500);font-size:12px}
 .rv-resource-state:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--rv-green-700)}
 
-.rv-footer{position:sticky;bottom:0;z-index:10;padding:12px 32px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--rv-line);background:rgba(255,255,255,.97);box-shadow:0 -1px 8px rgba(17,17,17,.08);backdrop-filter:blur(10px)}
+.rv-footer{position:static;min-height:72px;margin-top:8px;padding:14px 16px;display:flex;align-items:center;gap:14px;border:1px solid var(--rv-g300);border-radius:12px;background:var(--rv-g50);box-shadow:none}
 .rv-footer .rv-foot-hint{color:var(--rv-g500);font-size:12px;margin-right:auto}
+.rv-footer .rv-foot-hint.blocked{color:var(--rv-amber-800);font-weight:600}.rv-footer .rv-foot-hint.ready{color:var(--rv-purps-700)}.rv-footer .rv-foot-hint.finished{color:var(--rv-green-700)}
+.rv-finish-copy{min-width:0;flex:1;display:grid;gap:5px}.rv-finish-copy>strong{font-size:13px;font-weight:600}
+.rv-finish-checks{display:flex;align-items:center;gap:8px;overflow-x:auto}#review-view .rv-finish-check{min-height:40px;padding:8px 10px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1px solid var(--rv-g300);border-radius:8px;background:#fff;color:var(--rv-amber-800);font-size:13px;font-weight:500;cursor:pointer}.rv-finish-check:hover{border-color:var(--rv-purps-200);background:var(--rv-purps-10)}
+.rv-finish-state{font-size:12px}.rv-finish-state.ready{color:var(--rv-purps-700)}.rv-finish-state.done{color:var(--rv-green-700);font-weight:600}
+.rv-finish-reason{display:flex;align-items:center;gap:8px}.rv-finish-reason>span{font-size:11px;color:var(--rv-muted)}.rv-finish-reason input{min-width:240px;min-height:36px;padding:7px 10px;border:1px solid var(--rv-g400);border-radius:8px;background:#fff;font-size:12px}
 .rv-footer .rv-foot-actions{display:flex;gap:8px}
 .rv-granola-dock{display:flex;align-items:center;gap:8px;min-width:min(440px,42vw)}
 .rv-granola-dock input{min-width:0;flex:1;min-height:40px;padding:9px 12px;border:1px solid var(--rv-g400);border-radius:10px;background:#fff;font-size:13px}
 .rv-granola-dock input:focus{outline:2px solid var(--rv-purps);outline-offset:0;border-color:var(--rv-purps)}
-.rv-granola-wip{display:flex;align-items:center;gap:8px;min-width:min(300px,34vw);padding:9px 12px;border:1px solid var(--rv-g300);border-radius:10px;background:var(--rv-g50);font-size:12px}
-.rv-granola-wip strong{font-weight:600;color:var(--rv-ink)}
-.rv-granola-wip span{color:var(--rv-muted)}
+.rv-granola-wip{margin-top:18px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px;border-top:1px solid var(--rv-g200);color:var(--rv-muted)}
+.rv-granola-wip-label{flex:none;padding:3px 8px;border-radius:999px;background:var(--rv-g200);color:var(--rv-g600);font-size:11px;font-weight:600;line-height:16px}
+.rv-granola-wip-copy{display:grid;gap:2px;min-width:0}
+.rv-granola-wip-copy strong{color:var(--rv-ink);font-size:13px;font-weight:600;line-height:18px}
+.rv-granola-wip-copy small{color:var(--rv-muted);font-size:12px;line-height:18px;text-wrap:pretty}
 
 .rv-drawer-wrap{position:fixed;inset:0;z-index:60;display:flex;justify-content:flex-end;background:rgba(17,17,17,.42)}
 .rv-drawer-wrap[hidden]{display:none}
-.rv-drawer{width:min(560px,100vw);height:100%;overflow:auto;background:var(--rv-g50);box-shadow:var(--rv-shadow-3)}
+.rv-drawer{width:min(680px,100vw);height:100%;overflow:auto;background:var(--rv-g50);box-shadow:var(--rv-shadow-3)}
 .rv-drawer-head{position:sticky;top:0;z-index:2;padding:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--rv-line);background:var(--rv-white)}
 .rv-drawer-head h2{margin:5px 0 0;font-family:var(--rv-hd);font-size:22px;font-weight:600}
 .rv-drawer-head p{margin:4px 0 0;color:var(--rv-muted);font-size:13px}
-.rv-close{width:40px;height:40px;flex:none;border:0;border-radius:10px;background:var(--rv-g200);font-size:22px;cursor:pointer}
+.rv-close{width:40px;height:40px;flex:none;border:1px solid var(--rv-g300);border-radius:8px;background:var(--rv-white);font-size:20px;cursor:pointer}
 .rv-drawer-body{padding:16px}
-.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:repeat(3,1fr);border-radius:12px;background:var(--rv-g200)}
+.rv-memory-tabs{margin-bottom:12px;padding:3px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-radius:12px;background:var(--rv-g200)}
 .rv-memory-tab{min-height:38px;border:0;border-radius:10px;background:transparent;color:var(--rv-muted);cursor:pointer;font-size:13px}
 .rv-memory-tab.active{background:#fff;color:var(--rv-purps-700);font-weight:600;box-shadow:var(--rv-shadow-1)}
 .rv-memory-panel[hidden]{display:none}
+.rv-memory-intro{display:flex;flex-direction:column;gap:2px;padding:4px 2px 10px;color:var(--rv-muted);font-size:12px;line-height:18px}
+.rv-memory-intro strong{color:var(--rv-ink);font-size:13px;font-weight:600}
+.rv-memory-subsection{margin-top:18px;padding-top:16px;border-top:1px solid var(--rv-g200)}
 .rv-week-card{margin-top:12px;overflow:hidden;border:1px solid var(--rv-line);border-radius:14px;background:var(--rv-white)}
 .rv-week-head{padding:12px 16px;display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--rv-g200);font-weight:600;font-size:13px}
 .rv-week-head span{color:var(--rv-muted);font-weight:400}
@@ -284,19 +389,43 @@
 .rv-empty-state{padding:20px;border:1px dashed var(--rv-g400);border-radius:12px;background:var(--rv-g50);text-align:center}
 .rv-empty-state strong{display:block;font-weight:600}
 .rv-empty-state span{display:block;max-width:520px;margin:4px auto 0;color:var(--rv-muted);font-size:12px}
+.rv-shortlist-guide{display:flex;align-items:baseline;gap:8px;margin:12px 0 6px;padding:9px 11px;border:1px solid var(--rv-purps-200);border-radius:10px;background:var(--rv-purps-10)}
+.rv-shortlist-guide strong{color:var(--rv-purps-700);font-size:13px}.rv-shortlist-guide span{color:var(--rv-muted);font-size:12px;line-height:17px}
+.rv-queue-group{margin-top:18px}.rv-queue-group:first-child{margin-top:0}.rv-queue-group-head{display:flex;align-items:center;justify-content:space-between;padding:0 2px 8px;color:var(--rv-muted);font-size:12px;font-weight:600;letter-spacing:0;text-transform:none}.rv-queue-selected .rv-queue-group-head{color:var(--rv-purps-700)}
+.rv-memory-loading{padding:18px;border:1px solid var(--rv-g200);border-radius:12px;background:#fff}.rv-memory-loading strong,.rv-memory-loading span{display:block;margin-top:10px}.rv-memory-loading span{color:var(--rv-muted);font-size:12px}
+.rv-skeleton{height:12px;width:72%;margin-top:10px;border-radius:6px;background:var(--rv-g200)}.rv-skeleton.wide{width:94%;height:18px;margin-top:0}.rv-skeleton.short{width:44%}
 
 .rv-toast{position:fixed;right:24px;bottom:84px;z-index:80;padding:12px 16px;border-radius:12px;background:var(--rv-g900);color:#fff;box-shadow:var(--rv-shadow-3);font-size:14px}
 .rv-toast[hidden]{display:none}
 
+#review-view button:focus-visible,#review-view select:focus-visible,#review-view textarea:focus-visible,#review-view input:focus-visible,#review-view [role="link"]:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view button:active:not(:disabled){transform:scale(.96)}
+#review-view .rv-receipt,#review-view .rv-card-count,#review-view .rv-work-meta,#review-view .rv-datebadge,#review-view .rv-source-meta,#review-view .rv-sync-status{font-variant-numeric:tabular-nums}
+#review-view .rv-card-sub,#review-view .rv-note-text,#review-view .rv-empty-state span{ text-wrap:pretty }
+
 @media(max-width:900px){
   .rv-layout{grid-template-columns:1fr}
-  .rv-side{border-right:0;border-bottom:1px solid var(--rv-line)}
-  .rv-workspace{padding:16px 16px 120px}
+  .rv-side{display:none;position:fixed;inset:0;z-index:70;height:100dvh;padding:16px;overflow:hidden;border:0;background:#fff}
+  .rv-side.open{display:flex;flex-direction:column}
+  .rv-mobile-side-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .rv-mobile-current{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rv-g200);background:#fff}
+  .rv-mobile-current span{display:grid;min-width:0}.rv-mobile-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.rv-mobile-current small{color:var(--rv-muted);font-size:11px}
+  .rv-mobile-current .rv-btn{min-height:44px;white-space:nowrap}
+  .rv-queue-panel{max-height:none;min-height:0;flex:1}
+  .rv-detail-head{padding:20px 16px 18px}
+  .rv-title-line{gap:12px}
+  .rv-title-line h1{font-size:22px;line-height:28px}
+  .rv-workspace{padding:16px 16px 32px}
   .rv-compose .row2{grid-template-columns:1fr}
   .rv-work-controls,.rv-work-edit-grid{grid-template-columns:1fr!important}
-  .rv-footer{padding:12px 16px}
+  .rv-footer{padding:14px;flex-wrap:wrap}
+  .rv-finish-copy{width:100%;flex-basis:100%}.rv-finish-checks{padding-bottom:2px}.rv-finish-reason{align-items:stretch;flex-wrap:wrap}.rv-finish-reason>span{width:100%}.rv-finish-reason input{min-width:0;flex:1}
+  .rv-module-head{align-items:flex-start}.rv-module-head .rv-card-count{display:none}.rv-source-bridge{margin-left:0}.rv-action-tabs{padding:0 6px}.rv-action-panel{padding:10px}.rv-inline-actions .rv-btn{min-height:44px}.rv-summary-title{align-items:flex-start}.rv-summary-title>div{align-items:flex-start;flex-direction:column}.rv-attention-chip{margin-top:2px}
+  .rv-reconciliation>summary{min-height:64px;padding:12px 14px;align-items:flex-start}.rv-reconciliation>summary strong{font-size:15px;line-height:20px}.rv-reconciliation>summary small{font-size:12px;line-height:17px}
+  .rv-reconciliation>.rv-card-body{padding:4px 14px 14px}.rv-recon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rv-granola-dock{min-width:0;width:100%;order:3}
 }
+@media(max-width:520px){.rv-recon-grid{grid-template-columns:1fr}}
 </style><div id="review-view"></div><script>
 
 // ---- stateful in-memory mock backend (no server / no auth) ----
@@ -424,13 +553,14 @@
   var WORK_STATUS = [
     ["needs_action", "Needs action"], ["already_actioned", "Already actioned"],
     ["self_recovering", "Self-recovering"], ["monitoring", "Monitoring"],
-    ["no_action_needed", "No action needed"], ["complete", "Complete"]
+    ["blocked", "Blocked"], ["stale", "Stale"], ["no_action_needed", "No action needed"],
+    ["complete", "Complete"], ["dismissed", "Archived / dismissed"]
   ];
   var CHECK_STATUS = [
     ["scheduled", "Scheduled"], ["monitoring", "Monitoring"],
     ["self_recovering", "Self-recovering"], ["complete", "Complete"]
   ];
-  var CLOSED = ["complete", "cancelled", "no_action_needed"];
+  var CLOSED = ["complete", "cancelled", "dismissed", "no_action_needed"];
   var MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   // Primary posting routes mirror alert/market_channels.json. Alternate market
   // channels remain read/mention sources; one discussion must have one stable home.
@@ -443,7 +573,7 @@
     gcc:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},north_africa:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},
     rest_of_mea:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},benelux:{id:"CKTFHT4AF",name:"mkt-uk"},
     nordics:{id:"CSQ10TALA",name:"mkt-csee"},south_america:{id:"CH2LRMJF2",name:"mkt-iberia"},
-    mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"},headout:{id:"C0975BGAX0B",name:"team-central-biz"}
+    mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"}
   };
 
   global.initReviewView = function initReviewView(ctx) {
@@ -460,11 +590,12 @@
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
       queue: [], byId: {}, selected: null, loaded: false,
-      receipts: {}, weekly: {}, weeklyHist: {}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
-      loadingCe: {}, editingNote: false, confirmDelete: false, adding: false, compose: "", addingGranola: false,
-      processing: false, processSummary: "", noteDraft: null, mentionPreview: null, mentionBusy: false,
+      receipts: {}, outcomes: {}, weekly: {}, weeklyHist: {}, threadRegistry: {}, threadRegistryLoaded:{}, threadRegistryError:{}, work: {}, suggestions: {}, comments: {}, setRows: {}, setRowsList: [],
+      loadingCe: {}, editingNote: false, editingRole: "", confirmDelete: false, adding: false, compose: "", addingGranola: false,
+      processing: false, processSummary: "", noteDraft: null, roleDrafts: {}, slackDrafts: {}, composeDrafts: {}, composeByCe: {}, queueQuery: "", queueFilter: "all", queueReason: "", queueCategory: "", queueOwner: "", queueTaskForce: "", queueBrowse: false, expandedSuggestion: "", workTab: "needs", mentionPreview: null, mentionBusy: false,
       editingWork: null, confirmDeleteWork: null, editingComment: null, confirmDeleteComment: null,
-      drafts: {}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, asyncBusy: {}
+      threadOperation: "", threadOperationByCe: {}, newThreadReason: "", newThreadReasonDrafts: {}, backlogView: "open", reconciliation: null, finishReasonOpen:false, showAllSuggestions:false,
+      drafts: {}, outcomeDrafts: {}, noDiscussionDrafts:{}, ceLoadedAt: {}, ceRequestSeq: {}, ceControllers: {}, memoryCache: {}, memoryInflight: {}, memoryOpen: false, asyncBusy: {}
     };
 
     // Review mutations are BGM-only.  The server already has the authenticated
@@ -484,6 +615,8 @@
     // ---- small helpers ---------------------------------------------------
     function author() { try { return localStorage.getItem("wr_author") || ""; } catch (e) { return ""; } }
     function setAuthor(v) { try { localStorage.setItem("wr_author", String(v || "").trim()); } catch (e) {} }
+    function sessionId(){try{var id=sessionStorage.getItem("wr_review_session");if(!id){id="rvs_"+Date.now()+"_"+Math.random().toString(36).slice(2);sessionStorage.setItem("wr_review_session",id);}return id;}catch(e){return "session";}}
+    function track(event,fields){if(!api||typeof api.recordTelemetry!=="function")return;var f=fields||{},key=[event,S.market_slug,S.week_start,f.ce_id||S.selected||"",f.value_text||"",sessionId()].join(":");api.recordTelemetry({market_slug:S.market_slug,ce_id:String(f.ce_id||S.selected||""),week_start:S.week_start,event_type:event,value_number:f.value_number,value_text:f.value_text||"",actor_name:author(),session_id:sessionId(),idempotency_key:f.idempotency_key||key}).catch(function(){});}
     function ident(ceId) {
       var ce = S.byId[String(ceId)] || {};
       return { market_slug: S.market_slug, ce_id: String(ceId), ce_name: ce.ce_name || "", week_start: S.week_start };
@@ -504,7 +637,40 @@
       if (!S.byId[id]) { var q={ce_id:id,ce_name:ce.ce_name||("CE "+id),reason:"Opened from CE drawer",source:"drawer"}; S.queue.push(q); S.byId[id]=q; }
       return ce;
     }
+    function revealQueueSelection(ceId) {
+      var panel = root.querySelector("#rv-queue-review");
+      var active = root.querySelector('[data-select-ce="' + String(ceId).replace(/"/g, '\\"') + '"]');
+      if (!panel || !active) return;
+      var rowRect = active.getBoundingClientRect();
+      var panelRect = panel.getBoundingClientRect();
+      if (rowRect.top < panelRect.top) panel.scrollTop += rowRect.top - panelRect.top;
+      else if (rowRect.bottom > panelRect.bottom) panel.scrollTop += rowRect.bottom - panelRect.bottom;
+      if (active.focus) active.focus({ preventScroll: true });
+    }
+    function captureVisibleDrafts() {
+      root.querySelectorAll("[data-role-input]").forEach(function (el) {
+        S.roleDrafts[roleDraftKey(el.dataset.roleInput)] = el.value;
+      });
+      var note = root.querySelector("#rv-note");
+      if (note) { S.noteDraft = note.value; S.drafts[String(S.selected)] = note.value; }
+      var slack = root.querySelector("#rv-slack-message");
+      if (slack) S.slackDrafts[String(S.selected)] = slack.value;
+      var reason = root.querySelector("#rv-new-thread-reason");
+      if (reason) S.newThreadReasonDrafts[String(S.selected)] = reason.value;
+      if (S.threadOperation) S.threadOperationByCe[String(S.selected)] = S.threadOperation;
+      if (S.compose) {
+        var composeKey=composeDraftKey(S.selected,S.compose);
+        S.composeByCe[String(S.selected)]=S.compose;
+        S.composeDrafts[composeKey]={
+          text:(root.querySelector("#rv-c-text")||{}).value||"",
+          owner:(root.querySelector("#rv-c-owner")||{}).value||"",
+          due:(root.querySelector("#rv-c-due")||{}).value||"",
+          status:(root.querySelector("#rv-c-status")||{}).value||(S.compose==="check"?"scheduled":"needs_action")
+        };
+      }
+    }
     function openAnalyticsDrawer(ceId) {
+      captureVisibleDrafts();
       var ce=ensureLocalCe(ceId);
       if (ce && ctx.openCeDrawer) ctx.openCeDrawer(String(ce.ce_id)); else toast("CE analytics drawer unavailable for this CE");
     }
@@ -576,6 +742,35 @@
     function reviewedFor(ceId) { return !!S.receipts[String(ceId)]; }
     function workFor(ceId) { return (S.work[String(ceId)] || []); }
     function openWorkFor(ceId) { return workFor(ceId).filter(function (w) { return CLOSED.indexOf(w.status) < 0; }); }
+    function ceMeta(ceId) {
+      return ((S.headline && S.headline.all_ces) || []).filter(function (ce) { return String(ce.ce_id) === String(ceId); })[0] || {};
+    }
+    function shortlistState(q) {
+      if (reviewedFor(q.ce_id)) return "reviewed";
+      var treatment = treatmentFor(q.ce_id);
+      if (["live", "async", "follow_up"].indexOf(treatment) >= 0) return "selected";
+      if (treatment === "skip") return "skipped";
+      return "candidate";
+    }
+    function queueState(q) {
+      var shortlist = shortlistState(q);
+      if (shortlist === "reviewed") return "reviewed";
+      if (shortlist === "selected") return "in_progress";
+      return "needs_review";
+    }
+    function visibleQueueRows() {
+      var needle = String(S.queueQuery || "").trim().toLowerCase();
+      return S.queue.filter(function (q) {
+        var meta = ceMeta(q.ce_id), state = queueState(q);
+        var haystack = [q.ce_name, q.ce_id, q.reason, meta.category, meta.city].join(" ").toLowerCase();
+        return (!needle || haystack.indexOf(needle) >= 0) &&
+          (S.queueFilter === "all" || state === S.queueFilter) &&
+          (!S.queueReason || String(q.reason || "") === S.queueReason) &&
+          (!S.queueCategory || String(meta.category || "") === S.queueCategory) &&
+          (!S.queueOwner || String(meta.owner || meta.bgm_owner || "") === S.queueOwner) &&
+          (!S.queueTaskForce || String(meta.task_force || "") === S.queueTaskForce);
+      });
+    }
 
     // ---- data loading (unchanged backend surface) -----------------------
     function refreshHeadline() {
@@ -595,18 +790,26 @@
       if (!api) { S.setRowsList = []; buildQueue(); render(); return Promise.resolve(); }
       // Paint the snapshot-backed queue immediately. Remote review state then
       // enriches it without delaying tab navigation.
-      if (!S.loaded) { buildQueue(); S.loaded = true; render(); }
+      if (!S.loaded) {
+        buildQueue();
+        if (!S.selected || !S.byId[S.selected]) S.selected = (S.queue[0] || {}).ce_id || null;
+        S.loaded = true; render();
+        if (S.selected) loadCe(S.selected);
+      }
       var id = { market_slug: S.market_slug, week: S.week_start };
       return Promise.all([
         api.reviewSet(id).catch(function () { return { review_set: [] }; }),
         api.receipts({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { receipts: [] }; }),
-        api.work({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { work_items: [] }; })
+        api.work({ market_slug: S.market_slug, week: S.week_start }).catch(function () { return { work_items: [] }; }),
+        api.reconciliation({ market_slug:S.market_slug,week_start:S.week_start }).catch(function(){return null;})
       ]).then(function (res) {
         S.setRowsList = (res[0].review_set || []);
         S.setRows = {}; S.setRowsList.forEach(function (r) { S.setRows[String(r.ce_id)] = r; });
         S.receipts = {}; (res[1].receipts || []).forEach(function (r) { S.receipts[String(r.ce_id)] = r; });
         S.work = {}; (res[2].work_items || []).forEach(function (w) { var k = String(w.ce_id); (S.work[k] = S.work[k] || []).push(w); });
+        S.reconciliation=res[3]||null;
         buildQueue();
+        var selectedCount=S.queue.filter(function(q){return shortlistState(q)==="selected";}).length;track("shortlist_size",{value_number:selectedCount,value_text:String(S.queue.length),idempotency_key:"shortlist:"+S.market_slug+":"+S.week_start+":"+selectedCount});
         if (!S.selected || !S.byId[S.selected]) {
           var firstOpen = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); })[0];
           S.selected = (firstOpen || S.queue[0] || {}).ce_id || null;
@@ -626,7 +829,8 @@
       var call=Promise.all([
         api.weeklyCommentary({ market_slug: S.market_slug, ce_id: ceId }, "", 8, requestOptions).catch(function () { return { weekly: [] }; }),
         api.suggestions({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { suggestions: [] }; }),
-        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; })
+        api.comments({ market_slug: S.market_slug, ce_id: ceId, week: S.week_start }, false, requestOptions).catch(function () { return { comments: [] }; }),
+        api.threads({ market_slug:S.market_slug,ce_id:ceId },requestOptions).catch(function(){return {__thread_error:true};})
       ]).then(function (res) {
         if(S.ceRequestSeq[ceId]!==seq)return;
         var rows = res[0].weekly || [];
@@ -634,6 +838,8 @@
         S.weeklyHist[ceId] = rows;
         S.suggestions[ceId] = res[1].suggestions || [];
         S.comments[ceId] = res[2].comments || [];
+        if(res[3].__thread_error){S.threadRegistryError[ceId]=true;delete S.threadRegistryLoaded[ceId];}
+        else{S.threadRegistry[ceId] = {active:res[3].active_thread||null,threads:res[3].threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];}
         S.loadingCe[ceId] = false; delete S.ceControllers[ceId]; S.ceLoadedAt[ceId]=Date.now();
         if (String(S.selected) === String(ceId)) render();
       }).catch(function () { if(S.ceRequestSeq[ceId]===seq)S.loadingCe[ceId] = false; });
@@ -641,12 +847,13 @@
     }
 
     function select(ceId) {
+      captureVisibleDrafts();
       if (S.selected && S.noteDraft != null) S.drafts[String(S.selected)] = S.noteDraft;
       if(S.selected&&String(S.selected)!==String(ceId)&&S.ceControllers[S.selected]){S.ceRequestSeq[S.selected]=(S.ceRequestSeq[S.selected]||0)+1;S.ceControllers[S.selected].abort();delete S.ceControllers[S.selected];S.loadingCe[S.selected]=false;}
-      S.selected = String(ceId); S.confirmDelete = false; S.compose = "";
+      S.selected = String(ceId); S.confirmDelete = false; S.compose = S.composeByCe[S.selected]||""; S.editingRole = ""; S.memoryOpen = false; S.queueBrowse = false; S.expandedSuggestion = ""; S.finishReasonOpen=false; S.showAllSuggestions=false;
       S.noteDraft = Object.prototype.hasOwnProperty.call(S.drafts, S.selected) ? S.drafts[S.selected] : null;
       S.editingNote = S.noteDraft != null;
-      S.mentionPreview = null; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
+      S.mentionPreview = null; S.threadOperation = S.threadOperationByCe[S.selected]||""; S.newThreadReason = S.newThreadReasonDrafts[S.selected]||""; S.editingWork = null; S.confirmDeleteWork = null; S.editingComment = null; S.confirmDeleteComment = null;
       syncUrl(S.selected);
       render();
       if (!S.weekly[S.selected] && !S.loadingCe[S.selected]) loadCe(S.selected);
@@ -658,33 +865,64 @@
       root.innerHTML = '<div class="rv-layout">' + renderSide() + renderMain() + "</div>" +
         '<div class="rv-toast" id="rv-toast" hidden></div>' + renderMemoryDrawer();
       wire();
+      if (S.queueRevealUntil > Date.now() && S.selected) setTimeout(function () { revealQueueSelection(S.selected); }, 0);
+      if (S.memoryOpen) setTimeout(openMemory, 0);
     }
 
     function renderSide() {
       var open = S.queue.filter(function (q) { return !reviewedFor(q.ce_id); }).length;
       var total = S.queue.length, reviewed = total - open;
-      var rows = S.queue.length ? S.queue.map(queueRow).join("") :
-        '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>';
+      var shortlistCounts={candidate:0,selected:0,skipped:0,reviewed:0};S.queue.forEach(function(q){shortlistCounts[shortlistState(q)]++;});
+      var needle=String(S.queueQuery||"").trim().toLowerCase();
+      var visibleQueue=visibleQueueRows();
+      var counts={all:total,needs_review:0,in_progress:0,reviewed:0};S.queue.forEach(function(q){counts[queueState(q)]++;});
+      var reasons=Array.from(new Set(S.queue.map(function(q){return String(q.reason||"");}).filter(Boolean))).sort();
+      var categories=Array.from(new Set(S.queue.map(function(q){return String(ceMeta(q.ce_id).category||"");}).filter(Boolean))).sort();
+      var owners=Array.from(new Set(S.queue.map(function(q){var m=ceMeta(q.ce_id);return String(m.owner||m.bgm_owner||"");}).filter(Boolean))).sort();
+      var taskForces=Array.from(new Set(S.queue.map(function(q){return String(ceMeta(q.ce_id).task_force||"");}).filter(Boolean))).sort();
+      var rows = visibleQueue.length ? renderQueueGroups(visibleQueue) :
+        (needle?'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Try a partial CE name or stable CE ID.</span></div>':
+        '<div class="rv-empty-queue"><strong>No CEs flagged this week</strong><span>System flags and CEs you add appear here. ✅</span></div>');
       var picker = S.adding ? renderPicker() : "";
-      return '<aside class="rv-side">' +
+      return '<aside class="rv-side' + (S.queueBrowse ? ' open' : '') + '" aria-label="Review queue">' +
+        '<div class="rv-mobile-side-head"><strong>Browse/search CEs</strong><button class="rv-close" type="button" id="rv-close-queue" aria-label="Close CE browser">×</button></div>' +
         '<div class="rv-eyebrow">Weekly review · w/c ' + esc(S.week_start) + "</div>" +
         '<div class="rv-side-head"><h2>' + (open ? open + " CE" + (open === 1 ? "" : "s") + " to review" : "All caught up") + "</h2>" +
         '<button class="rv-addce" type="button" id="rv-add-ce">＋ Add CE</button></div>' +
-        '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed</div>" +
+        '<div class="rv-shortlist-guide" id="rv-shortlist-guide"><strong>' + shortlistCounts.selected + ' selected this week</strong><span>Recommended: 3–5 CEs. The BGM decides.</span></div>' +
+        '<div class="rv-subtle" id="rv-progress">' + reviewed + " of " + total + " reviewed · " + shortlistCounts.candidate + " candidates · " + shortlistCounts.skipped + " deferred</div>" +
+        '<label class="rv-search"><span class="sr-only">Search CE</span><input id="rv-search-ce" type="search" placeholder="Search CE name or ID" value="'+esc(S.queueQuery||"")+'"><button type="button" id="rv-clear-search" aria-label="Clear CE search"'+(needle?'':' hidden')+'>×</button></label>'+
+        '<div class="rv-queue-filters" role="group" aria-label="Filter review status">'+
+        [['all','All'],['needs_review','Needs review'],['in_progress','In progress'],['reviewed','Reviewed']].map(function(f){return '<button type="button" class="rv-filter-chip'+(S.queueFilter===f[0]?' active':'')+'" data-queue-filter="'+f[0]+'">'+f[1]+' <span>'+counts[f[0]]+'</span></button>';}).join('')+'</div>'+
+        '<div class="rv-queue-selects"><select id="rv-reason-filter" aria-label="Filter by review reason"><option value="">All reasons</option>'+reasons.map(function(v){return '<option'+(S.queueReason===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'+
+        '<select id="rv-category-filter" aria-label="Filter by category"><option value="">All categories</option>'+categories.map(function(v){return '<option'+(S.queueCategory===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>'+
+        (owners.length?'<select id="rv-owner-filter" aria-label="Filter by owner"><option value="">All owners</option>'+owners.map(function(v){return '<option'+(S.queueOwner===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>':'')+
+        (taskForces.length?'<select id="rv-task-force-filter" aria-label="Filter by task force"><option value="">All task forces</option>'+taskForces.map(function(v){return '<option'+(S.queueTaskForce===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>':'')+'</div>'+
         '<div class="rv-queue-label">Review queue</div>' + picker +
         '<div class="rv-queue-panel" id="rv-queue-review">' + rows + "</div></aside>";
+    }
+    function renderQueueGroups(rows){
+      var labels={selected:"Selected this week",candidate:"Candidates",skipped:"Skipped / deferred",reviewed:"Reviewed"};
+      var groups={selected:[],candidate:[],skipped:[],reviewed:[]};
+      rows.forEach(function(q){groups[shortlistState(q)].push(q);});
+      return ["selected","candidate","skipped","reviewed"].map(function(key){
+        if(!groups[key].length)return "";
+        return '<section class="rv-queue-group rv-queue-'+key+'"><div class="rv-queue-group-head"><span>'+labels[key]+'</span><span>'+groups[key].length+'</span></div>'+groups[key].map(queueRow).join("")+'</section>';
+      }).join("");
     }
     function queueRow(q) {
       var reviewed = reviewedFor(q.ce_id), active = String(q.ce_id) === String(S.selected), t = treatmentFor(q.ce_id);
       var openN = openWorkFor(q.ce_id).length;
-      var tags = '<span class="rv-chip' + (reviewed ? " done" : "") + '">' + (reviewed ? "Reviewed" : esc(TREATMENT_LABELS[t] || t)) + "</span>" +
+      var shortlist=shortlistState(q),shortlistLabel=shortlist==="selected"?"Selected":shortlist==="skipped"?"Deferred":shortlist==="reviewed"?"Reviewed":"Candidate";
+      var tags = '<span class="rv-chip' + (reviewed ? " done" : "") + '">' + esc(shortlistLabel) + "</span>" +
         (openN ? '<span class="rv-chip">' + openN + " open</span>" : "") +
         (q.source === "manual" ? '<span class="rv-chip">manual</span>' : "");
-      var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" title="Remove from review set">×</button>' : "";
-      return '<div style="position:relative">' + remove +
+      var details = '<button class="rv-ce-details" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '" aria-label="Open ' + esc(q.ce_name) + ' details">↗</button>';
+      var remove = q.source === "manual" ? '<button class="rv-ce-remove" type="button" data-remove-ce="' + esc(q.ce_id) + '" aria-label="Remove ' + esc(q.ce_name) + ' from review set">×</button>' : "";
+      return '<div class="rv-ce-row-wrap">' +
         '<button class="rv-ce-row' + (active ? " active" : "") + (reviewed ? " reviewed" : "") + '" type="button" data-select-ce="' + esc(q.ce_id) + '">' +
-        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</strong>" +
-        "<small>" + esc(q.reason) + ' · <span class="rv-ce-identity" role="link" tabindex="0" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + '</span></small><span class="rv-ce-tags">' + tags + "</span></span></button></div>";
+        '<span class="rv-dot"></span><span class="rv-ce-copy"><strong>' + esc(q.ce_name) + "</strong>" +
+        "<small>" + esc(q.reason) + ' · CE ' + esc(q.ce_id) + '</small><span class="rv-ce-tags">' + tags + "</span></span></button>" + details + remove + "</div>";
     }
     function renderProcessPanel() {
       return '<div class="rv-process" id="rv-process-panel">' +
@@ -696,6 +934,7 @@
     }
     function renderPicker() {
       return '<div class="rv-picker" id="rv-picker"><input id="rv-picker-input" type="search" placeholder="Add a CE to this week’s review…" value="' + esc(S.pickerQuery || "") + '">' +
+        '<input id="rv-nomination-reason" type="text" placeholder="Nomination reason (required)" value="'+esc(S.nominationReason||"")+'">'+
         '<div class="rv-picker-results" id="rv-picker-results">' + renderPickerResults() + "</div></div>";
     }
     function renderPickerResults() {
@@ -718,37 +957,125 @@
       var q = S.byId[S.selected];
       if (!q) return '<main class="rv-main"><div class="rv-workspace"><div class="rv-empty-state"><strong>Nothing to review</strong>' +
         "<span>No CE is flagged this week. Use ＋ Add CE to pull one in.</span></div></div></main>";
-      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id);
+      var t = treatmentFor(q.ce_id), reviewed = reviewedFor(q.ce_id), blockers=completionBlockers(q),treatmentHelp={live:"Discuss together now; finish after the live review.",async:"Collect input asynchronously and finish when follow-through is clear.",follow_up:"Use this CE only to close or advance existing work.",skip:"Defer this CE for the week; record remains in the queue.",not_scheduled:"Choose the review path before finishing."}[t];
       var receipt = reviewed
         ? '<span class="rv-receipt done">✓ Reviewed by ' + esc((S.receipts[q.ce_id] || {}).reviewer || author() || "BGM") + "</span>"
-        : t !== "not_scheduled" ? '<span class="rv-receipt">Ready to finish</span>'
-          : '<span class="rv-receipt">Choose how you’ll review this CE</span>';
-      var footHint = reviewed ? "Review saved — open work carries into next week"
-        : t === "not_scheduled" ? "Set a treatment above to finish this CE" : "Finish when you’re done with this CE";
+        : !blockers.length ? '<span class="rv-receipt">Ready to finish</span>'
+          : '<span class="rv-receipt">'+blockers.length+' item'+(blockers.length===1?'':'s')+' to resolve</span>';
       return '<main class="rv-main">' +
+        '<div class="rv-mobile-current"><span><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+' · '+esc(TREATMENT_LABELS[t]||t)+'</small></span><button class="rv-btn" type="button" id="rv-browse-ces">Browse/search CEs</button></div>'+
         '<header class="rv-detail-head"><div class="rv-breadcrumb"><button class="rv-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">CE ' + esc(q.ce_id) + "</button> · " + esc(S.market) + "</div>" +
         '<div class="rv-title-line"><div><h1><button class="rv-title-link" type="button" data-open-drawer-ce="' + esc(q.ce_id) + '">' + esc(q.ce_name) + "</button></h1>" +
         "<p>Record what you know, decide the follow-through, and mark it reviewed.</p></div>" +
         '<div class="rv-button-row"><button class="rv-btn" type="button" id="rv-open-drawer">Open CE drawer</button></div></div>' +
-        '<div class="rv-status-line"><label for="rv-treatment">Review as</label>' +
+        '<div class="rv-treatment-block"><div class="rv-step-line"><span class="rv-step">1</span><div><strong>Decide how to review</strong><span>'+esc(treatmentHelp)+'</span></div></div><div class="rv-status-line"><label for="rv-treatment">Review path</label>' +
         '<select class="rv-select" id="rv-treatment" aria-label="Review treatment">' +
         TREATMENT_ORDER.map(function (v) { return '<option value="' + v + '"' + (v === t ? " selected" : "") + ">" + esc(TREATMENT_LABELS[v]) + "</option>"; }).join("") +
-        "</select>" + receipt + "</div></header>" +
-        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderMemoryRail(q) +
+        "</select>" + receipt + "</div></div></header>" +
+        '<div class="rv-workspace">' + renderCommentaryCard(q) + renderActionsCard(q) + renderReconciliationCard(q) + renderMemoryRail(q) +
         (S.processing ? renderProcessPanel() : "") +
-        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div></div>" +
-        '<footer class="rv-footer"><span class="rv-foot-hint">' + esc(footHint) + "</span>" + renderGranolaDock() +
-        '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next CE →</button>' +
-        '<button class="rv-btn primary" type="button" id="rv-finish"' + (t === "not_scheduled" || reviewed ? " disabled" : "") + ">" +
+        '<div class="rv-resource-state">Saved to Review history · CE ' + esc(q.ce_id) + "</div>" + renderGranolaDock() + "</div>" +
+        renderFinishBar(q,blockers,reviewed) +
+        '<div class="rv-foot-actions"><button class="rv-btn" type="button" id="rv-next-ce">Next unreviewed →</button>' +
+        '<button class="rv-btn primary" type="button" id="rv-finish"' + (blockers.length || reviewed ? " disabled" : "") + ">" +
         (reviewed ? "Reviewed ✓" : "Finish CE review") + "</button></div></footer></main>";
     }
 
-    function renderCommentaryCard(q) {
+    function completionBlockers(q){
+      var blockers=[],weekly=S.weekly[q.ce_id]||{},pending=dedupeSuggestions((S.suggestions[q.ce_id]||[]).filter(function(s){return (!s.decided_at&&(!s.status||s.status==="pending"))&&(s.kind==="action"||s.kind==="check"||s.kind==="comment"||!s.kind); }));
+      if(treatmentFor(q.ce_id)==="not_scheduled")blockers.push({key:"treatment",label:"Choose a review path"});
+      if(!weekly.slack_post_ts&&!String(S.noDiscussionDrafts[q.ce_id]||"").trim())blockers.push({key:"discussion",label:"Start Slack or add a no-discussion reason"});
+      if(pending.length)blockers.push({key:"suggestions",label:"Triage "+pending.length+" pending suggestion"+(pending.length===1?"":"s")});
+      var unmanaged=openWorkFor(q.ce_id).filter(function(w){return !(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(w.kind==="check"&&(w.due_date||w.next_review_date)));});
+      if(unmanaged.length)blockers.push({key:"work",label:"Assign/date or carry forward "+unmanaged.length+" open item"+(unmanaged.length===1?"":"s")});
+      return blockers;
+    }
+    function renderFinishBar(q,blockers,reviewed){
+      var weekly=S.weekly[q.ce_id]||{},reason=S.noDiscussionDrafts[q.ce_id]||"";
+      var list=reviewed?'<span class="rv-finish-state done">✓ Reviewed</span>':(!blockers.length?'<span class="rv-finish-state ready">Ready to finish</span>':'<div class="rv-finish-checks" aria-label="Items required to finish">'+blockers.map(function(b){return '<button type="button" class="rv-finish-check" data-resolve="'+b.key+'"><span aria-hidden="true">○</span>'+esc(b.label)+'</button>';}).join("")+'</div>');
+      var reasonBox=!weekly.slack_post_ts&&S.finishReasonOpen?'<label class="rv-finish-reason" for="rv-no-discussion-reason"><span>Why is Slack not needed?</span><input id="rv-no-discussion-reason" value="'+esc(reason)+'" placeholder="Concise reason required"><button class="rv-btn small" id="rv-save-finish-reason" type="button">Use reason</button></label>':'';
+      return '<footer class="rv-footer"><div class="rv-finish-copy"><strong>Finish review</strong>'+list+reasonBox+'</div>';
+    }
+
+    function roleMeta(role) {
+      return role === "performance" ? {label:"Performance note",key:"performance_note",author:"performance_author",updated:"performance_updated_at",deleted:"performance_note_deleted_at"} :
+        role === "bdm" ? {label:"BDM note",key:"bdm_note",author:"bdm_author",updated:"bdm_updated_at",deleted:"bdm_note_deleted_at"} :
+        {label:"BGM note",key:"bgm_note",author:"bgm_author",updated:"bgm_updated_at",deleted:"note_deleted_at"};
+    }
+    function roleDraftKey(role){return String(S.selected)+":"+role;}
+    function composeDraftKey(ceId,kind){return [S.market_slug,S.week_start,String(ceId),String(kind)].join(":");}
+    function renderRoleNote(weekly,role){
+      var m=roleMeta(role),saved=!!(weekly&&weekly[m.key]&&!weekly[m.deleted]),editing=S.editingRole===role;
+      var draftKey=roleDraftKey(role),hasDraft=Object.prototype.hasOwnProperty.call(S.roleDrafts,draftKey),val=hasDraft?S.roleDrafts[draftKey]:(saved?weekly[m.key]:"");
+      if(role!=="bgm"&&!saved)return "";
+      if(role!=="bgm"&&saved)return '<details class="rv-role-note rv-role-readonly"><summary><span><strong>'+esc(m.label)+'</strong><small>Historical · read-only · '+esc(weekly[m.author]||"Unknown author")+'</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-note-text">'+esc(weekly[m.key])+'</div></details>';
+      if(role==="bgm"&&!saved&&!editing&&!hasDraft)return '<div class="rv-bgm-observation-surface"><span><strong>BGM observation · Optional</strong><small>Add useful context not already captured in Slack.</small></span><button class="rv-btn small" type="button" data-role-open="bgm" aria-expanded="false">Add observation</button></div>';
+      if(!editing&&saved)return '<div class="rv-role-note" data-role-note="'+role+'"><div class="rv-note-top"><span class="rv-note-name">'+esc(m.label)+'</span><span class="rv-note-metatxt">'+esc(weekly[m.author]||"Unknown author")+' · '+esc(weekly[m.updated]?fmtWhen(weekly[m.updated]):"saved")+'</span><span class="rv-note-links"><button class="rv-link" type="button" data-role-edit="'+role+'">Edit</button><button class="rv-link danger" type="button" data-role-delete="'+role+'">Delete</button></span></div><div class="rv-note-text">'+esc(weekly[m.key])+'</div></div>';
+      return '<div class="rv-role-note rv-note-edit" data-role-note="'+role+'"><label class="rv-field-label" for="rv-note-'+role+'">'+esc(m.label)+'</label><textarea id="rv-note-'+role+'" data-role-input="'+role+'" placeholder="Add '+esc(m.label.toLowerCase())+' for this CE and week">'+esc(val)+'</textarea><div class="rv-note-foot"><span class="hint">Saved independently with author and timestamp.</span><div class="rv-note-actions">'+((editing||hasDraft)?'<button class="rv-btn small" type="button" data-role-cancel="'+role+'">Cancel</button>':'')+'<button class="rv-btn small primary" type="button" data-role-save="'+role+'">Save '+esc(m.label)+'</button></div></div></div>';
+    }
+    function renderWeeklySummary(weekly,currentDiscussionNumber){
+      if(!weekly||!weekly.slack_post_ts)return "";
+      var discussionNumber=String(weekly.slack_discussion_number||currentDiscussionNumber||""),discussionLabel=discussionNumber?"Slack discussion #"+discussionNumber:"Current Slack discussion";
+      var explicitSummaryBinding=!!(weekly.summary_thread_binding_id||weekly.summary_slack_discussion_number);
+      var legacySingleDiscussion=!explicitSummaryBinding&&(!discussionNumber||discussionNumber==="1");
+      var summaryBound=legacySingleDiscussion||(String(weekly.summary_thread_binding_id||"")===String(weekly.thread_binding_id||"")&&String(weekly.summary_slack_discussion_number||"")===discussionNumber);
+      var approved=summaryBound&&String(weekly.summary_status||"")==="approved",raw=summaryBound?(approved?(weekly.summary_approved_json||weekly.summary_json):(weekly.summary_draft_json||"")):"",summary=null;try{summary=raw?JSON.parse(raw):null;}catch(e){}
+      function group(label,rows){return rows&&rows.length?rows.map(function(row){return '<li><strong>'+label+':</strong> '+esc(typeof row==="string"?row:(row.text||row.body||""))+'</li>';}).join(""):"";}
+      var delayed=summaryBound&&weekly.sync_status==="summary_delayed",pending=summaryBound&&String(weekly.summary_status)==="pending",rejected=summaryBound&&String(weekly.summary_status)==="rejected",status=!summaryBound?"Summary pending for "+discussionLabel:
+        (delayed?"Summary delayed · Slack replies remain available":
+        (approved?"Approved by "+(weekly.summary_approved_by||"BGM")+" · "+fmtWhen(weekly.summary_approved_at||weekly.summary_updated_at):(pending?"Draft summary awaiting BGM approval":(rejected?"Draft summary rejected":"Waiting for replies"))));
+      var content=summary?'<ul class="rv-summary-bullets">'+(group("Finding",summary.findings)+group("Decision",summary.decisions)+group("Open question",summary.open_points))+'</ul>':"";
+      var finding=summary&&summary.findings&&summary.findings.length?(typeof summary.findings[0]==="string"?summary.findings[0]:(summary.findings[0].text||summary.findings[0].body||"")):"";
+      return '<div class="rv-summary-surface'+(approved?' approved':'')+'" data-thread-binding-id="'+esc(weekly.thread_binding_id||"")+'" data-slack-discussion-number="'+esc(discussionNumber)+'"><div class="rv-summary-title"><div><span class="rv-origin slack">Slack</span><strong>'+esc(discussionLabel)+' · '+(approved?'Approved summary':(pending?'Draft summary':'Summary pending'))+'</strong></div><span class="rv-attention-chip '+(approved?'approved':'')+'">'+(approved?'Approved':(pending?'Needs BGM approval':'Preparing'))+'</span></div>'+
+        '<div class="rv-sync-status'+(delayed?' delayed':'')+'"><span class="rv-live-dot"></span>'+esc(status)+'</div>'+
+        (approved?'<div class="rv-summary-principal"><strong>Finding</strong><span>'+esc(finding||"Approved summary available")+'</span></div><details class="rv-summary-details"><summary>View details</summary><div class="rv-summary">'+content+'</div></details>':(content?'<div class="rv-summary">'+content+'</div>':'<div class="rv-summary rv-summary-empty">'+esc(!summaryBound?'This discussion has no summary yet. The previous discussion remains in CE Memory.':'No summary is available yet. Slack replies remain available at source.')+'</div>'))+
+        (pending?'<div class="rv-summary-actions"><button class="rv-btn small primary" id="rv-summary-approve" type="button">Approve summary</button><details class="rv-summary-approval"><summary class="rv-btn small">Edit</summary><textarea id="rv-summary-draft">'+esc(raw)+'</textarea></details><button class="rv-btn small" id="rv-summary-reject" type="button">Dismiss</button><button class="rv-link" id="rv-summary-regenerate" type="button">Regenerate</button></div>':'')+'</div>';
+    }
+    function renderCommentaryCard(q){
+      var weekly=S.weekly[q.ce_id]||{},hasWeekActivity=!!weekly.slack_post_ts,registry=S.threadRegistry[q.ce_id]||{},registryLoaded=!!S.threadRegistryLoaded[q.ce_id],registryError=!!S.threadRegistryError[q.ce_id],binding=registry.active||null,hasBinding=!!binding,slackKey=String(q.ce_id),slackText=S.slackDrafts[slackKey]||"";
+      var discussionNumber=String(weekly.slack_discussion_number||(registry.threads||[]).length||1);
+      var thread=hasWeekActivity?'<div class="rv-thread-compact rv-thread-visible"><div class="rv-thread-status"><span><strong>Slack discussion #'+esc(discussionNumber)+'</strong><small>'+(weekly.summary_updated_at?'Summary updated '+esc(fmtWhen(weekly.summary_updated_at)):'Waiting for replies')+'</small></span><span class="rv-status-chip">Active</span></div><div class="rv-thread"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue Slack discussion #'+esc(discussionNumber)+'</button><a class="rv-btn small ghost" href="'+esc(weekly.slack_post_permalink||binding&&binding.slack_permalink||"#")+'" target="_blank" rel="noopener">Open in Slack ↗</a><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button><button class="rv-btn small ghost" type="button" id="rv-sync-thread">Refresh summary</button></div>'+renderWeeklySummary(weekly,discussionNumber)+'</div>':'';
+      var priorNumber=String((registry.threads||[]).length||1),priorChoice=!hasWeekActivity&&hasBinding?'<div class="rv-thread-choice"><div><strong>Existing CE discussion found</strong><span>Use the durable CE thread'+(binding.slack_permalink?' · <a href="'+esc(binding.slack_permalink)+'" target="_blank" rel="noopener">Open thread ↗</a>':'')+'</span></div><div class="rv-note-actions"><button class="rv-btn small primary" type="button" id="rv-continue-slack">Continue Slack discussion #'+esc(priorNumber)+'</button><button class="rv-btn small" type="button" id="rv-new-slack">Start a new discussion</button></div></div>':'';
+      var newThread=S.threadOperation==="new_parent"?'<div class="rv-new-thread-choice"><label class="rv-field-label" for="rv-new-thread-reason">Why start a new discussion?</label><input id="rv-new-thread-reason" value="'+esc(S.newThreadReason||"")+'" placeholder="Issue, owner, scope, or channel changed (required)"><div class="rv-note-actions"><button class="rv-link" type="button" id="rv-new-thread-cancel">Cancel</button><button class="rv-btn small primary" type="button" id="rv-start-slack">Preview new Slack post</button></div></div>':'';
+      var registryState=!hasWeekActivity&&!registryLoaded?(registryError?'<div class="rv-thread-discovery error"><strong>Could not check the existing CE thread</strong><span>Retry before starting a discussion so Review does not create a duplicate.</span><button class="rv-btn small" type="button" id="rv-retry-threads">Retry thread check</button></div>':'<div class="rv-thread-discovery" role="status"><strong>Checking the existing CE thread…</strong><span>Slack options will appear when the CE thread registry responds.</span></div>'):'';
+      var normalStart=S.threadOperation==="continue"?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Preview Slack message')+'</button>':(!hasWeekActivity&&registryLoaded&&!hasBinding?'<button class="rv-btn small primary" type="button" id="rv-start-slack"'+(S.mentionBusy?' disabled':'')+'>'+(S.mentionBusy?'Resolving names…':'Start Slack discussion')+'</button>':'');
+      var canCompose=!hasWeekActivity||S.threadOperation==="new_parent"||S.threadOperation==="continue";
+      var composer='<div class="rv-slack-composer"><label class="rv-field-label" for="rv-slack-message">Slack discussion</label><div class="rv-channel-preview">Will post to #'+esc((S.channel&&S.channel.name)||"unconfigured")+'</div>'+registryState+priorChoice+newThread+(canCompose&&registryLoaded?'<textarea id="rv-slack-message" placeholder="Write a discussion starter. This will not change the BGM observation.">'+esc(slackText)+'</textarea>'+renderMentionPreview():'')+'<div class="rv-note-actions">'+normalStart+'</div>'+thread+'</div>';
+      return '<section class="rv-flow-section rv-discussion-module" id="rv-discussion-section"><div class="rv-module-head"><span class="rv-module-icon" aria-hidden="true">↗</span><div><div class="rv-card-title">Discussion highlights</div><div class="rv-card-sub">What the team discussed, what needs BGM approval, and the source thread.</div></div></div><div class="rv-module-surface"><div class="rv-card-body rv-role-notes">'+composer+'</div></div><div class="rv-optional-notes">'+renderRoleNote(weekly,"bgm")+'<details class="rv-history-notes"><summary>Historical Performance and BDM notes · read-only</summary>'+renderRoleNote(weekly,"performance")+renderRoleNote(weekly,"bdm")+'</details></div></section>';
+    }
+
+    function normalizedSuggestionBody(s) {
+      return String((s && s.body) || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+    }
+    function renderReconciliationCard(q){
+      var r=S.reconciliation;if(!r)return "";
+      function count(key){return (r[key]||[]).filter(function(row){return !row.ce_id||String(row.ce_id)===String(q.ce_id);}).length;}
+      var rows=[["Completed since prior cycle",count("completed_since_prior")],["Open",count("open")],["Blocked / overdue",count("blocked_overdue")],["Carried forward",count("carried_forward")],["Evidence suggests completion",count("evidence_suggesting_completion")],["Revisit required",count("revisit_required")]];
+      return '<details class="rv-card rv-reconciliation"><summary><span><strong>Monday reconciliation</strong><small>Read-only work projection · no metric attribution</small></span><span aria-hidden="true">⌄</span></summary><div class="rv-card-body"><div class="rv-recon-grid">'+rows.map(function(x){return '<span><strong>'+x[1]+'</strong>'+esc(x[0])+'</span>';}).join("")+'</div><p class="hint">'+esc((r.later_economic_outcome||{}).reason||"Later economic outcome is unavailable.")+'</p></div></details>';
+    }
+    function dedupeSuggestions(rows) {
+      var seen = {}, out = [];
+      rows.forEach(function (s) {
+        var key = String(s.kind || "action") + "|" + normalizedSuggestionBody(s);
+        if (!normalizedSuggestionBody(s)) key += "|" + String(s.suggestion_id || s.source_ref || "");
+        if (seen[key]) {
+          seen[key]._trace = seen[key]._trace || [];
+          seen[key]._trace.push({ suggestion_id:s.suggestion_id || "", source_ref:s.source_ref || "", source_type:s.source_type || "" });
+          return;
+        }
+        var copy = Object.assign({}, s);
+        copy._trace = [{ suggestion_id:s.suggestion_id || "", source_ref:s.source_ref || "", source_type:s.source_type || "" }];
+        seen[key] = copy; out.push(copy);
+      });
+      return out;
+    }
+
+    function renderLegacyCommentaryCard(q) {
       var weekly = S.weekly[q.ce_id];
       var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) {
         return (s.kind === "comment" || !s.kind) && String(s.source_type || "granola") === "granola";
       });
-      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
+      var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
       var accepted = (S.comments[q.ce_id] || []).filter(function (c) { return !c.deleted_at && String(c.source_type || "") === "granola"; });
       var pendingHtml = pending.map(function (s) {
         return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="comment">' +
@@ -813,10 +1140,9 @@
     }
 
     function renderGranolaDock() {
-      // Keep this visible, but do not offer a broken control across markets:
-      // the Granola workspace key still needs verified note access. The
-      // underlying extractor stays isolated in Preview until then.
-      return '<div class="rv-granola-wip" role="note"><strong>Granola meeting</strong><span>WIP · meeting access is being connected</span></div>';
+      // Status only: the guarded beta remains inactive and exposes no ingest
+      // control until exact CE matching and approval gates are verified.
+      return '<div class="rv-granola-wip" role="note" aria-label="Granola integration work in progress"><span class="rv-granola-wip-label">Work in progress</span><span class="rv-granola-wip-copy"><strong>Granola meeting capture</strong><small>Meeting notes and transcripts will suggest observations and follow-ups for BGM approval. Not active yet.</small></span></div>';
     }
 
     function renderImportedComment(c) {
@@ -844,61 +1170,63 @@
         var names = (a.candidates || []).map(function (c) { return c.name; }).filter(Boolean).join(" or ");
         return '<span>“' + esc(a.name) + '” matches ' + esc(names || "more than one person") + ". Use their full Slack name.</span>";
       }).join("") + "</div>" : "";
+      var operation=S.threadOperation==="new_parent"?"New parent discussion":S.threadOperation==="continue"?"Continue existing discussion":"Start Slack discussion";
       return '<div class="rv-mention-preview" aria-live="polite"><div class="rv-mention-title"><span>Slack post preview</span><button class="rv-link" type="button" id="rv-mention-cancel">Edit message</button></div>' +
-        resolved + blocked + '<div class="rv-mention-message">' + esc(p.original_text || "") + "</div>" +
+        '<div class="rv-mention-neutral"><strong>'+esc(operation)+'</strong><span>#'+esc((S.channel&&S.channel.name)||"unconfigured")+(S.threadOperation==="new_parent"?' · prior thread remains in CE Memory':'')+'</span></div>'+resolved + blocked + '<div class="rv-mention-message">' + esc(p.original_text || "") + "</div>" +
         '<div class="rv-mention-actions"><button class="rv-btn small primary" type="button" id="rv-confirm-slack"' + (ambiguous.length ? " disabled" : "") + '>Post to Slack</button></div></div>';
     }
 
     function renderActionsCard(q) {
-      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check"; });
-      var pending = sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; });
-      var allWork = workFor(q.ce_id);
-      var openItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) < 0; });
-      var doneItems = allWork.filter(function (w) { return CLOSED.indexOf(w.status) >= 0; });
-      var openN = openItems.length;
-      var suggHtml = pending.map(function (s) {
-        var isCheck = s.kind === "check";
-        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-kind="' + esc(s.kind) + '">' +
-          '<div class="rv-sugg-meta">' + suggestionSource(s) + '<span>·</span><span>' + esc(s.source_ref || s.source_author || "source") + "</span>" +
-          "<span>·</span><span>" + (isCheck ? "suggested check" : "suggested action") + "</span></div>" +
-          '<textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isCheck ? "check" : "action") + '">' + esc(s.body || "") + "</textarea>" +
-          '<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
-          '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(s.proposed_owner || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
-          '<input type="date" data-w-due value="' + esc(s.proposed_due_date || "") + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
-          '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
-          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>' + (isCheck ? "Schedule check" : "Create action") + "</button>" +
-          '<button class="rv-btn small" type="button" data-sugg-ignore>Ignore</button></div></div>';
+      var sugg = (S.suggestions[q.ce_id] || []).filter(function (s) { return s.kind === "action" || s.kind === "check" || s.kind === "comment" || !s.kind; });
+      var pending = dedupeSuggestions(sugg.filter(function (s) { return !s.decided_at && (s.status || "pending") === "pending"; }));
+      var allWork = workFor(q.ce_id),openAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)<0&&!w.archived_at;}),doneAll=allWork.filter(function(w){return CLOSED.indexOf(w.status)>=0&&!w.archived_at;});
+      var laterItems=openAll.filter(function(w){return w.kind==="check"||String(w.carry_forward)==="true";}),openItems=openAll.filter(function(w){return laterItems.indexOf(w)<0;}),visibleSuggestions=S.showAllSuggestions?pending:pending.slice(0,3);
+      var nextCheck=laterItems.filter(function(w){return w.due_date||w.next_review_date;}).sort(function(a,b){return String(a.due_date||a.next_review_date).localeCompare(String(b.due_date||b.next_review_date));})[0];
+      var focus=[pending.length?pending.length+" suggestion"+(pending.length===1?"":"s")+" need review":"No suggestions waiting",openItems.length?openItems.length+" open action"+(openItems.length===1?"":"s"):"no open actions",nextCheck?"next check "+fmtDue(nextCheck.due_date||nextCheck.next_review_date):(laterItems.length?laterItems.length+" item"+(laterItems.length===1?"":"s")+" for later":"nothing scheduled")].join(" · ")+".";
+      var suggHtml = visibleSuggestions.map(function (s) {
+        var isCheck = s.kind === "check", isComment = s.kind === "comment" || !s.kind, expanded = String(S.expandedSuggestion) === String(s.suggestion_id), trace = s._trace || [];
+        var owner=s.proposed_owner||"",due=s.proposed_due_date||"",needsFields=!isComment&&((!isCheck&&!owner)|| (isCheck&&!due));
+        var sourceLine=(isComment?'Observation':(isCheck?'Check':'Action'))+' suggested from '+sourceName(s)+(s.created_at?' · '+fmtWhen(s.created_at):'')+(trace.length>1?' · '+trace.length+' matching sources':'');
+        var proposal=[owner?'Owner '+owner:'',due?(isCheck?'Next check ':'Due ')+fmtDue(due):''].filter(Boolean).join(' · ');
+        return '<div class="rv-sugg" data-suggestion="' + esc(s.suggestion_id) + '" data-duplicate-ids="'+esc(trace.slice(1).map(function(t){return t.suggestion_id;}).filter(Boolean).join(','))+'" data-kind="' + esc(isComment?"comment":s.kind) + '" data-body="'+esc(s.body||'')+'" data-owner="'+esc(owner)+'" data-due="'+esc(due)+'">' +
+          '<div class="rv-suggestion-main"><div class="rv-sugg-meta">'+esc(sourceLine)+'</div><div class="rv-suggestion-text">'+esc(s.body||'Untitled suggestion')+'</div>'+(proposal?'<div class="rv-suggestion-proposal">'+esc(proposal)+'</div>':'')+'</div>'+
+          '<div class="rv-inline-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>'+(isComment?'Approve observation':(isCheck?'Approve check':'Approve action'))+'</button><button class="rv-btn small" type="button" data-sugg-edit="'+esc(s.suggestion_id)+'" aria-expanded="'+(expanded?'true':'false')+'">Edit</button><button class="rv-link" type="button" data-sugg-ignore>Dismiss</button></div>'+
+          (expanded?'<div class="rv-sugg-detail"><textarea class="rv-sugg-edit" data-sugg-body aria-label="Edit suggested ' + (isComment ? "observation" : (isCheck ? "check" : "action")) + '">' + esc(s.body || "") + "</textarea>" +
+          (isComment?'':'<div class="rv-work-controls" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">' +
+          '<input type="text" data-w-owner placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '" value="' + esc(owner) + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<input type="date" data-w-due value="' + esc(due) + '" style="min-height:38px;padding:8px 10px;border:1px solid var(--rv-g400);border-radius:10px">' +
+          '<select data-w-status class="rv-select">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>") +
+          '<div class="rv-sugg-actions"><button class="rv-btn small primary" type="button" data-sugg-accept>'+(needsFields?'Complete &amp; approve':'Save &amp; approve')+'</button><button class="rv-btn small" type="button" data-sugg-edit="">Cancel</button></div><details class="rv-trace"><summary>Source details</summary><ul>'+trace.map(function(t){return '<li>'+esc(sourceName(t))+' · '+esc(t.source_ref||'source reference unavailable')+' · '+esc(t.suggestion_id||'suggestion ID unavailable')+'</li>';}).join('')+'</ul></details></div>':'')+'</div>';
       }).join("");
       var openHtml = openItems.map(workRow).join("");
-      var doneHtml = doneItems.length ? '<details class="rv-done"><summary>Archived · ' + doneItems.length + " done</summary>" +
-        '<div class="rv-done-list">' + doneItems.map(workRow).join("") + "</div></details>" : "";
-      var emptyState = (openItems.length || pending.length || S.compose) ? "" :
-        '<div class="rv-empty-state" style="margin-top:12px"><strong>No open actions</strong><span>Add an action or schedule a check below. Slack and Granola suggestions appear here for confirmation.</span></div>';
+      var laterHtml=laterItems.map(workRow).join("");
+      var doneHtml = doneAll.length ? '<details class="rv-done"><summary>Completed · ' + doneAll.length + " recent</summary>" +
+        '<div class="rv-done-list">' + doneAll.slice(0,8).map(workRow).join("") + "</div></details>" : "";
+      var emptyState = (openItems.length || laterItems.length || suggHtml || S.compose) ? "" :
+        '<div class="rv-empty-state" style="margin-top:12px"><strong>No follow-through yet</strong><span>Add an action or schedule a check when the discussion creates work.</span></div>';
       var composer = S.compose ? renderCompose(S.compose) : "";
-      var count = openN ? openN + " open" : (allWork.length ? "All done" : "No work yet");
-      return '<section class="rv-card"><div class="rv-card-head"><span class="rv-step">2</span>' +
-        '<div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div>' +
-        '<div class="rv-card-sub">Every item carries its owner, source, status and next check</div></div>' +
-        '<span class="rv-card-count">' + count + "</span></div>" +
-        '<div class="rv-card-body">' + suggHtml + openHtml + emptyState + doneHtml +
-        composer +
-        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button>' +
-        '<button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div></div></section>';
+      var count = openAll.length ? openAll.length + " active" : (allWork.length ? "All done" : "No work yet");
+      var tabs=[['needs','Needs review',pending.length],['open','Open',openItems.length],['later','Later',laterItems.length],['completed','Completed',doneAll.length]];
+      var active=S.workTab||'needs',panel=active==='needs'?(suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')):active==='open'?(openHtml||'<div class="rv-empty-state"><strong>No open work</strong><span>Approved actions will appear here.</span></div>'):active==='later'?(laterHtml||'<div class="rv-empty-state"><strong>Nothing scheduled</strong><span>Checks and explicit carry-forward items will appear here.</span></div>'):(doneHtml||'<div class="rv-empty-state"><strong>No completed work</strong><span>Recent completed items will appear here.</span></div>');
+      return '<section class="rv-flow-section rv-actions-module" id="rv-actions-section"><div class="rv-module-head"><span class="rv-module-icon attention" aria-hidden="true">✓</span><div class="rv-card-headings"><div class="rv-card-title">Actions &amp; follow-ups</div><div class="rv-card-sub">Review suggestions separately from work the team has already committed to.</div></div><span class="rv-card-count">'+count+'</span></div>' +
+        '<div class="rv-source-bridge"><span aria-hidden="true">↓</span><strong>'+pending.length+' follow-up'+(pending.length===1?'':'s')+' suggested from '+esc((S.weekly[q.ce_id]||{}).slack_discussion_number?'Slack discussion #'+(S.weekly[q.ce_id]||{}).slack_discussion_number:'the active Slack discussion')+'</strong></div><div class="rv-action-surface"><p class="rv-focus-summary">'+esc(focus)+'</p><div class="rv-action-tabs" role="tablist">'+tabs.map(function(t){return '<button type="button" role="tab" class="rv-action-tab'+(active===t[0]?' active':'')+'" aria-selected="'+(active===t[0]?'true':'false')+'" data-work-tab="'+t[0]+'">'+t[1]+' <span>'+t[2]+'</span></button>';}).join('')+'</div><div class="rv-action-panel">'+panel+emptyState+'</div>' +
+        '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button><button class="rv-btn ghost small" type="button" id="rv-add-check">＋ Schedule check</button></div>'+composer+'</div></section>';
     }
     function workRow(w) {
       var done = CLOSED.indexOf(w.status) >= 0, isCheck = w.kind === "check";
       var src = w.source_type === "granola" ? "Granola" : w.source_type === "slack" ? "Slack" : w.source_type === "bgm_manual" ? "Manual" : (w.source_type || "");
       var srcLink = w.source_url ? '<a href="' + esc(w.source_url) + '" target="_blank" rel="noopener">' + esc(src || "source") + " ↗</a>" : esc(src);
       var meta = [w.owner ? esc(w.owner) : (isCheck ? "" : "no owner"), w.due_date ? (isCheck ? "returns " : "due ") + esc(fmtDue(w.due_date)) : "", srcLink].filter(Boolean).join(" · ");
+      var unmanaged=!done&&!w._pending&&!(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(isCheck&&(w.due_date||w.next_review_date)));
       var left = isCheck && w.due_date
         ? '<span class="rv-datebadge"><span class="m">' + MONTHS[(parseDate(w.due_date) || new Date()).getUTCMonth()] + '</span><span class="d">' + (parseDate(w.due_date) || new Date()).getUTCDate() + "</span></span>"
         : '<button class="rv-check' + (done ? " on" : "") + '" type="button" data-work-toggle="' + esc(w.work_id) + '" title="' + (done ? "Reopen" : "Mark complete") + '">' + (done ? "✓" : "") + "</button>";
       var right = w.owner ? avatar(w.owner, "sm") : '<span class="rv-av sm none">–</span>';
       if (String(S.editingWork || "") === String(w.work_id)) return renderWorkEdit(w);
-      return '<div class="rv-work' + (done ? " done" : "") + '" data-work="' + esc(w.work_id) + '">' + left +
-        '<div class="rv-work-main">' + (isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "") +
+      return '<div class="rv-work' + (done ? " done" : "") + (w._pending ? " pending" : "") + '" data-work="' + esc(w.work_id) + '" data-pending="'+(w._pending?"true":"false")+'">' + left +
+        '<div class="rv-work-main">' + (w._pending?'<div class="rv-work-kicker">Saving…</div>':(isCheck ? '<div class="rv-work-kicker">Next review check</div>' : "")) +
         '<div class="rv-work-title">' + esc(w.text) + "</div>" +
-        '<div class="rv-work-meta">' + meta + "</div>" +
+        '<div class="rv-work-meta">' + meta + "</div>" +(unmanaged?'<button class="rv-work-requirement" type="button" data-work-edit="'+esc(w.work_id)+'">Add owner/date or carry forward to finish</button>':'')+
         '<div class="rv-work-status"><select class="rv-select" data-work-status="' + esc(w.work_id) + '">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select>" +
         (String(S.confirmDeleteWork || "") === String(w.work_id)
           ? '<span class="rv-delete-confirm">Remove this item?<button class="rv-link danger" type="button" data-work-delete-confirm="' + esc(w.work_id) + '">Delete</button><button class="rv-link" type="button" data-work-delete-cancel>Cancel</button></span>'
@@ -913,15 +1241,16 @@
         '<div class="rv-work-edit-grid"><input type="text" data-edit-owner value="' + esc(w.owner || "") + '" placeholder="Owner' + (isCheck ? " (optional)" : "") + '">' +
         '<input type="date" data-edit-due value="' + esc(w.due_date || "") + '">' +
         '<select class="rv-select" data-edit-status>' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, w.status) + "</select></div>" +
+        '<label class="rv-checkline"><input type="checkbox" data-edit-carry'+(String(w.carry_forward)==="true"?' checked':'')+'> Explicitly carry this unresolved item into the next review</label>'+
         '<div class="rv-work-edit-actions"><button class="rv-btn small" type="button" data-work-edit-cancel>Cancel</button>' +
         '<button class="rv-btn small primary" type="button" data-work-edit-save="' + esc(w.work_id) + '">Save changes</button></div></div></div>';
     }
     function renderCompose(kind) {
-      var isCheck = kind === "check";
-      return '<div class="rv-compose" style="display:block"><div class="row1"><input type="text" id="rv-c-text" placeholder="' + (isCheck ? "What should we revisit next week?" : "What needs to happen?") + '"></div>' +
-        '<div class="row2"><input type="text" id="rv-c-owner" placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '">' +
-        '<input type="date" id="rv-c-due">' +
-        '<select class="rv-select" id="rv-c-status">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, isCheck ? "scheduled" : "needs_action") + "</select></div>" +
+      var isCheck = kind === "check",draft=S.composeDrafts[composeDraftKey(S.selected,kind)]||{},defaultStatus=isCheck?"scheduled":"needs_action";
+      return '<div class="rv-compose" style="display:block"><div class="row1"><input type="text" id="rv-c-text" value="'+esc(draft.text||'')+'" placeholder="' + (isCheck ? "What should we revisit next week?" : "What needs to happen?") + '"></div>' +
+        '<div class="row2"><input type="text" id="rv-c-owner" value="'+esc(draft.owner||'')+'" placeholder="' + (isCheck ? "Owner (optional)" : "Owner") + '">' +
+        '<input type="date" id="rv-c-due" value="'+esc(draft.due||'')+'">' +
+        '<select class="rv-select" id="rv-c-status">' + optionList(isCheck ? CHECK_STATUS : WORK_STATUS, draft.status||defaultStatus) + "</select></div>" +
         '<div class="foot"><button class="rv-btn small" type="button" id="rv-c-cancel">Cancel</button>' +
         '<button class="rv-btn small primary" type="button" id="rv-c-save">' + (isCheck ? "Schedule check" : "Create action") + "</button></div></div>";
     }
@@ -933,7 +1262,10 @@
       return '<div class="rv-drawer-wrap" id="rv-memory-drawer" hidden><div class="rv-drawer" role="dialog" aria-modal="true">' +
         '<header class="rv-drawer-head"><div><div class="rv-eyebrow" id="rv-memory-eyebrow"></div><h2 id="rv-memory-title">CE Memory</h2>' +
         "<p>Original weekly records and work history.</p></div><button class=\"rv-close\" id=\"rv-close-memory\" type=\"button\" aria-label=\"Close\">×</button></header>" +
-        '<div class="rv-drawer-body" id="rv-memory-body"><div class="rv-empty-state"><strong>Loading…</strong></div></div></div></div>';
+        '<div class="rv-drawer-body" id="rv-memory-body">'+renderMemoryLoading()+'</div></div></div>';
+    }
+    function renderMemoryLoading() {
+      return '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Previous reviews</button><button class="rv-memory-tab" disabled>Actions history</button></div><div class="rv-memory-loading" role="status" aria-live="polite"><div class="rv-skeleton wide"></div><div class="rv-skeleton"></div><div class="rv-skeleton short"></div><strong>Loading CE memory…</strong><span>Current Review stays usable. Slow or missing history will not block this report.</span></div>';
     }
 
     // ---- events ----------------------------------------------------------
@@ -950,6 +1282,11 @@
       root.querySelectorAll("[data-open-ce]").forEach(function (b) { b.onclick = function () { select(b.dataset.openCe); }; });
       root.querySelectorAll("[data-remove-ce]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); removeCe(b.dataset.removeCe); }; });
       bind("#rv-add-ce", function () { S.adding = !S.adding; S.pickerQuery = ""; render(); var i = root.querySelector("#rv-picker-input"); if (i) i.focus(); });
+      bind("#rv-browse-ces", function () { captureVisibleDrafts(); S.queueBrowse = true; render(); var i=root.querySelector("#rv-search-ce");if(i)i.focus({preventScroll:true}); });
+      bind("#rv-close-queue", function () { S.queueBrowse = false; render(); var b=root.querySelector("#rv-browse-ces");if(b)b.focus({preventScroll:true}); });
+      root.querySelectorAll("[data-queue-filter]").forEach(function(b){b.onclick=function(){S.queueFilter=b.dataset.queueFilter;render();};});
+      var reasonFilter=root.querySelector("#rv-reason-filter");if(reasonFilter)reasonFilter.onchange=function(){S.queueReason=reasonFilter.value;render();};
+      var categoryFilter=root.querySelector("#rv-category-filter");if(categoryFilter)categoryFilter.onchange=function(){S.queueCategory=categoryFilter.value;render();};
       var pick = root.querySelector("#rv-picker-input");
       if (pick) pick.oninput = function () {
         S.pickerQuery = pick.value;
@@ -957,6 +1294,10 @@
         if (res) { res.innerHTML = renderPickerResults(); wirePickerResults(); }
       };
       wirePickerResults();
+      var search=root.querySelector("#rv-search-ce");
+      if(search)search.oninput=function(){S.queueQuery=search.value;var clear=root.querySelector("#rv-clear-search");if(clear)clear.hidden=!String(S.queueQuery||"").trim();var panel=root.querySelector("#rv-queue-review");if(panel){var matches=visibleQueueRows();panel.innerHTML=matches.length?renderQueueGroups(matches):'<div class="rv-empty-queue"><strong>No CE matches</strong><span>Clear search or adjust the local filters.</span></div>';wire();}};
+      bind("#rv-clear-search",function(){S.queueQuery="";render();var el=root.querySelector("#rv-search-ce");if(el)el.focus();});
+      [["#rv-owner-filter","queueOwner"],["#rv-task-force-filter","queueTaskForce"]].forEach(function(pair){var el=root.querySelector(pair[0]);if(el)el.onchange=function(){S[pair[1]]=el.value;render();};});
 
       var treatment = root.querySelector("#rv-treatment");
       if (treatment) treatment.onchange = function () { setTreatment(treatment.value); };
@@ -969,12 +1310,30 @@
       bind("#rv-del-no", function () { S.confirmDelete = false; render(); });
       bind("#rv-del-yes", deleteNote);
       bind("#rv-save-note", saveNote);
+      root.querySelectorAll("[data-role-edit]").forEach(function(b){b.onclick=function(){S.editingRole=b.dataset.roleEdit;render();var el=root.querySelector('[data-role-input="'+S.editingRole+'"]');if(el)el.focus();};});
+      root.querySelectorAll("[data-role-open]").forEach(function(b){b.onclick=function(){S.editingRole=b.dataset.roleOpen;render();var el=root.querySelector('[data-role-input="'+S.editingRole+'"]');if(el)el.focus();};});
+      root.querySelectorAll("[data-role-cancel]").forEach(function(b){b.onclick=function(){delete S.roleDrafts[roleDraftKey(b.dataset.roleCancel)];S.editingRole="";render();};});
+      root.querySelectorAll("[data-role-save]").forEach(function(b){b.onclick=function(){saveRoleNote(b.dataset.roleSave,b);};});
+      root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
+      root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
+      bind("#rv-retry-threads",function(){delete S.ceLoadedAt[S.selected];delete S.threadRegistryError[S.selected];loadCe(S.selected);render();});
+      root.querySelectorAll("[data-resolve]").forEach(function(b){b.onclick=function(){focusRequirement(b.dataset.resolve);};});
+      bind("#rv-save-finish-reason",function(){var input=root.querySelector("#rv-no-discussion-reason"),value=String(input?input.value:"").trim();if(!value){if(input)input.focus();toast("Add a concise reason");return;}S.noDiscussionDrafts[S.selected]=value;S.finishReasonOpen=false;render();toast("No-discussion reason ready for the review receipt");});
+      var finishReason=root.querySelector("#rv-no-discussion-reason");if(finishReason)finishReason.oninput=function(){S.noDiscussionDrafts[S.selected]=finishReason.value;};
+      bind("#rv-continue-slack", function(){S.threadOperation="continue";S.threadOperationByCe[String(S.selected)]="continue";S.mentionPreview=null;render();var message=root.querySelector("#rv-slack-message");if(message)message.focus({preventScroll:true});});
+      bind("#rv-new-slack", function(){S.threadOperation="new_parent";S.threadOperationByCe[String(S.selected)]="new_parent";S.newThreadReason=S.newThreadReasonDrafts[String(S.selected)]||"";S.mentionPreview=null;render();var reason=root.querySelector("#rv-new-thread-reason");if(reason)reason.focus();});
+      bind("#rv-new-thread-cancel", function(){S.threadOperation="";S.newThreadReason="";delete S.threadOperationByCe[String(S.selected)];delete S.newThreadReasonDrafts[String(S.selected)];S.mentionPreview=null;render();});
       bind("#rv-confirm-slack", postSlack);
-      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-note"); if (n) n.focus(); });
+      bind("#rv-mention-cancel", function () { S.mentionPreview = null; render(); var n = root.querySelector("#rv-slack-message"); if (n) n.focus(); });
       var noteInput = root.querySelector("#rv-note");
       if (noteInput) noteInput.oninput = function () { S.noteDraft = noteInput.value; S.drafts[S.selected]=S.noteDraft; S.mentionPreview = null; };
+      var slackInput=root.querySelector("#rv-slack-message");if(slackInput)slackInput.oninput=function(){S.slackDrafts[String(S.selected)]=slackInput.value;S.mentionPreview=null;};
+      var threadReason=root.querySelector("#rv-new-thread-reason");if(threadReason)threadReason.oninput=function(){S.newThreadReason=threadReason.value;S.newThreadReasonDrafts[String(S.selected)]=threadReason.value;S.mentionPreview=null;};
       bind("#rv-sync-thread", syncThread);
+      bind("#rv-summary-approve", function(){decideSummary("approved");});
+      bind("#rv-summary-reject", function(){decideSummary("rejected");});
+      bind("#rv-summary-regenerate", function(){decideSummary("regenerate");});
       bind("#rv-granola-toggle", function () { S.addingGranola = !S.addingGranola; render(); var i = root.querySelector("#rv-granola-link"); if (i) i.focus(); });
       bind("#rv-granola-cancel", function () { S.addingGranola = false; S.processing = false; render(); });
       bind("#rv-granola-add", addGranola);
@@ -988,8 +1347,12 @@
       root.querySelectorAll(".rv-sugg").forEach(function (card) {
         var acc = card.querySelector("[data-sugg-accept]"), ig = card.querySelector("[data-sugg-ignore]");
         if (acc) acc.onclick = function () { acceptSuggestion(card); };
-        if (ig) ig.onclick = function () { decideSuggestion(card.dataset.suggestion, "rejected", {}); };
+        if (ig) ig.onclick = function () { decideSuggestionGroup(card, "rejected", {}); };
       });
+      root.querySelectorAll("[data-sugg-edit]").forEach(function(b){b.onclick=function(){S.expandedSuggestion=b.dataset.suggEdit&&String(S.expandedSuggestion)!==String(b.dataset.suggEdit)?b.dataset.suggEdit:"";render();var active=root.querySelector('[data-sugg-edit="'+String(S.expandedSuggestion).replace(/"/g,'')+'"]');if(active)active.focus({preventScroll:true});};});
+      root.querySelectorAll("[data-work-tab]").forEach(function(b){b.onclick=function(){S.workTab=b.dataset.workTab||"needs";render();};});
+      bind("#rv-more-suggestions",function(){S.showAllSuggestions=!S.showAllSuggestions;render();var heading=root.querySelector('#rv-actions-section [data-work-tab="needs"]');if(heading&&heading.focus)heading.focus({preventScroll:true});});
+      root.querySelectorAll("[data-backlog-view]").forEach(function(b){b.onclick=function(){S.backlogView=b.dataset.backlogView||"open";render();};});
       root.querySelectorAll("[data-comment-edit]").forEach(function (b) { b.onclick = function () { S.editingComment = b.dataset.commentEdit; render(); }; });
       root.querySelectorAll("[data-comment-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingComment = null; render(); }; });
       root.querySelectorAll("[data-comment-save]").forEach(function (b) { b.onclick = function () { saveImportedComment(b.dataset.commentSave); }; });
@@ -1004,16 +1367,17 @@
       root.querySelectorAll("[data-work-delete-cancel]").forEach(function (b) { b.onclick = function () { S.confirmDeleteWork = null; render(); }; });
       root.querySelectorAll("[data-work-edit-save]").forEach(function (b) { b.onclick = function () { saveWorkEdit(b.dataset.workEditSave); }; });
       root.querySelectorAll("[data-work-edit-cancel]").forEach(function (b) { b.onclick = function () { S.editingWork = null; render(); }; });
-      bind("#rv-add-action", function () { S.compose = S.compose === "action" ? "" : "action"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
-      bind("#rv-add-check", function () { S.compose = S.compose === "check" ? "" : "check"; render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus(); });
-      bind("#rv-c-cancel", function () { S.compose = ""; render(); });
+      bind("#rv-add-action", function () { captureVisibleDrafts();S.compose = S.compose === "action" ? "" : "action";if(S.compose)S.composeByCe[String(S.selected)]=S.compose;else delete S.composeByCe[String(S.selected)];render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
+      bind("#rv-add-check", function () { captureVisibleDrafts();S.compose = S.compose === "check" ? "" : "check";if(S.compose)S.composeByCe[String(S.selected)]=S.compose;else delete S.composeByCe[String(S.selected)];render(); var i = root.querySelector("#rv-c-text"); if (i) i.focus({preventScroll:true}); });
+      ["#rv-c-text","#rv-c-owner","#rv-c-due","#rv-c-status"].forEach(function(sel){var el=root.querySelector(sel);if(el)el.oninput=el.onchange=function(){captureVisibleDrafts();};});
+      bind("#rv-c-cancel", function () { delete S.composeDrafts[composeDraftKey(S.selected,S.compose)];delete S.composeByCe[String(S.selected)];S.compose = ""; render(); });
       bind("#rv-c-save", saveCompose);
       bind("#rv-next-ce", nextCe);
       bind("#rv-finish", finishReview);
       bind("#rv-open-memory", openMemory);
-      bind("#rv-close-memory", function () { root.querySelector("#rv-memory-drawer").hidden = true; });
+      bind("#rv-close-memory", function () { S.memoryOpen = false; root.querySelector("#rv-memory-drawer").hidden = true; });
       var wrap = root.querySelector("#rv-memory-drawer");
-      if (wrap) wrap.onclick = function (e) { if (e.target === wrap) wrap.hidden = true; };
+      if (wrap) wrap.onclick = function (e) { if (e.target === wrap) { S.memoryOpen = false; wrap.hidden = true; } };
     }
     function ensureAuthor() {
       var el = root.querySelector("#rv-author");
@@ -1027,7 +1391,7 @@
       if (!api) { toast("Review backend unavailable"); return; }
       var q = S.byId[S.selected];
       api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: q.ce_id, ce_name: q.ce_name, treatment: value, reason: q.reason || "", source: q.source || "flag" })
-        .then(function (res) { S.setRows[q.ce_id] = res.review_set_item || { treatment: value }; render(); })
+        .then(function (res) { S.setRows[q.ce_id] = res.review_set_item || { treatment: value }; track("treatment_selected",{ce_id:q.ce_id,value_text:value}); render(); })
         .catch(function () { toast("Could not save treatment"); });
     }
     function runExtract() {
@@ -1059,9 +1423,12 @@
     }
     function addCe(ceId) {
       if (!api) return;
+      var reasonInput=root.querySelector("#rv-nomination-reason"),reason=String(reasonInput?reasonInput.value:S.nominationReason||"").trim();
+      if(!reason){if(reasonInput)reasonInput.focus();toast("Add a nomination reason first");return;}S.nominationReason=reason;
       var ce = (S.headline.all_ces || []).find(function (c) { return String(c.ce_id) === String(ceId); }) || { ce_id: ceId };
-      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", treatment: "not_scheduled", reason: "Added to review", source: "manual" })
-        .then(function () { S.adding = false; S.pickerQuery = ""; return loadQueue().then(function () { select(ceId); }); })
+      api.saveReviewSetItem({ market_slug: S.market_slug, week_start: S.week_start, ce_id: String(ceId), ce_name: ce.ce_name || "", treatment: "not_scheduled", reason: reason, source: "nomination" })
+        .then(function () { return api.saveTimelineEvent({market_slug:S.market_slug,ce_id:String(ceId),ce_name:ce.ce_name||"",review_week:S.week_start,event_type:"nomination",approved_body:reason,approved_by:author()||"authenticated reviewer",idempotency_key:"nomination:"+S.week_start+":"+String(ceId)}); })
+        .then(function () { S.adding = false; S.pickerQuery = ""; S.nominationReason=""; return loadQueue().then(function () { select(ceId); }); })
         .then(function () { toast("CE added to this week’s review"); })
         .catch(function () { toast("Could not add CE"); });
     }
@@ -1072,6 +1439,21 @@
         .then(function () { if (String(S.selected) === String(ceId)) S.selected = null; return loadQueue(); })
         .then(function () { toast("Removed from review set"); })
         .catch(function () { toast("Could not remove CE"); });
+    }
+    function saveRoleNote(role,button){
+      if(!ensureAuthor()||!api||S.asyncBusy["note:"+role])return;
+      var el=root.querySelector('[data-role-input="'+role+'"]'),text=el?el.value.trim():"";
+      if(!text){if(el)el.focus();toast("Write the "+role+" note first");return;}
+      S.asyncBusy["note:"+role]=true;if(button){button.disabled=true;button.textContent="Saving…";}
+      var payload=Object.assign({},ident(S.selected),{note_type:role,note:text,author:author()});
+      payload[role+"_note"]=text;payload[role+"_author"]=author();
+      api.saveWeeklyNote(payload).then(function(res){S.weekly[S.selected]=res.weekly;delete S.roleDrafts[roleDraftKey(role)];S.editingRole="";toast(roleMeta(role).label+" saved");render();})
+        .catch(function(){toast("Save failed · note kept locally");}).finally(function(){delete S.asyncBusy["note:"+role];});
+    }
+    function deleteRoleNote(role){
+      if(!api||S.asyncBusy["note:"+role])return;S.asyncBusy["note:"+role]=true;
+      api.deleteWeeklyNote(ident(S.selected),author(),role).then(function(res){S.weekly[S.selected]=res.weekly||null;toast(roleMeta(role).label+" deleted · audit retained");render();})
+        .catch(function(){toast("Delete failed");}).finally(function(){delete S.asyncBusy["note:"+role];});
     }
     function saveNote() {
       if (!ensureAuthor() || !api) return;
@@ -1089,12 +1471,16 @@
     }
     function startSlack() {
       var weekly = S.weekly[S.selected];
-      if (weekly && weekly.slack_post_ts) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
+      if (weekly && weekly.slack_post_ts && !S.threadOperation) { window.open(weekly.slack_post_permalink || "#", "_blank"); return; }
       if (!ensureAuthor() || !api) return;
       if (!S.channel) { toast("No Slack channel configured for this market"); return; }
-      var ta = root.querySelector("#rv-note"); var text = ta ? ta.value.trim() : (weekly && weekly.bgm_note) || "";
+      var ta = root.querySelector("#rv-slack-message"); var text = ta ? ta.value.trim() : (S.slackDrafts[String(S.selected)] || "");
       if (!text) { if (ta) ta.focus(); toast("Write the discussion starter first"); return; }
-      S.noteDraft = text; S.drafts[S.selected]=text; S.editingNote = true; S.mentionBusy = true; S.mentionPreview = null; render();
+      if(S.threadOperation==="new_parent"){
+        var reason=root.querySelector("#rv-new-thread-reason");S.newThreadReason=String(reason?reason.value:S.newThreadReason||"").trim();
+        if(!S.newThreadReason){if(reason)reason.focus();toast("Add a reason before starting a new discussion");return;}
+      }
+      S.slackDrafts[String(S.selected)]=text; S.mentionBusy = true; S.mentionPreview = null; render();
       api.resolveMentions(ident(S.selected), text).then(function (res) {
         S.mentionBusy = false;
         S.mentionPreview = { original_text: text, resolved_text: res.resolved_text || text, matches: res.matches || [], ambiguous: res.ambiguous || [] };
@@ -1109,9 +1495,9 @@
       var text = String(p.original_text || "").trim();
       var id = ident(S.selected), reqId = "wbr_" + S.week_start + "_" + id.ce_id + "_" + hash(id.ce_id + text);
       var btn=root.querySelector("#rv-confirm-slack");if(btn){btn.disabled=true;btn.textContent="Posting…";}
-      api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, bgm_note: text, bgm_author: author(), request_id: reqId, report_url: location.href }))
-        .then(function (res) { S.weekly[S.selected] = res.weekly; S.editingNote = false; delete S.drafts[S.selected]; S.noteDraft = null; S.mentionPreview = null; toast("CE discussion started"); render(); })
-        .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · note remains saved"); });
+      api.startSlackDiscussion(Object.assign({}, id, { channel: S.channel.id, discussion_text: text, discussion_author: author(), request_id: reqId, report_url: location.href, thread_operation:S.threadOperation||"", replacement_reason:S.newThreadReason||"" }))
+        .then(function (res) { S.weekly[S.selected] = res.weekly; if(res.thread)S.threadRegistry[S.selected]={active:res.thread,threads:[res.thread].concat((S.threadRegistry[S.selected]||{}).threads||[])}; delete S.slackDrafts[String(S.selected)];delete S.threadOperationByCe[String(S.selected)];delete S.newThreadReasonDrafts[String(S.selected)]; S.mentionPreview = null; S.threadOperation=""; S.newThreadReason=""; track("slack_discussion_started",{value_text:res.operation||"start"}); toast(res.operation==="continue"?"CE discussion continued":"CE discussion started"); render(); })
+        .catch(function (e) { if(btn){btn.disabled=false;btn.textContent="Post to Slack";} toast((e && e.message) || "Post failed · discussion kept locally"); });
     }
     function syncThread() {
       if (!api) return;
@@ -1119,8 +1505,17 @@
       api.syncWeeklyDiscussion(ident(S.selected)).then(function (res) {
         if (res.weekly) S.weekly[S.selected] = res.weekly;
         toast(res.new_replies && res.new_replies.length ? "Summary updated from new replies" : "Summary is current");
-        return Promise.all([loadCe(S.selected), reloadWork()]);
+        render();
+        Promise.all([loadCe(S.selected), reloadWork()]).catch(function(){});
       }).catch(function () { toast("Could not summarize now · automatic sync will retry"); render(); });
+    }
+    function decideSummary(decision){
+      if(!api||S.asyncBusy.summary)return;
+      var weekly=S.weekly[S.selected]||{},draft=root.querySelector("#rv-summary-draft"),payload=Object.assign({},ident(S.selected),{decision:decision,decided_by:author()||"authenticated BGM",thread_binding_id:weekly.thread_binding_id||"",slack_discussion_number:weekly.slack_discussion_number||""});
+      if(draft)payload.summary_json=draft.value;
+      S.asyncBusy.summary=true;var btn=root.querySelector("#rv-summary-"+decision);if(btn){btn.disabled=true;btn.textContent=decision==="approved"?"Approving…":"Saving…";}
+      api.decideSummary(payload).then(function(res){S.weekly[S.selected]=res.weekly;toast(decision==="approved"?"Summary approved for CE Memory":(decision==="rejected"?"Summary rejected":"Regeneration requested"));render();if(decision==="regenerate")syncThread();})
+        .catch(function(e){toast((e&&e.message)||"Could not update summary");render();}).finally(function(){delete S.asyncBusy.summary;});
     }
     function addGranola() {
       if (!ensureAuthor() || !api) return;
@@ -1144,16 +1539,28 @@
     }
     function acceptSuggestion(card) {
       var kind = card.dataset.kind, sid = card.dataset.suggestion;
-      var body = ((card.querySelector("[data-sugg-body]") || {}).value || "").trim();
+      var body = ((card.querySelector("[data-sugg-body]") || {}).value || card.dataset.body || "").trim();
       if (!body) { var bodyEl = card.querySelector("[data-sugg-body]"); if (bodyEl) bodyEl.focus(); toast("Keep or edit the suggestion text first"); return; }
-      if (kind === "comment") { decideSuggestion(sid, "approved", { destination: "comment", body: body }); return; }
+      if (kind === "comment") { decideSuggestionGroup(card, "approved", { destination: "comment", body: body }); return; }
       if (!ensureAuthor()) return;
-      var owner = (card.querySelector("[data-w-owner]") || {}).value || "";
-      var due = (card.querySelector("[data-w-due]") || {}).value || "";
+      var owner = (card.querySelector("[data-w-owner]") || {}).value || card.dataset.owner || "";
+      var due = (card.querySelector("[data-w-due]") || {}).value || card.dataset.due || "";
       var status = (card.querySelector("[data-w-status]") || {}).value || (kind === "check" ? "scheduled" : "needs_action");
-      if (kind === "action" && status === "needs_action" && !owner.trim()) { card.querySelector("[data-w-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
-      if (kind === "check" && !due) { card.querySelector("[data-w-due]").focus(); toast("Choose the next review date"); return; }
-      decideSuggestion(sid, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
+      if ((kind === "action" && status === "needs_action" && !owner.trim()) || (kind === "check" && !due)) {
+        S.expandedSuggestion=sid; render();
+        var missing=root.querySelector(kind === "check"?'[data-suggestion="'+String(sid).replace(/"/g,'')+'"] [data-w-due]':'[data-suggestion="'+String(sid).replace(/"/g,'')+'"] [data-w-owner]');
+        if(missing)missing.focus({preventScroll:true});
+        toast(kind === "check"?"Choose the next review date":"Confirm an owner for work that needs action"); return;
+      }
+      decideSuggestionGroup(card, "approved", { destination: kind, body: body, owner: owner.trim(), due_date: due, work_status: status });
+    }
+    function decideSuggestionGroup(card, decision, fields) {
+      var primary = card.dataset.suggestion, duplicates = String(card.dataset.duplicateIds || "").split(",").filter(Boolean);
+      if (!api) return;
+      var destination=fields&&fields.destination;
+      var calls = [api.decideSuggestion(Object.assign({ suggestion_id:primary, decision:decision, decided_by:author() }, fields || {}))];
+      duplicates.forEach(function (sid) { calls.push(api.decideSuggestion({ suggestion_id:sid, decision:"rejected", decided_by:author(), duplicate_of:primary })); });
+      Promise.all(calls).then(function(){track("suggestion_triaged",{value_number:duplicates.length+1,value_text:decision,idempotency_key:"suggestion:"+primary+":"+decision});if(decision==="approved"&&destination!=="comment")S.workTab=destination==="check"?"later":"open";toast(decision==="approved"?(destination==="check"?"Approved · moved to Later":destination==="action"?"Approved · moved to Open":(duplicates.length?"Added · duplicate suggestions archived":"Added")):"Ignored · source retained");return Promise.all([loadCe(S.selected),reloadWork()]);}).catch(function(){toast("Could not update suggestion");});
     }
     function decideSuggestion(sid, decision, fields) {
       if (!api) return;
@@ -1183,13 +1590,18 @@
     }
     function saveCompose() {
       if (!ensureAuthor() || !api) return;
-      var kind = S.compose, text = root.querySelector("#rv-c-text").value.trim();
+      if(S.asyncBusy.createWork)return;
+      var kind = S.compose,composeKey=composeDraftKey(S.selected,kind), text = root.querySelector("#rv-c-text").value.trim();
       if (!text) { root.querySelector("#rv-c-text").focus(); toast("Describe it first"); return; }
       var owner = root.querySelector("#rv-c-owner").value.trim(), due = root.querySelector("#rv-c-due").value, status = root.querySelector("#rv-c-status").value;
       if (kind === "action" && status === "needs_action" && !owner) { root.querySelector("#rv-c-owner").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (kind === "check" && !due) { root.querySelector("#rv-c-due").focus(); toast("Choose the next review date"); return; }
-      saveWorkItem({ market_slug: S.market_slug, ce_id: S.selected, ce_name: (S.byId[S.selected] || {}).ce_name, origin_week: S.week_start, kind: kind, text: text, owner: owner, due_date: due, status: status, source_type: "bgm_manual" }, kind === "check" ? "Check scheduled" : "Action created");
-      S.compose = "";
+      S.asyncBusy.createWork=true;
+      var started=performance.now(),tempId="pending_"+Date.now()+"_"+hash(text+owner+due),item={ work_id:tempId,market_slug:S.market_slug,ce_id:S.selected,ce_name:(S.byId[S.selected]||{}).ce_name,origin_week:S.week_start,kind:kind,text:text,owner:owner,due_date:due,status:status,source_type:"bgm_manual",_pending:true };
+      S.composeDrafts[composeKey]={text:text,owner:owner,due:due,status:status};(S.work[String(S.selected)]=S.work[String(S.selected)]||[]).push(item);S.compose="";delete S.composeByCe[String(S.selected)];render();toast(kind==="check"?"Scheduling check…":"Creating action…");
+      api.saveWork(Object.assign({},item,{work_id:""})).then(function(res){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list[idx]=res.work_item||Object.assign({},item,{work_id:(res.work_item||{}).work_id||tempId,_pending:false});delete S.composeDrafts[composeKey];console.info("review_work_persist_ms",Math.round(performance.now()-started));toast(kind==="check"?"Check scheduled":"Action created");render();return reloadWork();})
+        .catch(function(){var list=S.work[String(item.ce_id)]||[],idx=list.indexOf(item);if(idx>=0)list.splice(idx,1);S.compose=kind;S.composeByCe[String(item.ce_id)]=kind;toast("Could not save work item · rolled back");render();})
+        .finally(function(){S.asyncBusy.createWork=false;});
     }
     function toggleWork(workId) {
       var w = findWork(workId); if (!w || !api) return;
@@ -1208,13 +1620,14 @@
       var owner = (row.querySelector("[data-edit-owner]") || {}).value || "";
       var due = (row.querySelector("[data-edit-due]") || {}).value || "";
       var status = (row.querySelector("[data-edit-status]") || {}).value || w.status;
+      var carry=!!((row.querySelector("[data-edit-carry]")||{}).checked);
       if (!text.trim()) { row.querySelector("[data-edit-text]").focus(); toast("Describe the work item first"); return; }
       if (w.kind === "action" && status === "needs_action" && !owner.trim()) { row.querySelector("[data-edit-owner]").focus(); toast("Confirm an owner for work that needs action"); return; }
       if (w.kind === "check" && !due) { row.querySelector("[data-edit-due]").focus(); toast("Choose the next review date"); return; }
       S.editingWork = null;
       saveWorkItem({ work_id: w.work_id, market_slug: w.market_slug, ce_id: w.ce_id, ce_name: w.ce_name, origin_week: w.origin_week,
         kind: w.kind, text: text.trim(), owner: owner.trim(), due_date: due, status: status,
-        source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
+        carry_forward:carry,source_type: w.source_type || "bgm_manual", source_ref: w.source_ref || "", source_url: w.source_url || "" }, "Work item updated");
     }
     function deleteWork(workId) {
       if (!ensureAuthor() || !api) return;
@@ -1223,7 +1636,7 @@
         S.confirmDeleteWork = null; toast("Work item deleted · audit retained"); return reloadWork();
       }).catch(function () { toast("Could not delete work item"); });
     }
-    function saveWorkItem(item, okMsg) { api.saveWork(item).then(function () { toast(okMsg); reloadWork(); }).catch(function () { toast("Could not save work item"); }); }
+    function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { if(CLOSED.indexOf(item.status)>=0)track("action_closed",{ce_id:item.ce_id,value_text:item.status,idempotency_key:"action_closed:"+item.work_id+":"+item.status});toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
     function reloadWork() {
       if (!api) return Promise.resolve();
       return api.work({ market_slug: S.market_slug, week: S.week_start }).then(function (res) {
@@ -1231,21 +1644,36 @@
       }).catch(function () {});
     }
     function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }
+    function focusRequirement(key){
+      if(key==="suggestions"&&S.workTab!=="needs"){S.workTab="needs";render();}
+      if(key==="work"){
+        var unmanaged=openWorkFor(S.selected).filter(function(w){return !(String(w.carry_forward)==="true"||(w.owner&&(w.due_date||w.next_review_date))||(w.kind==="check"&&(w.due_date||w.next_review_date)));})[0];
+        var neededTab=unmanaged&&(unmanaged.kind==="check"||String(unmanaged.carry_forward)==="true")?"later":"open";
+        if(S.workTab!==neededTab){S.workTab=neededTab;render();}
+      }
+      var selector=key==="treatment"?"#rv-treatment":key==="discussion"?"#rv-discussion-section":key==="suggestions"?'#rv-actions-section [data-work-tab="needs"]':"#rv-actions-section .rv-work-requirement";
+      if(key==="discussion"&&!(S.weekly[S.selected]||{}).slack_post_ts){var slackAction=root.querySelector("#rv-continue-slack,#rv-start-slack,#rv-retry-threads,#rv-discussion-section");if(slackAction){if(slackAction.focus)slackAction.focus({preventScroll:true});slackAction.scrollIntoView({block:"center",behavior:"smooth"});}return;}
+      var target=root.querySelector(selector);if(target){if(target.focus)target.focus({preventScroll:true});target.scrollIntoView({block:"center",behavior:"smooth"});}
+    }
     function finishReview() {
       var q = S.byId[S.selected], t = treatmentFor(q.ce_id);
       if (t === "not_scheduled") { root.querySelector("#rv-treatment").focus(); toast("Choose how you’ll review this CE"); return; }
       if (!ensureAuthor() || !api) return;
-      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: (S.weekly[q.ce_id] && S.weekly[q.ce_id].bgm_note) || "" })
-        .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; toast("CE review finished"); render(); })
+      var blockers=completionBlockers(q);if(blockers.length){focusRequirement(blockers[0].key);toast(blockers[0].label);return;}
+      var weekly=S.weekly[q.ce_id]||{},summary="";try{if(String(weekly.summary_status)==="approved"){var parsed=JSON.parse(weekly.summary_approved_json||weekly.summary_json||"{}");summary=[].concat(parsed.findings||[],parsed.decisions||[]).map(function(x){return typeof x==="string"?x:(x.text||x.body||"");}).filter(Boolean).join(" · ");}}catch(e){}
+      api.finishReview({ market_slug: S.market_slug, ce_id: q.ce_id, ce_name: q.ce_name, week_start: S.week_start, treatment: t, reviewer: author(), open_work_count: String(openWorkFor(q.ce_id).length), summary: summary, no_discussion_reason:String(S.noDiscussionDrafts[q.ce_id]||"").trim() })
+        .then(function (res) { S.receipts[q.ce_id] = res.receipt || { reviewer: author() }; track("review_completed",{ce_id:q.ce_id,idempotency_key:"review_completed:"+S.market_slug+":"+S.week_start+":"+q.ce_id});toast("CE review finished"); render(); })
         .catch(function () { toast("Could not save review receipt"); });
     }
     function nextCe() {
       var open = S.queue.filter(function (x) { return !reviewedFor(x.ce_id) && String(x.ce_id) !== String(S.selected); });
+      open.sort(function(a,b){var rank=function(q){var state=shortlistState(q);return state==="selected"?0:state==="candidate"?1:2;};return rank(a)-rank(b);});
       if (!open.length) { toast("Review queue complete for this week 🎉"); return; }
       select(open[0].ce_id);
     }
     function openMemory() {
       var wrap = root.querySelector("#rv-memory-drawer"), body = root.querySelector("#rv-memory-body"), q = S.byId[S.selected];
+      S.memoryOpen = true;
       root.querySelector("#rv-memory-title").textContent = q.ce_name + " memory";
       root.querySelector("#rv-memory-eyebrow").textContent = "CE " + q.ce_id + " · " + S.market;
       wrap.hidden = false;
@@ -1253,9 +1681,9 @@
       var key=S.market_slug+"|"+S.week_start+"|"+q.ce_id,cached=S.memoryCache[key];
       if(cached){body.innerHTML=renderMemory(cached);wireMemory(body);return;}
       if(S.memoryInflight[key])return;
-      body.innerHTML='<div class="rv-empty-state"><strong>Loading CE memory…</strong></div>';
-      S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; body.innerHTML = renderMemory(res); wireMemory(body); })
-        .catch(function () { body.innerHTML = '<div class="rv-empty-state"><strong>Could not load CE memory</strong></div>'; });
+      body.innerHTML=renderMemoryLoading();
+      S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen&&String(S.selected)===String(q.ce_id)){current.innerHTML=renderMemory(res);wireMemory(current);}return res; })
+        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Previous reviews</button><button class="rv-memory-tab" disabled>Actions history</button></div><div class="rv-empty-state"><strong>CE memory is temporarily unavailable</strong><span>Current Review data remains available. Try again later; missing history never blocks this report.</span></div>'; });
       S.memoryInflight[key].finally(function(){delete S.memoryInflight[key];});
     }
     function renderMemory(res) {
@@ -1263,12 +1691,12 @@
       // older aliases as a compatibility fallback, but prefer the canonical
       // names so CE Memory always contains the BGM note and Slack summary that
       // were just written in Review mode.
-      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [];
+      var weekly = res.weekly_commentary || res.weekly || [], work = res.work_items || res.work || [], receipts = res.receipts || [], threads=res.slack_threads||[],timeline=res.timeline||[];
       var legacy = res.historical_comments || res.legacy_notes || res.legacyNotes || [], sourceStatus=res.historical_source_status||{};
       var perf = res.perf_history || res.perf_actions || [];
       var story = weekly.map(function (w) {
         var summary = null;
-        try { summary = w.summary_json ? JSON.parse(w.summary_json) : null; } catch (e) {}
+        try { summary = String(w.summary_status||"")==="approved" ? JSON.parse(w.summary_approved_json||w.summary_json||"") : null; } catch (e) {}
         var points = summary ? [].concat(summary.findings || [], summary.decisions || [], summary.open_points || []) : [];
         var slackStory = points.length ? '<div class="rv-memory-source"><div class="rv-source-label">✦ AI · Slack · thread summary</div><ul>' +
           points.map(function (p) { return "<li>" + esc(typeof p === "string" ? p : (p.text || p.body || "")) + "</li>"; }).join("") + "</ul>" +
@@ -1276,7 +1704,10 @@
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(w.week_start) + "<span>" + esc(w.bgm_author || "BGM") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
-      var storyPanel = story || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
+      var threadHistory=threads.map(function(t){return '<article class="rv-week-card"><div class="rv-week-head">Slack discussion<span>'+esc(t.binding_status||"active")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(t.created_reason||"CE discussion")+'</div><p>'+(t.slack_permalink?'<a class="rv-source-link" href="'+esc(t.slack_permalink)+'" target="_blank" rel="noopener">Open source thread ↗</a>':'Permalink unavailable')+'</p><div class="rv-source-meta">'+[t.created_by?t.created_by:"",t.replacement_week?"w/c "+t.replacement_week:"",t.replaced_reason?"Replaced: "+t.replaced_reason:""].filter(Boolean).map(esc).join(" · ")+'</div></div></article>';}).join("");
+      var contextTimeline=timeline.filter(function(e){return ["work_opened","work_completed","performance_history","historical_comment"].indexOf(String(e.event_type||""))<0;});
+      var timelinePanel=contextTimeline.map(function(e){return '<article class="rv-week-card rv-timeline-event"><div class="rv-week-head">'+esc(String(e.event_type||"event").replace(/_/g," "))+'<span>'+esc(e.review_week||fmtWhen(e.occurred_at)||"")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(e.source_type||"Review")+(e.approval_state?' · '+esc(e.approval_state):'')+'</div><p>'+esc(e.approved_body||e.original_body||"—")+'</p><div class="rv-source-meta">'+[e.actor_name||""].filter(Boolean).map(esc).join(" · ")+(e.source_url?' · <a class="rv-source-link" href="'+esc(e.source_url)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'</div></div></article>';}).join("");
+      var storyPanel = timelinePanel || (story+threadHistory) || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
       var legacyPanel = legacy.map(function (n) {
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start || "date unavailable") + "<span>" + esc(n.author_name || "author unavailable") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Historical CE comment · read-only</div><p>' + esc(n.body || "—") + "</p>" +
@@ -1291,29 +1722,25 @@
         return '<article class="rv-week-card"><div class="rv-week-head">Review receipt<span>w/c ' + esc(r.week_start) + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">' + esc(TREATMENT_LABELS[r.treatment] || r.treatment) + " · " + esc(r.reviewer || "") + "</div><p>" + esc(r.summary || "—") + "</p></div></article>";
       }).join("");
-      var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
+      var reviewHistory = (storyPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No previous Review records yet</strong></div>';
       var perfPanel = perf.length ? perf.map(function (p) {
         return '<article class="rv-week-card"><div class="rv-week-head">Perf action<span>w/c ' + esc(p.week_start || p.week || "") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Historical Performance action · read-only</div><p>' + esc(p.action_text || p.text || p.action || p.comment || "—") + "</p>" +
           '<div class="rv-source-meta">' + [p.owner?"owner "+esc(p.owner):"",p.status?"status "+esc(String(p.status).replace(/_/g," ")):"",p.outcome?"outcome "+esc(p.outcome):"",p.updated_at?esc(p.updated_at):"",p.duplicate_count>1?esc(p.duplicate_count)+" duplicate rows":""].filter(Boolean).join(" · ") + "</div></div></article>";
       }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>' + ((sourceStatus.actions||{}).unavailable?"Performance history source unavailable":"No historical Performance actions") + '</strong><span>No value is inferred when history is missing.</span></div>';
-      return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="comments">Historical comments</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
-        '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-comments" hidden>' + legacyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-perf" hidden>' + perfPanel + "</div>";
+      var actionHistory = (workPanel || perf.length) ? workPanel + perfPanel : perfPanel;
+      return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="reviews">Previous reviews</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="actions">Actions history</button></div>' +
+        '<div class="rv-memory-panel" id="rv-mem-reviews"><div class="rv-memory-intro"><strong>Previous reviews</strong><span>BGM observations, approved discussion summaries and completed weekly reviews for this CE.</span></div>' + reviewHistory +
+        '<div class="rv-memory-intro rv-memory-subsection"><strong>Earlier BGM comments</strong><span>Read-only comments retained from the previous weekly workflow.</span></div>' + legacyPanel + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-actions" hidden><div class="rv-memory-intro"><strong>Actions history</strong><span>Review actions, scheduled checks and ongoing Performance follow-through for this CE.</span></div>' + actionHistory + "</div>";
     }
     function wireMemory(body) {
       body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
         b.onclick = function () {
           body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
-          body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
-          body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
-          body.querySelector("#rv-mem-comments").hidden = b.dataset.mem !== "comments";
-          body.querySelector("#rv-mem-perf").hidden = b.dataset.mem !== "perf";
+          body.querySelector("#rv-mem-reviews").hidden = b.dataset.mem !== "reviews";
+          body.querySelector("#rv-mem-actions").hidden = b.dataset.mem !== "actions";
         };
       });
     }
@@ -1326,8 +1753,9 @@
         if (refreshHeadline() || !S.loaded) loadQueue().then(function(){if(requested&&ensureLocalCe(requested))select(requested);});
         else if(requested&&ensureLocalCe(requested))select(requested);else render();
         visibleOnce = true;
+        track("review_return_usage",{idempotency_key:"return:"+S.market_slug+":"+S.week_start+":"+sessionId()});
       },
-      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){select(ceId);var active=root.querySelector('[data-select-ce="'+String(ceId).replace(/"/g,'\\"')+'"]');if(active)active.scrollIntoView({block:"nearest"});return true;}return false; },
+      focusCe: function (ceId) { refreshHeadline(); if(ensureLocalCe(ceId)){S.queueRevealUntil=Date.now()+2500;select(ceId);revealQueueSelection(ceId);return true;}return false; },
       prefetch: function(){refreshHeadline();if(!S.loaded)loadQueue();},
       onWeekChange: function () { if(S.selected&&S.noteDraft!=null)S.drafts[String(S.selected)]=S.noteDraft; Object.keys(S.ceRequestSeq).forEach(function(k){S.ceRequestSeq[k]++;}); S.selected = null; S.weekly = {}; S.suggestions = {}; S.ceLoadedAt={}; S.memoryCache={}; S.loaded = false; if (visibleOnce) loadQueue(); }
     };
