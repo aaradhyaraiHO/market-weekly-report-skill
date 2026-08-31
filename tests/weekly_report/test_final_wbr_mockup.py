@@ -39,12 +39,13 @@ class FinalWbrMockupTest(unittest.TestCase):
         ):
             self.assertIn(text, self.view)
 
-    def test_ce_memory_keeps_story_work_and_read_only_perf(self):
+    def test_ce_memory_simplifies_sources_into_review_and_action_history(self):
         for text in (
-            'data-mem="story"',
-            'data-mem="work"',
-            'data-mem="comments"',
-            'data-mem="perf"',
+            'data-mem="reviews"',
+            'data-mem="actions"',
+            "Previous reviews",
+            "Actions history",
+            "Earlier BGM comments",
             "BGM note · original",
             "thread summary",
             "Historical CE comment · read-only",
@@ -52,6 +53,8 @@ class FinalWbrMockupTest(unittest.TestCase):
             "Performance history source unavailable",
         ):
             self.assertIn(text, self.view)
+        for old_tab in ('data-mem="story"', 'data-mem="work"', 'data-mem="comments"', 'data-mem="perf"'):
+            self.assertNotIn(old_tab, self.view)
 
     def test_slack_is_not_duplicated_in_the_footer(self):
         footer_renderer = self.view.split("function renderFinishBar", 1)[1].split(

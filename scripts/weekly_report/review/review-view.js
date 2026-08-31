@@ -735,7 +735,7 @@
         '<div class="rv-drawer-body" id="rv-memory-body">'+renderMemoryLoading()+'</div></div></div>';
     }
     function renderMemoryLoading() {
-      return '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Story</button><button class="rv-memory-tab" disabled>Work</button><button class="rv-memory-tab" disabled>Historical comments</button><button class="rv-memory-tab" disabled>Perf history</button></div><div class="rv-memory-loading" role="status" aria-live="polite"><div class="rv-skeleton wide"></div><div class="rv-skeleton"></div><div class="rv-skeleton short"></div><strong>Loading CE memory…</strong><span>Current Review stays usable. Slow or missing history will not block this report.</span></div>';
+      return '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Previous reviews</button><button class="rv-memory-tab" disabled>Actions history</button></div><div class="rv-memory-loading" role="status" aria-live="polite"><div class="rv-skeleton wide"></div><div class="rv-skeleton"></div><div class="rv-skeleton short"></div><strong>Loading CE memory…</strong><span>Current Review stays usable. Slow or missing history will not block this report.</span></div>';
     }
 
     // ---- events ----------------------------------------------------------
@@ -1153,7 +1153,7 @@
       if(S.memoryInflight[key])return;
       body.innerHTML=renderMemoryLoading();
       S.memoryInflight[key]=api.memory({ market_slug: S.market_slug, ce_id: q.ce_id }).then(function (res) { S.memoryCache[key]=res; var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen&&String(S.selected)===String(q.ce_id)){current.innerHTML=renderMemory(res);wireMemory(current);}return res; })
-        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Story</button><button class="rv-memory-tab" disabled>Work</button><button class="rv-memory-tab" disabled>Historical comments</button><button class="rv-memory-tab" disabled>Perf history</button></div><div class="rv-empty-state"><strong>CE memory is temporarily unavailable</strong><span>Current Review data remains available. Try again later; missing history never blocks this report.</span></div>'; });
+        .catch(function () { var current=root.querySelector("#rv-memory-body");if(current&&S.memoryOpen)current.innerHTML = '<div class="rv-memory-tabs" aria-hidden="true"><button class="rv-memory-tab active" disabled>Previous reviews</button><button class="rv-memory-tab" disabled>Actions history</button></div><div class="rv-empty-state"><strong>CE memory is temporarily unavailable</strong><span>Current Review data remains available. Try again later; missing history never blocks this report.</span></div>'; });
       S.memoryInflight[key].finally(function(){delete S.memoryInflight[key];});
     }
     function renderMemory(res) {
@@ -1175,7 +1175,8 @@
           '<div class="rv-week-body"><div class="rv-source-label">BGM note · original</div><p>' + esc(w.note_deleted_at ? "(deleted · audit retained)" : (w.bgm_note || "—")) + "</p>" + slackStory + "</div></article>";
       }).join("");
       var threadHistory=threads.map(function(t){return '<article class="rv-week-card"><div class="rv-week-head">Slack discussion<span>'+esc(t.binding_status||"active")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(t.created_reason||"CE discussion")+'</div><p>'+(t.slack_permalink?'<a class="rv-source-link" href="'+esc(t.slack_permalink)+'" target="_blank" rel="noopener">Open source thread ↗</a>':'Permalink unavailable')+'</p><div class="rv-source-meta">'+[t.created_by?t.created_by:"",t.replacement_week?"w/c "+t.replacement_week:"",t.replaced_reason?"Replaced: "+t.replaced_reason:""].filter(Boolean).map(esc).join(" · ")+'</div></div></article>';}).join("");
-      var timelinePanel=timeline.map(function(e){return '<article class="rv-week-card rv-timeline-event"><div class="rv-week-head">'+esc(String(e.event_type||"event").replace(/_/g," "))+'<span>'+esc(e.review_week||fmtWhen(e.occurred_at)||"")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(e.source_type||"Review")+(e.approval_state?' · '+esc(e.approval_state):'')+'</div><p>'+esc(e.approved_body||e.original_body||"—")+'</p><div class="rv-source-meta">'+[e.actor_name||""].filter(Boolean).map(esc).join(" · ")+(e.source_url?' · <a class="rv-source-link" href="'+esc(e.source_url)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'</div></div></article>';}).join("");
+      var contextTimeline=timeline.filter(function(e){return ["work_opened","work_completed","performance_history","historical_comment"].indexOf(String(e.event_type||""))<0;});
+      var timelinePanel=contextTimeline.map(function(e){return '<article class="rv-week-card rv-timeline-event"><div class="rv-week-head">'+esc(String(e.event_type||"event").replace(/_/g," "))+'<span>'+esc(e.review_week||fmtWhen(e.occurred_at)||"")+'</span></div><div class="rv-week-body"><div class="rv-source-label">'+esc(e.source_type||"Review")+(e.approval_state?' · '+esc(e.approval_state):'')+'</div><p>'+esc(e.approved_body||e.original_body||"—")+'</p><div class="rv-source-meta">'+[e.actor_name||""].filter(Boolean).map(esc).join(" · ")+(e.source_url?' · <a class="rv-source-link" href="'+esc(e.source_url)+'" target="_blank" rel="noopener">Source ↗</a>':'')+'</div></div></article>';}).join("");
       var storyPanel = timelinePanel || (story+threadHistory) || '<div class="rv-empty-state"><strong>No current Review commentary history yet</strong></div>';
       var legacyPanel = legacy.map(function (n) {
         return '<article class="rv-week-card"><div class="rv-week-head">w/c ' + esc(n.week_start || "date unavailable") + "<span>" + esc(n.author_name || "author unavailable") + "</span></div>" +
@@ -1191,29 +1192,25 @@
         return '<article class="rv-week-card"><div class="rv-week-head">Review receipt<span>w/c ' + esc(r.week_start) + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">' + esc(TREATMENT_LABELS[r.treatment] || r.treatment) + " · " + esc(r.reviewer || "") + "</div><p>" + esc(r.summary || "—") + "</p></div></article>";
       }).join("");
-      var workTab = (workPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No work or receipts yet</strong></div>';
+      var reviewHistory = (storyPanel + receiptPanel) || '<div class="rv-empty-state"><strong>No previous Review records yet</strong></div>';
       var perfPanel = perf.length ? perf.map(function (p) {
         return '<article class="rv-week-card"><div class="rv-week-head">Perf action<span>w/c ' + esc(p.week_start || p.week || "") + "</span></div>" +
           '<div class="rv-week-body"><div class="rv-source-label">Historical Performance action · read-only</div><p>' + esc(p.action_text || p.text || p.action || p.comment || "—") + "</p>" +
           '<div class="rv-source-meta">' + [p.owner?"owner "+esc(p.owner):"",p.status?"status "+esc(String(p.status).replace(/_/g," ")):"",p.outcome?"outcome "+esc(p.outcome):"",p.updated_at?esc(p.updated_at):"",p.duplicate_count>1?esc(p.duplicate_count)+" duplicate rows":""].filter(Boolean).join(" · ") + "</div></div></article>";
       }).join("") : '<div class="rv-empty-state rv-perf-unavailable"><strong>' + ((sourceStatus.actions||{}).unavailable?"Performance history source unavailable":"No historical Performance actions") + '</strong><span>No value is inferred when history is missing.</span></div>';
-      return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="story">Story</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="comments">Historical comments</button>' +
-        '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
-        '<div class="rv-memory-panel" id="rv-mem-story"><div class="rv-memory-intro"><strong>Review story</strong><span>Approved weekly context, Slack discussions, summaries and Review events.</span></div>' + storyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-work" hidden><div class="rv-memory-intro"><strong>Actions &amp; receipts</strong><span>Committed Review actions, scheduled checks and completed-review receipts.</span></div>' + workTab + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-comments" hidden><div class="rv-memory-intro"><strong>Historical comments</strong><span>Read-only CE comments from the legacy notes table.</span></div>' + legacyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-perf" hidden><div class="rv-memory-intro"><strong>Performance history</strong><span>Read-only Performance actions from the legacy actions table.</span></div>' + perfPanel + "</div>";
+      var actionHistory = (workPanel || perf.length) ? workPanel + perfPanel : perfPanel;
+      return '<div class="rv-memory-tabs"><button class="rv-memory-tab active" type="button" data-mem="reviews">Previous reviews</button>' +
+        '<button class="rv-memory-tab" type="button" data-mem="actions">Actions history</button></div>' +
+        '<div class="rv-memory-panel" id="rv-mem-reviews"><div class="rv-memory-intro"><strong>Previous reviews</strong><span>BGM observations, approved discussion summaries and completed weekly reviews for this CE.</span></div>' + reviewHistory +
+        '<div class="rv-memory-intro rv-memory-subsection"><strong>Earlier BGM comments</strong><span>Read-only comments retained from the previous weekly workflow.</span></div>' + legacyPanel + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-actions" hidden><div class="rv-memory-intro"><strong>Actions history</strong><span>Review actions, scheduled checks and ongoing Performance follow-through for this CE.</span></div>' + actionHistory + "</div>";
     }
     function wireMemory(body) {
       body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
         b.onclick = function () {
           body.querySelectorAll(".rv-memory-tab").forEach(function (t) { t.classList.toggle("active", t === b); });
-          body.querySelector("#rv-mem-story").hidden = b.dataset.mem !== "story";
-          body.querySelector("#rv-mem-work").hidden = b.dataset.mem !== "work";
-          body.querySelector("#rv-mem-comments").hidden = b.dataset.mem !== "comments";
-          body.querySelector("#rv-mem-perf").hidden = b.dataset.mem !== "perf";
+          body.querySelector("#rv-mem-reviews").hidden = b.dataset.mem !== "reviews";
+          body.querySelector("#rv-mem-actions").hidden = b.dataset.mem !== "actions";
         };
       });
     }

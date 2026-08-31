@@ -320,14 +320,18 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn(".rv-action-tab.active", self.css)
         self.assertNotIn('e.related_work_id?"Work "+e.related_work_id', self.view)
 
-    def test_ce_memory_tabs_explain_their_distinct_sources(self):
+    def test_ce_memory_presents_two_user_oriented_histories(self):
         for fragment in (
-            "Approved weekly context, Slack discussions, summaries and Review events.",
-            "Committed Review actions, scheduled checks and completed-review receipts.",
-            "Read-only CE comments from the legacy notes table.",
-            "Read-only Performance actions from the legacy actions table.",
+            "Previous reviews",
+            "BGM observations, approved discussion summaries and completed weekly reviews for this CE.",
+            "Earlier BGM comments",
+            "Read-only comments retained from the previous weekly workflow.",
+            "Actions history",
+            "Review actions, scheduled checks and ongoing Performance follow-through for this CE.",
         ):
             self.assertIn(fragment, self.view)
+        for old_tab in ('data-mem="story"', 'data-mem="work"', 'data-mem="comments"', 'data-mem="perf"'):
+            self.assertNotIn(old_tab, self.view)
 
     def test_nomination_requires_reason_and_uses_stable_ce_id(self):
         for fragment in (
