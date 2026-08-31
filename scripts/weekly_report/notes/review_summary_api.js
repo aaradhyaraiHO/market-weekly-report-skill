@@ -101,14 +101,15 @@ async function askModel(instruction, payload, schema) {
       max_tokens: 2500,
       system: instruction,
       messages: [{ role: "user", content: JSON.stringify(payload) }],
-      tools: [{ name: "emit_result", description: "Return the validated review result.", input_schema: schema, strict: true }],
+      tools: [{ name: "emit_result", description: "Return the validated review result.", input_schema: schema }],
       tool_choice: { type: "tool", name: "emit_result", disable_parallel_tool_use: true },
     }),
   });
   if (!response.ok) {
     const failure = await response.json().catch(() => ({}));
     const code = failure?.error?.code || failure?.error?.type || "unknown_error";
-    throw new Error(`Anthropic API returned ${response.status} (${code})`);
+    const detail = String(failure?.error?.message || "").slice(0, 500);
+    throw new Error(`Anthropic API returned ${response.status} (${code})${detail ? `: ${detail}` : ""}`);
   }
   const result = await response.json();
   const output = result?.content?.find((item) => item?.type === "tool_use" && item?.name === "emit_result")?.input;
