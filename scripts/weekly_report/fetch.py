@@ -984,6 +984,13 @@ def ce_channels(
         SELECT
             combined_entity_id,
             CASE
+                -- PMax campaign names can also carry the CE suffix (for example
+                -- ``... Performance Max ... cid3111``).  Classify campaign type
+                -- before the generic CE-id Search rule or their revenue is
+                -- silently folded into Google Search.
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance[ -]?max')
+                    THEN 'Google PMax'
                 WHEN channel_name = 'Google Ads'
                     AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
                     THEN 'Google Search'
@@ -992,9 +999,6 @@ def ce_channels(
                 WHEN channel_name = 'Bing Ads'
                     AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
                     THEN 'Bing'
-                WHEN channel_name = 'Google Ads'
-                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance.max')
-                    THEN 'Google PMax'
                 WHEN channel_name = 'Google Ads'                 THEN 'Google Cross-sell'
                 WHEN channel_name = 'Bing Ads'                   THEN 'Bing Cross-sell'
                 WHEN channel_name = 'Things to Do (Ads)'         THEN 'TTD (Paid)'
@@ -1060,6 +1064,11 @@ def ce_channel_history(
     WITH classified AS (
         SELECT combined_entity_id,
             CASE
+                -- Keep campaign-type rules ahead of the generic CE-id Search
+                -- rule; PMax names commonly include the same cid suffix.
+                WHEN channel_name = 'Google Ads'
+                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance[ -]?max')
+                    THEN 'Google PMax'
                 WHEN channel_name = 'Google Ads'
                     AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
                     THEN 'Google Search'
@@ -1067,9 +1076,6 @@ def ce_channel_history(
                 WHEN channel_name = 'Bing Ads'
                     AND REGEXP_CONTAINS(campaign_name, CONCAT('cid', CAST(combined_entity_id AS STRING)))
                     THEN 'Bing'
-                WHEN channel_name = 'Google Ads'
-                    AND REGEXP_CONTAINS(LOWER(COALESCE(campaign_name, '')), r'pmax|performance.max')
-                    THEN 'Google PMax'
                 WHEN channel_name = 'Google Ads' THEN 'Google Cross-sell'
                 WHEN channel_name = 'Bing Ads' THEN 'Bing Cross-sell'
                 WHEN channel_name = 'Things to Do (Ads)' THEN 'TTD (Paid)'

@@ -30,6 +30,7 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
             return pd.DataFrame()
 
         with mock.patch.object(fetch, "query_df", side_effect=capture):
+            fetch.ce_channels("North America", *windows)
             fetch.ce_variants("North America", *windows)
             fetch.ce_leadtime("North America", *windows)
             fetch.ce_countries("North America", *windows)
@@ -38,6 +39,17 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
             fetch.ce_channel_history("North America", windows[0], windows[1], windows[4], windows[5], ["CE-1"])
 
         by_label = {label: (sql, params) for label, sql, params in captured}
+
+        # PMax campaigns commonly end in the same cid suffix used by Search.
+        # Campaign type must win or PMax revenue is silently reported as Search.
+        for label in ("ce_channels", "ce_channel_history"):
+            channel_sql, _ = by_label[label]
+            self.assertLess(
+                channel_sql.index("THEN 'Google PMax'"),
+                channel_sql.index("THEN 'Google Search'"),
+            )
+            self.assertIn(r"pmax|performance[ -]?max", channel_sql)
+
         variant_sql, variant_params = by_label["ce_variants"]
         self.assertIn("__UNATTRIBUTED__", variant_sql)
         self.assertIn("price_payable_usd", variant_sql)
