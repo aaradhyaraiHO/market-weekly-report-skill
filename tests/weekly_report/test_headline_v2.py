@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import math
 import os
 import re
 import sys
@@ -258,6 +259,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="drawer-pacing-section"', html)
         self.assertIn("Performance &amp; pacing", html)
         self.assertIn('id="targets-section"', html)
+        self.assertIn('id="market-okrs"', html)
+        self.assertIn("function renderMarketOkrs", html)
         self.assertIn('id="target-summary"', html)
         self.assertIn('id="target-comparisons"', html)
         self.assertNotIn('id="target-contributors"', html)
@@ -600,6 +603,17 @@ class HeadlineV2Contract(unittest.TestCase):
 
         self.assertEqual(first_drop["seasonality_tag"], "")
 
+    def test_non_finite_optional_leadtime_value_renders_unavailable_without_mutating_v1(self):
+        market = copy.deepcopy(self.market)
+        source_ce = market["ces"][0]
+        source_ce["leadtime"] = [{"band": "3-4D", "rev": 0.0, "rev_wow": float("nan")}]
+
+        view = headline_v2.build_headline_view(market)
+        rendered_ce = next(row for row in view["all_ces"] if row["ce_id"] == str(source_ce["ce_id"]))
+
+        self.assertIsNone(rendered_ce["leadtime"][0]["rev_wow"])
+        self.assertTrue(math.isnan(source_ce["leadtime"][0]["rev_wow"]))
+
     def test_v1_market_drawer_backfills_legacy_orders_aov_and_average_cm1(self):
         market = copy.deepcopy(self.market)
         metrics = market["market_summary"]["headlines"]["key_metrics"]
@@ -681,6 +695,35 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertEqual(embedded["notes_url"], "https://example.com/weekly-actions")
         self.assertIn("action=action_list", html)
         self.assertNotIn("fetch(NOTES_URL,{method:'POST'", html)
+
+    def test_same_week_market_okr_sidecar_is_embedded_without_enriching_country_views(self):
+        sidecar = {
+            "schema_version": 1,
+            "week_start": "2026-08-02",
+            "markets": {"north_america": [{
+                "id": "grow_cumulative_pro_plus_ces",
+                "label": "Grow cumulative Pro+ CEs",
+                "current": "7 CEs",
+                "detail": "L92 predicted revenue ≥ $10K",
+                "status": ":large_yellow_circle: At risk",
+            }]},
+        }
+        html = render_v2.render([self.market], okr_results=sidecar)
+        payload = json.loads(re.search(
+            r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
+        ).group(1))
+
+        self.assertEqual(payload["headlines"][0]["market_okrs"][0]["current"], "7 CEs")
+        self.assertNotIn("market_okrs", next(iter(payload["headlines"][0]["country_views"].values()), {}))
+
+    def test_mismatched_market_okr_week_is_omitted(self):
+        html = render_v2.render([self.market], okr_results={
+            "week_start": "2026-07-26", "markets": {"north_america": [{}]},
+        })
+        payload = json.loads(re.search(
+            r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
+        ).group(1))
+        self.assertNotIn("market_okrs", payload["headlines"][0])
 
     def test_diagnostic_actions_use_the_legacy_actions_proxy_not_review_mode(self):
         html = render_v2.render([self.market])

@@ -7,6 +7,7 @@ Monthly goal data is optional and must come from an explicit sidecar.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from copy import deepcopy
 from functools import reduce
 from statistics import fmean
@@ -71,7 +72,20 @@ _CE_DRAWER_METRICS = {
 
 
 def _number(value):
-    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _json_safe_optional(value):
+    """Copy optional enrichment data while nulling non-finite JSON numbers."""
+    if isinstance(value, dict):
+        return {key: _json_safe_optional(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_optional(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return deepcopy(value)
 
 
 def _percent_change(current, baseline):
@@ -594,7 +608,7 @@ def _ce_views(market, dimensions=None):
             "channels": deepcopy(ce.get("channels") or []),
             "funnel": deepcopy(ce.get("funnel") or {}),
             "tgids": deepcopy(ce.get("tgids") or []),
-            "leadtime": deepcopy(ce.get("leadtime") or []),
+            "leadtime": _json_safe_optional(ce.get("leadtime") or []),
             "country_mix": [
                 {
                     "country": row.get("country"),
