@@ -1319,7 +1319,7 @@ function installReviewStorage(){
 var REVIEW_MARKET_SLACK_CHANNELS={
   north_america:["C0BQHT29WMB"],central_live_entertainment:["C042A57T52Q"],italy:["C045L2WQ79P"],france:["CH64TEB71"],
   iberia:["CH2LRMJF2"],south_america:["CH2LRMJF2"],mexico_central_america:["C012949PQ81"],
-  csee:["CSQ10TALA"],nordics:["CSQ10TALA"],united_kingdom:["CKTFHT4AF"],benelux:["CKTFHT4AF"],
+  csee:["CSQ10TALA"],nordics:["CSQ10TALA"],united_kingdom:["CKTFHT4AF"],benelux:["CL13UPZ6V"],
   east_asia:["CQD6220VB","C01C4NPLYN6","C01CARUM1CL","C0809DN93DH"],oceania:["CHKRLFDPU","C039TMH0GEP","C097DVBLHGS"],
   sea:["C5WFYN82H","C03R4UJ4DHC","C01CHADFPAM","C03US4WRHB6","C05D50N5BQW"],
   uae:["C046622L80Z"],gcc:["C0889D22PM5"],north_africa:["C0889D22PM5"],rest_of_mea:["C0889D22PM5"],

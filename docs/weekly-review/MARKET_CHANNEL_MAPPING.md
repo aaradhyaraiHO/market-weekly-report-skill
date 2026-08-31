@@ -21,7 +21,7 @@ channel IDs are the routing authority.
 | `france` | France | `#mkt-france` | `CH64TEB71` | France and Monaco |
 | `iberia` | Iberia | `#mkt-iberia` | `CH2LRMJF2` | Andorra, Portugal, Spain |
 | `united_kingdom` | United Kingdom | `#mkt-uk` | `CKTFHT4AF` | UK and Ireland |
-| `benelux` | Benelux | `#mkt-uk` | `CKTFHT4AF` | Shared UK route |
+| `benelux` | Benelux | `#mkt-netherlands` | `CL13UPZ6V` | Dedicated Netherlands route |
 | `csee` | CSEE | `#mkt-csee` | `CSQ10TALA` | CSEE portfolio |
 | `nordics` | Nordics | `#mkt-csee` | `CSQ10TALA` | Shared CSEE route |
 | `east_asia` | East Asia | `#mkt-japan` | `CQD6220VB` | Primary posting home; alternate read channels below |

@@ -40,7 +40,7 @@
     csee:{id:"CSQ10TALA",name:"mkt-csee"},east_asia:{id:"CQD6220VB",name:"mkt-japan"},
     sea:{id:"C5WFYN82H",name:"mkt-singapore"},uae:{id:"C046622L80Z",name:"mkt-mena"},
     gcc:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},north_africa:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},
-    rest_of_mea:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},benelux:{id:"CKTFHT4AF",name:"mkt-uk"},
+    rest_of_mea:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},benelux:{id:"CL13UPZ6V",name:"mkt-netherlands"},
     nordics:{id:"CSQ10TALA",name:"mkt-csee"},south_america:{id:"CH2LRMJF2",name:"mkt-iberia"},
     mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"}
   };

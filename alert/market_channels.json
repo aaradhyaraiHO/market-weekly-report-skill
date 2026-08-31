@@ -19,13 +19,13 @@
     "gcc": "C0889D22PM5",
     "north_africa": "C0889D22PM5",
     "rest_of_mea": "C0889D22PM5",
-    "benelux": "CKTFHT4AF",
+    "benelux": "CL13UPZ6V",
     "nordics": "CSQ10TALA",
     "south_america": "CH2LRMJF2",
     "mexico_central_america": "C012949PQ81",
     "headout": "C0975BGAX0B"
   },
-  "_note_longtail": "benelux→#mkt-uk (shares UK), nordics→CSEE channel, south_america→Iberia channel (bot already in all three since UK/CSEE/Iberia are covered). mexico_central_america→#mkt-mexico (C012949PQ81) is a NEW channel — invite the alert bot before first post. Added 2026-08-04.",
+  "_note_longtail": "benelux→#mkt-netherlands (CL13UPZ6V), nordics→CSEE channel, south_america→Iberia channel. mexico_central_america→#mkt-mexico (C012949PQ81). Benelux moved from the shared UK route on 2026-08-31.",
   "_note_headout": "headout is the PORTFOLIO rollup (all 42 markets), not a market — posts to #team-central-biz (C0975BGAX0B). It IS part of the weekly Losing-Money alert sweep (uses weekly-report-headout.html + --market-slug headout), but is EXCLUDED from the Thursday actions ping (would redundantly re-ping every market's CEs).",
   "_alternates": {
     "oceania": [
