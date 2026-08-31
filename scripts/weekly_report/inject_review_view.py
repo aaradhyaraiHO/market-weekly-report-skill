@@ -40,6 +40,7 @@ BOOT_END = "/*RV-BOOT-END*/"
 
 NAV_RE = re.compile(r'<button class="nav-item"[^>]*>Review</button>')
 NAV_ENABLED = '<button class="nav-item" type="button" data-report-view="review">Review</button>'
+HEADOUT_RE = re.compile(r"^weekly-report-headout(?:-\d{4}-\d{2}-\d{2})?\.html$")
 
 # insertion anchor: the all-ces section close + main close. We slot the review-view container
 # between them so it is a sibling of #overview-view / #all-ces-view *inside* <main>.
@@ -168,7 +169,25 @@ def strip_previous(html: str) -> str:
     return html
 
 
+def remove_review(path: Path) -> bool:
+    """Remove Review from Headout/global while leaving the report shell intact."""
+    html = strip_previous(path.read_text())
+    html = NAV_RE.sub("", html, count=1)
+    html = html.replace(
+        '      <section class="report-view" id="review-view" hidden aria-label="Weekly review"></section>\n',
+        "",
+    )
+    html = html.replace(SWITCH_ADD, SWITCH_ANCHOR)
+    html = html.replace(CE_REVIEW_CONTROL, "")
+    html = html.replace(CE_REVIEW_WIRE, CE_REVIEW_WIRE_ANCHOR)
+    path.write_text(html)
+    print(f"  - {path.name}: Review excluded from Headout/global")
+    return True
+
+
 def inject(path: Path, deploy: Path, native: bool = False) -> bool:
+    if HEADOUT_RE.match(path.name):
+        return remove_review(path)
     html = path.read_text()
     if "report-data" not in html or "data-report-view" not in html:
         print(f"  ! {path.name}: not a V2 shell (no report-data / nav) — skipped")
@@ -253,15 +272,20 @@ def main(argv=None):
 
     targets = resolve_targets(args)
     print(f"Inject Review tab · {len(targets)} file(s)\n  assets: {REVIEW_DIR}\n  deploy: {deploy}")
-    done = 0
+    enabled = 0
+    excluded = 0
     for path in targets:
         if not path.exists():
             print(f"  ! {path} not found — skipped")
             continue
+        if HEADOUT_RE.match(path.name):
+            remove_review(path)
+            excluded += 1
+            continue
         if inject(path, deploy, args.native):
-            done += 1
-    print(f"\n  injected {done}/{len(targets)} file(s)")
-    if done:
+            enabled += 1
+    print(f"\n  Review enabled: {enabled}; Headout/global excluded: {excluded}; total processed: {enabled + excluded}/{len(targets)}")
+    if enabled:
         print("  next (USER, from ~/analytics):  vercel deploy --prod --cwd market-notebook-v2")
 
 

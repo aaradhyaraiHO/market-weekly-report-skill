@@ -1,185 +1,70 @@
-# Market → Slack Channel Mapping Reference
+# Review market → Slack channel mapping
 
-Complete mapping of Headout markets to Slack channels for weekly review context gathering.
+This is the Review workflow routing reference. It mirrors the runtime maps in
+`scripts/weekly_report/review/review-view.js` and
+`scripts/weekly_report/notes/review_apps_script.js`.
 
----
+Review is enabled for the 17 market reports. The Headout/global report is not a
+Review destination and must not render a Review tab. Weekly alert delivery is a
+separate contract in `alert/market_channels.json`; notably, North America alerts
+still use `#mkt-usa`, while Review discussions use `#adhoc-north-america`.
 
-## Complete Market List (21 markets)
+## Primary Review posting routes
 
-| Market | Region | Channel(s) | Channel ID(s) | Countries/Notes |
-|--------|--------|-----------|---------------|-----------------|
-| **North America** | North America | #adhoc-north-america | `C0BQHT29WMB` | Review discussions only; weekly alerts remain in #mkt-usa |
-| **Central Live Entertainment** | Central Categories | #pod-live-entertainment | `C042A57T52Q` | Cross-market live entertainment category |
-| **Italy** | Europe | #mkt-italy | `C045L2WQ79P` | Italy, Malta, Switzerland |
-| **France** | Europe | #mkt-france | `CH64TEB71` | France, Monaco |
-| **Iberia** | Europe | #mkt-iberia | `CH2LRMJF2` | Andorra, Portugal, Spain |
-| **CSEE** | Europe | #mkt-csee | `CSQ10TALA` | Albania, Austria, Bosnia and Herzegovina, Bulgaria, Croatia, Czech Republic, Estonia, Germany, Greece, Hungary, Latvia, Moldova, Montenegro, North Macedonia, Poland, Romania, Serbia, Slovakia, Slovenia, Turkey (23 countries) |
-| **United Kingdom** | Europe | #mkt-uk | `CKTFHT4AF` | UK + Ireland |
-| **Benelux** | Europe | #mkt-uk | `CKTFHT4AF` | Belgium, Luxembourg, Netherlands (rolls up to UK channel) |
-| **Nordics** | Europe | #mkt-csee | `CSQ10TALA` | Denmark, Finland, Iceland, Norway, Sweden (rolls up to CSEE channel) |
-| **East Asia (JPN, SK, HK)** | Asia-Pacific | #mkt-japan<br>#mkt-hongkong<br>#mkt-korea | `CQD6220VB`<br>`C01C4NPLYN6`<br>`C01CARUM1CL` | Japan + South Korea + Hong Kong (read all 3 channels) |
-| **Oceania** | Asia-Pacific | #mkt-australia<br>#mkt-new-zealand<br>mkt-fiji | `CHKRLFDPU`<br>`C039TMH0GEP`<br>`C097DVBLHGS` | Australia + New Zealand + Fiji (read all 3 channels) |
-| **SEA (SIN + THA)** | Asia-Pacific | #mkt-singapore<br>#mkt-thailand | `C5WFYN82H`<br>`C03R4UJ4DHC` | Singapore + Thailand |
-| **SEA (MLY + IND + VN)** | Asia-Pacific | #mkt-malaysia<br>#mkt-indonesia<br>#mkt-vietnam | `C01CHADFPAM`<br>`C03US4WRHB6`<br>`C05D50N5BQW` | Malaysia + Indonesia + Vietnam |
-| **East Asia (CN, TW)** | Asia-Pacific | #mkt-china-taiwan | `C0809DN93DH` | China, Macao, Taiwan |
-| **South America** | LATAM | #mkt-iberia | `CH2LRMJF2` | Argentina, Brazil, Chile, Colombia, Peru (rolls up to Iberia channel) |
-| **Mexico & Central America** | LATAM | #mkt-iberia | `CH2LRMJF2` | Antigua and Barbuda, Barbados, Costa Rica, Dominican Republic, Jamaica, Mexico, Panama (rolls up to Iberia channel) |
-| **United Arab Emirates** | Middle East and North Africa | #mkt-mena | `C046622L80Z` | UAE |
-| **GCC** | Middle East and North Africa | #mkt-mena | `C046622L80Z` | Bahrain, Oman, Qatar, Saudi Arabia (rolls up to MENA channel) |
-| **Egypt** | Middle East and North Africa | mkt-mena-expansion-internal | `C0889D22PM5` | Egypt (internal expansion channel) |
-| **Morocco** | Middle East and North Africa | mkt-mena-expansion-internal | `C0889D22PM5` | Morocco (internal expansion channel) |
+One Review discussion has one stable primary channel. Names are display labels;
+channel IDs are the routing authority.
 
----
+| Market slug | Report market | Primary Review channel | Channel ID | Scope note |
+|---|---|---|---|---|
+| `north_america` | North America | `#adhoc-north-america` | `C0BQHT29WMB` | Review-only override; alerts remain in `#mkt-usa` |
+| `italy` | Italy | `#mkt-italy-switzerland-malta` | `C045L2WQ79P` | Italy, Malta, Switzerland |
+| `france` | France | `#mkt-france` | `CH64TEB71` | France and Monaco |
+| `iberia` | Iberia | `#mkt-iberia` | `CH2LRMJF2` | Andorra, Portugal, Spain |
+| `united_kingdom` | United Kingdom | `#mkt-uk` | `CKTFHT4AF` | UK and Ireland |
+| `benelux` | Benelux | `#mkt-uk` | `CKTFHT4AF` | Shared UK route |
+| `csee` | CSEE | `#mkt-csee` | `CSQ10TALA` | CSEE portfolio |
+| `nordics` | Nordics | `#mkt-csee` | `CSQ10TALA` | Shared CSEE route |
+| `east_asia` | East Asia | `#mkt-japan` | `CQD6220VB` | Primary posting home; alternate read channels below |
+| `oceania` | Oceania | `#mkt-anz` / `#mkt-australia` | `CHKRLFDPU` | Same channel ID; report payload may display `mkt-anz` |
+| `sea` | South East Asia | `#mkt-singapore` | `C5WFYN82H` | Primary posting home; alternate read channels below |
+| `uae` | United Arab Emirates | `#mkt-mena` | `C046622L80Z` | UAE only |
+| `gcc` | GCC | `#mkt-mena-expansion-internal` | `C0889D22PM5` | Separate from UAE, per 27 Jul 2026 routing decision |
+| `north_africa` | North Africa | `#mkt-mena-expansion-internal` | `C0889D22PM5` | Shared expansion route |
+| `rest_of_mea` | Rest of MEA | `#mkt-mena-expansion-internal` | `C0889D22PM5` | Shared expansion route |
+| `south_america` | South America | `#mkt-iberia` | `CH2LRMJF2` | Shared Iberia route |
+| `mexico_central_america` | Mexico & Central America | `#mkt-mexico` | `C012949PQ81` | Dedicated corrected route; not Iberia |
 
-## Market Notes
+## Alternate context/read channels
 
-### Asia-Pacific Region
+Alternates may be scanned for context and mention-directory membership. They do
+not change the primary channel used to start a Review discussion.
 
-The Asia-Pacific region has **two separate "East Asia" markets**:
-- **East Asia (JPN, SK, HK)**: Japan + South Korea + Hong Kong
-- **East Asia (CN, TW)**: China + Taiwan
+| Market | Alternate channel IDs |
+|---|---|
+| East Asia | `C01C4NPLYN6` (Hong Kong), `C01CARUM1CL` (Korea), `C0809DN93DH` (China/Taiwan) |
+| Oceania | `C039TMH0GEP` (New Zealand), `C097DVBLHGS` (Fiji) |
+| South East Asia | `C03R4UJ4DHC` (Thailand), `C01CHADFPAM` (Malaysia), `C03US4WRHB6` (Indonesia), `C05D50N5BQW` (Vietnam) |
 
-These are distinct markets with different channel mappings.
+## Excluded global route
 
----
+| Route | Slack alert channel | Review behavior |
+|---|---|---|
+| Headout/global | `#team-central-biz` (`C0975BGAX0B`) | Weekly alert only; no Review tab and no Review discussion composer |
 
-## Regional Rollups
+## Authorization and routing rules
 
-Some markets don't have dedicated channels and roll up to regional channels:
+- The authenticated user must independently pass the BGM/GM/admin allowlist.
+  Slack membership alone never grants Review access.
+- The server validates the submitted channel ID against the market mapping.
+- Missing or failed CE-thread discovery never falls back to “no thread.”
+- Shared channels do not merge market data: every request remains scoped by
+  `market_slug + review_week + stable CE ID`.
+- New channels require a runtime-map update, bot invitation, contract-test
+  update, and this document change in the same reviewed release.
 
-| Market | Rolls Up To | Channel | Channel ID | Notes |
-|--------|-------------|---------|------------|-------|
-| **Benelux** | UK | #mkt-uk | `CKTFHT4AF` | Belgium, Luxembourg, Netherlands |
-| **Nordics** | CSEE | #mkt-csee | `CSQ10TALA` | Denmark, Finland, Iceland, Norway, Sweden |
-| **GCC** | MENA | #mkt-mena | `C046622L80Z` | Bahrain, Oman, Qatar, Saudi Arabia |
-| **South America** | Iberia | #mkt-iberia | `CH2LRMJF2` | 5 countries |
-| **Mexico & Central America** | Iberia | #mkt-iberia | `CH2LRMJF2` | 7 countries |
+## Source-of-truth checks
 
----
-
-## Multi-Channel Markets
-
-These markets require reading **multiple** Slack channels:
-
-### East Asia (JPN, SK, HK)
-- #mkt-japan (`CQD6220VB`)
-- #mkt-hongkong (`C01C4NPLYN6`)
-- #mkt-korea (`C01CARUM1CL`)
-
-### Oceania (Australia + New Zealand + Fiji)
-- #mkt-australia (`CHKRLFDPU`)
-- #mkt-new-zealand (`C039TMH0GEP`)
-- mkt-fiji (`C097DVBLHGS`)
-
-### SEA (SIN + THA)
-- #mkt-singapore (`C5WFYN82H`)
-- #mkt-thailand (`C03R4UJ4DHC`)
-
-### SEA (MLY + IND + VN)
-- #mkt-malaysia (`C01CHADFPAM`)
-- #mkt-indonesia (`C03US4WRHB6`)
-- #mkt-vietnam (`C05D50N5BQW`)
-
----
-
-## CSEE Country Breakdown
-
-**CSEE (Central and Southeast Europe)** includes **23 countries**:
-- Albania
-- Austria
-- Bosnia and Herzegovina
-- Bulgaria
-- Croatia
-- Czech Republic
-- Estonia
-- Germany
-- Greece
-- Hungary
-- Latvia
-- Moldova
-- Montenegro
-- North Macedonia
-- Poland
-- Romania
-- Serbia
-- Slovakia
-- Slovenia
-- Turkey
-
-All CSEE countries share the same Slack channel: **#mkt-csee** (`CSQ10TALA`)
-
-**Nordics also roll up to CSEE channel**: Denmark, Finland, Iceland, Norway, Sweden
-
----
-
-## Global Context Channels (Always Read)
-
-These channels should be read for **every** weekly review regardless of which markets are notable:
-
-| Channel | Channel ID | Purpose |
-|---------|------------|---------|
-| #tf-bugalert | `C038T64PD` | Bugs impacting revenue or metrics |
-| #pod-live-entertainment | `C042A57T52Q` | Live entertainment pod updates (also a market category) |
-
----
-
-## Usage in Weekly Review
-
-### Stage 3b: Read Market Channels
-
-For each notable market in the weekly review (top 3 structural decliners + top 3 structural growers):
-
-1. **Find the market** in the table above
-2. **Note the channel(s)** - some markets have multiple channels
-3. **Use validated timestamps** from `scripts/get_slack_timestamps.py`
-4. **Call Slack API** for each channel:
-
-```python
-slack_read_channel(
-  channel_id="CHANNEL_ID",
-  oldest="1772994600",    # From validation script
-  latest="1773599399"
-)
-```
-
-5. **For multi-channel markets**, read all listed channels
-6. **For rollup markets**, read the rollup channel (e.g., South America → #mkt-iberia)
-
-### What to Look For
-
-In each channel, look for:
-- **Supply issues**: Inventory, availability, closures, maintenance
-- **Campaign changes**: Paused ads, new experiments, budget shifts
-- **Competitor activity**: Price changes, new entrants
-- **External events**: Weather, holidays, local events, regulations
-
----
-
-## Updating This Mapping
-
-This mapping should be updated when:
-- New markets are added to Headout's portfolio
-- Markets are reorganized (e.g., MENA → UAE + Egypt + Morocco)
-- New Slack channels are created for existing markets
-- Channel IDs change (rare, but possible during Slack workspace migrations)
-
-**Update locations:**
-- This file: `docs/weekly-review/MARKET_CHANNEL_MAPPING.md`
-- Main README: `docs/weekly-review/README.md` (abbreviated table)
-- Skill file: `plugins/weekly-growth-review/commands/weekly-review.md` (abbreviated table)
-
----
-
----
-
-## ✅ Complete Coverage
-
-All 21 markets now have verified Slack channel IDs. The mapping is complete and ready for use in weekly reviews.
-
-**Verified against:**
-- ✅ BigQuery `dim_combined_entities` table (market-country-region mappings)
-- ✅ Slack workspace (channel names and IDs)
-
----
-
-**Last updated:** 2026-03-17 (verified against BQ and Slack)
+The contract suite compares every market primary channel in the frontend and
+isolated backend. `alert/market_channels.json` remains authoritative for weekly
+alert delivery, not for the North America Review override. This document was
+reconciled to runtime on 31 Aug 2026.

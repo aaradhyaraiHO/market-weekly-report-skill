@@ -11,6 +11,7 @@ VIEW = (ROOT / "scripts/weekly_report/review/review-view.js").read_text()
 BACKEND = (ROOT / "scripts/weekly_report/notes/review_apps_script.js").read_text()
 INJECTOR = (ROOT / "scripts/weekly_report/inject_review_view.py").read_text()
 TEMPLATE = (ROOT / "scripts/weekly_report/template/report_v2_template.html").read_text()
+CHANNEL_DOC = (ROOT / "docs/weekly-review/MARKET_CHANNEL_MAPPING.md").read_text()
 CHANNELS = json.loads((ROOT / "alert/market_channels.json").read_text())["markets"]
 
 
@@ -44,12 +45,17 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
     def test_all_market_primary_channels_match_authoritative_alert_map(self):
         self.assertEqual(len(CHANNELS), 18)
         for market, channel in CHANNELS.items():
+            if market == "headout":
+                continue
             if market == "north_america":
                 channel = "C0BQHT29WMB"
             self.assertRegex(BACKEND, rf"{re.escape(market)}:\[\"{re.escape(channel)}\"")
             self.assertIn(f'{market}:{{id:"{channel}"', VIEW)
+            self.assertIn(f"`{channel}`", CHANNEL_DOC)
         self.assertIn("Slack channel does not match Review market routing", BACKEND)
         self.assertIn('S.market_slug === "north_america" ? MARKET_CHANNELS.north_america', VIEW)
+        self.assertIn("Headout/global", CHANNEL_DOC)
+        self.assertIn("no Review tab", CHANNEL_DOC)
 
     def test_history_is_read_only_ce_id_scoped_and_fail_soft(self):
         self.assertIn("reviewStableCeId", BACKEND)
@@ -65,11 +71,11 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
         self.assertIn("duplicates:duplicates", BACKEND)
         self.assertIn("duplicate_count", VIEW)
 
-    def test_sparse_dense_and_headout_shapes_remain_fail_soft(self):
+    def test_sparse_dense_and_global_shapes_remain_fail_soft(self):
         for fixture in ("sparse", "dense", "global"):
             path = ROOT / f"tests/weekly_report/fixtures/captured/snapshot_{fixture}_2026-08-02.json.gz"
             self.assertTrue(path.is_file())
-        self.assertIn('headout:{id:"C0975BGAX0B"', VIEW)
+        self.assertNotIn('headout:{id:', VIEW)
         self.assertIn("Missing history never blocks this report", VIEW)
 
     def test_navigation_paints_before_remote_review_state(self):

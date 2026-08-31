@@ -87,8 +87,9 @@ The Post button reuses the existing **`REVENUE_ALERT_SLACK_TOKEN`** bot
    - `chat:write`
    - `channels:history` (public market channels)
    - `users:read` (human-readable reply attribution; user ID is the fallback)
-3. **Invite the bot to each configured market channel** it will post to:
-   - `/invite @Monthly Market Review` in `#mkt-usa`, `#mkt-italy-switzerland-malta`, `#mkt-anz`
+3. **Invite the bot to each configured Review channel** it will post to. Use
+   `docs/weekly-review/MARKET_CHANNEL_MAPPING.md`; North America Review uses
+   `#adhoc-north-america`, not the weekly-alert `#mkt-usa` route.
 4. Redeploy only the isolated Review project so the property is picked up.
 
 Optional AI adapter:
@@ -191,15 +192,14 @@ market scope curated in `review_slack_people`.
 
 ## 4. Channel map
 
-Market → channel is in `config.py` → `NOTES_SLACK_CHANNELS`:
+The runtime authority is `REVIEW_MARKET_SLACK_CHANNELS` in the isolated Review
+Apps Script, mirrored by `MARKET_CHANNELS` in the Review UI. The reviewed human
+reference is `docs/weekly-review/MARKET_CHANNEL_MAPPING.md`. Review currently
+supports the 17 market reports; Headout/global is intentionally excluded.
 
-| Market | Channel | ID |
-|--------|---------|-----|
-| north_america | #mkt-usa | CNSHDD2H1 |
-| italy | #mkt-italy-switzerland-malta | C045L2WQ79P |
-| oceania | #mkt-anz | CHKRLFDPU |
-
-Add a market by adding a row here (and inviting the bot to that channel).
+Add or reroute a market only by updating both runtime maps, the mapping contract
+test and the reference document together, then inviting the bot to every listed
+primary/alternate channel. Weekly alert routing remains a separate contract.
 
 ## 5. Test
 

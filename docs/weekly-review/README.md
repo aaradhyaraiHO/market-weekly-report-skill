@@ -115,30 +115,11 @@ slack_read_channel(
 )
 ```
 
-**Market → Channel Mapping:**
-
-| Market | Region | Channel(s) | Notes |
-|--------|--------|-----------|-------|
-| **North America** | North America | #mkt-usa | USA, Canada, Bahamas |
-| **Central Live Entertainment** | Central Categories | #pod-live-entertainment | Cross-market category |
-| **Italy** | Europe | #mkt-italy | Italy, Malta, Switzerland |
-| **France** | Europe | #mkt-france | France, Monaco |
-| **Iberia** | Europe | #mkt-iberia | Andorra, Portugal, Spain |
-| **CSEE** | Europe | #mkt-csee | 23 countries (see MARKET_CHANNEL_MAPPING.md) |
-| **United Kingdom** | Europe | #mkt-uk | UK, Ireland |
-| **Benelux** | Europe | #mkt-uk | Belgium, Luxembourg, Netherlands → uses UK channel |
-| **Nordics** | Europe | #mkt-csee | Denmark, Finland, Iceland, Norway, Sweden → uses CSEE channel |
-| **East Asia (JPN, SK, HK)** | Asia-Pacific | #mkt-japan, #mkt-hongkong, #mkt-korea | Japan + South Korea + Hong Kong (3 channels) |
-| **Oceania** | Asia-Pacific | #mkt-australia, #mkt-new-zealand, mkt-fiji | Australia + New Zealand + Fiji (3 channels) |
-| **SEA (SIN + THA)** | Asia-Pacific | #mkt-singapore, #mkt-thailand | Singapore + Thailand |
-| **SEA (MLY + IND + VN)** | Asia-Pacific | #mkt-malaysia, #mkt-indonesia, #mkt-vietnam | Malaysia + Indonesia + Vietnam |
-| **East Asia (CN, TW)** | Asia-Pacific | #mkt-china-taiwan | China, Macao, Taiwan |
-| **South America** | LATAM | #mkt-iberia | Argentina, Brazil, Chile, Colombia, Peru → uses Iberia channel |
-| **Mexico & Central America** | LATAM | #mkt-iberia | 7 countries → uses Iberia channel |
-| **United Arab Emirates** | Middle East and North Africa | #mkt-mena | UAE |
-| **GCC** | Middle East and North Africa | #mkt-mena | Bahrain, Oman, Qatar, Saudi Arabia → uses MENA channel |
-| **Egypt** | Middle East and North Africa | mkt-mena-expansion-internal | Egypt |
-| **Morocco** | Middle East and North Africa | mkt-mena-expansion-internal | Morocco |
+**Market → Channel Mapping:** use the single maintained reference in
+[`MARKET_CHANNEL_MAPPING.md`](MARKET_CHANNEL_MAPPING.md). It distinguishes the
+primary Review posting channel from alternate context channels and the separate
+weekly-alert route. Do not copy the table into this guide: Mexico, GCC and the
+North America Review override have changed independently in the past.
 
 Look for:
 - Supply issues (inventory, availability, closures)

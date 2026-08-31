@@ -11,6 +11,11 @@ import sys
 from pathlib import Path
 
 
+def is_headout_report(path: Path) -> bool:
+    stem = path.stem
+    return stem == "weekly-report-headout" or stem.startswith("weekly-report-headout-20")
+
+
 def verify(directory: Path, report: str) -> list[str]:
     # Review is only testable as a whole when the authenticated Granola-link
     # route ships with the same artifact as the report and Review proxy.
@@ -24,11 +29,14 @@ def verify(directory: Path, report: str) -> list[str]:
     if not reports:
         failures.append("no weekly report pages found")
         return failures
-    # A partial Review rollout is worse than no rollout: every generated
-    # market report must carry the same Review bootstrap before this artifact
-    # is eligible even for Preview.
+    # Review is market-scoped. Headout/global is deliberately excluded; every
+    # market report must still carry the same bootstrap.
     for page in reports:
         shell = page.read_text()
+        if is_headout_report(page):
+            if 'id="review-view"' in shell or "initReviewView" in shell or 'data-report-view="review"' in shell:
+                failures.append(f"{page.name} must not contain Review")
+            continue
         if 'id="review-view"' not in shell:
             failures.append(f"{page.name} has no Review container")
         if "initReviewView" not in shell:

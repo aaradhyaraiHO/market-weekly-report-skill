@@ -42,7 +42,7 @@
     gcc:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},north_africa:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},
     rest_of_mea:{id:"C0889D22PM5",name:"mkt-mena-expansion-internal"},benelux:{id:"CKTFHT4AF",name:"mkt-uk"},
     nordics:{id:"CSQ10TALA",name:"mkt-csee"},south_america:{id:"CH2LRMJF2",name:"mkt-iberia"},
-    mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"},headout:{id:"C0975BGAX0B",name:"team-central-biz"}
+    mexico_central_america:{id:"C012949PQ81",name:"mkt-mexico"}
   };
 
   global.initReviewView = function initReviewView(ctx) {
@@ -1201,10 +1201,10 @@
         '<button class="rv-memory-tab" type="button" data-mem="work">Work</button>' +
         '<button class="rv-memory-tab" type="button" data-mem="comments">Historical comments</button>' +
         '<button class="rv-memory-tab" type="button" data-mem="perf">Perf history</button></div>' +
-        '<div class="rv-memory-panel" id="rv-mem-story">' + storyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-work" hidden>' + workTab + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-comments" hidden>' + legacyPanel + "</div>" +
-        '<div class="rv-memory-panel" id="rv-mem-perf" hidden>' + perfPanel + "</div>";
+        '<div class="rv-memory-panel" id="rv-mem-story"><div class="rv-memory-intro"><strong>Review story</strong><span>Approved weekly context, Slack discussions, summaries and Review events.</span></div>' + storyPanel + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-work" hidden><div class="rv-memory-intro"><strong>Actions &amp; receipts</strong><span>Committed Review actions, scheduled checks and completed-review receipts.</span></div>' + workTab + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-comments" hidden><div class="rv-memory-intro"><strong>Historical comments</strong><span>Read-only CE comments from the legacy notes table.</span></div>' + legacyPanel + "</div>" +
+        '<div class="rv-memory-panel" id="rv-mem-perf" hidden><div class="rv-memory-intro"><strong>Performance history</strong><span>Read-only Performance actions from the legacy actions table.</span></div>' + perfPanel + "</div>";
     }
     function wireMemory(body) {
       body.querySelectorAll(".rv-memory-tab").forEach(function (b) {
