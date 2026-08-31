@@ -116,17 +116,18 @@
     .okr-head p { margin:5px 0 0; color:var(--muted); font-size:12px; }
     .okr-tracker-link { color:var(--purple-dark); font-size:11px; font-weight:500; text-decoration:none; white-space:nowrap; }
     .okr-tracker-link:hover { color:var(--purple); text-decoration:underline; }
-    .okr-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-    .okr-card { display:flex; flex-direction:column; min-width:0; min-height:184px; padding:20px; border:1px solid var(--line-dark); border-radius:var(--radius-card); background:var(--surface); box-shadow:var(--shadow-1); }
+    .okr-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .okr-card { display:flex; flex-direction:column; min-width:0; min-height:162px; padding:16px; border:1px solid var(--line-dark); border-radius:var(--radius-card); background:var(--surface); box-shadow:var(--shadow-1); }
     .okr-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
     .okr-card h3 { margin:0; font-size:14px; line-height:20px; font-weight:600; text-wrap:balance; }
     .okr-status { display:inline-flex; align-items:center; gap:6px; flex:none; font-size:10px; font-weight:500; white-space:nowrap; }
     .okr-status::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; }
     .okr-status.risk { color:var(--amber); }.okr-status.track { color:var(--green); }
-    .okr-market-label { margin-top:24px; color:var(--muted); font-size:10px; line-height:12px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
-    .okr-current { margin-top:6px; font-family:var(--font-display); font-size:26px; line-height:32px; font-weight:500; font-variant-numeric:tabular-nums; }
+    .okr-market-label { margin-top:14px; color:var(--muted); font-size:10px; line-height:12px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
+    .okr-current { margin-top:5px; font-family:var(--font-display); font-size:24px; line-height:29px; font-weight:500; font-variant-numeric:tabular-nums; }
     .okr-detail { margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.45; text-wrap:pretty; }
-    .okr-card-foot { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:auto; padding-top:15px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }
+    .okr-card-foot { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:auto; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }
+    .okr-card-foot .detail-button { min-height:36px; padding:0 10px; font-size:10px; }
     .okr-card-foot a { color:var(--purple-dark); font-weight:500; text-decoration:none; }
     .okr-card-foot a:hover { color:var(--purple); text-decoration:underline; }
     .data-note { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px 14px 26px; border-top:1px solid var(--line); color:var(--muted); background:var(--soft); font-size:10px; }
@@ -401,6 +402,7 @@
     .ce-tool:disabled { cursor:not-allowed; opacity:.46; }
     .ce-filter-chips { display:grid; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); background:var(--soft); }
     .ce-filter-group { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .ce-filter-group.okr-filter-group { padding-bottom:10px; border-bottom:1px solid var(--line); }
     .ce-filter-label { width:82px; color:var(--muted); font-size:9px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
     .ce-chip-filter { min-height:32px; padding:0 10px; border:1px solid var(--line); border-radius:16px; color:var(--muted); background:var(--surface); font-size:9px; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
     .ce-chip-filter:hover { color:var(--ink); border-color:var(--purple); }
@@ -631,7 +633,7 @@
       .target-detail-grid { grid-template-columns:1fr; }
       .target-detail + .target-detail { border-left:0; border-top:1px solid var(--line); }
       .drawer { width:min(760px,100vw); }
-      .okr-grid { grid-template-columns:1fr; }
+      .okr-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .ce-context-controls { grid-template-columns:1fr 1fr; }
       .ce-context-controls .ce-reset { grid-column:1/-1; }
       .ce-contribution-row { grid-template-columns:110px minmax(140px,1fr) 150px; }
@@ -658,6 +660,7 @@
       .target-summary { grid-template-columns:1fr; }
       .target-card + .target-card { border-left:0; border-top:1px solid var(--line); }
       .okr-head { align-items:flex-start; flex-direction:column; gap:8px; }
+      .okr-grid { grid-template-columns:1fr; }
       .drawer-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .drawer-kpi:nth-child(odd) { border-left:0; }
       .drawer-kpi:nth-child(n+3) { border-top:1px solid var(--line); }
@@ -1141,7 +1144,8 @@
           {key:'category',label:'Category'},{key:'management_type',label:'Management'},{key:'growth_stage',label:'Evolution'},{key:'lifecycle',label:'Lifecycle'},{key:'tier',label:'Tier'},{key:'__tag',label:'Custom tags',values:customTags},
         ];
         const box=document.getElementById('ce-filter-chips');
-        box.innerHTML=specs.map(spec=>{const values=spec.values||[...new Set(all.map(ce=>ce[spec.key]).filter(Boolean))].sort().map(value=>({value,label:value}));if(!values.length)return '';const counts={};values.forEach(entry=>counts[entry.value]=all.filter(ce=>spec.key==='bucket'?(ce.buckets||[]).some(bucket=>bucket.key===entry.value):spec.key==='__tag'?portfolioFor(ce.ce_id).tags.includes(entry.value):ce[spec.key]===entry.value).length);return `<div class="ce-filter-group"><span class="ce-filter-label">${spec.label}</span>${values.map(entry=>`<button class="ce-chip-filter ${(ceState.filters[spec.key]||[]).includes(entry.value)?'active':''}" type="button" data-ce-filter="${spec.key}" data-ce-filter-value="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}<span class="ce-chip-count">${counts[entry.value]}</span></button>`).join('')}</div>`;}).join('');
+        const okrFilter=ceState.okrIds?`<div class="ce-filter-group okr-filter-group"><span class="ce-filter-label">OKR cohort</span><button class="ce-chip-filter active" type="button" data-clear-okr-cohort aria-label="Clear ${escapeHtml(ceState.okrCohortLabel||'selected OKR')} cohort filter">${escapeHtml(ceState.okrCohortLabel||'Selected OKR')}<span class="ce-chip-count">${count(ceState.okrIds.size)}</span><span aria-hidden="true">×</span></button></div>`:'';
+        box.innerHTML=okrFilter+specs.map(spec=>{const values=spec.values||[...new Set(all.map(ce=>ce[spec.key]).filter(Boolean))].sort().map(value=>({value,label:value}));if(!values.length)return '';const counts={};values.forEach(entry=>counts[entry.value]=all.filter(ce=>spec.key==='bucket'?(ce.buckets||[]).some(bucket=>bucket.key===entry.value):spec.key==='__tag'?portfolioFor(ce.ce_id).tags.includes(entry.value):ce[spec.key]===entry.value).length);return `<div class="ce-filter-group"><span class="ce-filter-label">${spec.label}</span>${values.map(entry=>`<button class="ce-chip-filter ${(ceState.filters[spec.key]||[]).includes(entry.value)?'active':''}" type="button" data-ce-filter="${spec.key}" data-ce-filter-value="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}<span class="ce-chip-count">${counts[entry.value]}</span></button>`).join('')}</div>`;}).join('');
       }
       function ceTableHeader() {
         const anyExpanded=ceAnyMetricExpanded(),staticRowspan=anyExpanded?2:1;
@@ -1478,7 +1482,7 @@
       weekSelect.addEventListener('change',()=>{render(Number(weekSelect.value));actionSyncPull();actionPrevPull();});
       document.querySelectorAll('[data-report-view]').forEach(button=>button.addEventListener('click',()=>{ const view=button.dataset.reportView; document.getElementById('overview-view').hidden=view!=='overview'; document.getElementById('all-ces-view').hidden=view!=='all-ces'; document.querySelectorAll('[data-report-view]').forEach(item=>{ const active=item===button; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current'); }); }));
       document.querySelector('.attention').addEventListener('click',event=>{const sortButton=event.target.closest('[data-mover-sort][data-mover-kind]');if(sortButton){const kind=sortButton.dataset.moverKind,state=moverSorts[kind],key=sortButton.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'?1:(kind==='drops'?1:-1);}renderMovers(currentHeadline(),kind);return;}const mover=event.target.closest('[data-mover-ce]');if(mover)openCeDrawer(mover.dataset.moverCe);});
-      document.getElementById('okr-grid').addEventListener('click',event=>{const trigger=event.target.closest('[data-okr-drilldown]');if(!trigger)return;const row=(currentHeadline().market_okrs||[]).find(value=>value.id===trigger.dataset.okrDrilldown),ids=row?.drilldown?.ce_ids||[];if(!ids.length)return;ceState.okrIds=new Set(ids.map(String));ceState.okrCohortLabel=row.label||'Selected OKR';ceState.page=1;document.querySelector('[data-report-view="all-ces"]').click();renderAllCes(currentHeadline());});
+      document.getElementById('okr-grid').addEventListener('click',event=>{const trigger=event.target.closest('[data-okr-drilldown]');if(!trigger)return;const row=(currentHeadline().market_okrs||[]).find(value=>value.id===trigger.dataset.okrDrilldown),ids=row?.drilldown?.ce_ids||[];if(!ids.length)return;ceState.okrIds=new Set(ids.map(String));ceState.okrCohortLabel=row.label||'Selected OKR';ceState.filtersOpen=true;ceState.page=1;document.querySelector('[data-report-view="all-ces"]').click();renderAllCes(currentHeadline());});
       function collapseFilteredGroups(){if(!ceState.group)return;const labels=[...new Set(ceFilteredRows(currentHeadline()).map(ce=>ceGroupValue(ce)))];ceState.collapsed=Object.fromEntries(labels.map(label=>[label,true]));}
       countrySelect.addEventListener('change',()=>{selectedCountry=countrySelect.value;ceState.page=1;collapseFilteredGroups();render(Number(weekSelect.value));});
       document.getElementById('ce-search').addEventListener('input',event=>{ceState.search=event.target.value;ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
@@ -1487,7 +1491,7 @@
       document.getElementById('ce-reset').addEventListener('click',()=>{Object.assign(ceState,{search:'',group:'',filters:{},collapsed:{},expanded:{},watchOnly:false,topMovers:false,okrIds:null,okrCohortLabel:'',sortKey:'revenue',sortDir:-1,page:1});document.getElementById('ce-search').value='';document.getElementById('ce-group').value='';renderAllCes(currentHeadline());});
       document.getElementById('okr-cohort-note').addEventListener('click',event=>{if(!event.target.closest('[data-clear-okr-cohort]'))return;ceState.okrIds=null;ceState.okrCohortLabel='';ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-table-head').addEventListener('click',event=>{const expand=event.target.closest('[data-ce-expand]');if(expand){const key=expand.dataset.ceExpand;ceState.expanded[key]=!ceState.expanded[key];renderAllCes(currentHeadline());ceRevealMetric(key);return;}const button=event.target.closest('[data-ce-sort]');if(!button)return;const key=button.dataset.ceSort;ceState.topMovers=false;ceState.page=1;if(ceState.sortKey===key)ceState.sortDir*=-1;else{ceState.sortKey=key;ceState.sortDir=key==='ce_name'?1:-1;}renderAllCes(currentHeadline());});
-      document.getElementById('ce-filter-chips').addEventListener('click',event=>{const button=event.target.closest('[data-ce-filter]');if(!button)return;const key=button.dataset.ceFilter,value=button.dataset.ceFilterValue,selected=ceState.filters[key]||[];ceState.filters[key]=selected.includes(value)?selected.filter(item=>item!==value):[...selected,value];ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
+      document.getElementById('ce-filter-chips').addEventListener('click',event=>{if(event.target.closest('[data-clear-okr-cohort]')){ceState.okrIds=null;ceState.okrCohortLabel='';ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());return;}const button=event.target.closest('[data-ce-filter]');if(!button)return;const key=button.dataset.ceFilter,value=button.dataset.ceFilterValue,selected=ceState.filters[key]||[];ceState.filters[key]=selected.includes(value)?selected.filter(item=>item!==value):[...selected,value];ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-pagination').addEventListener('click',event=>{if(event.target.closest('#ce-page-previous'))ceState.page-=1;else if(event.target.closest('#ce-page-next'))ceState.page+=1;else return;renderAllCes(currentHeadline());document.querySelector('.ce-table-wrap').scrollIntoView({block:'start'});});
       document.getElementById('ce-top-movers').addEventListener('click',()=>{ceState.topMovers=!ceState.topMovers;ceState.page=1;if(ceState.topMovers){ceState.sortKey='__mover';ceState.sortDir=-1;}else{ceState.sortKey='revenue';ceState.sortDir=-1;}renderAllCes(currentHeadline());});
       document.getElementById('ce-watch-only').addEventListener('click',()=>{ceState.watchOnly=!ceState.watchOnly;ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});

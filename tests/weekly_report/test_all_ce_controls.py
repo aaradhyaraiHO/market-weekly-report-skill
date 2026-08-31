@@ -36,8 +36,14 @@ class AllCeControlsContract(unittest.TestCase):
     def test_okr_cohort_is_visible_and_clearable_in_all_ces(self):
         self.assertIn('id="okr-cohort-note"', self.html)
         self.assertIn('data-clear-okr-cohort', self.html)
+        self.assertIn('class="ce-filter-group okr-filter-group"', self.html)
+        self.assertIn("ceState.filtersOpen=true", self.html)
         self.assertIn("okrCohortLabel", self.html)
         self.assertIn("okrIds:null,okrCohortLabel:''", self.html)
+
+    def test_selected_okrs_use_a_compact_four_up_desktop_layout(self):
+        self.assertIn(".okr-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr));", self.html)
+        self.assertIn(".okr-card { display:flex; flex-direction:column; min-width:0; min-height:162px;", self.html)
 
 
 if __name__ == "__main__":
