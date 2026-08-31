@@ -109,6 +109,26 @@
     .runway-label.forecast { color:var(--purple); transform:translateX(-50%); }
     .runway-label.goal { right:0; text-align:right; }
     .goal-line { margin-top:22px; padding-top:18px; border-top:1px solid var(--purple-soft); color:var(--muted); font-size:11px; line-height:1.55; }
+    .market-okrs { margin-top:32px; }
+    .market-okrs[hidden] { display:none; }
+    .okr-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:14px; }
+    .okr-head h2 { margin:4px 0 0; font-family:var(--font-display); font-size:24px; line-height:30px; font-weight:500; text-wrap:balance; }
+    .okr-head p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .okr-tracker-link { color:var(--purple-dark); font-size:11px; font-weight:500; text-decoration:none; white-space:nowrap; }
+    .okr-tracker-link:hover { color:var(--purple); text-decoration:underline; }
+    .okr-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .okr-card { display:flex; flex-direction:column; min-width:0; min-height:184px; padding:20px; border:1px solid var(--line-dark); border-radius:var(--radius-card); background:var(--surface); box-shadow:var(--shadow-1); }
+    .okr-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .okr-card h3 { margin:0; font-size:14px; line-height:20px; font-weight:600; text-wrap:balance; }
+    .okr-status { display:inline-flex; align-items:center; gap:6px; flex:none; font-size:10px; font-weight:500; white-space:nowrap; }
+    .okr-status::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; }
+    .okr-status.risk { color:var(--amber); }.okr-status.track { color:var(--green); }
+    .okr-market-label { margin-top:24px; color:var(--muted); font-size:10px; line-height:12px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
+    .okr-current { margin-top:6px; font-family:var(--font-display); font-size:26px; line-height:32px; font-weight:500; font-variant-numeric:tabular-nums; }
+    .okr-detail { margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.45; text-wrap:pretty; }
+    .okr-card-foot { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:auto; padding-top:15px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }
+    .okr-card-foot a { color:var(--purple-dark); font-weight:500; text-decoration:none; }
+    .okr-card-foot a:hover { color:var(--purple); text-decoration:underline; }
     .data-note { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px 14px 26px; border-top:1px solid var(--line); color:var(--muted); background:var(--soft); font-size:10px; }
     .data-note-copy { display:flex; gap:16px; flex-wrap:wrap; }
     .detail-button,.drawer-close { display:inline-flex; align-items:center; justify-content:center; min-height:40px; border:1px solid var(--line-dark); border-radius:var(--radius-control); background:var(--surface); font-weight:500; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
@@ -355,6 +375,10 @@
     .ce-manage-button:active { transform:scale(.96); }
     .ce-filter-count { min-width:19px; height:19px; display:none; place-items:center; border-radius:10px; color:white; background:var(--purple); font-size:9px; font-variant-numeric:tabular-nums; }
     .ce-filter-count[data-active="true"] { display:grid; }
+    .okr-cohort-note { display:inline-flex; align-items:center; gap:8px; margin:10px 0 0; color:var(--purple-dark); font-size:11px; font-weight:500; }
+    .okr-cohort-clear { min-height:28px; padding:0 9px; border:1px solid var(--purple-line); border-radius:8px; color:var(--purple-dark); background:var(--purple-soft); font:inherit; font-size:10px; cursor:pointer; transition-property:color,background-color,border-color,transform; transition-duration:120ms; }
+    .okr-cohort-clear:hover { color:var(--purple); background:var(--surface); }
+    .okr-cohort-clear:active { transform:scale(.96); }
     .ce-filter-panel[hidden] { display:none; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .ce-context-controls { display:grid; grid-template-columns:minmax(280px,1.4fr) minmax(190px,.7fr) auto; align-items:end; gap:10px; padding:14px 18px 18px; border-bottom:1px solid var(--line); background:var(--soft); }
@@ -607,6 +631,7 @@
       .target-detail-grid { grid-template-columns:1fr; }
       .target-detail + .target-detail { border-left:0; border-top:1px solid var(--line); }
       .drawer { width:min(760px,100vw); }
+      .okr-grid { grid-template-columns:1fr; }
       .ce-context-controls { grid-template-columns:1fr 1fr; }
       .ce-context-controls .ce-reset { grid-column:1/-1; }
       .ce-contribution-row { grid-template-columns:110px minmax(140px,1fr) 150px; }
@@ -632,6 +657,7 @@
       .detail-button { width:100%; }
       .target-summary { grid-template-columns:1fr; }
       .target-card + .target-card { border-left:0; border-top:1px solid var(--line); }
+      .okr-head { align-items:flex-start; flex-direction:column; gap:8px; }
       .drawer-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .drawer-kpi:nth-child(odd) { border-left:0; }
       .drawer-kpi:nth-child(n+3) { border-top:1px solid var(--line); }
@@ -707,6 +733,10 @@
             <section class="runway"><div class="visual-head"><div><h3 class="visual-title" id="runway-title">Monthly revenue runway</h3><p class="visual-sub" id="runway-sub">Month-to-date, projected close and goal</p></div><div class="runway-gap" id="runway-gap"></div></div><div class="runway-body" id="runway-body"></div></section>
           </div>
         </article>
+        <section class="market-okrs" id="market-okrs" aria-labelledby="market-okrs-title" hidden>
+          <header class="okr-head"><div><div class="section-kicker">Market contribution</div><h2 id="market-okrs-title">Selected OKRs</h2><p>How this market contributes to the selected company priorities.</p></div><a class="okr-tracker-link" href="https://okr.headout.com/okr-tracker" target="_blank" rel="noopener">Open OKR tracker ↗</a></header>
+          <div class="okr-grid" id="okr-grid"></div>
+        </section>
         <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>Shows up to five CEs with the largest revenue drops or gains, using whichever move is greater: versus last week or the trailing four-week average. Sort any column for a different view, or select a CE to open its detail.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Largest negative revenue moves · up to 5</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Largest positive revenue moves · up to 5</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
         <div class="diagnostic-buckets" id="diagnostic-buckets" aria-label="V1 diagnostic buckets">
           <section id="losing-money-section"></section>
@@ -720,12 +750,11 @@
         </div>
       </div>
       <section class="all-ce-view report-view" id="all-ces-view" hidden aria-labelledby="all-ces-title">
-        <header class="all-ce-hero"><div><div class="section-kicker">Portfolio explorer</div><h2 id="all-ces-title">All combined entities</h2><p>Every V1 All-CE metric and workflow remains available. Search, group and compare the portfolio before opening a CE deep dive.</p></div><div class="ce-summary"><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-count">—</strong><span class="ce-summary-label" id="ce-summary-count-label">CEs shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-revenue">—</strong><span class="ce-summary-label">Revenue shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-share">—</strong><span class="ce-summary-label" id="ce-summary-share-label">Market share</span></div></div></header>
+        <header class="all-ce-hero"><div><div class="section-kicker">Portfolio explorer</div><h2 id="all-ces-title">All combined entities</h2><p>Search, filter and compare the portfolio, then open any entity for a detailed view.</p><div class="okr-cohort-note" id="okr-cohort-note" hidden></div></div><div class="ce-summary"><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-count">—</strong><span class="ce-summary-label" id="ce-summary-count-label">CEs shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-revenue">—</strong><span class="ce-summary-label">Revenue shown</span></div><div class="ce-summary-item"><strong class="ce-summary-value" id="ce-summary-share">—</strong><span class="ce-summary-label" id="ce-summary-share-label">Market share</span></div></div></header>
         <div class="ce-panel">
           <div class="ce-primary-controls"><label class="ce-search-shell"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.7"></circle><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg><span class="sr-only">Search combined entities</span><input class="ce-input" id="ce-search" type="search" placeholder="Search CE, city, CID, category…"></label><button class="ce-filter-toggle" id="ce-filter-toggle" type="button" aria-expanded="false" aria-controls="ce-filter-panel"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span>Filters</span><span class="ce-filter-count" id="ce-filter-count">0</span></button><button class="ce-manage-button" id="ce-manage-portfolio" type="button"><span aria-hidden="true">✦</span><span>Manage portfolio</span></button></div>
           <div class="ce-context-controls">
             <label class="ce-control"><span class="ce-control-label">Group by</span><span class="ce-group-field"><select class="ce-select" id="ce-group"><option value="">No grouping</option><option value="category">Category</option><option value="subcategory">Subcategory</option><option value="city">City</option><option value="management_type">Management type</option><option value="growth_stage">Evolution</option><option value="lifecycle">Lifecycle</option><option value="tier">Tier</option><option value="bucket">Diagnostic bucket</option><option value="__custom_group">Custom group</option></select><button class="ce-tool" id="ce-collapse-groups" type="button" disabled>▸ Collapse all</button></span></label>
-            <label class="ce-control"><span class="ce-control-label">Country</span><select class="ce-select" id="ce-country"><option value="">All countries</option></select></label>
             <button class="ce-reset" id="ce-reset" type="button">Reset</button>
           </div>
           <div class="ce-filter-panel" id="ce-filter-panel" hidden><div class="ce-filter-chips" id="ce-filter-chips"></div><div class="filter-boundary" id="ce-filter-boundary"></div></div>
@@ -757,7 +786,7 @@
       const svgNS = 'http://www.w3.org/2000/svg';
       const seriesVisible = {ty:true,ly:true};
       const moverSorts = {drops:{key:'rank',dir:1},gains:{key:'rank',dir:1}};
-      const ceState = {search:'',country:'',group:'',filters:{},collapsed:{},expanded:{},filtersOpen:false,watchOnly:false,topMovers:false,sortKey:'revenue',sortDir:-1,page:1,pageSize:50};
+      const ceState = {search:'',group:'',filters:{},collapsed:{},expanded:{},filtersOpen:false,watchOnly:false,topMovers:false,okrIds:null,okrCohortLabel:'',sortKey:'revenue',sortDir:-1,page:1,pageSize:50};
       let portfolioMetadata={},portfolioLoadedKey='',portfolioPreview=null,portfolioTab='watchlist';
       let activeCe=null, ceMetricGroup='overall', ceResourceTrendMetrics=new Map();
       const ceExpandedTgids={},ceExpandedMetrics={},ceTgidBands={size:true,value:true,funnel:true,booking:true};
@@ -866,6 +895,15 @@
         method.textContent=`The forecast combines ${money(monthly.mtd_revenue)} earned through ${dateLabel(monthly.as_of)} with ${money(monthly.forecast_remaining_revenue)} expected across the remaining ${monthly.remaining_days} days at the recent four-week pace.`;
         const fetched=monthly.retrieved_at?dateLabel(monthly.retrieved_at.slice(0,10)):'unknown';
         source.textContent=`${monthLabel(monthly.month)} market target · retrieved ${fetched} · the target source does not publish an update time.`;
+      }
+      function renderMarketOkrs(item) {
+        const section=document.getElementById('market-okrs'),grid=document.getElementById('okr-grid'),rows=item.market_okrs||[];
+        section.hidden=!rows.length;
+        if(!rows.length){grid.replaceChildren();return;}
+        const status=row=>String(row.status||'');
+        const statusLabel=row=>status(row).replace(/:[a-z_]+:/g,'').trim()||'Status unavailable';
+        const statusClass=row=>/on track/i.test(status(row))?'track':'risk';
+        grid.innerHTML=rows.map(row=>`<article class="okr-card"><div class="okr-card-head"><h3>${escapeHtml(row.label||'Selected OKR')}</h3><span class="okr-status ${statusClass(row)}">${escapeHtml(statusLabel(row))}</span></div><div class="okr-market-label">${escapeHtml(item.market||'Market')} contribution</div><div class="okr-current">${escapeHtml(row.current||'—')}</div><p class="okr-detail">${escapeHtml(row.detail||'Market evidence unavailable.')}</p><footer class="okr-card-foot"><button class="detail-button" type="button" data-okr-drilldown="${escapeHtml(row.id)}">View matching CEs →</button><a href="https://okr.headout.com/okr-tracker" target="_blank" rel="noopener">View details ↗</a></footer></article>`).join('');
       }
       function renderMovers(item, kind) {
         const list=document.getElementById(`${kind}-list`),rows=[...(item.movers[kind]||[])],sort=moverSorts[kind],mode=sort.key,dir=sort.dir;
@@ -1058,11 +1096,11 @@
         return count(value);
       }
       function ceAggregate(rows, period) {
-        const sums={revenue:0,orders:0,clicks:0,paid_clicks:0,spend:0,coupon_wallet:0,cm1:0,gbv:0,gbv_completed:0,ad_conversions:0,organic_gbv:0,paid_revenue:0};
+        const sums={revenue:0,actual_revenue:0,orders:0,clicks:0,paid_clicks:0,spend:0,coupon_wallet:0,cm1:0,gbv:0,gbv_completed:0,ad_conversions:0,organic_gbv:0,paid_revenue:0};
         rows.forEach(ce=>{const source=(ce.periods&&ce.periods[period])||{};Object.keys(sums).forEach(key=>{if(source[key]!=null)sums[key]+=source[key];});});
         return {
           revenue:sums.revenue,orders:sums.orders,aov:sums.orders?sums.gbv/sums.orders:null,
-          tr_pct:sums.gbv_completed?sums.revenue/sums.gbv_completed*100:null,
+          tr_pct:sums.gbv_completed?(sums.actual_revenue||sums.revenue)/sums.gbv_completed*100:null,
           cr_pct:sums.gbv?sums.gbv_completed/sums.gbv*100:null,clicks:sums.clicks,
           cvr_pct:sums.clicks?sums.ad_conversions/sums.clicks*100:null,
           cpc:sums.paid_clicks?sums.spend/sums.paid_clicks:null,
@@ -1093,14 +1131,14 @@
         return (item.all_ces||[]).filter(ce=>{
           const custom=portfolioFor(ce.ce_id),hay=[ce.ce_name,ce.ce_id,ce.city,ce.category,ce.subcategory,ce.management_type,ce.growth_stage,ce.lifecycle,ce.tier,custom.primary_group,...custom.tags,...ce.countries].filter(Boolean).join(' ').toLowerCase();
           const chipMatch=Object.entries(ceState.filters).every(([key,selected])=>!selected.length||(key==='bucket'?selected.some(value=>(ce.buckets||[]).some(bucket=>bucket.key===value)):key==='__tag'?selected.some(value=>custom.tags.includes(value)):selected.includes(ce[key])));
-          return (!query||hay.includes(query))&&chipMatch&&(!ceState.country||ce.countries.includes(ceState.country))&&(!ceState.watchOnly||custom.watchlist);
+          return (!query||hay.includes(query))&&chipMatch&&(!ceState.watchOnly||custom.watchlist)&&(!ceState.okrIds||ceState.okrIds.has(String(ce.ce_id)));
         });
       }
       function renderCeFilters(all) {
         const customTags=[...new Set(all.flatMap(ce=>portfolioFor(ce.ce_id).tags))].sort().map(tag=>({value:tag,label:tag}));
         const specs=[
           {key:'bucket',label:'Bucket',values:[...new Map(all.flatMap(ce=>ce.buckets||[]).map(bucket=>[bucket.key,bucket])).values()].map(bucket=>({value:bucket.key,label:bucket.label}))},
-          {key:'management_type',label:'Management'},{key:'growth_stage',label:'Evolution'},{key:'lifecycle',label:'Lifecycle'},{key:'tier',label:'Tier'},{key:'__tag',label:'Custom tags',values:customTags},
+          {key:'category',label:'Category'},{key:'management_type',label:'Management'},{key:'growth_stage',label:'Evolution'},{key:'lifecycle',label:'Lifecycle'},{key:'tier',label:'Tier'},{key:'__tag',label:'Custom tags',values:customTags},
         ];
         const box=document.getElementById('ce-filter-chips');
         box.innerHTML=specs.map(spec=>{const values=spec.values||[...new Set(all.map(ce=>ce[spec.key]).filter(Boolean))].sort().map(value=>({value,label:value}));if(!values.length)return '';const counts={};values.forEach(entry=>counts[entry.value]=all.filter(ce=>spec.key==='bucket'?(ce.buckets||[]).some(bucket=>bucket.key===entry.value):spec.key==='__tag'?portfolioFor(ce.ce_id).tags.includes(entry.value):ce[spec.key]===entry.value).length);return `<div class="ce-filter-group"><span class="ce-filter-label">${spec.label}</span>${values.map(entry=>`<button class="ce-chip-filter ${(ceState.filters[spec.key]||[]).includes(entry.value)?'active':''}" type="button" data-ce-filter="${spec.key}" data-ce-filter-value="${escapeHtml(entry.value)}">${escapeHtml(entry.label)}<span class="ce-chip-count">${counts[entry.value]}</span></button>`).join('')}</div>`;}).join('');
@@ -1154,11 +1192,8 @@
         box.innerHTML=`<div class="ce-contribution-head"><strong>What drove the week · ${escapeHtml(ceState.group.replaceAll('_',' '))}</strong><span>WoW revenue movement and share of filtered revenue</span></div><div class="ce-contribution-list">${stats.sort((a,b)=>Math.abs(b.move)-Math.abs(a.move)).slice(0,10).map(row=>`<div class="ce-contribution-row"><strong>${escapeHtml(row.label)}</strong><span class="ce-contribution-track"><span class="ce-contribution-fill ${tone(row.move)}" style="width:${Math.abs(row.move)/max*50}%"></span></span><span class="ce-contribution-value ${tone(row.move)}">${signedMoney(row.move)}<small>${(100*row.revenue/total).toFixed(1)}% revenue</small></span></div>`).join('')}</div>`;
       }
       function renderAllCes(item) {
-        const all=item.all_ces||[], country=document.getElementById('ce-country');
+        const all=item.all_ces||[];
         ensurePortfolioMetadata(item);
-        const distinct=values=>[...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
-        setSelectOptions(country,distinct(all.flatMap(ce=>ce.countries||[])),'All countries','Country unavailable',ceState.country);
-        ceState.country=country.value;
         renderCeFilters(all);
         let rows=ceFilteredRows(item);
         const key=ceState.sortKey,dir=ceState.sortDir;
@@ -1186,7 +1221,8 @@
         const expandAll=document.getElementById('ce-expand-metrics');
         const watched=all.filter(ce=>portfolioFor(ce.ce_id).watchlist).length,watchOnly=document.getElementById('ce-watch-only');watchOnly.setAttribute('aria-pressed',String(ceState.watchOnly));watchOnly.textContent=`★ Watchlist only${watched?` · ${watched}`:''}`;
         document.getElementById('ce-top-movers').setAttribute('aria-pressed',String(ceState.topMovers));expandAll.setAttribute('aria-pressed',String(anyExpanded));expandAll.textContent=anyExpanded?'⇔ Collapse all metrics':'⇔ Expand all metrics';
-        const activeFilterCount=Object.values(ceState.filters).reduce((sum,values)=>sum+values.length,0);
+        const activeFilterCount=Object.values(ceState.filters).reduce((sum,values)=>sum+values.length,0)+(ceState.okrIds?1:0);
+        const okrNote=document.getElementById('okr-cohort-note');okrNote.hidden=!ceState.okrIds;okrNote.innerHTML=ceState.okrIds?`<span>OKR cohort · ${escapeHtml(ceState.okrCohortLabel||'Selected OKR')} · ${count(ceState.okrIds.size)} CEs</span><button class="okr-cohort-clear" type="button" data-clear-okr-cohort>Clear</button>`:'';
         const filterCount=document.getElementById('ce-filter-count');filterCount.textContent=String(activeFilterCount);filterCount.dataset.active=String(activeFilterCount>0);
         const filterPanel=document.getElementById('ce-filter-panel'),filterToggle=document.getElementById('ce-filter-toggle');filterPanel.hidden=!ceState.filtersOpen;filterToggle.setAttribute('aria-expanded',String(ceState.filtersOpen));
         document.getElementById('ce-filter-boundary').textContent=(cap?`Capped Headout view: showing ${cap.shown} of ${cap.total} CEs, covering ${coverage==null?'—':`${coverage.toFixed(1)}%`} of weekly revenue. `:'')+'Country and portfolio filters use the current weekly snapshot.';
@@ -1435,24 +1471,26 @@
           metrics.innerHTML=[metric('Versus trailing 4w',pct(item.vs_trailing_four_pct),tone(item.vs_trailing_four_pct)),metric('Weekly YoY',pct(item.yoy_pct),tone(item.yoy_pct)),metric('Paid ROI',item.paid_roi_pct==null?'—':pct(item.paid_roi_pct).replace('+',''))].join('');
         }
         document.getElementById('source-note').textContent=monthly.source ? `Sources: frozen weekly snapshot and the ${monthLabel(monthly.month)} market target.` : 'Source: frozen weekly snapshot; no monthly target is attached.';
-        renderRunway(item); renderTargets(item); drawChart(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderDiagnosticBuckets(item); renderPostDiagnostic(item); renderDrawer(item); renderAllCes(item);
+        renderRunway(item); renderTargets(item); drawChart(item); renderMarketOkrs(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderDiagnosticBuckets(item); renderPostDiagnostic(item); renderDrawer(item); renderAllCes(item);
       }
       payload.headlines.forEach((item,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`; weekSelect.appendChild(option); });
       weekSelect.value=String(Math.max(0,payload.headlines.length-1));
       weekSelect.addEventListener('change',()=>{render(Number(weekSelect.value));actionSyncPull();actionPrevPull();});
-      countrySelect.addEventListener('change',()=>{selectedCountry=countrySelect.value;ceState.page=1;render(Number(weekSelect.value));});
       document.querySelectorAll('[data-report-view]').forEach(button=>button.addEventListener('click',()=>{ const view=button.dataset.reportView; document.getElementById('overview-view').hidden=view!=='overview'; document.getElementById('all-ces-view').hidden=view!=='all-ces'; document.querySelectorAll('[data-report-view]').forEach(item=>{ const active=item===button; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current'); }); }));
       document.querySelector('.attention').addEventListener('click',event=>{const sortButton=event.target.closest('[data-mover-sort][data-mover-kind]');if(sortButton){const kind=sortButton.dataset.moverKind,state=moverSorts[kind],key=sortButton.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'?1:(kind==='drops'?1:-1);}renderMovers(currentHeadline(),kind);return;}const mover=event.target.closest('[data-mover-ce]');if(mover)openCeDrawer(mover.dataset.moverCe);});
-      document.getElementById('ce-search').addEventListener('input',event=>{ceState.search=event.target.value;ceState.page=1;renderAllCes(currentHeadline());});
+      document.getElementById('okr-grid').addEventListener('click',event=>{const trigger=event.target.closest('[data-okr-drilldown]');if(!trigger)return;const row=(currentHeadline().market_okrs||[]).find(value=>value.id===trigger.dataset.okrDrilldown),ids=row?.drilldown?.ce_ids||[];if(!ids.length)return;ceState.okrIds=new Set(ids.map(String));ceState.okrCohortLabel=row.label||'Selected OKR';ceState.page=1;document.querySelector('[data-report-view="all-ces"]').click();renderAllCes(currentHeadline());});
+      function collapseFilteredGroups(){if(!ceState.group)return;const labels=[...new Set(ceFilteredRows(currentHeadline()).map(ce=>ceGroupValue(ce)))];ceState.collapsed=Object.fromEntries(labels.map(label=>[label,true]));}
+      countrySelect.addEventListener('change',()=>{selectedCountry=countrySelect.value;ceState.page=1;collapseFilteredGroups();render(Number(weekSelect.value));});
+      document.getElementById('ce-search').addEventListener('input',event=>{ceState.search=event.target.value;ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-filter-toggle').addEventListener('click',()=>{ceState.filtersOpen=!ceState.filtersOpen;renderAllCes(currentHeadline());});
-      document.getElementById('ce-country').addEventListener('change',event=>{ceState.country=event.target.value;ceState.page=1;renderAllCes(currentHeadline());});
-      document.getElementById('ce-group').addEventListener('change',event=>{ceState.group=event.target.value;ceState.collapsed={};ceState.page=1;renderAllCes(currentHeadline());});
-      document.getElementById('ce-reset').addEventListener('click',()=>{Object.assign(ceState,{search:'',country:'',group:'',filters:{},collapsed:{},expanded:{},watchOnly:false,topMovers:false,sortKey:'revenue',sortDir:-1,page:1});document.getElementById('ce-search').value='';document.getElementById('ce-group').value='';renderAllCes(currentHeadline());});
+      document.getElementById('ce-group').addEventListener('change',event=>{ceState.group=event.target.value;ceState.collapsed={};ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
+      document.getElementById('ce-reset').addEventListener('click',()=>{Object.assign(ceState,{search:'',group:'',filters:{},collapsed:{},expanded:{},watchOnly:false,topMovers:false,okrIds:null,okrCohortLabel:'',sortKey:'revenue',sortDir:-1,page:1});document.getElementById('ce-search').value='';document.getElementById('ce-group').value='';renderAllCes(currentHeadline());});
+      document.getElementById('okr-cohort-note').addEventListener('click',event=>{if(!event.target.closest('[data-clear-okr-cohort]'))return;ceState.okrIds=null;ceState.okrCohortLabel='';ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-table-head').addEventListener('click',event=>{const expand=event.target.closest('[data-ce-expand]');if(expand){const key=expand.dataset.ceExpand;ceState.expanded[key]=!ceState.expanded[key];renderAllCes(currentHeadline());ceRevealMetric(key);return;}const button=event.target.closest('[data-ce-sort]');if(!button)return;const key=button.dataset.ceSort;ceState.topMovers=false;ceState.page=1;if(ceState.sortKey===key)ceState.sortDir*=-1;else{ceState.sortKey=key;ceState.sortDir=key==='ce_name'?1:-1;}renderAllCes(currentHeadline());});
-      document.getElementById('ce-filter-chips').addEventListener('click',event=>{const button=event.target.closest('[data-ce-filter]');if(!button)return;const key=button.dataset.ceFilter,value=button.dataset.ceFilterValue,selected=ceState.filters[key]||[];ceState.filters[key]=selected.includes(value)?selected.filter(item=>item!==value):[...selected,value];ceState.page=1;renderAllCes(currentHeadline());});
+      document.getElementById('ce-filter-chips').addEventListener('click',event=>{const button=event.target.closest('[data-ce-filter]');if(!button)return;const key=button.dataset.ceFilter,value=button.dataset.ceFilterValue,selected=ceState.filters[key]||[];ceState.filters[key]=selected.includes(value)?selected.filter(item=>item!==value):[...selected,value];ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-pagination').addEventListener('click',event=>{if(event.target.closest('#ce-page-previous'))ceState.page-=1;else if(event.target.closest('#ce-page-next'))ceState.page+=1;else return;renderAllCes(currentHeadline());document.querySelector('.ce-table-wrap').scrollIntoView({block:'start'});});
       document.getElementById('ce-top-movers').addEventListener('click',()=>{ceState.topMovers=!ceState.topMovers;ceState.page=1;if(ceState.topMovers){ceState.sortKey='__mover';ceState.sortDir=-1;}else{ceState.sortKey='revenue';ceState.sortDir=-1;}renderAllCes(currentHeadline());});
-      document.getElementById('ce-watch-only').addEventListener('click',()=>{ceState.watchOnly=!ceState.watchOnly;ceState.page=1;renderAllCes(currentHeadline());});
+      document.getElementById('ce-watch-only').addEventListener('click',()=>{ceState.watchOnly=!ceState.watchOnly;ceState.page=1;collapseFilteredGroups();renderAllCes(currentHeadline());});
       document.getElementById('ce-expand-metrics').addEventListener('click',()=>{const collapse=ceAnyMetricExpanded();ceState.expanded={};if(!collapse)CE_METRICS.forEach(metric=>ceState.expanded[metric.key]=true);renderAllCes(currentHeadline());document.querySelector('.ce-table-wrap').scrollLeft=0;});
       document.getElementById('ce-collapse-groups').addEventListener('click',()=>{if(!ceState.group)return;const rows=ceFilteredRows(currentHeadline()),labels=[...new Set(rows.map(ce=>ceGroupValue(ce)))],shouldCollapse=labels.some(label=>!ceState.collapsed[label]);labels.forEach(label=>ceState.collapsed[label]=shouldCollapse);renderAllCes(currentHeadline());});
       document.querySelectorAll('[data-series]').forEach(button=>button.addEventListener('click',()=>{ const name=button.dataset.series; seriesVisible[name]=!seriesVisible[name]; button.setAttribute('aria-pressed',String(seriesVisible[name])); drawChart(currentHeadline()); }));
