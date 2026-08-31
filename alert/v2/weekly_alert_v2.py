@@ -374,6 +374,29 @@ def _mover_line(row: dict, direction: str) -> str:
     )
 
 
+def _mover_table_rows(rows: Iterable[dict], direction: str) -> list[list[str]]:
+    """Render existing V2 mover evidence as rows for a native Slack table."""
+    icon = "🟢" if direction == "top" else "🔴"
+    table_rows = [["CE", "Revenue", "vs LW", "vs L4W", "vs LY", "Target"]]
+    for row in rows:
+        _validate_mover(row)
+        if row.get("monthly_target") is None:
+            target = "No target"
+        elif row.get("target_mtd_attainment_pct") is None:
+            target = "Unavailable"
+        else:
+            target = fmt_attainment(row.get("target_mtd_attainment_pct"))
+        table_rows.append([
+            f"{icon} [{row['ce_id']}] {row['ce_name']}",
+            fmt_money(row["revenue"]),
+            fmt_money(row.get("wow_abs"), signed=True),
+            fmt_money(row.get("delta_4w"), signed=True),
+            fmt_delta(row.get("yoy_pct"), 0),
+            target,
+        ])
+    return table_rows
+
+
 def _unique_ids(rows: Iterable[dict]) -> list[str]:
     ids: list[str] = []
     seen: set[str] = set()
@@ -391,10 +414,12 @@ def build_alert_2(headline: dict, report_url: str) -> tuple[list[dict], list[dic
         {"type": "section", "text": {"type": "mrkdwn", "text":
             f"📈 *{headline['market']} — Top 5 & Bottom 5*\n"
             "Source order and comparisons are taken directly from the V2 market headline."}},
-        {"type": "section", "text": {"type": "mrkdwn", "text":
-            "*Top 5*\n" + ("\n".join(_mover_line(row, "top") for row in top) or "—")}},
-        {"type": "section", "text": {"type": "mrkdwn", "text":
-            "*Bottom 5*\n" + ("\n".join(_mover_line(row, "bottom") for row in bottom) or "—")}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": "*Top 5*"}},
+        _table_block(_mover_table_rows(top, "top"), ["left", "right", "right", "right", "right", "right"])
+        if top else {"type": "section", "text": {"type": "mrkdwn", "text": "—"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": "*Bottom 5*"}},
+        _table_block(_mover_table_rows(bottom, "bottom"), ["left", "right", "right", "right", "right", "right"])
+        if bottom else {"type": "section", "text": {"type": "mrkdwn", "text": "—"}},
         {"type": "section", "text": {"type": "mrkdwn", "text":
             "🧵 Per-CE weekly alerts in thread ↓"}},
         {"type": "section", "text": {"type": "mrkdwn", "text":

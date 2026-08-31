@@ -4,7 +4,7 @@
   "_excluded_sheet_markets": {
     "central_live_entertainment": "Not present in scripts/weekly_report/config.py finalized market list"
   },
-  "_missing_assignments": ["headout"],
+  "_missing_assignments": [],
   "markets": {
     "north_america": {"slack_user_ids": ["U043STEG7RQ", "U07U5B1SX9D"]},
     "italy": {"slack_user_ids": ["U05LBHUSRDH", "U091YRNQNDN", "U06GGSA7GGP"]},
@@ -23,6 +23,6 @@
     "nordics": {"slack_user_ids": ["U07V5BEG58V", "U08ARAYTMN3"]},
     "south_america": {"slack_user_ids": ["U04MZBQPE11", "U08QZTDRQ3B"]},
     "mexico_central_america": {"slack_user_ids": ["U05LBHUSRDH", "U091YRNQNDN", "U06GGSA7GGP"]},
-    "headout": {"slack_user_ids": []}
+    "headout": {"slack_user_ids": ["U3RSYK6E6", "U029AQ5LD", "U029B21B7", "U0688A2DR29", "UM1FKLCLC"]}
   }
 }

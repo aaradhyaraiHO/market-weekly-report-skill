@@ -150,6 +150,29 @@ class WeeklyAlertV2Contract(unittest.TestCase):
             expected,
         )
 
+    def test_movers_render_as_native_slack_tables(self):
+        payload = weekly_alert_v2.build_payload(self.headline, self.bgms)
+        top, bottom = weekly_alert_v2.report_movers(self.headline)
+        tables = [
+            block for block in payload["messages"][1]["blocks"]
+            if block.get("type") == "table"
+        ]
+
+        self.assertEqual(len(tables), 2)
+        self.assertEqual([len(table["rows"]) for table in tables], [len(top) + 1, len(bottom) + 1])
+        self.assertEqual(
+            [cell["text"] for cell in tables[0]["rows"][0]],
+            ["CE", "Revenue", "vs LW", "vs L4W", "vs LY", "Target"],
+        )
+        self.assertTrue(all(
+            cell["type"] == "raw_text"
+            for table in tables
+            for row in table["rows"]
+            for cell in row
+        ))
+        self.assertIn(str(top[0]["ce_id"]), tables[0]["rows"][1][0]["text"])
+        self.assertIn(str(bottom[0]["ce_id"]), tables[1]["rows"][1][0]["text"])
+
     def test_mover_target_without_pacing_renders_unavailable(self):
         row = dict(self.headline["movers"]["gains"][0])
         row["monthly_target"] = 20_000
@@ -278,6 +301,27 @@ class MarketOKRBuilderContract(unittest.TestCase):
         )
         self.assertEqual(payload["week_end"], "2026-08-08")
 
+    def test_company_result_adds_q3_targets_without_leaking_them_to_markets(self):
+        rows = [{
+            "market": "Headout",
+            "pro_plus_ces": 477,
+            "new_pro_plus_mature_on_pace": 49,
+            "new_pro_plus_mature_reached": 23,
+            "new_pro_plus_emerging_growth_on_pace": 24,
+            "new_pro_plus_emerging_growth_reached": 14,
+            "gel_revenue_ty": 5_400_000,
+            "gel_revenue_ly": 2_800_000,
+            "gel_yoy_pct": 95.3,
+        }]
+        payload = build_market_okr_results.build_results(
+            rows, {"headout": "Headout"}, "2026-08-16"
+        )
+
+        self.assertEqual(
+            [row["target"] for row in payload["markets"]["headout"]],
+            ["500 CEs", "55 CEs", "35 CEs", "+100% YoY"],
+        )
+
     def test_sql_preserves_current_engine_definitions_and_market_grain(self):
         sql = build_market_okr_results.MARKET_OKR_SQL
         self.assertIn("sum_revenue_predicted", sql)
@@ -315,10 +359,8 @@ class AlertV2ReadinessContract(unittest.TestCase):
     def test_headout_is_an_explicit_extra_readiness_scope(self):
         result = check_readiness.check(include_headout=True)
 
-        self.assertEqual(
-            result["blockers"]["missing_bgm_assignments"],
-            ["headout"],
-        )
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["blockers"]["missing_bgm_assignments"], [])
 
 
 if __name__ == "__main__":
