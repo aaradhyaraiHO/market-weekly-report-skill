@@ -39,6 +39,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 "baseline",
                 "build-markets",
                 "build-headout",
+                "build-market-okrs",
                 "combined-v2-gate",
                 "alert-readiness",
                 "stage-notebook",
@@ -56,6 +57,7 @@ class RunV2ReleaseTests(unittest.TestCase):
         self.assertEqual(len(snapshots), len(release.config.MARKETS) + 1)
         for slug in (*release.config.MARKETS, "headout"):
             self.assertTrue(any(f"snapshot_{slug}_{self.week}.json" in item for item in snapshots))
+        self.assertIn("--okr-results", gate.command)
 
     def test_notebook_stage_never_writes_perf_sheet(self) -> None:
         plan = release.build_plan(self.week, self.notebook)

@@ -184,10 +184,11 @@ def verify_market(market, view, goal_error=None):
     }
 
 
-def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True):
+def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True, okr_results_path=None):
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     supplied_goals = render_v2.load_goals(goals_path) if goals_path else {}
+    supplied_okrs = render_v2.load_okr_results(okr_results_path) if okr_results_path else {}
     goals_artifact = output_dir / "goals_v2.json"
     try:
         existing_goals = (
@@ -222,7 +223,7 @@ def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True):
         goals = {slug: goal} if goal is not None else {}
         view = headline_v2.build_headline_view(market, goal)
         output = output_dir / f"report_{slug}_{week}.html"
-        output.write_text(render_v2.render([market], goals=goals))
+        output.write_text(render_v2.render([market], goals=goals, okr_results=supplied_okrs))
         record = verify_market(market, view, goal_error)
         record["artifact"] = str(output)
         records.append(record)
@@ -259,6 +260,7 @@ def main():
     parser.add_argument("--glob", dest="snapshot_glob", help="additional snapshot glob")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--goals", help="existing goals sidecar")
+    parser.add_argument("--okr-results", help="optional same-week market OKR sidecar")
     goal_fetch = parser.add_mutually_exclusive_group()
     goal_fetch.add_argument(
         "--fetch-goals",
@@ -280,7 +282,7 @@ def main():
         paths.extend(Path(path) for path in sorted(glob.glob(args.snapshot_glob)))
     if not paths:
         parser.error("at least one snapshot input is required")
-    manifest = release(paths, args.out_dir, args.goals, args.fetch_goals)
+    manifest = release(paths, args.out_dir, args.goals, args.fetch_goals, args.okr_results)
     manifest_path = Path(args.manifest).resolve()
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

@@ -71,6 +71,7 @@ def build_plan(
 
     python = sys.executable
     combined_manifest = CACHE / f"v2_release_full_{week}.json"
+    okr_results = CACHE / f"okr_results_v2_{week}.json"
     release_command = (
         python,
         str(SCRIPTS / "release_v2.py"),
@@ -78,6 +79,8 @@ def build_plan(
         "--out-dir",
         str(V2_REPORTS),
         "--fetch-goals",
+        "--okr-results",
+        str(okr_results),
         "--manifest",
         str(combined_manifest),
     )
@@ -109,6 +112,18 @@ def build_plan(
                 "--renderer",
                 "both",
                 "--no-open",
+            ),
+            str(ROOT),
+        ),
+        Step(
+            "build-market-okrs",
+            (
+                python,
+                str(ROOT / "alert" / "v2" / "build_market_okr_results.py"),
+                "--week-start",
+                week,
+                "--out",
+                str(okr_results),
             ),
             str(ROOT),
         ),

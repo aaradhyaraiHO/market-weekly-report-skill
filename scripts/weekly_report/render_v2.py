@@ -32,7 +32,32 @@ def load_ce_dimensions(path):
     return payload.get("markets", payload)
 
 
-def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None):
+def load_okr_results(path):
+    """Load the optional market-grain OKR sidecar used by Alert V2."""
+    if not path or not os.path.exists(path):
+        return {}
+    with open(path) as handle:
+        payload = json.load(handle)
+    return payload
+
+
+def _attach_market_okrs(headlines, okr_results):
+    """Attach only same-week market evidence; country views remain un-enriched."""
+    if not isinstance(okr_results, dict):
+        return headlines
+    markets = okr_results.get("markets")
+    sidecar_week = okr_results.get("week_start")
+    if not isinstance(markets, dict):
+        return headlines
+    for headline in headlines:
+        slug = headline.get("market_slug")
+        if sidecar_week != headline.get("week_start") or not isinstance(markets.get(slug), list):
+            continue
+        headline["market_okrs"] = markets[slug]
+    return headlines
+
+
+def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None, okr_results=None):
     with open(template_path) as handle:
         html = handle.read()
     first_slug = markets[0].get("meta", {}).get("market_slug")
@@ -44,7 +69,9 @@ def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None):
     payload = {
         "schema_version": 2,
         "source_schema_version": markets[0].get("meta", {}).get("schema_version", 1),
-        "headlines": build_headline_payload(scoped_markets, goals, ce_dimensions),
+        "headlines": _attach_market_okrs(
+            build_headline_payload(scoped_markets, goals, ce_dimensions), okr_results
+        ),
         # Reuse the established V1 action sidecar contract. Rendering remains
         # read-only; writes only happen after an explicit reviewer interaction.
         "notes_url": (os.environ.get("WR_NOTES_SCRIPT_URL") or render_v1.NOTES_SCRIPT_URL) or None,
@@ -67,6 +94,7 @@ def main():
     parser.add_argument("--glob", help="additional snapshot glob")
     parser.add_argument("--goals", help="optional approved monthly-goal sidecar JSON")
     parser.add_argument("--ce-dimensions", help="optional CE-to-BDM/Growth-region sidecar JSON")
+    parser.add_argument("--okr-results", help="optional same-week market OKR sidecar JSON")
     parser.add_argument("--out", help="output HTML path")
     args = parser.parse_args()
     paths = list(args.inputs)
@@ -80,6 +108,7 @@ def main():
             markets,
             goals=load_goals(args.goals),
             ce_dimensions=load_ce_dimensions(args.ce_dimensions),
+            okr_results=load_okr_results(args.okr_results),
         ))
     print(f"wrote: {output}")
 

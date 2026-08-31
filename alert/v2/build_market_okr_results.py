@@ -36,6 +36,24 @@ OFFICIAL_STATUS = {
     "grow_non_poi_gel_revenue_yoy": ":large_green_circle: On track",
 }
 
+# Company-grain targets from the authoritative H2 2026 OKR tracker. These are
+# deliberately attached only to the Headout roll-up: comparing a company goal
+# with an individual market actual would be a grain error.
+COMPANY_TARGETS = {
+    3: {
+        "grow_cumulative_pro_plus_ces": "500 CEs",
+        "launch_new_pro_plus_mature": "55 CEs",
+        "launch_new_pro_plus_emerging_growth": "35 CEs",
+        "grow_non_poi_gel_revenue_yoy": "+100% YoY",
+    },
+    4: {
+        "grow_cumulative_pro_plus_ces": "520 CEs",
+        "launch_new_pro_plus_mature": "45 CEs",
+        "launch_new_pro_plus_emerging_growth": "25 CEs",
+        "grow_non_poi_gel_revenue_yoy": "+100% YoY",
+    },
+}
+
 
 # Mirrors the current central-tracking engine:
 # - O1-KR1: L92 predicted revenue >= $10K.
@@ -107,14 +125,16 @@ l92_ce AS (
 l92_by_market AS (
     SELECT
         ce_dims.market,
-        COUNTIF(l92_ce.l92_revenue >= 10000) AS pro_plus_ces
+        COUNTIF(l92_ce.l92_revenue >= 10000) AS pro_plus_ces,
+        STRING_AGG(IF(l92_ce.l92_revenue >= 10000, CAST(l92_ce.combined_entity_id AS STRING), NULL), ',') AS pro_plus_ce_ids
     FROM l92_ce
     INNER JOIN ce_dims USING (combined_entity_id)
     GROUP BY 1
     UNION ALL
     SELECT
         'Headout' AS market,
-        COUNTIF(l92_ce.l92_revenue >= 10000) AS pro_plus_ces
+        COUNTIF(l92_ce.l92_revenue >= 10000) AS pro_plus_ces,
+        STRING_AGG(IF(l92_ce.l92_revenue >= 10000, CAST(l92_ce.combined_entity_id AS STRING), NULL), ',') AS pro_plus_ce_ids
     FROM l92_ce
 ),
 
@@ -191,7 +211,9 @@ new_by_market AS (
         COUNTIF(ce_dims.evolution_bucket IN ('Emerging', 'Growth'))
             AS new_pro_plus_emerging_growth_on_pace,
         COUNTIF(ce_dims.evolution_bucket IN ('Emerging', 'Growth') AND qtd_revenue >= 10000)
-            AS new_pro_plus_emerging_growth_reached
+            AS new_pro_plus_emerging_growth_reached,
+        STRING_AGG(IF(ce_dims.evolution_bucket = 'Mature', CAST(new_pro_plus_ce.combined_entity_id AS STRING), NULL), ',') AS mature_ce_ids,
+        STRING_AGG(IF(ce_dims.evolution_bucket IN ('Emerging', 'Growth'), CAST(new_pro_plus_ce.combined_entity_id AS STRING), NULL), ',') AS emerging_growth_ce_ids
     FROM new_pro_plus_ce
     INNER JOIN ce_dims USING (combined_entity_id)
     GROUP BY 1
@@ -204,7 +226,9 @@ new_by_market AS (
         COUNTIF(ce_dims.evolution_bucket IN ('Emerging', 'Growth'))
             AS new_pro_plus_emerging_growth_on_pace,
         COUNTIF(ce_dims.evolution_bucket IN ('Emerging', 'Growth') AND qtd_revenue >= 10000)
-            AS new_pro_plus_emerging_growth_reached
+            AS new_pro_plus_emerging_growth_reached,
+        STRING_AGG(IF(ce_dims.evolution_bucket = 'Mature', CAST(new_pro_plus_ce.combined_entity_id AS STRING), NULL), ',') AS mature_ce_ids,
+        STRING_AGG(IF(ce_dims.evolution_bucket IN ('Emerging', 'Growth'), CAST(new_pro_plus_ce.combined_entity_id AS STRING), NULL), ',') AS emerging_growth_ce_ids
     FROM new_pro_plus_ce
     INNER JOIN ce_dims USING (combined_entity_id)
 ),
@@ -243,24 +267,51 @@ gel_by_market AS (
         SUM(gel_revenue_ty) AS gel_revenue_ty,
         SUM(gel_revenue_ly) AS gel_revenue_ly
     FROM gel_by_market_base
+),
+
+gel_candidates AS (
+    SELECT
+        market,
+        STRING_AGG(combined_entity_id, ',' ORDER BY gel_revenue_ty DESC) AS gel_ce_ids
+    FROM (
+        SELECT
+            ce_dims.market,
+            CAST(stats.combined_entity_id AS STRING) AS combined_entity_id,
+            SUM(IF(stats.report_date BETWEEN quarter_start AND cutoff, stats.sum_revenue_predicted, 0)) AS gel_revenue_ty
+        FROM `headout-analytics.analytics_reporting.combined_entity_stats` AS stats
+        INNER JOIN ce_dims USING (combined_entity_id)
+        CROSS JOIN params
+        WHERE stats.report_timestamp >= TIMESTAMP(DATE_SUB(quarter_start, INTERVAL 1 YEAR))
+          AND stats.report_date BETWEEN DATE_SUB(quarter_start, INTERVAL 1 YEAR) AND cutoff
+          AND ce_dims.evolution_bucket != 'Mature'
+          AND ce_dims.category != 'POI/ Attractions'
+          AND ce_dims.management_type IN ('Managed', 'Managed Lite')
+        GROUP BY 1, 2
+    )
+    GROUP BY 1
 )
 
 SELECT
     requested_market AS market,
     COALESCE(l92.pro_plus_ces, 0) AS pro_plus_ces,
+    l92.pro_plus_ce_ids,
     COALESCE(new_pp.new_pro_plus_mature_on_pace, 0) AS new_pro_plus_mature_on_pace,
     COALESCE(new_pp.new_pro_plus_mature_reached, 0) AS new_pro_plus_mature_reached,
+    new_pp.mature_ce_ids,
     COALESCE(new_pp.new_pro_plus_emerging_growth_on_pace, 0)
         AS new_pro_plus_emerging_growth_on_pace,
     COALESCE(new_pp.new_pro_plus_emerging_growth_reached, 0)
         AS new_pro_plus_emerging_growth_reached,
+    new_pp.emerging_growth_ce_ids,
     COALESCE(gel.gel_revenue_ty, 0) AS gel_revenue_ty,
     COALESCE(gel.gel_revenue_ly, 0) AS gel_revenue_ly,
     SAFE_DIVIDE(gel.gel_revenue_ty - gel.gel_revenue_ly, gel.gel_revenue_ly) * 100 AS gel_yoy_pct
+    , gel_candidates.gel_ce_ids
 FROM UNNEST(@markets) AS requested_market
 LEFT JOIN l92_by_market AS l92 ON l92.market = requested_market
 LEFT JOIN new_by_market AS new_pp ON new_pp.market = requested_market
 LEFT JOIN gel_by_market AS gel ON gel.market = requested_market
+LEFT JOIN gel_candidates ON gel_candidates.market = requested_market
 ORDER BY 1
 """
 
@@ -293,6 +344,10 @@ def _pct(value: Any) -> str:
     return f"{sign}{abs(number):.1f}% YoY"
 
 
+def _ce_ids(value: Any) -> list[str]:
+    return [item for item in str(value or "").split(",") if item]
+
+
 def build_results(
     rows: Iterable[dict],
     market_names: dict[str, str],
@@ -300,7 +355,9 @@ def build_results(
 ) -> dict:
     """Convert one query row per market into the alert's stable sidecar contract."""
     by_market = {str(row["market"]): row for row in rows}
-    week_end = str(dt.date.fromisoformat(week_start) + dt.timedelta(days=6))
+    report_date = dt.date.fromisoformat(week_start)
+    week_end = str(report_date + dt.timedelta(days=6))
+    quarter = (report_date.month - 1) // 3 + 1
     markets: dict[str, list[dict]] = {}
     for slug, market_name in market_names.items():
         if market_name not in by_market:
@@ -324,6 +381,7 @@ def build_results(
                 "detail": "L92 predicted revenue ≥ $10K",
                 "value": pro_plus,
                 "status": OFFICIAL_STATUS[OKR_IDS[0]],
+                "drilldown": {"ce_ids": _ce_ids(row.get("pro_plus_ce_ids"))},
             },
             {
                 "id": OKR_IDS[1],
@@ -333,6 +391,7 @@ def build_results(
                 "value": mature,
                 "reached": mature_reached,
                 "status": OFFICIAL_STATUS[OKR_IDS[1]],
+                "drilldown": {"ce_ids": _ce_ids(row.get("mature_ce_ids"))},
             },
             {
                 "id": OKR_IDS[2],
@@ -344,6 +403,7 @@ def build_results(
                 "value": emerging,
                 "reached": emerging_reached,
                 "status": OFFICIAL_STATUS[OKR_IDS[2]],
+                "drilldown": {"ce_ids": _ce_ids(row.get("emerging_growth_ce_ids"))},
             },
             {
                 "id": OKR_IDS[3],
@@ -352,8 +412,15 @@ def build_results(
                 "detail": f"{_money(gel_ty)} vs {_money(gel_ly)} QTD LY",
                 "value": gel_yoy,
                 "status": OFFICIAL_STATUS[OKR_IDS[3]],
+                "drilldown": {"ce_ids": _ce_ids(row.get("gel_ce_ids"))},
             },
         ]
+        if slug == "headout":
+            targets = COMPANY_TARGETS.get(quarter, {})
+            for result in markets[slug]:
+                target = targets.get(result["id"])
+                if target is not None:
+                    result["target"] = target
     return {
         "schema_version": 1,
         "week_start": week_start,
