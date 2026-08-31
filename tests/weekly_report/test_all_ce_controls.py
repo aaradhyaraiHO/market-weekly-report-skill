@@ -45,6 +45,10 @@ class AllCeControlsContract(unittest.TestCase):
         self.assertIn(".okr-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr));", self.html)
         self.assertIn(".okr-card { display:flex; flex-direction:column; min-width:0; min-height:162px;", self.html)
 
+    def test_selected_okrs_have_one_section_level_tracker_link(self):
+        self.assertEqual(self.html.count('href="https://okr.headout.com/okr-tracker"'), 1)
+        self.assertNotIn("View details ↗", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
