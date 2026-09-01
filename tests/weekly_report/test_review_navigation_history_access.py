@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -65,6 +66,29 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
         self.assertNotRegex(BACKEND, r"historical.*(?:appendRow|setValues|setValue)")
         self.assertIn("historical_comments", BACKEND)
         self.assertIn("perf_history", BACKEND)
+
+    def test_history_ce_id_normalization_preserves_composite_identity(self):
+        helper = re.search(
+            r"function reviewStableCeId\(value\) \{.*?\n\}", BACKEND, re.DOTALL
+        )
+        self.assertIsNotNone(helper)
+        script = (
+            helper.group(0)
+            + '; console.log(JSON.stringify(['
+            + 'reviewStableCeId(384),'
+            + 'reviewStableCeId("384.0"),'
+            + 'reviewStableCeId("18 - Paris"),'
+            + 'reviewStableCeId("18- Chicago"),'
+            + 'reviewStableCeId("not-a-ce")'
+            + ']));'
+        )
+        result = subprocess.run(
+            ["node", "-e", script], check=True, capture_output=True, text=True
+        )
+        self.assertEqual(
+            json.loads(result.stdout),
+            ["384", "384", "18 - Paris", "18 - Chicago", ""],
+        )
 
     def test_duplicate_history_is_collapsed_with_audit_count(self):
         self.assertIn("seen[signature]._duplicate_count++", BACKEND)

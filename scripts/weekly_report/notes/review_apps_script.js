@@ -126,8 +126,15 @@ var REVIEW_HISTORY_SCHEMAS = {
 };
 
 function reviewStableCeId(value) {
-  var match = String(value == null ? "" : value).trim().match(/^(\d+)(?:\s*-\s*.*)?$/);
-  return match ? match[1] : "";
+  var raw = String(value == null ? "" : value).trim();
+  // Google Sheets may return numeric IDs as numbers (or an exported workbook
+  // may render them as `384.0`).  Normalize that representation without
+  // collapsing composite CE IDs such as `18 - Paris`: the location suffix is
+  // part of the stable identity and prevents history leaking across sibling
+  // city entities that share the same numeric family ID.
+  if (/^\d+(?:\.0+)?$/.test(raw)) return raw.replace(/\.0+$/, "");
+  var composite = raw.match(/^(\d+)\s*-\s*(\S(?:.*\S)?)$/);
+  return composite ? composite[1] + " - " + composite[2] : "";
 }
 
 function reviewHistoricalRows(kind, market, ceId) {
