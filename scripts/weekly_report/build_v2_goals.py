@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import copy
 import datetime as dt
 import json
 import math
@@ -40,6 +41,66 @@ def _percent_change(current, baseline):
     if current is None or baseline in (None, 0):
         return None
     return 100.0 * (current / baseline - 1.0)
+
+
+def merge_headout_ce_targets(headout_goal, market_goals):
+    """Attach the same-month market CE targets to the global Headout goal.
+
+    Headout's approved monthly target is company-grain, while CE targets remain
+    market-grain in ``revenue_goals``.  Keep those authorities separate: this
+    function preserves every Headout monthly field and only builds the CE lookup
+    used by global movers. Conflicting duplicate stable IDs are omitted rather
+    than assigned to an arbitrary market.
+    """
+    if not isinstance(headout_goal, dict):
+        return headout_goal
+
+    month = headout_goal.get("month")
+    merged = {}
+    conflicts = set()
+    for slug, goal in sorted((market_goals or {}).items()):
+        if slug == "headout" or not isinstance(goal, dict) or goal.get("month") != month:
+            continue
+        for raw_ce_id, raw_pacing in (goal.get("ce_target_pacing") or {}).items():
+            if not isinstance(raw_pacing, dict):
+                continue
+            ce_id = str(raw_ce_id)
+            pacing = copy.deepcopy(raw_pacing)
+            pacing["source_market_slug"] = slug
+            existing = merged.get(ce_id)
+            if existing is None:
+                merged[ce_id] = pacing
+                continue
+            comparable_existing = {
+                key: value for key, value in existing.items() if key != "source_market_slug"
+            }
+            comparable_new = {
+                key: value for key, value in pacing.items() if key != "source_market_slug"
+            }
+            if comparable_existing != comparable_new:
+                conflicts.add(ce_id)
+
+    for ce_id in conflicts:
+        merged.pop(ce_id, None)
+
+    result = copy.deepcopy(headout_goal)
+    result["ce_target_pacing"] = merged
+    result["ce_target_row_count"] = len(merged)
+    result["ce_target_conflict_count"] = len(conflicts)
+    result["ce_target_source"] = "Same-month market CE target union keyed by stable CE ID"
+    target_total = sum(_number(row.get("monthly_goal")) or 0.0 for row in merged.values())
+    monthly_goal = _number(result.get("monthly_goal"))
+    result["ce_target_coverage_pct"] = (
+        100.0 * target_total / monthly_goal if monthly_goal else None
+    )
+    result["ce_gap_contributors"] = sorted(
+        (
+            row for row in merged.values()
+            if (_number(row.get("mtd_gap")) or 0.0) < 0
+        ),
+        key=lambda row: _number(row.get("mtd_gap")) or 0.0,
+    )[:5]
+    return result
 
 
 def _weekly_rows(market):

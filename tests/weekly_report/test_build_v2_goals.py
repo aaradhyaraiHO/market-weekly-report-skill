@@ -149,6 +149,56 @@ class BuildV2GoalsContract(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "No approved monthly target"):
             build_v2_goals.build_market_goal(copy.deepcopy(self.market))
 
+    def test_headout_keeps_company_goal_and_unions_same_month_ce_targets(self):
+        headout = {
+            "month": "2026-08",
+            "monthly_goal": 15_000_000.0,
+            "goal_grain": "Headout total",
+            "ce_target_pacing": {},
+        }
+        market_goals = {
+            "north_america": {
+                "month": "2026-08",
+                "ce_target_pacing": {
+                    "3111": {"monthly_goal": 200_000.0, "mtd_gap": -10_000.0},
+                    "18 - Chicago": {"monthly_goal": 300_000.0, "mtd_gap": 5_000.0},
+                },
+            },
+            "france": {
+                "month": "2026-08",
+                "ce_target_pacing": {
+                    "254": {"monthly_goal": 350_000.0, "mtd_gap": -20_000.0},
+                },
+            },
+            "stale_market": {
+                "month": "2026-07",
+                "ce_target_pacing": {"old": {"monthly_goal": 999_000.0}},
+            },
+        }
+
+        result = build_v2_goals.merge_headout_ce_targets(headout, market_goals)
+
+        self.assertEqual(result["monthly_goal"], 15_000_000.0)
+        self.assertEqual(result["goal_grain"], "Headout total")
+        self.assertEqual(set(result["ce_target_pacing"]), {"3111", "18 - Chicago", "254"})
+        self.assertEqual(
+            result["ce_target_pacing"]["18 - Chicago"]["source_market_slug"],
+            "north_america",
+        )
+        self.assertEqual(result["ce_target_row_count"], 3)
+        self.assertEqual(result["ce_target_conflict_count"], 0)
+        self.assertEqual(result["ce_gap_contributors"][0]["monthly_goal"], 350_000.0)
+        self.assertAlmostEqual(result["ce_target_coverage_pct"], 100 * 850_000 / 15_000_000)
+
+    def test_headout_omits_conflicting_duplicate_ce_ids(self):
+        result = build_v2_goals.merge_headout_ce_targets({"month": "2026-08"}, {
+            "france": {"month": "2026-08", "ce_target_pacing": {"254": {"monthly_goal": 1}}},
+            "italy": {"month": "2026-08", "ce_target_pacing": {"254": {"monthly_goal": 2}}},
+        })
+
+        self.assertNotIn("254", result["ce_target_pacing"])
+        self.assertEqual(result["ce_target_conflict_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -131,6 +132,47 @@ class V2ReleaseGateContract(unittest.TestCase):
 
         self.assertEqual(manifest["status"], "pass")
         self.assertEqual(stored["markets"], {})
+
+    def test_release_attaches_market_ce_targets_to_headout_movers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            market_path = root / "market.json"
+            headout_path = root / "headout.json"
+            market_path.write_text(json.dumps(self.market))
+            headout = copy.deepcopy(self.market)
+            headout["meta"].update({"market": "Headout", "market_slug": "headout"})
+            headout_path.write_text(json.dumps(headout))
+            mover_id = str(self.view["movers"]["drops"][0]["ce_id"])
+            goals_path = root / "supplied-goals.json"
+            goals_path.write_text(json.dumps({"markets": {
+                "north_america": {
+                    **approved_goal(),
+                    "ce_target_pacing": {
+                        mover_id: {"monthly_goal": 210_000.0, "mtd_gap": -12_500.0},
+                    },
+                },
+                "headout": {
+                    **approved_goal(),
+                    "monthly_goal": 15_000_000.0,
+                    "goal_grain": "Headout total",
+                    "ce_target_pacing": {},
+                },
+            }}))
+            output = root / "release"
+
+            release_v2.release(
+                [market_path, headout_path], output,
+                goals_path=goals_path, fetch_goals=False,
+            )
+            html = (output / "report_headout_2026-08-02.html").read_text()
+            payload = json.loads(re.search(
+                r'<script id="report-data" type="application/json">(.*?)</script>',
+                html, re.S,
+            ).group(1))
+            mover = payload["headlines"][0]["movers"]["drops"][0]
+
+        self.assertEqual(mover["ce_id"], mover_id)
+        self.assertEqual(mover["monthly_target"], 210_000.0)
 
 
 if __name__ == "__main__":

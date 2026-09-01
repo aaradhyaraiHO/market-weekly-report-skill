@@ -203,6 +203,7 @@ def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True, okr_r
         existing_goals = {}
     records, artifacts, goal_records = [], [], {}
     requested_slugs = set()
+    prepared = []
 
     for snapshot_path in snapshot_paths:
         market = render_v1.load_markets([str(snapshot_path)])[0]
@@ -220,6 +221,17 @@ def release(snapshot_paths, output_dir, goals_path=None, fetch_goals=True, okr_r
             goal_error = "live target fetch disabled and no supplied goal record"
         if goal is not None:
             goal_records[slug] = goal
+        prepared.append((market, slug, week, goal_error))
+
+    available_goals = {**existing_goals, **supplied_goals, **goal_records}
+    if isinstance(goal_records.get("headout"), dict):
+        goal_records["headout"] = build_v2_goals.merge_headout_ce_targets(
+            goal_records["headout"], available_goals
+        )
+        available_goals["headout"] = goal_records["headout"]
+
+    for market, slug, week, goal_error in prepared:
+        goal = goal_records.get(slug)
         goals = {slug: goal} if goal is not None else {}
         view = headline_v2.build_headline_view(market, goal)
         output = output_dir / f"report_{slug}_{week}.html"
