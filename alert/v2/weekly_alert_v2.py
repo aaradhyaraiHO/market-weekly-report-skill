@@ -437,9 +437,12 @@ def build_payload(
     feedback_canvas_url: str = DEFAULT_FEEDBACK_CANVAS_URL,
 ) -> dict:
     slug = headline["market_slug"]
+    week_start = str(headline.get("week_start") or "").strip()
+    ledger_slug = LEDGER_SLUG.get(slug, slug.replace("_", "-"))
     url = report_url or (
         "https://market-notebook.vercel.app/weekly-report-"
-        + LEDGER_SLUG.get(slug, slug.replace("_", "-"))
+        + ledger_slug
+        + (f"-{week_start}" if week_start else "")
     )
     alert_1 = build_alert_1(headline, url, bgms, okr_results, feedback_canvas_url)
     alert_2, threads, rca_ids = build_alert_2(headline, url)

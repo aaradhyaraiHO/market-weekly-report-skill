@@ -383,7 +383,12 @@ def main():
 
     mk = load_market(Path(args.file).expanduser(), args.market_slug, args.market_index)
     slug = mk["meta"]["market_slug"]
-    report_url = args.report_url or f"https://market-notebook.vercel.app/weekly-report-{LEDGER_SLUG.get(slug, slug.replace('_','-'))}"
+    week_start = str((mk.get("meta") or {}).get("week_start") or "").strip()
+    ledger_slug = LEDGER_SLUG.get(slug, slug.replace('_','-'))
+    report_url = args.report_url or (
+        f"https://market-notebook.vercel.app/weekly-report-{ledger_slug}"
+        + (f"-{week_start}" if week_start else "")
+    )
 
     summary = build_summary_blocks(mk, report_url)
     t_los = table_losing(mk, report_url)

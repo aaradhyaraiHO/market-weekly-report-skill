@@ -96,6 +96,19 @@ class WeeklyAlertV2Contract(unittest.TestCase):
         self.assertIn("Open this market's weekly report", alert_1_blocks[1]["text"]["text"])
         alert_2_blocks = payload["messages"][1]["blocks"]
         self.assertIn("Open the weekly report", alert_2_blocks[1]["text"]["text"])
+        expected_url = (
+            "https://market-notebook.vercel.app/weekly-report-"
+            f"{weekly_alert_v2.LEDGER_SLUG.get(self.headline['market_slug'], self.headline['market_slug'].replace('_', '-'))}-"
+            f"{self.headline['week_start']}"
+        )
+        self.assertIn(expected_url, rendered)
+
+    def test_explicit_report_url_is_preserved(self):
+        explicit = "https://example.test/report"
+        payload = weekly_alert_v2.build_payload(
+            self.headline, self.bgms, report_url=explicit
+        )
+        self.assertIn(explicit, json.dumps(payload))
 
     def test_uk_and_benelux_tag_uday_as_the_bgm(self):
         configured = json.loads(weekly_alert_v2.DEFAULT_BGMS.read_text())["markets"]
