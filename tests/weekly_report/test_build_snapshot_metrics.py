@@ -16,6 +16,23 @@ import headline_v2  # noqa: E402
 
 
 class WeeklyMetricContractTests(unittest.TestCase):
+    def test_paid_cm1_cutover_matches_omni_strict_post_sep_1_rule(self):
+        source = (REPORT_DIR / "fetch.py").read_text()
+
+        # Omni's contribution_margin_one uses offline CM1 strictly after
+        # 2025-09-01. All three Weekly CM1 projections must preserve that exact
+        # boundary; conversion-count cutovers are a separate metric contract.
+        self.assertEqual(
+            source.count("WHEN report_date > '2025-09-01'\n"
+                         "                 AND sum_conversion_value_offline_contribution_margin > 0"),
+            3,
+        )
+        self.assertNotIn(
+            "WHEN report_date >= '2025-09-01'\n"
+            "                 AND sum_conversion_value_offline_contribution_margin > 0",
+            source,
+        )
+
     def test_take_rate_uses_actual_order_revenue(self):
         business = pd.Series({
             "revenue": 3_113.78,
