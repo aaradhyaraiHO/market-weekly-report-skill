@@ -297,10 +297,9 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
         DATE_TRUNC(report_date, WEEK(SUNDAY))                     AS week,
         SUM(sum_spend)                                            AS spend,
         SUM(sum_coupon_and_wallet_credits)                       AS coupon_wallet,
-        -- CM1: match Omni contribution_margin_one exactly. Offline CM1 is used
-        -- strictly after 2025-09-01; Sep 1 itself uses calculated CM1.
+        -- CM1: offline contribution margin post-Sep-2025, calculated fallback pre-Sep
         SUM(CASE
-            WHEN report_date > '2025-09-01'
+            WHEN report_date >= '2025-09-01'
                  AND sum_conversion_value_offline_contribution_margin > 0
                 THEN sum_conversion_value_offline_contribution_margin
             ELSE sum_conversion_value_calculated_contribution_margin
@@ -320,7 +319,7 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
         -- report keeps the Google+Bing rollup above. (SEARCH filter already applied in WHERE.)
         SUM(IF(ad_platform = 'Google Ads', sum_spend, 0))       AS spend_g,
         SUM(IF(ad_platform = 'Google Ads', CASE
-            WHEN report_date > '2025-09-01'
+            WHEN report_date >= '2025-09-01'
                  AND sum_conversion_value_offline_contribution_margin > 0
                 THEN sum_conversion_value_offline_contribution_margin
             ELSE sum_conversion_value_calculated_contribution_margin
@@ -1218,7 +1217,7 @@ def ce_daily_ads(market: str | None, daily_start: dt.date, w0_end: dt.date) -> p
         ANY_VALUE(campaign_target_combined_entity_name)          AS combined_entity_name,
         report_date,
         SUM(CASE
-            WHEN report_date > '2025-09-01'
+            WHEN report_date >= '2025-09-01'
                  AND sum_conversion_value_offline_contribution_margin > 0
                 THEN sum_conversion_value_offline_contribution_margin
             ELSE sum_conversion_value_calculated_contribution_margin
