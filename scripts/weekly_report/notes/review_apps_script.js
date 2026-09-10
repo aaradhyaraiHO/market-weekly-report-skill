@@ -1151,10 +1151,12 @@ function reviewSummarySourceMatches(row,thread,state,latest) {
       location.parent!==String(thread.slack_thread_ts))return false;
     if(location.message!==location.parent&&location.message!==ref[2])return false;
   }
-  // Already-scanned sources still belong to this cycle. Do not use its scan
-  // cursor as the lower bound, or a retry loses the existing human evidence.
+  // The caller has already matched market + CE + exact week. An immutable
+  // binding proves these stored records belong to this discussion, even when
+  // an older relay moved slack_post_ts forward on every same-week reply.
+  // Legacy unbound records still require both permalink proof and the boundary.
   var ts=ref?ref[2]:"";
-  return !ts||((!state.slack_post_ts||ts>=String(state.slack_post_ts))&&(!latest||ts<latest));
+  return !ts||((!!explicit||!state.slack_post_ts||ts>=String(state.slack_post_ts))&&(!latest||ts<latest));
 }
 
 function reviewSummaryDecide(p){
@@ -1303,7 +1305,12 @@ function reviewWeeklySlackPost(p){
   var finalState=reviewWeeklyMutate(p,function(next){
     next.last_post_request_id=p.request_id;
     if(!posted.ok){next.sync_status="post_failed";next.last_error=posted.error||"Slack post failed";return next;}
-    next.slack_post_ts=posted.posted_ts;next.slack_post_permalink=posted.posted_permalink||posted.thread.slack_permalink||"";
+    // Same-week replies append to the discussion, not a new weekly boundary.
+    // Keep the first post so historical summaries retain earlier source text.
+    if(posted.operation==="new_parent"||!next.slack_post_ts||
+        String(next.thread_binding_id||"")!==String(posted.thread.binding_id||"")){
+      next.slack_post_ts=posted.posted_ts;next.slack_post_permalink=posted.posted_permalink||posted.thread.slack_permalink||"";
+    }
     next.thread_binding_id=String(posted.thread.binding_id||"");
     next.slack_discussion_number=String(reviewThreadsFor(p.market_slug,p.ce_id).length||1);
     if(posted.operation==="new_parent"){
@@ -1415,7 +1422,13 @@ function reviewWeeklySyncCore(p){
     r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact"&&
     reviewSummarySourceMatches(r,thread,state,latest);});
   var contributors=[];raw.forEach(function(r){if(r.source_author&&contributors.indexOf(r.source_author)<0)contributors.push(r.source_author);});
-  if(!created.length && Number(state.reply_count||0)===raw.length && state.summary_upto_ts===newest && ["pending","approved"].indexOf(String(state.summary_status))>=0)
+  // App-relayed replies have already been stored as exact sources, but Slack
+  // identifies them as bot messages. Include their timestamps in the summary
+  // freshness check without advancing the human scan cursor past unread pages.
+  var summaryNewest=newest;
+  raw.forEach(function(r){var ref=String(r.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d+)$/);
+    if(ref&&ref[2]>summaryNewest)summaryNewest=ref[2];});
+  if(!created.length && Number(state.reply_count||0)===raw.length && state.summary_upto_ts===summaryNewest && ["pending","approved"].indexOf(String(state.summary_status))>=0)
     return {ok:true,weekly:state,new_replies:[],ai_status:"current"};
   var ai=raw.length?reviewAiWeeklySummary(raw,state,p):{status:"no_new_source"};
   var latestState=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
@@ -1424,7 +1437,7 @@ function reviewWeeklySyncCore(p){
     if(String(rec.thread_binding_id||"")!==String(state.thread_binding_id||""))throw new Error("CE thread changed while summarizing");
     rec.last_scanned_ts=newest;rec.reply_count=String(raw.length);rec.contributors_json=JSON.stringify(contributors);
     if(ai.status==="ok"){
-      rec.summary_draft_json=JSON.stringify(ai.summary);rec.summary_status="pending";rec.summary_upto_ts=newest;rec.summary_updated_at=reviewNow();
+      rec.summary_draft_json=JSON.stringify(ai.summary);rec.summary_status="pending";rec.summary_upto_ts=summaryNewest;rec.summary_updated_at=reviewNow();
       rec.summary_thread_binding_id=String(state.thread_binding_id||"");
       rec.summary_slack_discussion_number=String(state.slack_discussion_number||"");
       rec.sync_status="summary_pending_approval";rec.last_error="";rec.version=String((parseInt(rec.version,10)||0)+1);

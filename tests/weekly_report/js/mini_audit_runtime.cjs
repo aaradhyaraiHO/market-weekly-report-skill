@@ -72,8 +72,36 @@ function backendTests(){
   b.c.reviewSlackPostCore=()=>{posts++;return {ok:true,operation:'continue',thread:b.thread,posted_ts:'104.000001'}};
   const post={...id,channel:b.thread.slack_channel,discussion_text:'Follow up',discussion_author:'Reviewer',request_id:'retry'};
   res=b.c.reviewWeeklySlackPost(post);assert.equal(res.ok,true);assert.equal(posts,1);assert.equal(res.weekly.last_scanned_ts,'100.000001');
+  assert.equal(res.weekly.slack_post_ts,'100.000001'); // A reply must not move this week's boundary.
   assert.equal(b.t.suggestions[0].body,'Follow up'); // human writeup is summarization context
   b.c.reviewWeeklySlackPost(post);assert.equal(posts,1);
+
+  // Live regression: app-relayed replies are bot messages in Slack, but already
+  // have exact stored provenance. A second reply must refresh the summary even
+  // when the Slack human-message scan cursor is unchanged. Retain earlier text.
+  b=backend();b.c.slackThreadReplies=()=>({ok:true,messages:[]});
+  b.c.reviewWeeklyMutate(id,r=>({...r,thread_binding_id:'active',slack_discussion_number:'1',
+    slack_post_ts:'102.000001',last_scanned_ts:'100.000001'})); // v17 moved this boundary
+  const exact=(ts,body)=>b.c.reviewSuggestionRecord({...id,source_type:'slack',kind:'comment',
+    confidence:'source_exact',thread_binding_id:'active',source_ref:b.thread.slack_channel+':'+ts,body});
+  exact('100.000001','Original observation');exact('101.000001','First reply');exact('102.000001','Second reply');
+  res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
+  assert.equal(res.ai_status,'ok');assert.equal(b.aiRecords().length,3);
+  assert.equal(res.weekly.summary_upto_ts,'102.000001');assert.equal(res.weekly.last_scanned_ts,'100.000001');
+  exact('103.000001','Third reply');
+  res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
+  assert.equal(res.ai_status,'ok');assert.equal(b.aiCalls(),2);assert.equal(b.aiRecords().length,4);
+  assert.equal(res.weekly.summary_upto_ts,'103.000001');
+  const stable=JSON.stringify(b.t);
+  res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
+  assert.equal(res.ai_status,'current');assert.equal(b.aiCalls(),2);assert.equal(JSON.stringify(b.t),stable);
+
+  // The maximum summarized source is not the scan cursor: advancing a scan past
+  // an app reply could skip unread human messages on a truncated Slack page.
+  b.c.slackThreadReplies=()=>({ok:true,truncated:true,messages:[{ts:'101.500001',user:'U2',text:'Earlier unread human reply'}]});
+  res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
+  assert.equal(res.weekly.last_scanned_ts,'101.500001');assert.equal(res.weekly.summary_upto_ts,'103.000001');
+  assert.ok(b.aiRecords().some(r=>r.body==='Earlier unread human reply'));
 }
 
 function historicalBindingTests(){
