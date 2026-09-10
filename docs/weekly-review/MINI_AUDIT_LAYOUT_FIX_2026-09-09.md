@@ -1,7 +1,8 @@
 # Mini Audit header and collapsible left navigation — local verification
 
-Status: **implemented and verified locally; not deployed**. The live mid-week
-release remains `dpl_42kTYc2YkRwhMffBVpjENTfXtZBy` / backend version 17.
+Status at original local verification: **implemented and verified locally**.
+Subsequently deployed on September 10; see `SIDEBAR_RELEASE_2026-09-10.md` for
+the exact frontend/backend versions, live results and remaining limitations.
 
 Scope: the floating table header and **left report navigation rail**. The earlier
 Hide notes / Show notes implementation was removed following the user's
@@ -72,10 +73,10 @@ Considered but rejected:
   retained all labels, and the desktop-only collapse control was hidden.
 - Browser error log: empty for the tested preview.
 
-Verdict: **Approve for the tested local slice**. Not verified/deployed live for
-this new layout patch; no production notes, Slack posts or backend mutations were
-used as fixtures. This does not close the separately outstanding genuinely-new
-Slack delivery / new AI summary live gate.
+Original verdict: **Approve for the tested local slice**. No production notes,
+Slack posts or backend mutations were used as local fixtures. The later live
+deployment and genuinely-new Slack/AI test are recorded separately in
+`SIDEBAR_RELEASE_2026-09-10.md`; do not infer those results from this local test.
 
 Preview generator:
 
