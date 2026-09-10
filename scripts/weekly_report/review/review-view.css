@@ -524,3 +524,4 @@
 #review-view .rv-discussion-heading h3{margin:0;font-size:17px}
 #review-view .rv-discussion-tools{display:flex;justify-content:flex-end;margin:12px 0}
 @media(max-width:600px){#review-view .rv-slack-send select{min-height:44px}#review-view .rv-summary-heading{flex-wrap:wrap}#review-view .rv-composer-actions .rv-btn,#review-view .rv-saved-note .rv-link,#review-view .rv-saved-note .rv-note-discuss,#review-view .rv-new-writeup{min-height:44px}}
+@media(max-width:900px){#review-view .rv-btn{min-height:44px}}

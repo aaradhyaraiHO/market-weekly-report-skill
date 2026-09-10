@@ -55,6 +55,12 @@ def merge_headout_ce_targets(headout_goal, market_goals):
     if not isinstance(headout_goal, dict):
         return headout_goal
 
+    # A fresh unfiltered Headout query already carries the company-wide CE
+    # target lookup. Do not replace it with a partial/stale market-sidecar union
+    # (or an empty union when Headout is generated on its own).
+    if headout_goal.get('scope') == 'all markets' and isinstance(headout_goal.get('ce_target_pacing'), dict):
+        return copy.deepcopy(headout_goal)
+
     month = headout_goal.get("month")
     merged = {}
     conflicts = set()
@@ -115,8 +121,10 @@ def _current_week_revenue(market):
     return _number(row.get("revenue"))
 
 
-def _trailing_weekly_average(market, end_offset=0, weeks=4):
+def _trailing_weekly_average(market, end_offset=0, weeks=4, as_of=None):
     rows = _weekly_rows(market)
+    if as_of is not None:
+        rows = [row for row in rows if dt.date.fromisoformat(row['week']) + dt.timedelta(days=6) <= as_of]
     if end_offset:
         rows = rows[:-end_offset]
     values = [_number(row.get("revenue")) for row in rows[-weeks:]]
@@ -124,14 +132,20 @@ def _trailing_weekly_average(market, end_offset=0, weeks=4):
     return sum(values) / len(values) if values else None
 
 
-def build_market_goal(market):
+def build_market_goal(market, as_of=None):
     meta = market.get("meta", {})
     market_name = meta.get("market")
     market_slug = meta.get("market_slug")
     week_end = dt.date.fromisoformat(meta["week_end"])
     month = week_end.replace(day=1)
+    # Headout is the whole business, never a literal warehouse market filter.
+    query_market = None if market_slug == "headout" else market_name
+    cutoff = min(week_end, as_of or (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)))
+    if cutoff < month:
+        raise RuntimeError("No completed days in the target month yet")
+    week_end = cutoff
 
-    goal_row = _first_row(fetch.market_monthly_goal(market_name, month))
+    goal_row = _first_row(fetch.market_monthly_goal(query_market, month))
     market_goal = _number(goal_row.get("market_goal"))
     ce_goal = _number(goal_row.get("ce_goal"))
     market_rows = int(goal_row.get("market_row_count") or 0)
@@ -139,19 +153,19 @@ def build_market_goal(market):
     if market_rows and market_goal is not None:
         monthly_goal = market_goal
         goal_grain = "Market"
-    elif ce_rows and ce_goal is not None:
+    elif market_slug != "headout" and ce_rows and ce_goal is not None:
         monthly_goal = ce_goal
         goal_grain = "Combined Entity roll-up"
     else:
         raise RuntimeError(f"No approved monthly target for {market_name} in {month:%Y-%m}")
 
-    revenue_row = _first_row(fetch.market_period_revenue(market_name, month, week_end))
+    revenue_row = _first_row(fetch.market_period_revenue(query_market, month, week_end))
     mtd_revenue = _number(revenue_row.get("revenue"))
     current_revenue = _current_week_revenue(market)
     if mtd_revenue is None or current_revenue is None:
         raise RuntimeError(f"Missing canonical revenue inputs for {market_name}")
 
-    run_rate_weekly_revenue = _trailing_weekly_average(market)
+    run_rate_weekly_revenue = _trailing_weekly_average(market, as_of=cutoff)
     if run_rate_weekly_revenue is None:
         raise RuntimeError(f"Missing trailing weekly revenue for {market_name}")
     run_rate_monthly_revenue = run_rate_weekly_revenue * WEEKS_TO_MONTH
@@ -166,7 +180,7 @@ def build_market_goal(market):
     ly_end = ly_start.replace(day=calendar.monthrange(ly_start.year, ly_start.month)[1])
     ly_mtd_end = ly_start.replace(day=min(elapsed_days, ly_end.day))
     comparisons = _first_row(fetch.market_month_comparisons(
-        market_name, prior_start, prior_mtd_end, prior_end, ly_start, ly_mtd_end, ly_end
+        query_market, prior_start, prior_mtd_end, prior_end, ly_start, ly_mtd_end, ly_end
     ))
     prior_month_revenue = _number(comparisons.get("prior_month_revenue"))
     prior_mtd_revenue = _number(comparisons.get("prior_mtd_revenue"))
@@ -190,33 +204,33 @@ def build_market_goal(market):
 
     ce_revenue = {
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
-        for row in fetch.market_ce_period_revenue(market_name, month, week_end).to_dict("records")
+        for row in fetch.market_ce_period_revenue(query_market, month, week_end).to_dict("records")
     }
     ce_prior_mtd_revenue = {
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
         for row in fetch.market_ce_period_revenue(
-            market_name, prior_start, prior_mtd_end
+            query_market, prior_start, prior_mtd_end
         ).to_dict("records")
     }
     ce_prior_month_revenue = {
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
         for row in fetch.market_ce_period_revenue(
-            market_name, prior_start, prior_end
+            query_market, prior_start, prior_end
         ).to_dict("records")
     }
     ce_ly_mtd_revenue = {
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
         for row in fetch.market_ce_period_revenue(
-            market_name, ly_start, ly_mtd_end
+            query_market, ly_start, ly_mtd_end
         ).to_dict("records")
     }
     ce_ly_month_revenue = {
         str(row.get("ce_id")): _number(row.get("revenue")) or 0.0
         for row in fetch.market_ce_period_revenue(
-            market_name, ly_start, ly_end
+            query_market, ly_start, ly_end
         ).to_dict("records")
     }
-    ce_goals = fetch.market_ce_monthly_goals(market_name, month).to_dict("records")
+    ce_goals = fetch.market_ce_monthly_goals(query_market, month).to_dict("records")
     contributors = []
     ce_target_pacing = {}
     ce_target_total = 0.0
@@ -259,12 +273,15 @@ def build_market_goal(market):
         "mtd_revenue": mtd_revenue,
         "forecast_revenue": forecast_revenue,
         "as_of": week_end.isoformat(),
+        "report_week_end": meta["week_end"],
+        "partial_period": cutoff < dt.date.fromisoformat(meta["week_end"]),
         "retrieved_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "source": (
             f"revenue_goals ({goal_grain}); "
             "analytics_reporting.combined_entity_stats.sum_revenue_predicted"
         ),
         "goal_grain": goal_grain,
+        "scope": "all markets" if market_slug == "headout" else market_name,
         "goal_row_count": market_rows if goal_grain == "Market" else ce_rows,
         "forecast_method": (
             "actual MTD + latest 4 complete weeks run rate allocated to "

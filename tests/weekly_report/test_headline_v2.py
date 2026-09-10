@@ -22,6 +22,15 @@ import render_v2  # noqa: E402
 
 
 class HeadlineV2Contract(unittest.TestCase):
+    def test_partial_preview_goal_is_current_only_for_its_report_and_cutoff(self):
+        goal = dict(month='2026-09', monthly_goal=14217164, mtd_revenue=4000000,
+                    forecast_revenue=14000000, as_of='2026-09-09', partial_period=True,
+                    report_week_end='2026-09-12')
+        self.assertEqual(headline_v2._goal_state(goal, '2026-09-12'), 'current')
+        self.assertEqual(headline_v2._goal_state(goal, '2026-09-19'), 'stale')
+        self.assertEqual(headline_v2._goal_state({**goal, 'as_of': '2026-09-05'}, '2026-09-12'), 'stale')
+        self.assertEqual(headline_v2._goal_state({**goal, 'status': 'stale'}, '2026-09-12'), 'stale')
+
     @classmethod
     def setUpClass(cls):
         cls.market = json.loads(FIXTURE.read_text())

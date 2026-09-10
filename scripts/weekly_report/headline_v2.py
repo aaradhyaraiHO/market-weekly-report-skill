@@ -108,6 +108,11 @@ def _goal_state(goal, week_end):
         report_end = dt.date.fromisoformat(str(week_end))
     except ValueError:
         return "stale"
+    # A deliberately partial-week preview has real MTD data through its cutoff,
+    # not through the future Saturday. Keep the visible "through" date honest.
+    if (goal.get("partial_period") is True and goal.get("report_week_end") == week_end
+            and report_end - dt.timedelta(days=6) <= as_of <= report_end):
+        return "current"
     return "current" if as_of >= report_end else "stale"
 
 
@@ -904,6 +909,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
             "ce_target_pacing",
             "goal_grain", "goal_row_count", "forecast_method",
             "retrieved_at",
+            "partial_period", "report_week_end", "scope", "reference",
         )})
         attainment = _number(goal.get("forecast_attainment_pct"))
         if attainment is None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import json
 import sys
 import unittest
@@ -18,6 +19,13 @@ import build_v2_goals  # noqa: E402
 
 
 class BuildV2GoalsContract(unittest.TestCase):
+    def test_fresh_headout_ce_goals_are_not_replaced_by_partial_market_sidecars(self):
+        goal = {'month':'2026-09', 'scope':'all markets', 'monthly_goal':14217164,
+                'ce_target_pacing':{'544':{'monthly_goal':10000}}}
+        self.assertEqual(build_v2_goals.merge_headout_ce_targets(goal, {}), goal)
+        stale = {'benelux':{'month':'2026-09', 'ce_target_pacing':{'544':{'monthly_goal':999}}}}
+        self.assertEqual(build_v2_goals.merge_headout_ce_targets(goal, stale), goal)
+
     @classmethod
     def setUpClass(cls):
         cls.market = json.loads(FIXTURE.read_text())
@@ -198,6 +206,54 @@ class BuildV2GoalsContract(unittest.TestCase):
 
         self.assertNotIn("254", result["ce_target_pacing"])
         self.assertEqual(result["ce_target_conflict_count"], 1)
+
+    @mock.patch.object(build_v2_goals.fetch, "market_period_revenue")
+    @mock.patch.object(build_v2_goals.fetch, "market_monthly_goal")
+    def test_headout_uses_all_markets_and_only_approved_market_total(self, goal_query, revenue_query):
+        market = copy.deepcopy(self.market)
+        market['meta'].update(market='Headout (all markets)', market_slug='headout')
+        goal_query.return_value = pd.DataFrame([dict(market_row_count=25, market_goal=14_217_164, ce_row_count=900, ce_goal=99_000_000)])
+        revenue_query.return_value = self._period_revenue()
+        _, goal = build_v2_goals.build_market_goal(market)
+        self.assertEqual(goal['monthly_goal'], 14_217_164)
+        self.assertEqual(goal['scope'], 'all markets')
+        self.assertIsNone(goal_query.call_args.args[0])
+        self.assertIsNone(revenue_query.call_args.args[0])
+        for query in (self.market_ce_period_revenue, self.market_month_comparisons, self.market_ce_monthly_goals):
+            self.assertTrue(all(call.args[0] is None for call in query.call_args_list))
+        goal_query.return_value = pd.DataFrame([dict(market_row_count=0, market_goal=None, ce_row_count=900, ce_goal=99_000_000)])
+        with self.assertRaisesRegex(RuntimeError, 'No approved'):
+            build_v2_goals.build_market_goal(market)
+
+    @mock.patch.object(build_v2_goals.fetch, "market_period_revenue")
+    @mock.patch.object(build_v2_goals.fetch, "market_monthly_goal")
+    def test_preview_does_not_count_future_days_or_partial_week(self, goal_query, revenue_query):
+        market = copy.deepcopy(self.market)
+        market['meta'].update(week_start='2026-09-06', week_end='2026-09-12', market_slug='headout')
+        market['market_summary']['weekly'] = [dict(week=w, revenue=r) for w, r in [
+            ('2026-08-09', 100), ('2026-08-16', 200), ('2026-08-23', 300), ('2026-08-30', 400), ('2026-09-06', 9999)]]
+        goal_query.return_value = pd.DataFrame([dict(market_row_count=25, market_goal=10000, ce_row_count=0)])
+        revenue_query.return_value = self._period_revenue()
+        _, goal = build_v2_goals.build_market_goal(market, as_of=dt.date(2026, 9, 9))
+        self.assertEqual(goal['as_of'], '2026-09-09')
+        self.assertEqual(goal['elapsed_days'], 9)
+        self.assertEqual(goal['remaining_days'], 21)
+        self.assertEqual(goal['run_rate_weekly_revenue'], 250)
+        self.assertEqual(revenue_query.call_args.args[-1], dt.date(2026, 9, 9))
+
+    @mock.patch.object(build_v2_goals.fetch, 'query_df')
+    def test_all_market_queries_remove_only_market_filter(self, query):
+        start, end = dt.date(2026, 9, 1), dt.date(2026, 9, 9)
+        f = build_v2_goals.fetch
+        f.market_period_revenue(None, start, end)
+        f.market_ce_period_revenue(None, start, end)
+        f.market_month_comparisons(None, start, end, end, start, end, end)
+        f.market_monthly_goal(None, start)
+        f.market_ce_monthly_goals(None, start)
+        for call in query.call_args_list:
+            self.assertNotIn('@market', call.args[0])
+            self.assertNotIn('market', call.args[2])
+            self.assertTrue('@start' in call.args[0] or '@prior_start' in call.args[0] or '@month' in call.args[0])
 
 
 if __name__ == "__main__":

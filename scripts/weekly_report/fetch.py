@@ -152,7 +152,7 @@ def market_weekly_revenue(market: str | None, start: dt.date, end: dt.date) -> p
     return query_df(sql, "market_weekly_revenue", params)
 
 
-def market_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def market_period_revenue(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """Return canonical predicted revenue for one market over an exact date range."""
     sql = f"""
     SELECT
@@ -161,17 +161,17 @@ def market_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataF
     FROM {config.CE_STATS}
 
     WHERE report_date BETWEEN @start AND @end
-      AND business_market = @market
+      {'AND business_market = @market' if market else ''}
     """
     return query_df(
         sql,
         "market_period_revenue",
-        {"market": market, "start": config.iso(start), "end": config.iso(end)},
+        {**({"market": market} if market else {}), "start": config.iso(start), "end": config.iso(end)},
     )
 
 
 def market_month_comparisons(
-    market: str,
+    market: str | None,
     prior_start: dt.date,
     prior_mtd_end: dt.date,
     prior_end: dt.date,
@@ -193,14 +193,13 @@ def market_month_comparisons(
 
     FROM {config.CE_STATS}
 
-    WHERE business_market = @market
-      AND (
+    WHERE {'business_market = @market AND' if market else ''} (
         report_date BETWEEN CAST(@prior_start AS DATE) AND CAST(@prior_end AS DATE)
         OR report_date BETWEEN CAST(@ly_start AS DATE) AND CAST(@ly_end AS DATE)
       )
     """
     return query_df(sql, "market_month_comparisons", {
-        "market": market,
+        **({"market": market} if market else {}),
         "prior_start": config.iso(prior_start),
         "prior_mtd_end": config.iso(prior_mtd_end),
         "prior_end": config.iso(prior_end),
@@ -210,7 +209,7 @@ def market_month_comparisons(
     })
 
 
-def market_ce_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+def market_ce_period_revenue(market: str | None, start: dt.date, end: dt.date) -> pd.DataFrame:
     """Return CE-level canonical predicted revenue for an exact date range."""
     sql = f"""
     SELECT
@@ -221,18 +220,18 @@ def market_ce_period_revenue(market: str, start: dt.date, end: dt.date) -> pd.Da
     FROM {config.CE_STATS}
 
     WHERE report_date BETWEEN CAST(@start AS DATE) AND CAST(@end AS DATE)
-      AND business_market = @market
+      {'AND business_market = @market' if market else ''}
 
     GROUP BY 1
     """
     return query_df(sql, "market_ce_period_revenue", {
-        "market": market,
+        **({"market": market} if market else {}),
         "start": config.iso(start),
         "end": config.iso(end),
     })
 
 
-def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
+def market_monthly_goal(market: str | None, month: dt.date) -> pd.DataFrame:
     """Return approved market and CE-roll-up goals without mixing their grains.
 
     ``revenue_goals`` is a Drive-backed external table. A market-level target is
@@ -240,7 +239,7 @@ def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
     can use it only as an explicit fallback for markets whose market row is
     absent; the two values must never be added together.
     """
-    sql = """
+    sql = f"""
     SELECT
         COUNTIF(entity_type = 'Market') AS market_row_count,
         SUM(IF(entity_type = 'Market', target_revenue, NULL)) AS market_goal,
@@ -250,18 +249,18 @@ def market_monthly_goal(market: str, month: dt.date) -> pd.DataFrame:
     FROM `headout-analytics.analytics_reporting.revenue_goals`
 
     WHERE target_month = CAST(@month AS DATE)
-      AND LOWER(market) = LOWER(@market)
+      {'AND LOWER(market) = LOWER(@market)' if market else ''}
     """
     return query_df(
         sql,
         "market_monthly_goal",
-        {"market": market, "month": config.iso(month.replace(day=1))},
+        {**({"market": market} if market else {}), "month": config.iso(month.replace(day=1))},
     )
 
 
-def market_ce_monthly_goals(market: str, month: dt.date) -> pd.DataFrame:
+def market_ce_monthly_goals(market: str | None, month: dt.date) -> pd.DataFrame:
     """Return approved CE-level targets for target-gap attribution."""
-    sql = """
+    sql = f"""
     SELECT
         CAST(entity_id AS STRING) AS ce_id,
         ANY_VALUE(entity_name) AS ce_name,
@@ -270,7 +269,7 @@ def market_ce_monthly_goals(market: str, month: dt.date) -> pd.DataFrame:
     FROM `headout-analytics.analytics_reporting.revenue_goals`
 
     WHERE target_month = CAST(@month AS DATE)
-      AND LOWER(market) = LOWER(@market)
+      {'AND LOWER(market) = LOWER(@market)' if market else ''}
       AND entity_type = 'Combined Entity'
 
     GROUP BY 1
@@ -278,7 +277,7 @@ def market_ce_monthly_goals(market: str, month: dt.date) -> pd.DataFrame:
     return query_df(
         sql,
         "market_ce_monthly_goals",
-        {"market": market, "month": config.iso(month.replace(day=1))},
+        {**({"market": market} if market else {}), "month": config.iso(month.replace(day=1))},
     )
 
 
