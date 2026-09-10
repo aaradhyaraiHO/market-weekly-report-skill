@@ -1,11 +1,11 @@
 """
-Weekly buckets — FINAL production engine (locked 2026-07-13).
+Weekly buckets — current production table engine.
 
-Defend/Compound over the existing B1/B2/B4 detection engines, reorganized:
-  DEFEND  = Losing Money v2 (C1-C4 criteria, Existing/New tables)  +  Seasonality ↓
+Current table families:
+  DEFEND  = Losing Money v2 (C1-C5 criteria, Existing/New tables)  +  Seasonality ↓
   COMPOUND = Scale-Up (ROI≥155% ≥3-of-4 wk, not cliffed)        +  Seasonality ↑
 
-Seasonality is ONE Fluctuations table (CM1/conv detects, RPC = evidence), split by
+Seasonality is ONE Fluctuations table (CM1/conv and RPC detect), split by
 direction. Consumes a market snapshot (build_snapshot.build_market output). Pure logic.
 Stress-tested NA+IT+OC → 0 anomalies.
 """
@@ -27,7 +27,7 @@ LM_LOSS_FLOOR = 0.0            # C5: W0 CM2 < 0 flags — FLOORLESS (Aaradhya 20
                                # −ve OR ROI<100 → flag"; the ROI clause is redundant since
                                # ROI<100 ⟺ CM2<0 with spend). Restores the transcript's base
                                # "current week status" check the finalized notes dropped. Losing
-                               # CEs also bypass the $1k funded gate, superseding the burn line.
+                               # CEs enter the report only above the materiality gate.
                                # Raise this if the table gets too noisy to review.
 LM_RECOVER_IMPROVE_PCT = 50.0  # W0 loss ≥50% smaller than W1 loss → "recovering" tag
 SEAS_UP, SEAS_DN = 140.0, 120.0   # Fluctuations verdict bands: +ve if ROI>140 · -ve if ROI<120
@@ -133,7 +133,7 @@ def _vs_cat(val, med): return round((val / med - 1) * 100) if (val and med) else
 
 
 def _lm_fired(wkseq, ne, SPK, CMK, RK, CVK):
-    """Evaluate C1-C4 with wkseq[-1] as the current week. Returns
+    """Evaluate C1-C5 with wkseq[-1] as the current week. Returns
     (fired, d_wow, d_3w, cm2_90d, c1). Shared by the main pass (full series) and
     the flagged-last-week recheck (series truncated by one) so the two can't drift."""
     w0 = wkseq[-1]
@@ -156,7 +156,7 @@ def _lm_fired(wkseq, ne, SPK, CMK, RK, CVK):
 
 
 def losing_money(ces, troas_now=None, launch=None, prior_pp=None, spend_gate=LM_SPEND_GATE):
-    """DEFEND · Losing Money v2 — four flagging criteria (locked 2026-07-30 meeting),
+    """DEFEND · Losing Money v2 — five flagging criteria (locked 2026-07-30 meeting),
     evaluated per funded CE (> $1k Google-search spend / 4wk). Existing and New CEs
     flag into SEPARATE tables. New = never Pro+ in the prior 4 calendar quarters
     (`prior_pp` from _prior_proplus_map; 2026-08-03 decision — metadata fallback
@@ -230,11 +230,8 @@ def losing_money(ces, troas_now=None, launch=None, prior_pp=None, spend_gate=LM_
         ident = {"ce_id": ce["ce_id"], "ce_name": ce["ce_name"], "tier": _tier(ce),
                  "new_existing": ne, "spend_4w": round(sp4),
                  "orders_4w": round(sum((w.get("orders") or 0) for w in wk[-4:]))}
-        # Scope = the 5 criteria ONLY (Aaradhya 2026-08-04): every CE spending this week is
-        # evaluated — no spend floor, no funded gate, no history minimum. The old $1k gate,
-        # burn line and subthreshold footnote are REMOVED. Two data-validity guards remain
-        # (not criteria): spend=0 → can't lose this week (paused footnote if it spent
-        # recently); missing CM1 feed → CM2 unknowable (tracking-gap footnote, below).
+        # Evaluate spending CEs subject to the report materiality gate below.
+        # Paused CEs and missing CM1 are data-validity cases, not flag criteria.
         if spw <= 0:
             if sp4 > 0: paused.append(ident)              # spent recently, stopped this week
             continue
@@ -866,7 +863,7 @@ def build_buckets(snap):
     # Losing Money first, so its flagged set can suppress duplicate down-swings in Fluctuations.
     # A CE already in the cash bucket isn't an EARLY warning — it's the same finding, later.
     # We read the OUTPUT ce-ids (existing + new), never the criteria, so this is agnostic to
-    # which Losing Money engine is running (v2 here / C5 on main).
+    # future changes to Losing Money criteria.
     lm = losing_money(ces, troas_now, launch, prior_pp)
     lm_flagged = {str(r["ce_id"]) for r in (lm.get("existing") or []) + (lm.get("new") or [])}
     seas = seasonality(fl, ces, cat_rpc, cat_cvr, flux_w0=flux_win, lm_ce_ids=lm_flagged)

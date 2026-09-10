@@ -9,6 +9,20 @@ Imported 2026-07-12 from `~/analytics` safepoint branch `weekly-report-v1` (1c0b
 - `dbt/` — reference copies of the ce_weekly_* models; canonical home = analytics repo, PR from safepoint branch `weekly-report-v1`
 - Sibling pattern: ~/market-monthly-review-skill (sync-skill.sh mirrors into analytics)
 
+## Current bucket dependencies
+
+Current report tables use `buckets_final`, produced by `buckets.build_buckets`.
+Losing Money and RPC/CM1 thresholds live in `buckets.py`, `alerts.py`, and
+`config.py`. The retired B1/B2/B3/B4 display cascade, ten-row narrative cap,
+and legacy bucket sparklines are no longer generated. New snapshots omit
+`bucket_b3`, `bucket_b4`, and `bucket_cascade`; existing snapshots remain readable.
+
+B1 is still computed because its movement rows supply Scale-Up tROAS context.
+The global builder also retains B1/B3/B4 candidate IDs to preserve its existing
+CE drawer selection; market builds no longer run B3/B4. Removing these remaining
+classifiers requires migrating those dependencies and checking CE-selection and
+Scale-Up parity. Cached-snapshot metric fallbacks remain supported.
+
 ## V2 baseline verification
 
 Phase 1 freezes the observable V1 producer/consumer boundary with synthetic edge cases,
