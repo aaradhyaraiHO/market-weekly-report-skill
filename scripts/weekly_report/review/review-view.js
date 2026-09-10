@@ -325,6 +325,7 @@
       }
       if (!force && S.ceLoadedAt[ceId] && Date.now()-S.ceLoadedAt[ceId]<60000) return Promise.resolve();
       var market=S.market_slug, week=S.week_start, seq=(S.ceRequestSeq[ceId]||0)+1;
+      var commentVersion=(S.commentVersions||{})[ceId]||0;
       S.ceRequestSeq[ceId]=seq;
       var options={refresh:!!force,timeoutMs:45000}, errors=S.resourceErrors[ceId]=S.resourceErrors[ceId]||{};
       function current(){return S.market_slug===market&&S.week_start===week&&S.ceRequestSeq[ceId]===seq;}
@@ -332,7 +333,7 @@
       var calls=[
         resource("notes",api.weeklyCommentary({market_slug:market,ce_id:ceId,week:week},"",8,options),function(res){var rows=res.weekly||[];S.weeklyHist[ceId]=rows;S.weekly[ceId]=rows.find(function(r){return String(r.week_start)===week;})||null;}),
         resource("suggestions",api.suggestions({market_slug:market,ce_id:ceId,week:week},false,options),function(res){S.suggestions[ceId]=res.suggestions||[];}),
-        resource("comments",api.comments({market_slug:market,ce_id:ceId,week:week},false,options),function(res){S.comments[ceId]=res.comments||[];}),
+        resource("comments",api.comments({market_slug:market,ce_id:ceId,week:week},false,options),function(res){if(((S.commentVersions||{})[ceId]||0)===commentVersion)S.comments[ceId]=res.comments||[];}),
         resource("threads",api.threads({market_slug:market,ce_id:ceId},options),function(res){S.threadRegistry[ceId]={active:res.active_thread||null,threads:res.threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];})
       ];
       S.loadingCe[ceId]=Promise.all(calls).finally(function(){if(current()){delete S.loadingCe[ceId];S.ceLoadedAt[ceId]=Object.keys(errors).length?0:Date.now();}});
@@ -643,16 +644,24 @@
       if(!text.trim()||S.asyncBusy[key])return;
       captureVisibleDrafts();
       var editor=S.writeupEditors[writeupEditorKey(id.ce_id)],existing=editor&&editor.mode==='edit'&&editor.comment;
-      var draftKey=composeDraftKey(id.ce_id,"note:"+text),request=S.sendRequests[draftKey]||(S.sendRequests[draftKey]="note_"+Date.now()+"_"+hash(draftKey));
+      var draftKey=composeDraftKey(id.ce_id,"note:"+(existing?existing.comment_id+":":"")+text),request=S.sendRequests[draftKey]||(S.sendRequests[draftKey]="note_"+Date.now()+"_"+hash(draftKey));
       S.asyncBusy[key]=true;S.auditStatus[id.ce_id]="Saving note…";render();
+      function progress(message){
+        if(!sameReport(id)||!S.asyncBusy[key])return;
+        S.auditStatus[id.ce_id]=message;
+        if(String(S.selected)===String(id.ce_id)){var status=root.querySelector("#rv-discussion-section .rv-audit-status");if(status)status.textContent=message;}
+      }
+      var slowTimer=setTimeout(function(){progress("Still saving your note… Your text is kept here. Please don’t submit it again.");},8000);
       var payload=Object.assign({},id,{source_ref:request,body:text,author_name:author(),source_type:"manual"});
-      if(existing)payload=Object.assign({},existing,{body:text,expected_updated_at:existing.updated_at||existing.created_at||""});
-      api.saveComment(payload).then(function(res){
+      if(existing)payload=Object.assign({},id,{comment_id:existing.comment_id,body:text,author_name:author(),expected_updated_at:existing.updated_at||existing.created_at||""});
+      api.saveComment(payload,function(message){clearTimeout(slowTimer);progress(message);}).then(function(res){
         if(!sameReport(id))return;
-        var c=res.comment||Object.assign({},id,{comment_id:request,body:text,author_name:author(),created_at:new Date().toISOString()});
+        var c=res.comment;
+        if(!c||!c.comment_id)throw new Error("Could not confirm the save. Your writeup is preserved.");
+        S.commentVersions=S.commentVersions||{};S.commentVersions[id.ce_id]=(S.commentVersions[id.ce_id]||0)+1;
         S.comments[id.ce_id]=[c].concat((S.comments[id.ce_id]||[]).filter(function(x){return x.comment_id!==c.comment_id;}));
         closeWriteup(id.ce_id);delete S.sendRequests[draftKey];S.auditStatus[id.ce_id]=existing?"Note updated.":"Note saved.";
-      }).catch(function(error){if(!sameReport(id))return;S.auditStatus[id.ce_id]=error.message||"Could not save. Your writeup is preserved.";}).finally(function(){delete S.asyncBusy[key];if(sameReport(id)&&S.selected===id.ce_id){var box=root.querySelector("#rv-slack-message");if(box)box.value=S.slackDrafts[id.ce_id]||"";render();}});
+      }).catch(function(error){if(!sameReport(id))return;S.auditStatus[id.ce_id]=error.message||"Could not save. Your writeup is preserved.";}).finally(function(){clearTimeout(slowTimer);delete S.asyncBusy[key];if(sameReport(id)&&S.selected===id.ce_id){var box=root.querySelector("#rv-slack-message");if(box)box.value=S.slackDrafts[id.ce_id]||"";render();}});
     }
     function sendWriteup(){
       if(!api||!ensureAuthor()||!S.threadRegistryLoaded[S.selected])return;

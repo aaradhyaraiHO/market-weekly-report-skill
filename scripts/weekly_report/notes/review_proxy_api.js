@@ -33,7 +33,7 @@ function parseCookies(header) {
 function canonicalParams(params) {
   return [...params.entries()]
     .filter(([key]) => key !== "actor_sig")
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join("\n");
 }
@@ -74,7 +74,8 @@ export default async function handler(req, res) {
 
   let actor;
   try { actor = await authenticatedActor(req); } catch (_) { actor = null; }
-  if (!actor) return res.status(401).json({ ok: false, error: "authenticated BGM identity required" });
+  res.setHeader("cache-control", "no-store");
+  if (!actor) return res.status(401).json({ ok: false, code: "AUTH_REQUIRED", error: "authenticated BGM identity required" });
 
   if (!APPS_SCRIPT_URL)
     return res.status(503).json({ ok: false, error: "isolated review backend unavailable" });
@@ -100,10 +101,12 @@ export default async function handler(req, res) {
   if (req.method === "POST" && ["review_weekly_sync", "review_slack_scan"].includes(action) && process.env.VERCEL_AUTOMATION_BYPASS_SECRET)
     params.set("review_ai_protection_bypass", process.env.VERCEL_AUTOMATION_BYPASS_SECRET);
 
-  const signingSecret = process.env.REVIEW_MODE_PROXY_SECRET;
+  const signingSecret = String(process.env.REVIEW_MODE_PROXY_SECRET || "").trim();
   if (!signingSecret) return res.status(503).json({ ok: false, error: "review proxy signing unavailable" });
 
   let target;
+  const started = Date.now();
+  let noteTimer;
   try {
     target = new URL(APPS_SCRIPT_URL);
     if (target.protocol !== "https:") throw new Error("HTTPS required");
@@ -124,16 +127,29 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       ({ upstream, text } = await readBackend(target));
     } else {
+      const controller = action === "review_comment_upsert" ? new AbortController() : null;
+      if (controller) noteTimer = setTimeout(() => controller.abort(), 18000);
       upstream = await fetch(target, {
         method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
+        ...(controller ? { signal: controller.signal } : {}),
         body: JSON.stringify(Object.fromEntries(params.entries()))
       });
       text = await upstream.text();
     }
+    res.setHeader("server-timing", `review;dur=${Date.now() - started}`);
+    // A signed-request failure is a service problem, not an expired browser
+    // session. Do not send the user through a pointless sign-in loop.
+    let result; try { result = JSON.parse(text); } catch (_) {}
+    if (result && result.ok === false && result.error === "authenticated BGM identity required")
+      return res.status(502).json({ ok: false, code: "REVIEW_BACKEND_AUTH_FAILED", error: "The note service could not verify this request. Your draft is kept; please retry. If it persists, report this error." });
     res.status(upstream.status);
     res.setHeader("content-type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
     return res.send(text);
   } catch (_) {
+    if (req.method === "POST" && action === "review_comment_upsert")
+      return res.status(504).json({ ok: false, code: "REVIEW_SAVE_UNCONFIRMED", error: "The save response did not arrive. Check the saved note before retrying." });
     return res.status(502).json({ ok: false, error: "review backend unavailable" });
+  } finally {
+    clearTimeout(noteTimer);
   }
 }

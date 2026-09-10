@@ -217,7 +217,7 @@ async function clientTests(){
   const timeout=api.threads(id);timers.at(-1)();await assert.rejects(timeout,/took too long/);
   fetcher=async()=>reply({ok:true,threads:[]});await api.threads(id);
   // A pre-save read cannot refill the cache after the successful mutation.
-  api.clearCache();let release;fetcher=async(url,opts)=>opts.method==='POST'?reply({ok:true}):new Promise(r=>{release=r;});
+  api.clearCache();let release;fetcher=async(url,opts)=>opts.method==='POST'?reply({ok:true,comment:{comment_id:'saved'}}):new Promise(r=>{release=r;});
   const old=api.comments(id);await api.saveComment({...id,body:'x',author_name:'Reviewer'});release(reply({ok:true,comments:['stale']}));await old;
   fetcher=async()=>reply({ok:true,comments:['fresh']});assert.equal((await api.comments(id)).comments[0],'fresh');
   let pages=0;fetcher=async()=>reply(++pages===1?{ok:true,work_items:[{work_id:'one'}],next_before:'cursor'}:{ok:true,work_items:[{work_id:'two'}]});
@@ -310,7 +310,7 @@ async function savedNoteTests(){
   const view=fs.readFileSync(path.join(root,'scripts/weekly_report/review/review-view.js'),'utf8');
   let box={value:''},sent=[],fail=false;
   const S={market_slug:id.market_slug,week_start:id.week_start,selected:id.ce_id,comments:{},writeupEditors:{},slackDrafts:{},asyncBusy:{},auditStatus:{},sendRequests:{},resourceErrors:{},threadRegistry:{},threadRegistryError:{}};
-  const ui=vm.createContext({S,Promise,Date,JSON,root:{querySelector:()=>box},api:{saveComment:async p=>{sent.push({...p});if(fail)throw Error('Save unavailable');return {comment:{...p,comment_id:p.comment_id||'saved',source_type:'manual',created_at:'2026-09-09T00:00:00Z',updated_at:'2026-09-09T01:00:00Z'}};}},
+  const ui=vm.createContext({S,Promise,Date,JSON,setTimeout,clearTimeout,root:{querySelector:()=>box},api:{saveComment:async p=>{sent.push({...p});if(fail)throw Error('Save unavailable');return {comment:{...p,comment_id:p.comment_id||'saved',source_type:'manual',created_at:'2026-09-09T00:00:00Z',updated_at:'2026-09-09T01:00:00Z'}};}},
     ensureAuthor:()=>true,author:()=> 'Reviewer',ident:()=>id,sameReport:()=>true,composeDraftKey:(ce,kind)=>[S.market_slug,S.week_start,ce,kind].join(':'),
     captureVisibleDrafts(){if(box)S.slackDrafts[S.selected]=box.value;},esc:v=>String(v??'').replace(/</g,'&lt;'),fmtWhen:v=>v,hash:()=> 'hash',render(){}});
   vm.runInContext(view.slice(view.indexOf('    function writeupEditorKey('),view.indexOf('    function renderCommentaryCard(')),ui);

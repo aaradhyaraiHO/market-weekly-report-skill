@@ -409,8 +409,12 @@ function reviewUpsertBy(kind,predicate,buildRecord){
     delete reviewRowCache[kind]; // Re-read after acquiring the mutation lock.
     var rows=reviewRows(kind),existing=null;
     for(var i=0;i<rows.length;i++)if(predicate(rows[i])){existing=rows[i];break;}
-    var record=buildRecord(existing),sh=reviewSheet(kind);
+    var prior=existing&&def.headers.map(function(h){return existing[h]==null?"":existing[h];});
+    var record=buildRecord(existing);
     var vals=def.headers.map(function(h){return record[h]==null?"":record[h];});
+    // An idempotent replay is a read, not another Sheet write.
+    if(existing&&JSON.stringify(prior)===JSON.stringify(vals))return existing;
+    var sh=reviewSheet(kind);
     var row=existing?existing._row:sh.getLastRow()+1;
     sh.getRange(row,1,1,vals.length).setValues([vals]);
     delete reviewRowCache[kind];
@@ -548,10 +552,6 @@ function reviewMentionResolve(p){
 function reviewCommentUpsert(p) {
   var err = reviewRequired(p, ["market_slug","ce_id","week_start","body","author_name"]);
   if (err) return err;
-  if(!p.comment_id && p.source_type==="manual" && p.source_ref){
-    var duplicate=reviewFind("comments",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&r.source_ref===p.source_ref&&r.source_type==="manual";});
-    if(duplicate)return jsonResp({ok:true,duplicate:true,comment:duplicate});
-  }
   var existing = p.comment_id ? reviewFind("comments", function(r){ return r.comment_id === p.comment_id; }) : null;
   if (p.comment_id && !existing) return jsonResp({ok:false,error:"comment not found"});
   if (existing && (existing.market_slug !== p.market_slug || String(existing.ce_id) !== String(p.ce_id) || ymd(existing.week_start)!==ymd(p.week_start)))
@@ -591,6 +591,20 @@ function reviewCommentUpsert(p) {
         return rec;
       });
     }catch(error){return jsonResp({ok:false,error:error.message});}
+  }else if(p.source_type==="manual"&&p.source_ref){
+    // Check AFTER taking the write lock. The first request can still complete
+    // after its browser times out; a retry must not append a second note.
+    var replay=false;
+    try{
+      rec=reviewUpsertBy("comments",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start)&&r.source_ref===p.source_ref&&r.source_type==="manual";},function(current){
+        if(current){
+          if(current.deleted_at||current.body!==p.body)throw new Error("This save request was already used for a different or deleted note. Your draft is kept.");
+          replay=true;return current;
+        }
+        return rec;
+      });
+    }catch(error){return jsonResp({ok:false,error:error.message});}
+    return jsonResp({ok:true,duplicate:replay,comment:rec});
   }else reviewWrite("comments", existing, rec);
   return jsonResp({ok:true, comment:rec});
 }
@@ -998,6 +1012,8 @@ function doGet(e) {
   if(getMutations.indexOf(action)>=0)return jsonResp({ok:false,error:action+" requires POST"});
   if (action === "review_comment_list") {
     var comments = reviewFilter(reviewRows("comments"), p);
+    if(p.comment_id)comments=comments.filter(function(r){return r.comment_id===p.comment_id;});
+    if(p.source_ref)comments=comments.filter(function(r){return r.source_ref===p.source_ref;});
     if (!reviewBool(p.include_deleted)) comments = comments.filter(function(r){ return !r.deleted_at; });
     var commentPage=reviewPage(comments,p,"created_at",50);
     return jsonResp({ok:true,comments:commentPage.items,next_before:commentPage.next_before});

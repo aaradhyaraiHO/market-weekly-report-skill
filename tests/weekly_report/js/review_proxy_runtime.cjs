@@ -25,7 +25,7 @@ const response=(status=200,body='{"ok":true,"weekly":[{"week_start":"2026-08-30"
 function signed(call) {
   const u=new URL(call.url);const p=call.init.method==='POST'?new URLSearchParams(Object.entries(JSON.parse(call.init.body))):u.searchParams;
   assert.equal(p.get('actor_email'),'bgm@headout.com');
-  const canonical=[...p.entries()].filter(([k])=>k!=='actor_sig').sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('\n');
+  const canonical=[...p.entries()].filter(([k])=>k!=='actor_sig').sort(([a],[b])=>a < b ? -1 : a > b ? 1 : 0).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('\n');
   assert.equal(p.get('actor_sig'),createHmac('sha256','test-signing').update(canonical).digest('hex'));
   return p;
 }
@@ -58,6 +58,15 @@ function signed(call) {
     const p=signed(t.calls[0]);assert.equal(p.get('review_ai_protection_bypass'),'server-bypass');assert.equal(new URL(t.calls[0].url).search,'');
   }
   t=setup(()=>response());await t.request('POST','/api/review',{action:'review_comment_upsert',body:'Note',author_name:'BGM'});assert.equal(t.calls.length,1);assert.equal(signed(t.calls[0]).has('review_ai_protection_bypass'),false);
+  assert.deepEqual(t.delays,[18000]);assert.equal(t.timers.size,0);
+  t=setup((u,init)=>new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(Error('aborted')))),{expire:true});
+  r=await t.request('POST','/api/review',{action:'review_comment_upsert',body:'Note',author_name:'BGM'});
+  assert.equal(t.calls.length,1);assert.equal(r.code,504);assert.equal(r.body.code,'REVIEW_SAVE_UNCONFIRMED');assert.equal(t.timers.size,0);
+  t=setup(()=>response(200,'{"ok":false,"error":"authenticated BGM identity required"}'));
+  r=await t.request('POST','/api/review',{action:'review_comment_upsert',body:'Note'});
+  assert.equal(r.code,502);assert.equal(r.body.code,'REVIEW_BACKEND_AUTH_FAILED');assert.equal(t.calls.length,1);
+  t=setup(()=>response(),{env:{REVIEW_MODE_PROXY_SECRET:' test-signing\n'}});
+  await t.request('POST','/api/review',{action:'review_comment_upsert',body:'Private note',Z:'upper',a:'lower'});signed(t.calls[0]);
 
   // Authentication, route allowlist, configuration, and whoami short circuits stay intact.
   for(const opts of [{rejectAuth:true},{actor:{email:'outsider@example.com'}},{env:{AUTH_SECRET:''}}]){

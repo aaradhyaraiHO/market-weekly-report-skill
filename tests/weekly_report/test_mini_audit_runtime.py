@@ -6,6 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 class MiniAuditRuntime(unittest.TestCase):
+    def test_note_save_deadlines_reconciliation_and_atomic_retries(self):
+        result = subprocess.run([shutil.which('node'), str(ROOT / 'tests/weekly_report/js/review_note_save_runtime.cjs')], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_meeting_import_replay_and_granola_payload(self):
         result = subprocess.run([shutil.which('node'), str(ROOT / 'tests/weekly_report/js/review_import_runtime.mjs')], cwd=ROOT, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

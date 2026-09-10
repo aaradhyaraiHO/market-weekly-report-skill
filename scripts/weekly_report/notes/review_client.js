@@ -15,15 +15,21 @@
     required(baseUrl, "baseUrl");
     var cache = {}, inflight = {}, generation=0, CACHE_MS = 60000;
 
+    function failure(message, code, status) {
+      var error = new Error(message); error.code = code; error.status = status; return error;
+    }
+
     function fetchJson(url,options,timeoutMs){
       var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},timeoutMs||15000);
       var opts=Object.assign({},options||{},{signal:controller.signal});
       return fetch(url,opts).then(function(response){
-        return response.json().catch(function(){throw new Error(response.status===401?"Please sign in again.":"The audit service did not return a valid response.");}).then(function(body){
-          if(!response.ok||!body||!body.ok)throw new Error(body&&body.error||"Audit request failed ("+response.status+")");
+        return response.json().catch(function(){throw failure(response.status===401?"Please sign in again in another tab, then retry here. Your draft is kept.":"The audit service did not return a valid response.",response.status===401?"AUTH_REQUIRED":"INVALID_RESPONSE",response.status);}).then(function(body){
+          if(response.status===401)throw failure("Please sign in again in another tab, then retry here. Your draft is kept.","AUTH_REQUIRED",401);
+          if(body&&body.error==="authenticated BGM identity required")throw failure("The note service could not verify this request. Your draft is kept; please retry. If it persists, report this error.","BACKEND_AUTH_FAILED",response.status);
+          if(!response.ok||!body||!body.ok)throw failure(body&&body.error||"Audit request failed ("+response.status+")",body&&body.code||"REQUEST_FAILED",response.status);
           return body;
         });
-      }).catch(function(error){if(error.name==="AbortError")throw new Error("The audit service took too long. Your draft is preserved. Retry when ready.");throw error;}).finally(function(){clearTimeout(timer);});
+      }).catch(function(error){if(error.name==="AbortError")throw failure("The audit service took too long. Your draft is preserved. Retry when ready.","TIMEOUT");throw error;}).finally(function(){clearTimeout(timer);});
     }
 
     function request(action, params, options) {
@@ -46,13 +52,13 @@
       return running;
     }
 
-    function post(action, params) {
+    function post(action, params, timeoutMs) {
       return fetchJson(baseUrl, {
         method: "POST",
         headers: {"content-type": "application/json"},
         credentials: "same-origin",
         body: JSON.stringify(Object.assign({action: action}, params || {}))
-      }, 90000)
+      }, timeoutMs || 90000)
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
           // Any successful mutation may change queue, CE history, work, or
@@ -76,9 +82,30 @@
         });}
         return page("");
       },
-      saveComment: function(comment) {
+      saveComment: function(comment, onProgress) {
         required(comment.author_name, "author_name");
-        return post("review_comment_upsert", comment);
+        // A note is not an AI job. Bound the write, then READ its durable ID
+        // after an ambiguous outcome. Never automatically repeat a POST.
+        return post("review_comment_upsert", comment, 20000).then(function(result){
+          if(!result.comment||!result.comment.comment_id)throw failure("Save confirmation was incomplete.","INVALID_RESPONSE");
+          return result;
+        }).catch(function(error){
+          if(error.code==="AUTH_REQUIRED"||error.code==="BACKEND_AUTH_FAILED"||error.code==="REVIEW_BACKEND_AUTH_FAILED"||error.status===403||error.status===400)throw error;
+          var uncertain=error.code==="TIMEOUT"||error.code==="INVALID_RESPONSE"||error.code==="REVIEW_SAVE_UNCONFIRMED"||error.status>=500||error.name==="TypeError";
+          if(!uncertain||(!comment.comment_id&&!comment.source_ref))throw error;
+          if(onProgress)onProgress("Checking whether your note was saved… Please don’t submit it again yet.");
+          var identity={market_slug:comment.market_slug,ce_id:comment.ce_id,week:comment.week_start};
+          if(comment.comment_id)identity.comment_id=comment.comment_id;else identity.source_ref=comment.source_ref;
+          return request("review_comment_list",identity,{refresh:true,timeoutMs:10000}).then(function(result){
+            var saved=(result.comments||[]).find(function(row){return !row.deleted_at&&row.market_slug===comment.market_slug&&String(row.ce_id)===String(comment.ce_id)&&String(row.week_start)===String(comment.week_start)&&row.body===comment.body&&(comment.comment_id?row.comment_id===comment.comment_id:row.source_ref===comment.source_ref);});
+            if(!saved)throw error;
+            cache={};inflight={};generation++;
+            return {ok:true,comment:saved,recovered:true};
+          }).catch(function(readError){
+            if(readError.code==="AUTH_REQUIRED")throw readError;
+            throw failure("Could not confirm the save. Your draft is kept. Retry Save note; the same request will not create a duplicate.","SAVE_UNCONFIRMED");
+          });
+        });
       },
       deleteComment: function(commentId, deletedBy) {
         return post("review_comment_delete", {comment_id: commentId, deleted_by: deletedBy});
