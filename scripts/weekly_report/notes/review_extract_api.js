@@ -15,6 +15,9 @@
  */
 import { createHash } from "node:crypto";
 import { jwtVerify } from "jose";
+import { useReviewOpenAI, askReviewOpenAI } from "../lib/review_ai_provider.mjs";
+
+import { meetingBatchId, importMeetingBatch } from "../lib/review_meeting_import.mjs";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.REVIEW_AI_MODEL || "claude-sonnet-4-5-20250929";
@@ -23,6 +26,7 @@ const APPS_SCRIPT_URL = process.env.REVIEW_MODE_APPS_SCRIPT_URL;
 const SCHEMA = {
   type: "object",
   properties: {
+    unmatched: {type:"array",items:{type:"string"}},
     ces: { type: "array", items: {
       type: "object",
       properties: {
@@ -43,7 +47,7 @@ const SCHEMA = {
       additionalProperties: false,
     } },
   },
-  required: ["ces"],
+  required: ["ces","unmatched"],
   additionalProperties: false,
 };
 
@@ -62,10 +66,12 @@ async function actor(req) {
 }
 
 async function askModel(system, payload) {
+  if (useReviewOpenAI()) return askReviewOpenAI(system, payload, SCHEMA);
   const token = process.env.ANTHROPIC_API_KEY;
   if (!token) throw new Error("ANTHROPIC_API_KEY not set");
   const r = await fetch(ANTHROPIC_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(45000),
     headers: { "x-api-key": token, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: MODEL, max_tokens: 4000, system,
@@ -74,7 +80,18 @@ async function askModel(system, payload) {
       tool_choice: { type: "tool", name: "emit", disable_parallel_tool_use: true },
     }),
   });
-  if (!r.ok) throw new Error(`Anthropic ${r.status}`);
+  if (!r.ok) {
+    const failure = await r.json().catch(() => ({}));
+    const message = String(failure?.error?.message || "").toLowerCase();
+    // Classify provider failures without logging credentials or meeting text.
+    const reason = /credit balance|billing/.test(message) ? "credits_unavailable"
+      : /strict/.test(message) ? "strict_tool_rejected"
+      : /schema/.test(message) ? "schema_rejected"
+      : /model/.test(message) ? "model_unavailable"
+      : /api.key|authentication/.test(message) ? "authentication_failed"
+      : "request_rejected";
+    throw new Error(`Anthropic ${r.status}: ${reason}`);
+  }
   const j = await r.json();
   const out = j?.content?.find((c) => c?.type === "tool_use" && c?.name === "emit")?.input;
   if (!out) throw new Error("no structured result");
@@ -88,48 +105,38 @@ const SYSTEM =
   "kind 'comment' for an observation/hypothesis, 'action' for something to do, 'check' for a dated follow-up. " +
   "Set proposed_owner only if a person is explicitly named as owning it (else \"\"); proposed_due_date only if a " +
   "date is stated, as YYYY-MM-DD (else \"\"). Map each item to a ce_id from the supplied list; skip anything you " +
-  "cannot confidently attribute to one CE. Be conservative — omit rather than guess.";
+  "cannot confidently attribute to one CE. Put CE-related passages with ambiguous or missing CE identity in unmatched, quoting the source. Do not invent work from observations. Be conservative.";
 
 function sourceItemRef(base, ceId, item) {
   const material = [base, ceId, item.kind, String(item.body || "").trim(), String(item.proposed_due_date || "").trim()].join("\n");
   return `${base}:${createHash("sha256").update(material).digest("hex").slice(0, 20)}`;
 }
 
-async function ingest(items) {
-  if (!APPS_SCRIPT_URL) throw new Error("REVIEW_MODE_APPS_SCRIPT_URL not set");
-  const secret = process.env.REVIEW_MODE_INGEST_SECRET;
-  if (!secret) throw new Error("REVIEW_MODE_INGEST_SECRET not set");
-  const r = await fetch(APPS_SCRIPT_URL, {
-    method: "POST", redirect: "follow", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "review_source_ingest", ingest_secret: secret, source_type: "granola", items }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw new Error(j.error || `ingest ${r.status}`);
-  return j;
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "POST required" });
   let who; try { who = await actor(req); } catch { who = null; }
   if (!who) return res.status(401).json({ ok: false, error: "authenticated BGM identity required" });
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+  let body;try{body=typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});}catch(_){return res.status(400).json({ok:false,error:"invalid JSON"});}
   const market_slug = String(body.market_slug || "").trim();
   const week = String(body.week || body.week_start || "").trim();
-  const text = String(body.text || "").trim().slice(0, 40000);
+  const text = String(body.text || "").trim();
+  if(text.length>40000)return res.status(413).json({ok:false,error:"Transcript is too long. Split it into parts of at most 40,000 characters."});
   const ces = (Array.isArray(body.ces) ? body.ces : []).slice(0, 1200)
     .map((c) => ({ ce_id: String(c.ce_id || "").trim(), ce_name: String(c.ce_name || "").trim() }))
     .filter((c) => c.ce_id && c.ce_name);
-  if (!market_slug || !week || !text || !ces.length)
+  if (!market_slug || !/^\d{4}-\d{2}-\d{2}$/.test(week) || !text || !ces.length)
     return res.status(400).json({ ok: false, error: "market_slug, week, text and ces are required" });
 
   const nameById = Object.fromEntries(ces.map((c) => [c.ce_id, c.ce_name]));
   const validIds = new Set(ces.map((c) => c.ce_id));
   // Replaying the same source must be safe. The digest is not a credential;
   // it simply makes source suggestions idempotent across browser retries.
-  const sourceRef = `meeting-notes:${createHash("sha256").update([who.email, market_slug, week, text].join("\n")).digest("hex").slice(0, 24)}`;
+  const sourceRef = meetingBatchId(market_slug, week, text);
 
   try {
+    const savedBatch = await importMeetingBatch({batchId:sourceRef,market:market_slug,week,buildItems:async()=>{
     const result = await askModel(SYSTEM, { market_slug, week_start: week, ce_list: ces, notes: text });
     const out = [], items = [];
     (Array.isArray(result.ces) ? result.ces : []).slice(0, 200).forEach((ce) => {
@@ -148,8 +155,14 @@ export default async function handler(req, res) {
         }));
       if (suggestions.length) { items.push(...suggestions); out.push({ ce_id: id, ce_name: nameById[id], suggestions }); }
     });
-    if (items.length) await ingest(items);
-    return res.status(200).json({ ok: true, ces: out, total: items.length });
+    (result.unmatched || []).forEach((body,index)=>{
+      if(typeof body!=="string"||!body.trim())return;
+      items.push({market_slug,week_start:week,source_type:"granola",source_author:who.name,
+        source_ref:sourceRef+":unmatched:"+index,kind:"comment",body:body.trim(),match_status:"unmatched"});
+    });
+    return items;
+    }});
+    return res.status(200).json({ok:true,...savedBatch});
   } catch (error) {
     console.error("review-extract failed:", error instanceof Error ? error.message : "unknown");
     return res.status(502).json({ ok: false, error: "meeting extraction unavailable" });

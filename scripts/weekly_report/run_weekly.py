@@ -46,6 +46,7 @@ REPORTS = REPO / "thoughts" / "shared" / "weekly-report-v1"
 REPORTS_V2 = REPO / "thoughts" / "shared" / "weekly-report-v2"
 BGM_CONFIG = ALERT_V2 / "market_bgms.json"
 POSTED_LEDGER = ALERT / "posted_ledger.json"
+SHARED_REPORT_MARKETS = {"csee", "nordics"}
 
 sys.path.insert(0, str(HERE))
 import config  # noqa: E402
@@ -234,6 +235,11 @@ def stage_alert_v2(slugs, week, post):
             "--market-slug", slug, "--week-start", week,
             "--bgms", str(BGM_CONFIG), "--out", str(payload),
         ]
+        if slug in SHARED_REPORT_MARKETS:
+            build_cmd.extend([
+                "--report-url",
+                f"https://market-notebook.vercel.app/weekly-report-csee-nordics-{week}?market={slug}",
+            ])
         if okr_ready:
             build_cmd.extend(["--okr-results", str(okr_results)])
         run(build_cmd, cwd=ALERT_V2)

@@ -32,6 +32,7 @@ import build_global
 import build_snapshot
 import config
 import release_v2
+import render_v2
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -120,6 +121,22 @@ def main() -> None:
         print(f"V2 manifest: {manifest_path}")
         if manifest["status"] != "pass":
             sys.exit("V2 parity gate FAILED — V1 artifacts are intact; activation blocked.")
+        for group_slug, group in config.MARKET_REPORT_GROUPS.items():
+            members = tuple(group["markets"])
+            if not all(member in targets for member in members):
+                continue
+            group_markets = [
+                render_v2.render_v1.load_markets([str(CACHE / f"snapshot_{member}_{config.iso(w0)}.json")])[0]
+                for member in members
+            ]
+            goals = render_v2.load_goals(V2_REPORTS / "goals_v2.json")
+            output = V2_REPORTS / f"report_{group_slug}_{config.iso(w0)}.html"
+            output.write_text(render_v2.render(
+                group_markets,
+                goals=goals,
+                report_group={"slug": group_slug, "name": group["name"]},
+            ))
+            print(f"V2 shared-group report: {output}")
 
 
 if __name__ == "__main__":

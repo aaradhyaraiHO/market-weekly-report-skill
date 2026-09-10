@@ -425,3 +425,102 @@
   .rv-granola-dock{min-width:0;width:100%;order:3}
 }
 @media(max-width:520px){.rv-recon-grid{grid-template-columns:1fr}}
+
+/* Mini Audit: the real CE evidence and one persistent audit column. */
+#review-view .rv-audit-toolbar{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--rv-line);background:var(--rv-white)}
+#review-view .rv-audit-toolbar>span{flex:1;font-size:13px;color:var(--rv-muted)}
+#review-view .rv-mini-audit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);height:calc(100dvh - 150px);min-height:500px;background:var(--rv-white)}
+#review-view .rv-data-pane{min-width:0;border-right:1px solid var(--rv-line);overflow:hidden}
+#review-view .rv-embedded-data{position:relative;inset:auto;width:100%;max-width:none;height:100%;max-height:none;box-shadow:none;border:0;border-radius:0;overflow:auto;transform:none}
+#review-view .rv-embedded-data .drawer-header{padding:20px;position:static}
+#review-view .rv-embedded-data .drawer-body{padding:0 20px 24px}
+#review-view .rv-embedded-data #ce-close-detail,#review-view .rv-embedded-data #ce-open-review{display:none}
+#review-view .rv-embedded-data .drawer-title{font-size:23px}
+#review-view .rv-embedded-data .drawer-identity{flex-wrap:wrap}
+#review-view .rv-mini-audit>.rv-main{min-width:0;overflow-y:auto;height:100%;overscroll-behavior:contain;background:var(--rv-white)}
+#review-view .rv-detail-head{padding:22px 28px 0;border:0;background:var(--rv-white)}
+#review-view .rv-detail-head h2{font-size:22px;line-height:28px;margin:6px 0 0;text-wrap:balance}
+#review-view .rv-workspace{padding:20px 28px;max-width:none;display:grid;gap:24px}
+#review-view .rv-flow-section{margin:0;padding:0 0 22px;border-bottom:1px solid var(--rv-line)}
+#review-view #rv-slack-message{width:100%;min-height:128px;padding:14px;border:1px solid var(--rv-g400);border-radius:12px;font-size:15px;line-height:23px;resize:vertical;background:var(--rv-white)}
+#review-view textarea:focus-visible,#review-view input:focus-visible,#review-view select:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-composer-actions{display:flex;justify-content:flex-end;gap:8px;margin:10px 0 16px}
+#review-view .rv-thread-line{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#review-view .rv-thread-select{display:flex;align-items:center;gap:8px;color:var(--rv-muted);font-size:13px}
+#review-view .rv-thread-select select{max-width:230px;min-height:40px;border:1px solid var(--rv-line);border-radius:8px;padding:6px;background:var(--rv-white)}
+#review-view .rv-summary-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 12px}
+#review-view .rv-summary-heading h3{margin:0;font-size:17px}
+#review-view .rv-audit-status{font-size:13px;line-height:20px;background:var(--rv-purps-10);padding:10px 12px;border-radius:8px;white-space:pre-wrap}
+#review-view .rv-memory-entry{padding:12px 0;border-bottom:1px solid var(--rv-g200)}
+#review-view .rv-memory-entry p{font-size:14px;line-height:22px;white-space:pre-wrap;margin:6px 0}
+#review-view details>summary{cursor:pointer;min-height:40px;padding:10px 0;font-size:13px;color:var(--rv-muted)}
+#review-view .rv-thread-history p{font-size:13px;line-height:20px}
+#review-view .rv-module-head{padding:0;margin-bottom:12px;gap:8px}
+#review-view .rv-module-icon,#review-view .rv-source-bridge,#review-view .rv-focus-summary{display:none}
+#review-view .rv-card-sub{font-size:13px}
+#review-view .rv-action-surface{box-shadow:none;border:0;padding:0;background:var(--rv-white)}
+#review-view .rv-action-panel{padding:8px 0}
+#review-view .rv-sugg{padding:12px;margin:10px 0}
+#review-view .rv-work-row{padding:12px 0}
+#review-view .rv-queue-overlay{position:fixed;inset:0;z-index:120;background:#0004;display:flex;justify-content:flex-end}
+#review-view .rv-queue-overlay .rv-side{display:block;position:relative;inset:auto;max-width:440px;width:100%;height:100dvh;overflow:auto;padding:20px;box-shadow:var(--rv-shadow-3)}
+#review-view .rv-queue-overlay .rv-mobile-side-head{display:flex;align-items:center;justify-content:space-between}
+#review-view .rv-queue-panel{max-height:none;overflow:visible}
+#review-view .rv-meeting-input{padding:16px 24px;background:var(--rv-purps-10);border-bottom:1px solid var(--rv-line)}
+#review-view .rv-meeting-input textarea{display:block;width:100%;min-height:130px;margin:8px 0;padding:12px;border:1px solid var(--rv-line);border-radius:10px}
+#review-view .rv-meeting-input input{min-height:40px;width:min(70%,540px);padding:8px;border:1px solid var(--rv-line);border-radius:8px;margin:0 8px 16px 0}
+#review-view .rv-btn{min-height:40px}#review-view .rv-btn:disabled{opacity:.5;cursor:default}
+#review-view .rv-toast{z-index:150;max-width:calc(100vw - 32px)}
+@media(max-width:900px){#review-view .rv-mini-audit{grid-template-columns:1fr;height:auto;min-height:0}#review-view .rv-data-pane{height:45dvh;border-right:0;border-bottom:1px solid var(--rv-line)}#review-view .rv-mini-audit>.rv-main{height:auto;overflow:visible}#review-view .rv-workspace{padding:18px}#review-view .rv-detail-head{padding:18px 18px 0}#review-view .rv-audit-toolbar{padding:10px;gap:8px;flex-wrap:wrap}#review-view .rv-audit-toolbar>span{display:none}}
+
+#review-view .rv-btn.primary{color:var(--rv-white)}
+
+#review-view .rv-memory-status{font-size:12px;color:var(--rv-g600);margin-top:6px}
+#review-view .rv-memory-entry ul{padding-left:20px;font-size:14px;line-height:22px;margin:4px 0 10px}
+
+#review-view .rv-memory-week{border-top:1px solid var(--rv-g200);padding:4px 0}
+#review-view .rv-memory-week>summary{padding:14px 0;cursor:pointer;font-size:14px;color:var(--rv-g900)}
+#review-view .rv-memory-week-body{padding:0 0 18px}
+#review-view .rv-memory-account p{font-size:14px;line-height:1.7;white-space:pre-wrap;text-wrap:pretty;margin:0 0 12px}
+#review-view .rv-memory-citation{border:0;background:none;color:var(--rv-purps);font:inherit;font-size:11px;cursor:pointer;padding:4px}
+#review-view .rv-memory-citation:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-memory-followthrough{margin:16px 0;font-size:13px}
+#review-view .rv-memory-work-ref{padding:8px 0}
+#review-view .rv-memory-work-ref p{font-size:13px;margin:4px 0}
+#review-view .rv-memory-originals>summary{cursor:pointer;padding:10px 0;font-size:12px;color:var(--rv-g600)}
+#review-view .rv-memory-original{padding-left:12px;border-left:2px solid var(--rv-g200);margin-top:12px}
+#review-view .rv-memory-original .rv-memory-entry{padding:0 0 12px}
+#review-view .rv-memory-week .rv-source-meta{color:var(--rv-g600)}
+
+#review-view .rv-memory-shell>summary{cursor:pointer;padding:8px 0;color:var(--rv-g900)}
+#review-view .rv-memory-shell>summary h3{display:inline;margin:0;font-size:18px}
+#review-view .rv-memory-shell-body{padding-top:8px}
+#review-view .rv-memory-perf-meta{font-size:12px;line-height:1.6;color:var(--rv-g700);margin:-6px 0 14px}
+
+/* Saved writeups retain the composer's place in the weekly review. */
+#review-view .rv-saved-note{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:14px 16px;margin:0 0 12px;border:1px solid var(--rv-line);border-radius:12px;background:var(--rv-white)}
+#review-view .rv-note-content{min-width:0;padding-top:8px}
+#review-view .rv-saved-note p,#review-view .rv-saved-summary p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.6;margin:8px 0 12px}
+#review-view .rv-saved-note p:last-child{margin-bottom:0}
+#review-view .rv-note-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start}
+#review-view .rv-note-actions .rv-link{font-size:13px;font-weight:500;color:var(--rv-purps-700);background:transparent;border:0;min-height:40px;padding:0 4px;white-space:nowrap}
+#review-view .rv-note-actions .rv-link:hover{text-decoration:underline;text-underline-offset:3px}
+#review-view .rv-note-actions .rv-link:disabled{opacity:.5;cursor:default}
+#review-view .rv-note-actions .rv-link:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px;border-radius:4px}
+#review-view .rv-saved-note .rv-source-meta{margin-top:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+#review-view .rv-saved-note .rv-source-meta,#review-view .rv-saved-summary .rv-source-meta{color:var(--rv-muted)}
+#review-view .rv-new-writeup{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:44px;margin:4px 0 18px;padding:10px 16px;font-size:14px;font-weight:500;color:var(--rv-purps-700);background:var(--rv-purps-10);border:1px solid var(--rv-purps-30);border-radius:10px;box-shadow:none}
+#review-view .rv-new-writeup:hover{background:var(--rv-purps-20)}
+#review-view .rv-saved-summary{padding:14px 16px;background:var(--rv-purps-10);border-left:3px solid var(--rv-purps-200);border-radius:0 10px 10px 0}
+#review-view .rv-saved-summary .rv-source-meta{margin-top:0}
+#review-view .rv-saved-summary p:last-child{margin-bottom:0}
+#review-view .rv-composer-actions{flex-wrap:wrap}
+#review-view .rv-slack-send{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;width:100%;padding-top:12px;border-top:1px solid var(--rv-line)}
+#review-view .rv-slack-send .rv-thread-select{flex:1;flex-wrap:wrap;min-width:0}
+#review-view .rv-slack-send select{max-width:100%;min-height:40px}
+#review-view .rv-send-hint{order:3;width:100%;font-size:12px;line-height:18px;color:var(--rv-muted)}
+#review-view .rv-discussion-group{margin-top:18px;padding-top:18px;border-top:1px solid var(--rv-line)}
+#review-view .rv-discussion-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#review-view .rv-discussion-heading h3{margin:0;font-size:17px}
+#review-view .rv-discussion-tools{display:flex;justify-content:flex-end;margin:12px 0}
+@media(max-width:600px){#review-view .rv-slack-send select{min-height:44px}#review-view .rv-summary-heading{flex-wrap:wrap}#review-view .rv-composer-actions .rv-btn,#review-view .rv-saved-note .rv-link,#review-view .rv-saved-note .rv-note-discuss,#review-view .rv-new-writeup{min-height:44px}}

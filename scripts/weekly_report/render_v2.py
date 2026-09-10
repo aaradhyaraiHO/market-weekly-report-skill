@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import glob as globmod
 import json
+import math
 import os
 
 import render as render_v1
@@ -14,6 +15,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "report_v2_template.html")
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 OUT_DIR = os.path.join(REPO_ROOT, "thoughts", "shared", "weekly-report-v2")
+
+
+def _json_safe(value):
+    """Replace non-finite numbers before embedding strict JSON in the page."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def load_goals(path):
@@ -57,27 +71,40 @@ def _attach_market_okrs(headlines, okr_results):
     return headlines
 
 
-def render(markets, template_path=TEMPLATE, goals=None, ce_dimensions=None, okr_results=None):
+def render(
+    markets,
+    template_path=TEMPLATE,
+    goals=None,
+    ce_dimensions=None,
+    okr_results=None,
+    report_group=None,
+):
     with open(template_path) as handle:
         html = handle.read()
     first_slug = markets[0].get("meta", {}).get("market_slug")
-    scoped_markets = [
-        market for market in markets
-        if market.get("meta", {}).get("market_slug") == first_slug
-    ]
-    scoped_markets.sort(key=lambda market: market.get("meta", {}).get("week_start", ""))
+    if report_group:
+        scoped_markets = list(markets)
+    else:
+        scoped_markets = [
+            market for market in markets
+            if market.get("meta", {}).get("market_slug") == first_slug
+        ]
+        scoped_markets.sort(key=lambda market: market.get("meta", {}).get("week_start", ""))
     payload = {
         "schema_version": 2,
         "source_schema_version": markets[0].get("meta", {}).get("schema_version", 1),
         "headlines": _attach_market_okrs(
             build_headline_payload(scoped_markets, goals, ce_dimensions), okr_results
         ),
+        "report_group": report_group,
         # Reuse the established V1 action sidecar contract. Rendering remains
         # read-only; writes only happen after an explicit reviewer interaction.
         "notes_url": (os.environ.get("WR_NOTES_SCRIPT_URL") or render_v1.NOTES_SCRIPT_URL) or None,
         "notes_channels": render_v1.NOTES_SLACK_CHANNELS,
     }
-    data_json = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
+    data_json = json.dumps(
+        _json_safe(payload), separators=(",", ":"), allow_nan=False
+    ).replace("<", "\\u003c")
     names = " · ".join(item["market"] for item in payload["headlines"])
     return html.replace("__REPORT_DATA_JSON__", data_json).replace("__TITLE__", f"Weekly V2 — {names}")
 
@@ -95,6 +122,8 @@ def main():
     parser.add_argument("--goals", help="optional approved monthly-goal sidecar JSON")
     parser.add_argument("--ce-dimensions", help="optional CE-to-BDM/Growth-region sidecar JSON")
     parser.add_argument("--okr-results", help="optional same-week market OKR sidecar JSON")
+    parser.add_argument("--group-slug", help="shared report-group slug")
+    parser.add_argument("--group-name", help="shared report-group display name")
     parser.add_argument("--out", help="output HTML path")
     args = parser.parse_args()
     paths = list(args.inputs)
@@ -104,11 +133,18 @@ def main():
     output = args.out or out_path(markets)
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, "w") as handle:
+        if bool(args.group_slug) != bool(args.group_name):
+            parser.error("--group-slug and --group-name must be supplied together")
+        report_group = (
+            {"slug": args.group_slug, "name": args.group_name}
+            if args.group_slug else None
+        )
         handle.write(render(
             markets,
             goals=load_goals(args.goals),
             ce_dimensions=load_ce_dimensions(args.ce_dimensions),
             okr_results=load_okr_results(args.okr_results),
+            report_group=report_group,
         ))
     print(f"wrote: {output}")
 

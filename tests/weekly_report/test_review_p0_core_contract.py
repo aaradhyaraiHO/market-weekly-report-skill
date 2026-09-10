@@ -16,26 +16,16 @@ class ReviewP0CoreContract(unittest.TestCase):
         self.assertIn("reviewThreadsFor(p.market_slug,p.ce_id)", endpoint)
         self.assertIn('threads: function(identity, options)', CLIENT)
         self.assertIn('"review_thread_list"', PROXY)
-        self.assertIn("api.threads({ market_slug:S.market_slug,ce_id:ceId }", VIEW)
+        self.assertIn("api.threads({market_slug:market,ce_id:ceId}", VIEW)
 
-    def test_all_three_slack_states_are_explicit(self):
-        card = VIEW.split("function renderCommentaryCard(q)", 1)[1].split(
-            "function normalizedSuggestionBody", 1
-        )[0]
-        for text in (
-            "Start Slack discussion",
-            "Continue Slack discussion #",
-            "Start a new discussion",
-            "Use the durable CE thread",
-        ):
-            self.assertIn(text, card)
-        self.assertIn('S.threadOperation==="new_parent"', card)
-        self.assertIn("Why start a new discussion?", card)
-        for text in (
-            "threadRegistryLoaded", "Checking the existing CE thread",
-            "Could not check the existing CE thread", 'id="rv-retry-threads"',
-        ):
-            self.assertIn(text, VIEW)
+    def test_thread_choice_is_explicit_without_a_second_composer(self):
+        card = VIEW.split("function renderWriteup(q,busy,loaded,summaryBusy,operation)", 1)[1].split("function normalizedSuggestionBody", 1)[0]
+        for label in ("Start Slack thread", "Reply in Slack", "Start a new thread", "Continue discussion #"):
+            self.assertIn(label, card)
+        self.assertEqual(card.count("<textarea"), 1)
+        self.assertNotIn("Why start a new discussion?", card)
+        self.assertIn("threadRegistryLoaded", card)
+        self.assertIn('id="rv-retry-threads"', card)
 
     def test_summary_requires_bgm_approval_before_timeline_or_memory(self):
         sync = BACKEND.split("function reviewWeeklySyncCore(p)", 1)[1].split(
@@ -43,15 +33,15 @@ class ReviewP0CoreContract(unittest.TestCase):
         )[0]
         self.assertIn('rec.summary_status="pending"', sync)
         self.assertIn("summary_draft_json", sync)
-        timeline = BACKEND.split("function reviewTimeline(p)", 1)[1].split(
+        timeline = BACKEND.split("function reviewTimeline(p, fullHistory)", 1)[1].split(
             "function reviewBacklog(p)", 1
         )[0]
         self.assertIn('String(r.summary_status)==="approved"', timeline)
-        memory = VIEW.split("function renderMemory(res)", 1)[1].split(
-            "function wireMemory", 1
+        memory = VIEW.split("function ceMemoryEntries", 1)[1].split(
+            "global.weeklyCeMemoryEntries", 1
         )[0]
-        self.assertIn('String(w.summary_status||"")==="approved"', memory)
-        for action in ("Approve summary", "Dismiss", "Regenerate"):
+        self.assertIn("w.summary_approved_json||w.summary_status==='approved'", memory)
+        for action in ("Save summary to memory", "Dismiss", "Summarize discussion"):
             self.assertIn(action, VIEW)
 
     def test_reconciliation_is_read_only_and_does_not_infer_attribution(self):
@@ -70,13 +60,13 @@ class ReviewP0CoreContract(unittest.TestCase):
         self.assertIn('status:"unavailable"', block)
         self.assertNotIn("reviewWrite(", block)
         self.assertIn('"review_reconciliation"', PROXY)
-        self.assertIn("Monday reconciliation", VIEW)
+        self.assertNotIn("function renderReconciliationCard", VIEW)
 
     def test_follow_through_separates_attention_from_committed_work(self):
         actions = VIEW.split("function renderActionsCard(q)", 1)[1].split(
             "function workRow(w)", 1
         )[0]
-        for label in ("Needs review", "Open", "Later", "Completed"):
+        for label in ("Needs review", "Open", "Completed"):
             self.assertIn(label, actions)
         self.assertIn("rv-focus-summary", actions)
         self.assertIn("pending.slice(0,3)", actions)

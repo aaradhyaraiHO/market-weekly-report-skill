@@ -245,7 +245,8 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('.ce-resource-table td:first-child .ce-metric-label { justify-content:flex-start; text-align:left; }', html)
         self.assertIn('.ce-cell-sub.positive { color:var(--green); }', html)
         self.assertIn('.ce-cell-sub.negative { color:var(--red); }', html)
-        self.assertNotIn('id="market-select"', html)
+        self.assertIn('id="market-filter-field" hidden', html)
+        self.assertIsNone(embedded["report_group"])
         self.assertIn('id="open-detail"', html)
         self.assertEqual(html.count('id="open-detail"'), 1)
         self.assertNotIn('id="weekly-engine-section"', html)
@@ -262,6 +263,38 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('id="market-okrs"', html)
         self.assertIn("function renderMarketOkrs", html)
         self.assertIn('id="target-summary"', html)
+
+    def test_shared_market_report_keeps_both_markets_and_exposes_market_switcher(self):
+        csee = copy.deepcopy(self.market)
+        csee["meta"]["market_slug"] = "csee"
+        csee["meta"]["market"] = "CSEE"
+        nordics = copy.deepcopy(self.market)
+        nordics["meta"]["market_slug"] = "nordics"
+        nordics["meta"]["market"] = "Nordics"
+
+        html = render_v2.render(
+            [csee, nordics],
+            report_group={"slug": "csee_nordics", "name": "CSEE + Nordics"},
+        )
+        match = re.search(
+            r'<script id="report-data" type="application/json">(.*?)</script>',
+            html,
+            re.S,
+        )
+
+        self.assertIsNotNone(match)
+        embedded = json.loads(match.group(1))
+        self.assertEqual(
+            embedded["report_group"],
+            {"slug": "csee_nordics", "name": "CSEE + Nordics"},
+        )
+        self.assertEqual(
+            [headline["market_slug"] for headline in embedded["headlines"]],
+            ["csee", "nordics"],
+        )
+        self.assertIn("marketFilterField.hidden=false", html)
+        self.assertIn("marketSelect.addEventListener('change'", html)
+        self.assertIn("url.searchParams.set('market',item.market_slug)", html)
         self.assertIn('id="target-comparisons"', html)
         self.assertNotIn('id="target-contributors"', html)
         self.assertIn('class="drawer-kpi"', html)
@@ -275,10 +308,25 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("const moverSorts", html)
         self.assertNotIn('data-mover-lens=', html)
         self.assertIn("['name','CE']", html)
-        self.assertIn("['wow','vs LW %']", html)
-        self.assertIn("['fourWeek','vs L4W %']", html)
-        self.assertIn("['yoy','vs LY %']", html)
-        self.assertIn("['target','Aug target %']", html)
+        self.assertIn("['wow','vs LW']", html)
+        self.assertIn("['fourWeek','vs L4W']", html)
+        self.assertIn("['yoy','vs LY']", html)
+        for absolute, relative in (
+            ("wow_abs", "wow_pct"),
+            ("delta_4w", "delta_4w_pct"),
+            ("yoy_abs", "yoy_pct"),
+        ):
+            self.assertIn(
+                "${signedMoney(row." + absolute + ")}"
+                '<span class="mover-secondary">${pct(row.' + relative + ",0)}</span>",
+                html,
+            )
+        self.assertIn("mode==='wow'?row.wow_abs", html)
+        self.assertIn("mode==='fourWeek'?row.delta_4w", html)
+        self.assertIn("mode==='yoy'?row.yoy_abs", html)
+        self.assertIn("['target',`${targetLabel} %`]", html)
+        self.assertIn("monthLabel(item.monthly.month)", html)
+        self.assertNotIn("calendar-prorated August target pace", html)
         self.assertIn("rows.slice(0,5)", html)
         self.assertIn("row.target_mtd_attainment_pct", html)
         self.assertIn("Shows up to five CEs with the largest revenue drops or gains", html)
@@ -314,7 +362,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn('aria-controls="lm-week-wrap fluctuations-week-wrap"', html)
         self.assertIn('data-diagnostic-week-wrap', html)
         self.assertIn("wr_v2_diagnostic_wk_hidden", html)
-        self.assertIn("Collapsed = this week + WoW", html)
+        self.assertIn("W0 = current analysis week; WoW = change vs the previous week", html)
         self.assertIn("CM1/conv · W0", html)
         self.assertIn("CPC · W0", html)
         self.assertIn("tROAS now", html)
@@ -336,7 +384,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("'losing_money'", html)
         self.assertIn("'flux_down'", html)
         self.assertIn("'flux_up'", html)
-        self.assertIn("Actions save to the established Weekly Actions Sheet", html)
+        self.assertIn("The save status confirms whether it has synced or remains a local draft.", html)
         self.assertIn("${pct(relative)} vs LW", html)
         self.assertNotIn("deltaFormat==='money'", html)
         self.assertIn('id="post-diagnostic-sections"', html)
@@ -388,7 +436,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("{key:'yoy',label:'YoY %'}", html)
         self.assertIn('Apply locally', html)
         self.assertIn('id="ce-weekly-evidence"', html)
-        self.assertIn("Weekly evidence · V1 baseline", html)
+        self.assertIn("Weekly performance", html)
         self.assertIn("Predicted weekly revenue", html)
         self.assertIn('id="ce-drawer-omni"', html)
         self.assertIn("function wireCeChart", html)
@@ -664,7 +712,7 @@ class HeadlineV2Contract(unittest.TestCase):
         self.assertIn("const relativePctFromPoints =", template)
         self.assertIn("every comparison is relative percentage change", template)
         self.assertNotIn("const cePp=", template)
-        self.assertNotIn("percentage points", template)
+        self.assertNotIn("percentage points", template.replace("not percentage points", ""))
         self.assertNotIn("Snapshot-backed", template)
         self.assertNotIn("ce-live-badge", template)
 
@@ -724,6 +772,22 @@ class HeadlineV2Contract(unittest.TestCase):
             r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
         ).group(1))
         self.assertNotIn("market_okrs", payload["headlines"][0])
+
+    def test_non_finite_okr_values_are_embedded_as_strict_json_null(self):
+        html = render_v2.render([self.market], okr_results={
+            "week_start": "2026-08-02",
+            "markets": {"north_america": [{
+                "id": "grow_non_poi_gel_revenue_yoy",
+                "current": "unavailable",
+                "value": float("nan"),
+            }]},
+        })
+        embedded_json = re.search(
+            r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
+        ).group(1)
+
+        self.assertNotIn("NaN", embedded_json)
+        self.assertIsNone(json.loads(embedded_json)["headlines"][0]["market_okrs"][0]["value"])
 
     def test_diagnostic_actions_use_the_legacy_actions_proxy_not_review_mode(self):
         html = render_v2.render([self.market])

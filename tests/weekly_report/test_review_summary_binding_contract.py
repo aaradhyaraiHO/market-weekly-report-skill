@@ -27,7 +27,7 @@ class ReviewSummaryBindingContract(unittest.TestCase):
         self.assertIn('Summary pending for ', VIEW)
         self.assertIn('This discussion has no summary yet. The previous discussion remains in CE Memory.', VIEW)
         self.assertIn("pending=summaryBound", VIEW)
-        self.assertIn("renderWeeklySummary(weekly,discussionNumber)", VIEW)
+        self.assertIn("renderWeeklySummary(weekly,number)", VIEW)
 
 
 if __name__ == "__main__":

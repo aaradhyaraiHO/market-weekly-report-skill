@@ -90,7 +90,7 @@ class ReviewBackendIsolationContract(unittest.TestCase):
         for action in (
             "review_comment_upsert", "review_work_upsert", "review_work_delete",
             "review_weekly_note_upsert", "review_weekly_slack_post",
-            "review_suggestion_decide", "review_granola_link_submit",
+            "review_suggestion_decide",
         ):
             self.assertIn(f'post("{action}"', self.client)
             self.assertIn(f'"{action}"', self.review)
@@ -141,52 +141,32 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn(fragment, self.view)
         self.assertIn(fragment, self.mockup)
 
-    def test_ce_search_and_add_are_present_and_wired(self):
+    def test_single_search_opens_any_ce_without_a_nomination_form(self):
         for fragment in (
-            'id="rv-add-ce"',
-            'id="rv-picker-input"',
+            'id="rv-search-ce"',
             'type="search"',
-            "data-pick-ce",
-            "api.saveReviewSetItem",
+            'data-select-ce',
+            'ensureLocalCe(b.dataset.selectCe)',
+            'renderAuditQueueRows',
         ):
-            self.assert_ui_contract(fragment)
+            self.assertIn(fragment, self.view)
 
-    def test_role_notes_and_slack_have_separate_composers(self):
-        for role in ("bgm", "performance", "bdm"):
-            self.assertIn(f'renderRoleNote(weekly,"{role}")', self.view)
-        self.assertIn('id="rv-slack-message"', self.view)
-        start_slack = self.view.split("function startSlack()", 1)[1].split("function syncThread()", 1)[0]
-        self.assertIn('querySelector("#rv-slack-message")', start_slack)
-        self.assertNotIn('querySelector("#rv-note")', start_slack)
-        self.assertIn("discussion_text: text", self.view)
 
-    def test_mentions_are_resolved_and_ambiguity_is_visible_before_posting(self):
-        for fragment in (
-            "api.resolveMentions",
-            "rv-mention-preview",
-            "rv-mention-ok",
-            "rv-mention-ambiguous",
-            "Post to Slack",
-        ):
-            self.assert_ui_contract(fragment)
-        resolver = self.view.split("function startSlack()", 1)[1].split("function syncThread()", 1)[0]
-        self.assertIn("resolveMentions", resolver)
+    def test_mentions_are_resolved_inline_and_ambiguity_is_visible(self):
+        for fragment in ("api.resolveMentions", "rv-mention-status", "Use a full Slack name", "S.slackDrafts[ceId]!==text"):
+            self.assertIn(fragment, self.view)
+        self.assertIn("ambiguous Slack mentions", (ROOT / "scripts/weekly_report/notes/review_apps_script.js").read_text())
 
     def test_slack_summary_has_automatic_and_manual_paths(self):
-        for fragment in (
-            'id="rv-sync-thread"',
-            "Summarize now",
-            "Automatic sync every 5 minutes",
-            "api.syncWeeklyDiscussion",
-        ):
-            self.assert_ui_contract(fragment)
+        for fragment in ('id="rv-sync-thread"','Summarize discussion','api.syncWeeklyDiscussion'):
+            self.assertIn(fragment,self.view)
+        self.assertIn('installReviewAutomation', REVIEW_BACKEND.read_text())
+
 
     def test_slack_and_granola_suggestions_are_source_attributed(self):
-        self.assertIn("api.suggestions", self.view)
-        for fragment in ("AI · Slack", "AI · Granola", "data-suggestion"):
-            self.assert_ui_contract(fragment)
-        self.assertRegex(self.view, r'kind\s*===\s*["\']action["\']')
-        self.assertRegex(self.view, r'kind\s*===\s*["\']check["\']')
+        for fragment in ('api.suggestions','source_url','source_author','source_type','data-suggestion'):
+            self.assertIn(fragment,self.view)
+
 
     def test_work_items_support_edit_delete_and_scheduled_dates(self):
         for fragment in (
@@ -198,12 +178,11 @@ class ReviewV0UiContract(unittest.TestCase):
             self.assert_ui_contract(fragment)
 
     def test_ce_memory_preserves_perf_as_read_only_or_unavailable(self):
-        for fragment in ("CE Memory", "Perf", "Performance history source unavailable"):
-            self.assert_ui_contract(fragment)
-        memory = self.view.split("function renderMemory(res)", 1)[1].split(
-            "function wireMemory", 1
-        )[0]
-        self.assertNotRegex(memory, r"savePerf|upsertPerf|deletePerf")
+        for fragment in ('CE memory','Historical record · read-only','Performance history source is unavailable'):
+            self.assertIn(fragment,self.view)
+        memory=self.view.split('function ceMemoryEntries',1)[1].split('global.weeklyCeMemoryEntries',1)[0]
+        self.assertNotRegex(memory,r'savePerf|upsertPerf|deletePerf')
+
 
     def test_ce_drawer_navigation_captures_visible_local_drafts(self):
         self.assertIn("function captureVisibleDrafts()", self.view)
@@ -215,54 +194,14 @@ class ReviewV0UiContract(unittest.TestCase):
             r"function openAnalyticsDrawer\(ceId\) \{\s+captureVisibleDrafts\(\);",
         )
 
-    def test_ce_drawer_return_scrolls_only_the_bounded_queue(self):
-        self.assertIn("function revealQueueSelection(ceId)", self.view)
-        self.assertIn("panel.scrollTop += rowRect.bottom - panelRect.bottom", self.view)
-        self.assertIn("active.focus({ preventScroll: true })", self.view)
-        self.assertNotIn("active.scrollIntoView", self.view)
-        self.assertIn("S.queueRevealUntil=Date.now()+2500", self.view)
-        self.assertIn("revealQueueSelection(S.selected)", self.view)
-        self.assertIn(".rv-queue-panel{max-height:", self.css)
-        self.assertIn("overflow-y:auto", self.css)
 
-    def test_narrow_queue_is_an_on_demand_ce_browser(self):
-        for fragment in (
-            'id="rv-browse-ces"', 'id="rv-close-queue"',
-            'S.queueBrowse = true', 'S.queueBrowse = false',
-        ):
-            self.assertIn(fragment, self.view)
-        self.assertIn(".rv-side{display:none;position:fixed", self.css)
-        self.assertIn(".rv-side.open{display:flex", self.css)
-        self.assertIn(".rv-mobile-current{display:flex", self.css)
 
     def test_queue_rows_have_no_nested_interactive_targets(self):
-        row = self.view.split("function queueRow(q)", 1)[1].split(
-            "function renderProcessPanel", 1
-        )[0]
-        self.assertNotIn('role="link"', row)
-        self.assertEqual(row.count('data-open-drawer-ce="'), 1)
-        self.assertIn('data-select-ce="', row)
-        self.assertIn('class="rv-ce-details"', row)
+        row=self.view.split('function renderAuditQueueRows',1)[1].split('function renderPickerResults',1)[0]
+        self.assertNotIn('role="link"',row)
+        self.assertIn('data-select-ce',row)
+        self.assertNotIn('data-open-drawer-ce',row)
 
-    def test_queue_filters_are_local_and_cover_review_states(self):
-        for fragment in (
-            'queueFilter: "all"', '"needs_review"', '"in_progress"',
-            '"reviewed"', 'id="rv-reason-filter"', 'id="rv-category-filter"',
-            "function visibleQueueRows()",
-        ):
-            self.assertIn(fragment, self.view)
-
-    def test_candidate_and_shortlist_reuse_existing_treatments(self):
-        for fragment in (
-            "function shortlistState(q)", 'return "candidate"',
-            'return "selected"', 'return "skipped"', 'return "reviewed"',
-            'id="rv-shortlist-guide"', "Recommended: 3–5 CEs. The BGM decides.",
-            "function renderQueueGroups(rows)", "Selected this week", "Candidates",
-            "Skipped / deferred", "Reviewed",
-        ):
-            self.assertIn(fragment, self.view)
-        self.assertNotIn("review_candidate_upsert", self.view)
-        self.assertNotIn("review_shortlist_upsert", self.view)
 
     def test_next_ce_prefers_selected_then_candidates(self):
         next_ce = self.view.split("function nextCe()", 1)[1].split(
@@ -271,87 +210,32 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn('state==="selected"?0', next_ce)
         self.assertIn('state==="candidate"?1', next_ce)
 
-    def test_existing_thread_offers_explicit_continue_or_new_parent(self):
-        for fragment in (
-            'id="rv-continue-slack"', 'id="rv-new-slack"',
-            'id="rv-new-thread-reason"', 'id="rv-new-thread-cancel"',
-            "thread_operation", "replacement_reason",
-            "Continue Slack discussion #", "Start a new discussion",
-            "prior thread remains in CE Memory",
-        ):
-            self.assertIn(fragment, self.view)
 
-    def test_slack_is_primary_and_compatibility_notes_remain_separate(self):
-        card = self.view.split("function renderCommentaryCard(q)", 1)[1].split(
-            "function normalizedSuggestionBody", 1
-        )[0]
-        self.assertIn("Discussion highlights", card)
-        self.assertIn("rv-module-surface", card)
-        self.assertIn("BGM observation · Optional", self.view)
-        self.assertLess(card.index("+composer+"), card.index('renderRoleNote(weekly,"bgm")'))
-        self.assertIn('renderRoleNote(weekly,"performance")', card)
-        self.assertIn('renderRoleNote(weekly,"bdm")', card)
-        role = self.view.split("function renderRoleNote(weekly,role)", 1)[1].split(
-            "function renderWeeklySummary", 1
-        )[0]
-        self.assertIn('role!=="bgm"&&!saved)return ""', role)
-        self.assertIn("Historical · read-only", role)
 
     def test_core_completion_has_no_outcome_authoring_dependency(self):
-        for fragment in (
-            "function completionBlockers(q)", "noDiscussionDrafts",
-            'id="rv-no-discussion-reason"', "Triage ",
-            "Assign/date or carry forward", "api.finishReview",
-        ):
-            self.assertIn(fragment, self.view)
-        for fragment in ("function renderOutcomeCard", 'id="rv-outcome-type"', 'id="rv-outcome-decision"', 'id="rv-save-outcome"', "api.saveOutcome"):
-            self.assertNotIn(fragment, self.view)
-        self.assertNotIn("bgm_note) blockers.push", self.view)
+        main=self.view.split('function renderMain()',1)[1].split('function completionBlockers',1)[0]
+        for fragment in ('renderFinishBar','renderOutcomeCard','renderTreatment'):
+            self.assertNotIn(fragment,main)
+        self.assertIn('renderActionsCard(q)',main)
 
-    def test_follow_through_groups_and_timeline_are_progressive_and_local(self):
-        for fragment in (
-            "Actions &amp; follow-ups", "Needs review", "Open", "Later", "Completed",
-            "suggested from ", "Slack discussion #", "rv-action-tabs",
-            "rv-focus-summary", "timeline=res.timeline||[]",
-            "rv-timeline-event",
-        ):
-            self.assertIn(fragment, self.view)
-        self.assertIn(".rv-action-surface", self.css)
-        self.assertIn(".rv-action-tab.active", self.css)
-        self.assertNotIn('e.related_work_id?"Work "+e.related_work_id', self.view)
 
     def test_ce_memory_presents_two_user_oriented_histories(self):
-        for fragment in (
-            "Previous reviews",
-            "BGM observations, approved discussion summaries and completed weekly reviews for this CE.",
-            "Earlier BGM comments",
-            "Read-only comments retained from the previous weekly workflow.",
-            "Actions history",
-            "Review actions, scheduled checks and ongoing Performance follow-through for this CE.",
-        ):
-            self.assertIn(fragment, self.view)
-        for old_tab in ('data-mem="story"', 'data-mem="work"', 'data-mem="comments"', 'data-mem="perf"'):
-            self.assertNotIn(old_tab, self.view)
+        for fragment in ('ceMemoryWeeks','Week of ','Follow-through','Sources ·',"disclosure('memory',false)"):
+            self.assertIn(fragment,self.view)
+        self.assertNotIn('function renderMemoryDrawer',self.view)
+
 
     def test_nomination_requires_reason_and_uses_stable_ce_id(self):
-        for fragment in (
-            'id="rv-nomination-reason"', "Add a nomination reason first",
-            'source: "nomination"', 'event_type:"nomination"',
-            'idempotency_key:"nomination:"+S.week_start+":"+String(ceId)',
-        ):
-            self.assertIn(fragment, self.view)
+        queue=self.view.split('function renderAuditQueueRows',1)[1].split('function renderPickerResults',1)[0]
+        self.assertIn('ce.ce_id',queue)
+        self.assertNotIn('rv-nomination-reason',queue)
 
-    def test_owner_and_task_force_filters_render_only_when_metadata_exists(self):
-        self.assertIn("owners.length?", self.view)
-        self.assertIn("taskForces.length?", self.view)
-        self.assertIn('id="rv-owner-filter"', self.view)
-        self.assertIn('id="rv-task-force-filter"', self.view)
 
     def test_pilot_telemetry_is_fail_soft_and_covers_core_funnel(self):
         self.assertIn("function track(event,fields)", self.view)
         self.assertIn(".catch(function(){})", self.view)
         for event in (
-            "shortlist_size", "treatment_selected", "slack_discussion_started",
+            "treatment_selected", "slack_discussion_started",
             "suggestion_triaged", "action_closed",
             "review_completed", "review_return_usage",
         ):
@@ -362,7 +246,7 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("normalizedSuggestionBody", self.view)
         self.assertIn('class="rv-trace"', self.view)
         self.assertIn("matching sources", self.view)
-        self.assertIn("Actions &amp; follow-ups", self.view)
+        self.assertIn("Actions", self.view)
         action_card = self.view.split("function renderActionsCard", 1)[1].split("function workRow", 1)[0]
         self.assertIn("dedupeSuggestions(sugg.filter", action_card)
         self.assertNotIn("esc(s.source_ref || s.source_author || \"source\")", action_card)
@@ -370,55 +254,13 @@ class ReviewV0UiContract(unittest.TestCase):
         self.assertIn("data-sugg-edit", action_card)
         self.assertNotIn("data-sugg-expand", action_card)
 
-    def test_approved_visual_hierarchy_keeps_source_and_state_distinct(self):
-        summary = self.view.split("function renderWeeklySummary", 1)[1].split(
-            "function renderCommentaryCard", 1
-        )[0]
-        actions = self.view.split("function renderActionsCard", 1)[1].split(
-            "function workRow", 1
-        )[0]
-        for fragment in (
-            "Draft summary", "Needs BGM approval", "Approve summary",
-            "Discussion highlights", "Actions &amp; follow-ups",
-        ):
-            self.assertIn(fragment, self.view)
-        self.assertIn("rv-summary-surface", summary)
-        self.assertIn("rv-source-bridge", actions)
-        self.assertIn("rv-suggestion-main", actions)
-        self.assertIn("data-sugg-accept", actions)
-        self.assertIn("data-sugg-ignore", actions)
-        self.assertIn("position:static", self.css.split(".rv-footer", 1)[1].split("}", 1)[0])
 
-    def test_completion_checklist_links_to_the_actual_controls(self):
-        self.assertIn("function renderFinishBar", self.view)
-        self.assertIn('data-resolve=', self.view)
-        self.assertIn("function focusRequirement", self.view)
-        self.assertIn('S.workTab="needs"', self.view)
-        self.assertIn('data-work-tab="needs"', self.view)
-        self.assertNotIn('id="rv-footer-treatment"', self.view)
-        self.assertIn("Next unreviewed", self.view)
-        self.assertEqual(self.view.count('id="rv-treatment"'), 1)
 
     def test_memory_loading_is_structured_and_fail_soft(self):
-        self.assertIn("function renderMemoryLoading()", self.view)
-        self.assertIn("Current Review stays usable", self.view)
-        self.assertIn("missing history never blocks this report", self.view)
-        self.assertIn(".rv-skeleton", self.css)
+        self.assertIn('Loading CE history',self.view)
+        self.assertIn('Previously loaded records remain below',self.view)
+        self.assertIn('loadMemoryInline',self.view)
 
-    def test_granola_is_a_noninteractive_wip_notice_until_beta_approval(self):
-        for fragment in (
-            "Granola meeting capture",
-            "Work in progress",
-            "Not active yet.",
-            "api.ingestGranolaLink",
-        ):
-            self.assert_ui_contract(fragment)
-        self.assertNotIn('id="rv-granola-toggle"', self.view)
-        self.assertIn('aria-label="Granola integration work in progress"', self.view)
-        self.assertIn(".rv-granola-wip{margin-top:18px", self.css)
-        workspace = self.view.split("'<div class=\"rv-workspace\">'", 1)[1].split("function completionBlockers", 1)[0]
-        self.assertLess(workspace.index("renderMemoryRail(q)"), workspace.index("renderGranolaDock()"))
-        self.assertLess(workspace.index("renderGranolaDock()"), workspace.index("renderFinishBar(q,blockers,reviewed)"))
 
     def test_native_review_uses_post_for_mutations_and_posts_to_slack(self):
         api = NATIVE_API.read_text()

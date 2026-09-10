@@ -233,6 +233,20 @@ def _weekly_metrics(
         # is not derivable from the 12-week array. Null where no LY data.
         "yoy_pct": _num(100.0 * (revenue / yoy_rev - 1)) if (yoy_rev and revenue is not None) else None,
     }
+    # Optional complete platform evidence. Old cached query frames omit this
+    # marker and retain their existing snapshot contract unchanged.
+    if paid is not None and "coupon_wallet_g" in p:
+        from paid_platforms import platform_metrics
+        row["paid_platforms"] = platform_metrics(
+            {"spend": spend, "cm1": cm1, "paid_clicks": paid_clicks,
+             "paid_conversions": conversions, "paid_impressions": paid_impressions,
+             "paid_revenue": offline_rev, "coupon_wallet": coupon_wallet},
+            {"spend": spend_g, "cm1": cm1_g, "paid_clicks": paid_clicks_g,
+             "paid_conversions": conversions_g, "paid_impressions": sis_impr,
+             "paid_revenue": offline_revenue_g,
+             "coupon_wallet": _f(p, "coupon_wallet_g", None),
+             "sis_impr": sis_impr, "sis_elig": sis_elig},
+        )
     return row
 
 

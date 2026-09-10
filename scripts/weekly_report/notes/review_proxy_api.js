@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = new Set([
   "review_weekly_list", "review_weekly_note_upsert", "review_weekly_note_delete",
   "review_weekly_slack_post", "review_weekly_sync", "review_summary_decide", "review_mention_resolve", "review_thread_list",
   "review_suggestion_list", "review_suggestion_decide", "review_source_inbox",
-  "review_source_reconcile", "review_granola_link_submit",
+  "review_source_reconcile",
   "review_slack_post", "review_slack_scan",
 ]);
 
@@ -49,6 +49,26 @@ async function authenticatedActor(req) {
   return { email, name: String(payload.name || email) };
 }
 
+// Two read attempts, including response-body reads, fit inside the browser's
+// 45-second budget. Mutations never enter this retry path.
+const READ_ATTEMPT_TIMEOUT_MS = 20000;
+async function readBackend(target) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), READ_ATTEMPT_TIMEOUT_MS);
+    try {
+      const upstream = await fetch(target, { method: "GET", redirect: "follow", signal: controller.signal });
+      const text = await upstream.text();
+      if (upstream.status >= 500 && upstream.status <= 599) throw new Error("review upstream unavailable");
+      return { upstream, text };
+    } catch (error) {
+      if (attempt === 1) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 export default async function handler(req, res) {
   if (!["GET", "POST"].includes(req.method)) return res.status(405).json({ ok: false, error: "GET or POST required" });
 
@@ -73,6 +93,13 @@ export default async function handler(req, res) {
   if (!REVIEW_ACTION.test(action) || !REVIEW_ACTIONS.has(action))
     return res.status(400).json({ ok: false, error: "review action required" });
 
+  // A browser cannot supply infrastructure credentials. The authenticated
+  // server adds its existing project automation credential to the signed POST
+  // used by the Apps Script summarizer. It never enters a URL or response.
+  params.delete("review_ai_protection_bypass");
+  if (req.method === "POST" && ["review_weekly_sync", "review_slack_scan"].includes(action) && process.env.VERCEL_AUTOMATION_BYPASS_SECRET)
+    params.set("review_ai_protection_bypass", process.env.VERCEL_AUTOMATION_BYPASS_SECRET);
+
   const signingSecret = process.env.REVIEW_MODE_PROXY_SECRET;
   if (!signingSecret) return res.status(503).json({ ok: false, error: "review proxy signing unavailable" });
 
@@ -91,15 +118,20 @@ export default async function handler(req, res) {
   params.set("actor_sig", signature);
   if (req.method === "GET") params.forEach((value, key) => target.searchParams.set(key, value));
 
+  res.setHeader("cache-control", "no-store");
   try {
-    const upstream = await fetch(target, req.method === "POST" ? {
-      method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
-      body: JSON.stringify(Object.fromEntries(params.entries()))
-    } : { method: "GET", redirect: "follow" });
-    const text = await upstream.text();
+    let upstream, text;
+    if (req.method === "GET") {
+      ({ upstream, text } = await readBackend(target));
+    } else {
+      upstream = await fetch(target, {
+        method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
+        body: JSON.stringify(Object.fromEntries(params.entries()))
+      });
+      text = await upstream.text();
+    }
     res.status(upstream.status);
     res.setHeader("content-type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
-    res.setHeader("cache-control", "no-store");
     return res.send(text);
   } catch (_) {
     return res.status(502).json({ ok: false, error: "review backend unavailable" });

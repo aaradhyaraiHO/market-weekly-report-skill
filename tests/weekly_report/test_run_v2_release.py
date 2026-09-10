@@ -41,6 +41,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 "build-headout",
                 "build-market-okrs",
                 "combined-v2-gate",
+                "build-shared-market-report",
                 "alert-readiness",
                 "stage-notebook",
                 "alerts-dry-run",
@@ -64,6 +65,24 @@ class RunV2ReleaseTests(unittest.TestCase):
         stage = next(step for step in plan if step.name == "stage-notebook")
         self.assertIn("--skip-perf-sheet", stage.command)
         self.assertEqual(stage.env, {"MMR_NOTEBOOK_DIR": str(self.notebook)})
+
+    def test_shared_market_report_is_staged_to_current_and_dated_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reports = root / "reports"
+            deploy = root / "deploy"
+            reports.mkdir()
+            deploy.mkdir()
+            source = reports / f"report_csee_nordics_{self.week}.html"
+            source.write_text("shared CSEE + Nordics")
+
+            staged = publisher.stage_market_groups(self.week, deploy, reports)
+
+            current = deploy / "weekly-report-csee-nordics.html"
+            dated = deploy / f"weekly-report-csee-nordics-{self.week}.html"
+            self.assertEqual(staged, [current, dated])
+            self.assertEqual(current.read_text(), "shared CSEE + Nordics")
+            self.assertEqual(dated.read_text(), "shared CSEE + Nordics")
 
     def test_v2_publisher_stages_isolated_review_and_action_proxies(self) -> None:
         notes = ROOT / "scripts" / "weekly_report" / "notes"

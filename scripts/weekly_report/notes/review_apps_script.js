@@ -98,7 +98,11 @@ var REVIEW_TABLES = {
     headers: ["suggestion_id","market_slug","ce_id","ce_name","week_start","source_type",
       "source_author","source_ref","source_url","kind","body","proposed_owner","proposed_due_date",
       "confidence","status","created_at","decided_by","decided_at","decision_destination",
-      "accepted_body","accepted_owner","accepted_due_date","idempotency_key","provider_meeting_id","access_scope"]
+      "accepted_body","accepted_owner","accepted_due_date","idempotency_key","provider_meeting_id","access_scope","thread_binding_id"]
+  },
+  imports: {
+    sheet: "review_meeting_imports",
+    headers: ["batch_id","market_slug","week_start","items_json","created_at"]
   },
   inbox: {
     sheet: "review_source_inbox",
@@ -176,13 +180,18 @@ function reviewHistoricalRows(kind, market, ceId) {
   }
 }
 
+var reviewSpreadsheetHandle = null;
 function reviewSpreadsheet() {
+  if (reviewSpreadsheetHandle) return reviewSpreadsheetHandle;
   var id = String(PropertiesService.getScriptProperties().getProperty("REVIEW_SPREADSHEET_ID") || "").trim();
   if (!id) throw new Error("REVIEW_SPREADSHEET_ID not configured");
-  return SpreadsheetApp.openById(id);
+  reviewSpreadsheetHandle = SpreadsheetApp.openById(id);
+  return reviewSpreadsheetHandle;
 }
 
+var reviewSheetHandles = {};
 function reviewSheet(kind) {
+  if (reviewSheetHandles[kind]) return reviewSheetHandles[kind];
   var def = REVIEW_TABLES[kind];
   if (!def) throw new Error("unknown review table: " + kind);
   var ss = reviewSpreadsheet();
@@ -195,25 +204,33 @@ function reviewSheet(kind) {
   } else {
     // Additive schema evolution: keep existing records while making newly
     // introduced audit columns visible to Sheet operators.
-    sh.getRange(1, 1, 1, def.headers.length).setValues([def.headers]);
-    sh.getRange(1, 1, 1, def.headers.length).setFontWeight("bold");
+    var headerRange=sh.getRange(1,1,1,def.headers.length),headers=headerRange.getValues()[0];
+    if(def.headers.some(function(h,i){return headers[i]!==h;})){
+      headerRange.setValues([def.headers]);headerRange.setFontWeight("bold");
+    }
   }
+  reviewSheetHandles[kind]=sh;
   return sh;
 }
 
+var reviewRowCache = {};
 function reviewRows(kind) {
+  if (reviewRowCache[kind]) return reviewRowCache[kind].map(function(row){return Object.assign({},row);});
   var def = REVIEW_TABLES[kind], sh = reviewSheet(kind), last = sh.getLastRow();
   if (last < 2) return [];
   var data = sh.getRange(2, 1, last - 1, def.headers.length).getValues();
-  return data.map(function(row, idx) {
+  var rows = data.map(function(row, idx) {
     var obj = {_row: idx + 2};
     def.headers.forEach(function(h, col) { obj[h] = row[col]; });
     if (obj.ce_id !== undefined) obj.ce_id = String(obj.ce_id);
-    ["week_start","origin_week","due_date","next_review_date"].forEach(function(h) {
-      if (obj[h] !== undefined) obj[h] = ymd(obj[h]);
+    ["week_start","origin_week","review_week","replacement_week","weekly_starter_week","due_date","next_review_date","proposed_due_date","accepted_due_date"].forEach(function(h) {
+      if (obj[h] !== undefined) obj[h] = Object.prototype.toString.call(obj[h])==="[object Date]"
+        ? Utilities.formatDate(obj[h],reviewSpreadsheet().getSpreadsheetTimeZone(),"yyyy-MM-dd") : ymd(obj[h]);
     });
     return obj;
   });
+  reviewRowCache[kind] = rows;
+  return rows.map(function(row){return Object.assign({},row);});
 }
 
 function reviewFind(kind, predicate) {
@@ -228,9 +245,10 @@ function reviewWrite(kind, existing, record) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    delete reviewRowCache[kind];
     var row = existing ? existing._row : sh.getLastRow() + 1;
     sh.getRange(row, 1, 1, vals.length).setValues([vals]);
-    ["week_start","origin_week","due_date","next_review_date","slack_thread_ts",
+    ["week_start","origin_week","review_week","replacement_week","weekly_starter_week","due_date","next_review_date","proposed_due_date","accepted_due_date","slack_thread_ts",
       "last_scanned_ts","weekly_starter_ts"].forEach(function(h) {
         var col = def.headers.indexOf(h) + 1;
         // Sheets eagerly coerces a Slack timestamp such as 1787552580.536449
@@ -260,11 +278,12 @@ function reviewFilter(rows, p, weekField) {
   });
 }
 
-function reviewPage(rows,p,dateField,defaultLimit){
+function reviewPage(rows,p,dateField,defaultLimit,idField){
   var before=String(p.before||""),limit=Math.min(Math.max(parseInt(p.limit||defaultLimit,10)||defaultLimit,1),200);
-  rows=rows.filter(function(r){return !before||String(r[dateField]||"")<before;})
-    .sort(function(a,b){return String(b[dateField]||"").localeCompare(String(a[dateField]||""));});
-  var items=rows.slice(0,limit),next=rows.length>limit&&items.length?String(items[items.length-1][dateField]||""):"";
+  function cursor(r){return String(r[dateField]||"")+(idField?"|"+String(r[idField]||""):"");}
+  rows=rows.filter(function(r){return !before||cursor(r)<before;})
+    .sort(function(a,b){return cursor(a)<cursor(b)?1:cursor(a)>cursor(b)?-1:0;});
+  var items=rows.slice(0,limit),next=rows.length>limit&&items.length?cursor(items[items.length-1]):"";
   return {items:items,next_before:next};
 }
 
@@ -387,13 +406,15 @@ function reviewUpsertBy(kind,predicate,buildRecord){
   var def=REVIEW_TABLES[kind],lock=LockService.getScriptLock();
   lock.waitLock(10000);
   try{
+    delete reviewRowCache[kind]; // Re-read after acquiring the mutation lock.
     var rows=reviewRows(kind),existing=null;
     for(var i=0;i<rows.length;i++)if(predicate(rows[i])){existing=rows[i];break;}
     var record=buildRecord(existing),sh=reviewSheet(kind);
     var vals=def.headers.map(function(h){return record[h]==null?"":record[h];});
     var row=existing?existing._row:sh.getLastRow()+1;
     sh.getRange(row,1,1,vals.length).setValues([vals]);
-    ["week_start","origin_week","due_date","next_review_date","slack_thread_ts",
+    delete reviewRowCache[kind];
+    ["week_start","origin_week","review_week","replacement_week","weekly_starter_week","due_date","next_review_date","proposed_due_date","accepted_due_date","slack_thread_ts",
       "slack_post_ts","last_scanned_ts","summary_upto_ts"].forEach(function(h){
       var col=def.headers.indexOf(h)+1;
       if(col>0)sh.getRange(row,col).setNumberFormat("@").setValue("'" + String(record[h]||""));
@@ -419,6 +440,8 @@ function reviewWeeklyBase(p,existing){
     performance_note_deleted_at:(existing&&existing.performance_note_deleted_at)||"",
     bdm_note:(existing&&existing.bdm_note)||"",bdm_author:(existing&&existing.bdm_author)||"",
     bdm_updated_at:(existing&&existing.bdm_updated_at)||"",bdm_note_deleted_at:(existing&&existing.bdm_note_deleted_at)||"",
+    thread_binding_id:(existing&&existing.thread_binding_id)||"",
+    slack_discussion_number:(existing&&existing.slack_discussion_number)||"",
     slack_post_ts:(existing&&existing.slack_post_ts)||"",
     slack_post_permalink:(existing&&existing.slack_post_permalink)||"",
     last_scanned_ts:(existing&&existing.last_scanned_ts)||"",reply_count:(existing&&existing.reply_count)||"0",
@@ -525,10 +548,18 @@ function reviewMentionResolve(p){
 function reviewCommentUpsert(p) {
   var err = reviewRequired(p, ["market_slug","ce_id","week_start","body","author_name"]);
   if (err) return err;
+  if(!p.comment_id && p.source_type==="manual" && p.source_ref){
+    var duplicate=reviewFind("comments",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&r.source_ref===p.source_ref&&r.source_type==="manual";});
+    if(duplicate)return jsonResp({ok:true,duplicate:true,comment:duplicate});
+  }
   var existing = p.comment_id ? reviewFind("comments", function(r){ return r.comment_id === p.comment_id; }) : null;
   if (p.comment_id && !existing) return jsonResp({ok:false,error:"comment not found"});
-  if (existing && (existing.market_slug !== p.market_slug || String(existing.ce_id) !== String(p.ce_id)))
+  if (existing && (existing.market_slug !== p.market_slug || String(existing.ce_id) !== String(p.ce_id) || ymd(existing.week_start)!==ymd(p.week_start)))
     return jsonResp({ok:false,error:"comment identity is immutable"});
+  if(existing&&existing.deleted_at)return jsonResp({ok:false,error:"This note was deleted. Your draft has been kept."});
+  if(existing&&existing.body===p.body)return jsonResp({ok:true,duplicate:true,comment:existing});
+  if(existing&&p.expected_updated_at!==undefined&&String(p.expected_updated_at)!==String(existing.updated_at||existing.created_at||""))
+    return jsonResp({ok:false,error:"This note has a newer edit. Your draft has been kept; reload the saved note before editing again."});
   var now = reviewNow();
   var rec = {
     comment_id: existing ? existing.comment_id : reviewId("cmt"), market_slug:p.market_slug,
@@ -539,7 +570,28 @@ function reviewCommentUpsert(p) {
     accepted_by:p.accepted_by || "",
     created_at:(existing && existing.created_at) || now, updated_at:now, deleted_at:""
   };
-  reviewWrite("comments", existing, rec);
+  if(existing){
+    // Keep attribution and source identity when editing the same note.
+    ["author_name","author_role","source_type","source_author","source_ref","source_url","accepted_by"].forEach(function(k){rec[k]=existing[k]||"";});
+    // Archive before replacing. An interrupted save can be retried without
+    // losing the previous text or duplicating its revision.
+    var revisionKey="comment_revision:"+existing.comment_id+":"+reviewHash(JSON.stringify([existing.updated_at,existing.body]));
+    reviewUpsertBy("timeline",function(r){return r.idempotency_key===revisionKey;},function(old){return old||{
+      event_id:reviewId("evt"),market_slug:existing.market_slug,ce_id:String(existing.ce_id),ce_name:existing.ce_name,
+      review_week:ymd(existing.week_start),event_type:"comment_revision",source_type:existing.source_type,
+      source_ref:existing.comment_id,source_url:existing.source_url||"",actor_name:existing.author_name,
+      occurred_at:existing.updated_at||existing.created_at,recorded_at:now,original_body:existing.body,
+      approved_body:existing.body,approval_state:"superseded",approved_by:reviewTrustedAuthor(p,p.author_name),
+      approved_at:now,idempotency_key:revisionKey
+    };});
+    try{
+      rec=reviewUpsertBy("comments",function(r){return r.comment_id===existing.comment_id;},function(current){
+        if(!current||current.deleted_at||current.body!==existing.body||String(current.updated_at)!==String(existing.updated_at))
+          throw new Error("This note changed while saving. Your draft has been kept; reload the saved note before editing again.");
+        return rec;
+      });
+    }catch(error){return jsonResp({ok:false,error:error.message});}
+  }else reviewWrite("comments", existing, rec);
   return jsonResp({ok:true, comment:rec});
 }
 
@@ -560,6 +612,10 @@ function reviewWorkUpsert(p) {
   var statuses=["needs_action","in_progress","awaiting_reply","already_actioned","self_recovering",
     "monitoring","scheduled","blocked","stale","dismissed","no_action_needed","complete","cancelled"];
   if(statuses.indexOf(p.status)<0)return jsonResp({ok:false,error:"unsupported work status"});
+  if(!p.work_id&&p.idempotency_key){
+    var duplicate=reviewFind("work",function(r){return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&r.idempotency_key===p.idempotency_key;});
+    if(duplicate)return jsonResp({ok:true,duplicate:true,work_item:duplicate});
+  }
   var existing = p.work_id ? reviewFind("work", function(r){ return r.work_id === p.work_id; }) : null;
   if (p.work_id && !existing) return jsonResp({ok:false,error:"work item not found"});
   if (existing && (existing.market_slug !== p.market_slug || String(existing.ce_id) !== String(p.ce_id)))
@@ -571,8 +627,9 @@ function reviewWorkUpsert(p) {
     origin_week:ymd(p.origin_week), kind:p.kind, text:p.text,
     // Owner is deliberately never inferred. Empty is valid for a scheduled check.
     owner:p.owner || "", status:p.status, due_date:ymd(p.due_date || ""),
-    source_type:p.source_type || "manual", source_ref:p.source_ref || "",
-    source_url:p.source_url || "", created_at:(existing && existing.created_at) || now,
+    source_type:p.source_type || (existing&&existing.source_type) || "manual",
+    source_ref:p.source_ref===undefined?((existing&&existing.source_ref)||""):p.source_ref,
+    source_url:p.source_url===undefined?((existing&&existing.source_url)||""):p.source_url, created_at:(existing && existing.created_at) || now,
     updated_at:now, closed_at:closed ? ((existing && existing.closed_at) || now) : "",
     deleted_at:(existing && existing.deleted_at) || "", deleted_by:(existing && existing.deleted_by) || "",
     requester_id:p.requester_id||(existing&&existing.requester_id)||"",owner_id:p.owner_id||(existing&&existing.owner_id)||"",
@@ -623,7 +680,7 @@ function reviewTelemetryRecord(p){
   reviewWrite("telemetry",null,rec);return jsonResp({ok:true,telemetry:rec});
 }
 
-function reviewTimeline(p){
+function reviewTimeline(p, fullHistory){
   var market=p.market_slug,ce=String(p.ce_id),events=reviewFilter(reviewRows("timeline"),{market_slug:market,ce_id:ce}).slice();
   function add(type,week,when,body,source,ref,url,actor,reviewId,workId){events.push({event_id:"projection:"+type+":"+String(ref||week||when),market_slug:market,ce_id:ce,review_week:ymd(week),event_type:type,occurred_at:when||week,recorded_at:when||week,approved_body:body||"",approval_state:"approved",source_type:source||"review",source_ref:ref||"",source_url:url||"",actor_name:actor||"",related_review_id:reviewId||"",related_work_id:workId||"",read_only:true});}
   reviewFilter(reviewRows("review_set"),{market_slug:market,ce_id:ce}).forEach(function(r){add(r.treatment&&r.treatment!=="not_scheduled"?"shortlist_selected":"candidate_created",r.week_start,r.updated_at,r.reason,"weekly_report",r.source);});
@@ -631,7 +688,7 @@ function reviewTimeline(p){
   reviewFilter(reviewRows("outcomes"),{market_slug:market,ce_id:ce}).forEach(function(r){add("outcome_approved",r.week_start,r.approved_at,r.decision,"review",r.outcome_id,"",r.approved_by,r.outcome_id);});
   reviewFilter(reviewRows("work"),{market_slug:market,ce_id:ce}).filter(function(r){return !r.deleted_at;}).forEach(function(r){add(r.closed_at?"work_completed":"work_opened",r.origin_week,r.updated_at,r.text,"review",r.source_ref,r.source_url,r.approved_by,"",r.work_id);});
   reviewFilter(reviewRows("receipts"),{market_slug:market,ce_id:ce}).forEach(function(r){add("review_finished",r.week_start,r.reviewed_at,r.summary,"review",r.receipt_id,"",r.reviewer,r.receipt_id);});
-  return events.sort(function(a,b){return String(b.occurred_at||b.recorded_at||"").localeCompare(String(a.occurred_at||a.recorded_at||""));}).slice(0,250);
+  return events.sort(function(a,b){return String(b.occurred_at||b.recorded_at||"").localeCompare(String(a.occurred_at||a.recorded_at||""));}).slice(0,fullHistory?undefined:250);
 }
 
 function reviewBacklog(p){
@@ -731,10 +788,28 @@ function reviewSuggestionRecord(p) {
     proposed_owner:p.proposed_owner || "", proposed_due_date:ymd(p.proposed_due_date || ""),
     confidence:p.confidence || "", status:"pending", created_at:reviewNow(), decided_by:"", decided_at:"",
     decision_destination:"",accepted_body:"",accepted_owner:"",accepted_due_date:"",idempotency_key:stableKey,
-    provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||""
+    provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||"",thread_binding_id:p.thread_binding_id||""
   };
-  reviewWrite("suggestions", null, rec);
-  return {ok:true,suggestion:rec};
+  var saved=reviewUpsertBy("suggestions",function(r){
+    return String(r.idempotency_key||"")===stableKey||(r.source_type===p.source_type&&r.source_ref===p.source_ref&&String(r.ce_id)===String(p.ce_id)&&r.kind===p.kind);
+  },function(old){return old||rec;});
+  return {ok:true,duplicate:saved.suggestion_id!==rec.suggestion_id,suggestion:saved};
+}
+
+// Freeze the first extraction before saving suggestions. Retries (including
+// concurrent requests with different model wording) replay that exact batch.
+function reviewImportBatch(p){
+  if(!p.batch_id||!p.market_slug||!p.week_start)return jsonResp({ok:false,error:"batch identity required"});
+  var key=function(r){return r.batch_id===p.batch_id&&r.market_slug===p.market_slug&&ymd(r.week_start)===ymd(p.week_start);};
+  var existing=reviewFind("imports",key);
+  if(!existing&&!Array.isArray(p.items))return jsonResp({ok:true,found:false});
+  var encoded=JSON.stringify(p.items||[]);
+  if(!existing&&encoded.length>45000)return jsonResp({ok:false,error:"Meeting extraction is too large; split the transcript"});
+  var batch=existing||reviewUpsertBy("imports",key,function(old){return old||{
+    batch_id:p.batch_id,market_slug:p.market_slug,week_start:ymd(p.week_start),items_json:encoded,created_at:reviewNow()
+  };});
+  var results=JSON.parse(batch.items_json).map(function(item){return reviewSourceIngestRecord(item);});
+  return jsonResp({ok:true,found:true,results:results,replayed:!!existing});
 }
 
 function reviewSourceIngestRecord(p) {
@@ -762,8 +837,8 @@ function reviewSourceIngestRecord(p) {
     match_status:p.match_status||"unmatched",kind:p.kind,body:p.body,created_at:reviewNow(),
     reconciled_by:"",reconciled_at:"",provider_meeting_id:p.provider_meeting_id||"",access_scope:p.access_scope||"",
     content_hash:p.content_hash||"",idempotency_key:p.idempotency_key||[p.source_type,p.source_ref,p.kind].join(":")};
-  reviewWrite("inbox",null,rec);
-  return {ok:true,queued_for_reconciliation:true,inbox_item:rec};
+  var saved=reviewUpsertBy("inbox",function(r){return r.source_type===p.source_type&&r.source_ref===p.source_ref;},function(old){return old||rec;});
+  return {ok:true,duplicate:saved.source_item_id!==rec.source_item_id,queued_for_reconciliation:true,inbox_item:saved};
 }
 
 function reviewSuggestionIngest(p) {
@@ -888,16 +963,16 @@ function reviewMemory(p) {
     duplicate_count:row._duplicate_count,source_row:row._source_row,read_only:true
   };});
   var openWork=work.filter(function(r){return !r.closed_at;});
-  var recentClosed=work.filter(function(r){return !!r.closed_at;}).slice(0,25);
-  var timeline=reviewTimeline(p);
+  var recentClosed=work.filter(function(r){return !!r.closed_at;});
+  var timeline=reviewTimeline(p,true);
   perfHistory.forEach(function(r){timeline.push({event_id:"history:perf:"+String(r.source_row||r.week_start),market_slug:p.market_slug,ce_id:String(p.ce_id),review_week:r.week_start,event_type:"performance_history",source_type:"historical_sheet",occurred_at:r.updated_at||r.week_start,approved_body:r.action_text,actor_name:r.owner,approval_state:"read_only",read_only:true});});
   legacyComments.forEach(function(r){timeline.push({event_id:"history:comment:"+String(r.source_row||r.week_start),market_slug:p.market_slug,ce_id:String(p.ce_id),review_week:r.week_start,event_type:"historical_comment",source_type:"historical_sheet",source_url:r.slack_permalink,occurred_at:r.created_at||r.week_start,approved_body:r.body,actor_name:r.author_name,approval_state:"read_only",read_only:true});});
   timeline.sort(function(a,b){return String(b.occurred_at||b.recorded_at||"").localeCompare(String(a.occurred_at||a.recorded_at||""));});
   return jsonResp({ok:true, identity:{market_slug:p.market_slug,ce_id:String(p.ce_id)},
     counts:{comments:comments.length,weekly_commentary:weekly.length,open_work:openWork.length,receipts:receipts.length,
       source_suggestions:suggestions.length},
-    weekly_commentary:weekly.slice(0,52),comments:comments.slice(0,25),work_items:openWork.concat(recentClosed),receipts:receipts.slice(0,12),
-    source_suggestions:suggestions.slice(0,25),slack_thread:reviewThreadFor(p.market_slug,p.ce_id),slack_threads:threads.slice(0,25),timeline:timeline,
+    weekly_commentary:weekly,comments:comments,work_items:openWork.concat(recentClosed),receipts:receipts,
+    source_suggestions:suggestions.slice(0,25),slack_thread:reviewThreadFor(p.market_slug,p.ce_id),slack_threads:threads,timeline:timeline,
     perf_history:perfHistory,historical_comments:legacyComments,
     historical_source_status:{actions:{unavailable:historicalActions.unavailable,skipped_missing_ce_id:historicalActions.skipped_missing_ce_id||0,duplicates:historicalActions.duplicates||0},
       comments:{unavailable:historicalComments.unavailable,skipped_missing_ce_id:historicalComments.skipped_missing_ce_id||0,duplicates:historicalComments.duplicates||0}},
@@ -931,7 +1006,7 @@ function doGet(e) {
     var work = reviewFilter(reviewRows("work"), p, "origin_week");
     if (!reviewBool(p.include_deleted)) work = work.filter(function(r){ return !r.deleted_at; });
     if (reviewBool(p.open_only)) work = work.filter(function(r){ return !r.closed_at; });
-    var workPage=reviewPage(work,p,"updated_at",100);
+    var workPage=reviewPage(work,p,"updated_at",100,"work_id");
     return jsonResp({ok:true,work_items:workPage.items,next_before:workPage.next_before});
   }
   if (action === "review_receipt_list") {
@@ -983,11 +1058,12 @@ function doPost(e) {
   catch (err) { return jsonResp({ok:false,error:"invalid JSON"}); }
   var action = payload.action || "review_source_ingest";
   var denied=reviewMutationGate(action,payload);if(denied)return denied;
-  if(action === "review_source_ingest"){
+  if(action === "review_source_ingest" || action === "review_import_batch"){
     var expected=PropertiesService.getScriptProperties().getProperty("REVIEW_MODE_INGEST_SECRET");
     if(!expected)return jsonResp({ok:false,error:"REVIEW_MODE_INGEST_SECRET not configured"});
     if(String(payload.ingest_secret||"")!==String(expected))return jsonResp({ok:false,error:"unauthorized source ingestion"});
   }
+  if (action === "review_import_batch") return reviewImportBatch(payload);
   if (action === "review_source_ingest" && payload.items) {
     var results = payload.items.map(function(item) {
       item.source_type = item.source_type || payload.source_type;
@@ -1037,6 +1113,50 @@ function reviewThreadFor(market, ceId) {
   })[0] || null;
 }
 
+// Immutable Slack provenance, independent of the latest weekly starter on a
+// reusable thread. Invalid or contradictory legacy evidence never picks active.
+function reviewSlackLocation(value) {
+  var text=String(value||"").replace(/&amp;/g,"&"),match=text.match(/^https:\/\/[a-z0-9-]+\.slack\.com\/archives\/([CG][A-Z0-9]+)\/p(\d+)(?:[?#]|$)/i);
+  if(!match||match[2].length<=6)return null;
+  var message=match[2].slice(0,-6)+"."+match[2].slice(-6),parent=text.match(/[?&]thread_ts=(\d+\.\d+)(?:&|#|$)/);
+  return {channel:match[1],parent:parent?parent[1]:message,message:message,hasParent:!!parent};
+}
+
+function reviewResolveWeeklyThread(state,threads) {
+  if(!state)return null;
+  var explicit=String(state.thread_binding_id||""),post=String(state.slack_post_ts||""),location=reviewSlackLocation(state.slack_post_permalink);
+  var matches=threads.filter(function(thread){
+    if(explicit)return String(thread.binding_id||"")===explicit&&(!location||
+      (location.channel===String(thread.slack_channel)&&(!location.hasParent||location.parent===String(thread.slack_thread_ts))));
+    if(location)return location.channel===String(thread.slack_channel)&&
+      (location.hasParent?location.parent===String(thread.slack_thread_ts):
+        (location.message===String(thread.slack_thread_ts)||location.message===String(thread.weekly_starter_ts)))&&
+      (!post||post===location.message||post===location.parent);
+    // A nonempty unparseable link is not evidence for a legacy multi-thread CE.
+    if(state.slack_post_permalink)return false;
+    return !!post&&(post===String(thread.slack_thread_ts)||post===String(thread.weekly_starter_ts));
+  });
+  return matches.length===1?matches[0]:null;
+}
+
+function reviewThreadNumber(thread,threads) {
+  return String(threads.length-threads.findIndex(function(t){return String(t.binding_id||"")===String(thread.binding_id||"");}));
+}
+
+function reviewSummarySourceMatches(row,thread,state,latest) {
+  var explicit=String(row.thread_binding_id||""),location=reviewSlackLocation(row.source_url),ref=String(row.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d+)$/);
+  if(explicit&&explicit!==String(thread.binding_id||""))return false;
+  if(!explicit){
+    if(!location||!ref||location.channel!==ref[1]||location.channel!==String(thread.slack_channel)||
+      location.parent!==String(thread.slack_thread_ts))return false;
+    if(location.message!==location.parent&&location.message!==ref[2])return false;
+  }
+  // Already-scanned sources still belong to this cycle. Do not use its scan
+  // cursor as the lower bound, or a retry loses the existing human evidence.
+  var ts=ref?ref[2]:"";
+  return !ts||((!state.slack_post_ts||ts>=String(state.slack_post_ts))&&(!latest||ts<latest));
+}
+
 function reviewSummaryDecide(p){
   var err=reviewRequired(p,["market_slug","ce_id","week_start","decision","decided_by","thread_binding_id","slack_discussion_number"]);if(err)return err;
   var state=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
@@ -1056,6 +1176,7 @@ function reviewSummaryDecide(p){
     var parsed=reviewJson(draft,null);if(!parsed)return jsonResp({ok:false,error:"approved summary must be valid JSON"});
   }
   var next=reviewWeeklyMutate(p,function(rec){
+    if(String(rec.thread_binding_id||"")!==String(state.thread_binding_id||"")||String(rec.slack_discussion_number||"")!==String(state.slack_discussion_number||""))throw new Error("CE thread changed before summary save");
     if(decision==="approved"){
       rec.summary_status="approved";rec.summary_draft_json=draft;rec.summary_approved_json=draft;rec.summary_json=draft;
       rec.summary_approved_by=trusted;rec.summary_approved_at=now;rec.summary_rejected_at="";rec.summary_rejection_reason="";rec.sync_status="summary_approved";
@@ -1135,8 +1256,7 @@ function reviewSlackPostCore(p) {
 function reviewSlackPost(p){return jsonResp(reviewSlackPostCore(p));}
 
 function reviewArchiveApprovedSummary(state){
-  if(!state||String(state.summary_status||"")!=="approved"||
-      !(state.summary_approved_json||state.summary_json))return null;
+  if(!state||!(state.summary_approved_json||(String(state.summary_status||"")==="approved"&&state.summary_json)))return null;
   var binding=String(state.summary_thread_binding_id||state.thread_binding_id||"");
   var number=String(state.summary_slack_discussion_number||state.slack_discussion_number||"");
   var key="slack_summary:"+String(state.weekly_id||"")+":"+binding+":"+number;
@@ -1163,7 +1283,7 @@ function reviewWeeklySlackPost(p){
   // A weekly record can already point at the active CE thread and still accept
   // additional BGM replies. Only the same request is a duplicate; treating all
   // continuations as duplicates makes the UI report success without posting.
-  if(current && current.slack_post_ts && p.request_id &&
+  if(current && current.slack_post_ts && current.sync_status!=="post_failed" && p.request_id &&
       String(current.last_post_request_id||"")===String(p.request_id))
     return jsonResp({ok:true,duplicate:true,weekly:current});
   var trustedAuthor=reviewTrustedAuthor(p,discussionAuthor);
@@ -1193,13 +1313,30 @@ function reviewWeeklySlackPost(p){
       next.summary_thread_binding_id="";next.summary_slack_discussion_number="";
       next.reply_count="0";next.contributors_json="[]";
     }
-    next.last_scanned_ts=posted.posted_ts;next.sync_status="awaiting_replies";next.last_error="";return next;
+    if(posted.operation==="new_parent"||!next.last_scanned_ts)next.last_scanned_ts=posted.posted_ts;next.sync_status="awaiting_replies";next.last_error="";return next;
   });
   if(!posted.ok)return jsonResp({ok:false,error:posted.error,weekly:finalState,retryable:true});
+  reviewSuggestionRecord({market_slug:p.market_slug,ce_id:p.ce_id,ce_name:p.ce_name,week_start:p.week_start,
+    source_type:"slack",source_author:trustedAuthor,source_ref:p.channel+":"+posted.posted_ts,
+    source_url:posted.posted_permalink||posted.thread.slack_permalink,kind:"comment",body:discussionText,
+    confidence:"source_exact",thread_binding_id:posted.thread.binding_id});
   return jsonResp({ok:true,operation:posted.operation,weekly:finalState,thread:posted.thread,mentions:mentions.matches});
 }
 
 function reviewJson(value,fallback){try{return value?JSON.parse(value):fallback;}catch(err){return fallback;}}
+
+function reviewAiHeaders(context,secret){
+  var props=PropertiesService.getScriptProperties(),headers=secret?{"X-Review-Secret":secret}:{};
+  var automation=props.getProperty("REVIEW_MODE_VERCEL_AUTOMATION_SECRET")||"";
+  // Accept transport configuration only from a fresh, HMAC-signed server
+  // request. Retain it for scheduled syncs, which have no browser session.
+  if(context&&context.review_ai_protection_bypass&&reviewSignedActorEmail(context)){
+    var supplied=String(context.review_ai_protection_bypass);
+    if(supplied!==automation){props.setProperty("REVIEW_MODE_VERCEL_AUTOMATION_SECRET",supplied);automation=supplied;}
+  }
+  if(automation)headers["x-vercel-protection-bypass"]=automation;
+  return headers;
+}
 
 function reviewAiWeeklySummary(sourceRows,state,context){
   var endpoint=PropertiesService.getScriptProperties().getProperty("REVIEW_MODE_AI_WEBHOOK_URL");
@@ -1208,7 +1345,7 @@ function reviewAiWeeklySummary(sourceRows,state,context){
     var secret=PropertiesService.getScriptProperties().getProperty("REVIEW_MODE_AI_WEBHOOK_SECRET")||"";
     var previous=reviewJson(state.summary_json,{});
     var resp=UrlFetchApp.fetch(endpoint,{method:"post",contentType:"application/json",
-      headers:secret?{"X-Review-Secret":secret}:{},
+      headers:reviewAiHeaders(context,secret),
       payload:JSON.stringify({mode:"weekly_thread_summary",identity:{market_slug:context.market_slug,
         ce_id:String(context.ce_id),week_start:ymd(context.week_start)},previous_summary:previous,
         records:sourceRows.map(function(r){return {source_ref:r.source_ref,source_url:r.source_url,
@@ -1226,19 +1363,35 @@ function reviewAiWeeklySummary(sourceRows,state,context){
   }catch(ex){return {status:"source_unavailable",error:String(ex)};}
 }
 
+function reviewHash(text){var value=2166136261;for(var i=0;i<text.length;i++){value^=text.charCodeAt(i);value=Math.imul(value,16777619);}return (value>>>0).toString(16);}
+
 function reviewWeeklySyncCore(p){
   var state=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
-  if(!state)return {ok:false,error:"weekly commentary not found"};
-  if(!state.slack_post_ts)return {ok:false,error:"weekly Slack discussion has not started",weekly:state};
+  var threads=reviewThreadsFor(p.market_slug,p.ce_id),active=reviewThreadFor(p.market_slug,p.ce_id);
+  var wanted=String(p.thread_binding_id||""),hasHistory=state&&(state.thread_binding_id||state.slack_post_ts||state.slack_post_permalink);
+  var thread=hasHistory?reviewResolveWeeklyThread(state,threads):(wanted?threads.filter(function(t){return String(t.binding_id)===wanted;})[0]:active);
+  if(hasHistory&&!thread)return {ok:false,error:"Cannot establish this week's Slack thread from saved history.",weekly:state};
+  if(!thread)return {ok:false,error:"no matching CE Slack thread",weekly:state};
+  if(wanted&&String(thread.binding_id||"")!==wanted)return {ok:false,error:"CE thread changed. Refresh before summarizing."};
+  var recoverBinding=state&&(!state.thread_binding_id||!state.slack_discussion_number);
+  if(!state||!state.slack_post_ts||recoverBinding){
+    var expectedBinding=String((state||{}).thread_binding_id||""),expectedPost=String((state||{}).slack_post_ts||"");
+    state=reviewWeeklyMutate(p,function(rec){
+      if(String(rec.thread_binding_id||"")!==expectedBinding||String(rec.slack_post_ts||"")!==expectedPost)throw new Error("CE thread changed before legacy binding recovery");
+      rec.thread_binding_id=rec.thread_binding_id||thread.binding_id||"";
+      rec.slack_discussion_number=rec.slack_discussion_number||reviewThreadNumber(thread,threads);
+      rec.slack_post_ts=rec.slack_post_ts||thread.slack_thread_ts;rec.slack_post_permalink=rec.slack_post_permalink||thread.slack_permalink;rec.last_scanned_ts=rec.last_scanned_ts||rec.slack_post_ts;return rec;
+    });
+  }
+  if(wanted&&String(state.thread_binding_id||"")!==wanted)return {ok:false,error:"CE thread changed. Refresh before summarizing."};
   var token=PropertiesService.getScriptProperties().getProperty("SLACK_BOT_TOKEN");
   if(!token)return {ok:false,error:"SLACK_BOT_TOKEN not set in Script properties",weekly:state};
-  var thread=reviewThreadFor(p.market_slug,p.ce_id);
-  if(!thread)return {ok:false,error:"no CE Slack thread",weekly:state};
-  // A CE keeps one Slack thread for its lifetime, so each weekly cycle needs an
+  // A CE may reuse its active Slack thread, so each weekly cycle needs an
   // explicit upper boundary. Otherwise a late scan of W31 can also ingest W32
   // replies after the W32 starter has been posted.
   var nextCycle=reviewRows("weekly").filter(function(r){return r.market_slug===p.market_slug&&
-    String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)>ymd(p.week_start)&&r.slack_post_ts;})
+    String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)>ymd(p.week_start)&&r.slack_post_ts&&
+    String((reviewResolveWeeklyThread(r,threads)||{}).binding_id||"")===String(thread.binding_id||"");})
     .sort(function(a,b){return ymd(a.week_start).localeCompare(ymd(b.week_start));})[0];
   var latest=nextCycle?String(nextCycle.slack_post_ts):"";
   var since=String(state.last_scanned_ts||state.slack_post_ts),scan=slackThreadReplies(token,
@@ -1247,22 +1400,28 @@ function reviewWeeklySyncCore(p){
   var newest=since,created=[];
   (scan.messages||[]).forEach(function(msg){
     var ts=String(msg.ts||"");
-    if(!ts||ts<=since||ts===String(thread.slack_thread_ts)||msg.bot_id||msg.subtype)return;
+    if(!ts||ts<=since||(latest&&ts>=latest)||ts===String(thread.slack_thread_ts)||msg.bot_id||msg.subtype)return;
     newest=ts>newest?ts:newest;
     var ref=thread.slack_channel+":"+ts;
     var result=reviewSuggestionRecord({market_slug:p.market_slug,ce_id:p.ce_id,
       ce_name:p.ce_name||state.ce_name,week_start:p.week_start,source_type:"slack",
       source_author:slackUserName(token,msg.user),source_ref:ref,
       source_url:getPermalink(token,thread.slack_channel,ts),kind:"comment",body:msg.text||"",
-      confidence:"source_exact"});
+      confidence:"source_exact",thread_binding_id:thread.binding_id||""});
     if(result.ok&&!result.duplicate)created.push(result.suggestion);
   });
   var raw=reviewRows("suggestions").filter(function(r){return r.market_slug===p.market_slug&&
     String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start)&&
-    r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact";});
+    r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact"&&
+    reviewSummarySourceMatches(r,thread,state,latest);});
   var contributors=[];raw.forEach(function(r){if(r.source_author&&contributors.indexOf(r.source_author)<0)contributors.push(r.source_author);});
+  if(!created.length && Number(state.reply_count||0)===raw.length && state.summary_upto_ts===newest && ["pending","approved"].indexOf(String(state.summary_status))>=0)
+    return {ok:true,weekly:state,new_replies:[],ai_status:"current"};
   var ai=raw.length?reviewAiWeeklySummary(raw,state,p):{status:"no_new_source"};
+  var latestState=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
+  if(String((latestState||{}).thread_binding_id||"")!==String(state.thread_binding_id||""))return {ok:false,error:"CE thread changed while summarizing. Refresh to summarize the new thread."};
   var next=reviewWeeklyMutate(p,function(rec){
+    if(String(rec.thread_binding_id||"")!==String(state.thread_binding_id||""))throw new Error("CE thread changed while summarizing");
     rec.last_scanned_ts=newest;rec.reply_count=String(raw.length);rec.contributors_json=JSON.stringify(contributors);
     if(ai.status==="ok"){
       rec.summary_draft_json=JSON.stringify(ai.summary);rec.summary_status="pending";rec.summary_upto_ts=newest;rec.summary_updated_at=reviewNow();
@@ -1277,15 +1436,17 @@ function reviewWeeklySyncCore(p){
     (ai.summary.action_suggestions||[]).forEach(function(item,idx){if(!item||!item.text)return;
       reviewSuggestionRecord({market_slug:p.market_slug,ce_id:p.ce_id,ce_name:next.ce_name,
         week_start:p.week_start,source_type:"slack",source_author:"AI thread summary",
-        source_ref:"weekly:"+next.weekly_id+":"+newest+":action:"+idx,
+        thread_binding_id:thread.binding_id||"",
+        source_ref:"weekly:"+next.weekly_id+":"+String(thread.binding_id||"")+":action:"+reviewHash(item.text.toLowerCase().replace(/\s+/g," ").trim()),
         source_url:next.slack_post_permalink,kind:"action",body:item.text,
-        proposed_due_date:item.due_date||"",confidence:item.confidence||"summary_derived"});});
+        proposed_owner:item.owner||"",proposed_due_date:item.due_date||"",confidence:item.confidence||"summary_derived"});});
     (ai.summary.check_suggestions||[]).forEach(function(item,idx){if(!item||!item.text)return;
       reviewSuggestionRecord({market_slug:p.market_slug,ce_id:p.ce_id,ce_name:next.ce_name,
         week_start:p.week_start,source_type:"slack",source_author:"AI thread summary",
-        source_ref:"weekly:"+next.weekly_id+":"+newest+":check:"+idx,
+        thread_binding_id:thread.binding_id||"",
+        source_ref:"weekly:"+next.weekly_id+":"+String(thread.binding_id||"")+":check:"+reviewHash(item.text.toLowerCase().replace(/\s+/g," ").trim()),
         source_url:next.slack_post_permalink,kind:"check",body:item.text,
-        proposed_due_date:item.due_date||"",confidence:item.confidence||"summary_derived"});});
+        proposed_owner:item.owner||"",proposed_due_date:item.due_date||"",confidence:item.confidence||"summary_derived"});});
   }
   return {ok:true,weekly:next,new_replies:created,ai_status:ai.status,truncated:scan.truncated};
 }
@@ -1301,7 +1462,8 @@ function reviewSyncActiveThreads(){
 function installReviewSyncTrigger(){
   ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==="reviewSyncActiveThreads";})
     .forEach(function(t){ScriptApp.deleteTrigger(t);});
-  ScriptApp.newTrigger("reviewSyncActiveThreads").timeBased().everyMinutes(5).create();
+  // Manual summaries only. Retain this installer as a cleanup entry point.
+  return {ok:true,mode:"manual"};
 }
 
 function installReviewAutomation(){
@@ -1448,7 +1610,7 @@ function reviewAiSuggestions(sourceType, sourceRows, context) {
   try{
     var secret=PropertiesService.getScriptProperties().getProperty("REVIEW_MODE_AI_WEBHOOK_SECRET")||"";
     var resp=UrlFetchApp.fetch(endpoint,{method:"post",contentType:"application/json",
-      headers:secret?{"X-Review-Secret":secret}:{},
+      headers:reviewAiHeaders(context,secret),
       payload:JSON.stringify({source_type:sourceType,identity:{market_slug:context.market_slug,
         ce_id:String(context.ce_id),week_start:ymd(context.week_start)},records:sourceRows}),muteHttpExceptions:true});
     var body=JSON.parse(resp.getContentText());

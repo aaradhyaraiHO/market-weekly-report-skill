@@ -121,9 +121,6 @@ class ReviewBackendContract(unittest.TestCase):
             "decideSuggestion",
             "sourceInbox",
             "reconcileSource",
-            "granolaSuggestions",
-            "attachGranolaMeeting",
-            "ingestGranolaLink",
         ):
             self.assertRegex(self.client, rf"\b{method}: function")
 
@@ -163,7 +160,7 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('existing.binding_status="replaced"', lifecycle)
         self.assertIn("existing.last_post_request_id", lifecycle)
         self.assertIn("if(existing&&!existing.binding_id)", lifecycle)
-        self.assertIn("slack_threads:threads.slice(0,25)", self.backend)
+        self.assertIn("slack_threads:threads,timeline:timeline", self.backend)
 
     def test_legacy_outcomes_remain_readable_but_receipts_use_core_primitives(self):
         self.assertIn('sheet: "review_outcomes"', self.backend)
@@ -202,7 +199,7 @@ class ReviewBackendContract(unittest.TestCase):
             "related_review_id", "related_work_id", "supersedes_event_id", "idempotency_key",
         ):
             self.assertIn(f'"{field}"', self.backend)
-        timeline = self.backend.split("function reviewTimeline(p)", 1)[1].split(
+        timeline = self.backend.split("function reviewTimeline(p, fullHistory)", 1)[1].split(
             "function reviewBacklog", 1
         )[0]
         self.assertIn("ce=String(p.ce_id)", timeline)
@@ -230,7 +227,7 @@ class ReviewBackendContract(unittest.TestCase):
 
     def test_nomination_and_metric_events_are_idempotent_human_approved_only(self):
         event = self.backend.split("function reviewTimelineEventUpsert(p)", 1)[1].split(
-            "function reviewTimeline(p)", 1
+            "function reviewTimeline(p, fullHistory)", 1
         )[0]
         self.assertIn('"nomination","metric_outcome","completion_evidence"', event)
         self.assertIn("idempotency_key", event)
@@ -254,7 +251,7 @@ class ReviewBackendContract(unittest.TestCase):
     def test_pilot_telemetry_is_idempotent_and_review_scoped(self):
         self.assertIn('sheet: "review_pilot_telemetry"', self.backend)
         telemetry = self.backend.split("function reviewTelemetryRecord(p)", 1)[1].split(
-            "function reviewTimeline(p)", 1
+            "function reviewTimeline(p, fullHistory)", 1
         )[0]
         self.assertIn("idempotency_key", telemetry)
         self.assertIn("reviewTrustedAuthor", telemetry)
@@ -267,7 +264,7 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('rec.summary_status="pending"', self.backend)
         self.assertIn('function reviewSummaryDecide(p)', self.backend)
         self.assertIn("reviewSyncActiveThreads", self.backend)
-        self.assertIn("everyMinutes(5)", self.backend)
+        self.assertNotIn("everyMinutes(5)", self.backend)
         self.assertIn("reviewSyncSlackPeople", self.backend)
         self.assertIn("ambiguous Slack mentions", self.backend)
         self.assertIn('getProperty("REVIEW_MODE_AI_WEBHOOK_SECRET")', self.backend)
@@ -335,13 +332,14 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('client_path = HERE / "notes" / "review_client.js"', injector)
         self.assertIn('data-report-view="review"', injector)
         self.assertIn('id="review-view"', injector)
-        self.assertIn("BGM note saved", review_view)
-        self.assertIn("Thread summary", review_view)
+        self.assertIn("Note saved.", review_view)
+        self.assertIn("data-edit-writeup", review_view)
+        self.assertIn("Slack summary", review_view)
         self.assertIn("startSlackDiscussion", review_view)
-        self.assertIn("Granola meeting", review_view)
-        self.assertIn("Add to commentary", review_view)
+        self.assertIn("Paste the meeting transcript", review_view)
+        self.assertIn("Approve observation", review_view)
         self.assertIn("Schedule check", review_view)
-        self.assertIn("attachGranolaMeeting", CLIENT.read_text())
+        self.assertNotIn("attachGranolaMeeting", CLIENT.read_text())
 
     def test_manual_granola_link_is_a_source_inbox_fallback(self):
         self.assertIn("function reviewGranolaLinkSubmit(p)", self.backend)
@@ -349,7 +347,7 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn('match_confidence:"bgm_attached"', self.backend)
         self.assertIn('action === "review_granola_link_submit"', self.backend)
         self.assertIn("candidate_ce_id", self.backend)
-        self.assertIn('return post("review_granola_link_submit", link)', self.client)
+        self.assertNotIn("review_granola_link_submit", self.client)
         proxy = PROXY.read_text()
         self.assertIn('["GET", "POST"].includes(req.method)', proxy)
         self.assertIn('body: JSON.stringify(Object.fromEntries(params.entries()))', proxy)

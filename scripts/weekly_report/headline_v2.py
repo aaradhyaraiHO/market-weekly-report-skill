@@ -13,6 +13,7 @@ from functools import reduce
 from statistics import fmean
 
 import flows
+from paid_platforms import snapshot_platforms
 
 
 _METRIC_SPECS = (
@@ -186,7 +187,7 @@ def _metric_views(headlines, rows, weekly_ly):
     return views
 
 
-def _mover_views(headlines, direction, ce_target_pacing=None, ce_current_revenue=None):
+def _mover_views(headlines, direction, ce_target_pacing=None, ce_current_revenue=None, ce_last_year_revenue=None):
     trend = (headlines.get("week_header") or {}).get("trend") or {}
     rich_key = "top_droppers" if direction == "drop" else "top_gainers"
     fallback_key = "top_drops" if direction == "drop" else "top_gainers"
@@ -205,6 +206,7 @@ def _mover_views(headlines, direction, ce_target_pacing=None, ce_current_revenue
     result = []
     ce_target_pacing = ce_target_pacing or {}
     ce_current_revenue = ce_current_revenue or {}
+    ce_last_year_revenue = ce_last_year_revenue or {}
     for rank, row in enumerate(source, start=1):
         delta_4w = _number(row.get("delta_4w"))
         wow_abs = _number(row.get("raw_wow"))
@@ -235,6 +237,7 @@ def _mover_views(headlines, direction, ce_target_pacing=None, ce_current_revenue
             "primary_lens": primary[1],
             "delta_4w": delta_4w,
             "delta_4w_pct": _percent_change(revenue, trailing_four_revenue),
+            "yoy_abs": revenue - ce_last_year_revenue[str(ce_id)] if revenue is not None and ce_last_year_revenue.get(str(ce_id)) is not None else None,
             "wow_abs": wow_abs,
             "wow_pct": _percent_change(revenue, previous_revenue),
             "ly_wow": _number(row.get("ly_wow")),
@@ -486,6 +489,8 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
     previous = weekly[-2] if len(weekly) > 1 else {}
     ly_by_week = {row.get("week"): row for row in weekly_ly}
     funnel_cvr = (funnel or {}).get("CVR") or {}
+    platform_ty = {row.get("week"): snapshot_platforms(row) for row in weekly}
+    platform_ly = {row.get("week"): snapshot_platforms(row) for row in weekly_ly}
     result = {}
     for group, specs in _CE_DRAWER_METRICS.items():
         rows = []
@@ -493,6 +498,10 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
             if key == "funnel_cvr_pct":
                 funnel_w0 = _number(funnel_cvr.get("current"))
                 funnel_wm1 = _number(funnel_cvr.get("wm1"))
+                funnel_yoy_points = _number(funnel_cvr.get("yoy"))
+                funnel_ly = _number(funnel_cvr.get("ly"))
+                if funnel_ly is None and funnel_w0 is not None and funnel_yoy_points is not None:
+                    funnel_ly = funnel_w0 - funnel_yoy_points
                 rows.append({
                     "key": key,
                     "label": label,
@@ -503,6 +512,8 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
                     "delta_pct": _number(funnel_cvr.get("wow")),
                     "delta_kind": "pp",
                     "wow_kind": "pp",
+                    "ly_w0": funnel_ly,
+                    "yoy_pct": _percent_change(funnel_w0, funnel_ly),
                     # The live funnel query supplies W0/W-1/LY, not 12 weeks.
                     # An empty series is an explicit unavailable state.
                     "series": [],
@@ -528,8 +539,30 @@ def _ce_drawer_metrics(weekly, weekly_ly, funnel=None):
                 "delta_pct": _percent_change(w0, wm1),
                 "delta_kind": "pp" if value_format == "pct" else "abs",
                 "wow_kind": "pct",
+                "ly_w0": series[-1]["ly"] if series else None,
+                "yoy_pct": _percent_change(w0, series[-1]["ly"] if series else None),
                 "series": series,
             })
+            if group == "paid":
+                breakdown = []
+                for platform, label in (("google", "Google Search"), ("bing", "Bing Search")):
+                    history = [{"week": point.get("week"),
+                                "ty": _number(platform_ty.get(point.get("week"), {}).get(platform, {}).get(key)),
+                                "ly": _number(platform_ly.get(point.get("week"), {}).get(platform, {}).get(key))}
+                               for point in weekly[-12:]]
+                    now = history[-1]["ty"] if history else None
+                    prior = history[-2]["ty"] if len(history) > 1 else None
+                    ly = history[-1]["ly"] if history else None
+                    breakdown.append({
+                        "key": f"{key}:{platform}", "label": label, "format": value_format,
+                        "w0": now, "wm1": prior, "ly_w0": ly,
+                        "delta_abs": now - prior if now is not None and prior is not None else None,
+                        "delta_pct": _percent_change(now, prior), "yoy_pct": _percent_change(now, ly),
+                        "wow_kind": "pct", "series": history,
+                        "unavailable_reason": "Google Search only" if key == "paid_sis_pct" and platform == "bing"
+                        else ("Platform data unavailable" if now is None else None),
+                    })
+                rows[-1]["breakdown"] = breakdown
         result[group] = rows
     return result
 
@@ -896,10 +929,13 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
     current_ly_revenue = chart[-1]["revenue_ly"] if chart else None
     ce_target_pacing = monthly.get("ce_target_pacing") or {}
     ce_current_revenue = {}
+    ce_last_year_revenue = {}
     for ce in market.get("ces") or []:
         weekly = ce.get("weekly") or []
         if weekly:
             ce_current_revenue[str(ce.get("ce_id"))] = _number(weekly[-1].get("revenue"))
+            matched = next((r for r in ce.get("weekly_ly", []) if r.get("week") == weekly[-1].get("week")), {})
+            ce_last_year_revenue[str(ce.get("ce_id"))] = _number(matched.get("revenue"))
 
     result = {
         "market": meta.get("market", "Unknown market"),
@@ -920,8 +956,8 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
         "monthly": monthly,
         "chart": chart,
         "movers": {
-            "drops": _mover_views(headlines, "drop", ce_target_pacing, ce_current_revenue),
-            "gains": _mover_views(headlines, "gain", ce_target_pacing, ce_current_revenue),
+            "drops": _mover_views(headlines, "drop", ce_target_pacing, ce_current_revenue, ce_last_year_revenue),
+            "gains": _mover_views(headlines, "gain", ce_target_pacing, ce_current_revenue, ce_last_year_revenue),
         },
         "detail": {
             "metrics": _metric_views(headlines, rows, weekly_ly),

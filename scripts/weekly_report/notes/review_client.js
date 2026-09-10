@@ -13,7 +13,18 @@
 
   function createWeeklyReviewApi(baseUrl) {
     required(baseUrl, "baseUrl");
-    var cache = {}, inflight = {}, CACHE_MS = 60000;
+    var cache = {}, inflight = {}, generation=0, CACHE_MS = 60000;
+
+    function fetchJson(url,options,timeoutMs){
+      var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},timeoutMs||15000);
+      var opts=Object.assign({},options||{},{signal:controller.signal});
+      return fetch(url,opts).then(function(response){
+        return response.json().catch(function(){throw new Error(response.status===401?"Please sign in again.":"The audit service did not return a valid response.");}).then(function(body){
+          if(!response.ok||!body||!body.ok)throw new Error(body&&body.error||"Audit request failed ("+response.status+")");
+          return body;
+        });
+      }).catch(function(error){if(error.name==="AbortError")throw new Error("The audit service took too long. Your draft is preserved. Retry when ready.");throw error;}).finally(function(){clearTimeout(timer);});
+    }
 
     function request(action, params, options) {
       var query = new URLSearchParams({action: action});
@@ -24,39 +35,46 @@
       var url = baseUrl + "?" + query.toString(), now = Date.now(), opts = options || {};
       if (!opts.refresh && cache[url] && now - cache[url].at < (opts.ttl || CACHE_MS)) return Promise.resolve(cache[url].body);
       if (!opts.refresh && inflight[url]) return inflight[url];
-      inflight[url] = fetch(url, {redirect: "follow", credentials: "same-origin", signal: opts.signal})
-        .then(function(response) { return response.json(); })
+      var requestGeneration=generation;
+      var running = fetchJson(url, {redirect: "follow", credentials: "same-origin"}, opts.timeoutMs)
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
-          cache[url] = {at: Date.now(), body: body};
+          if(requestGeneration===generation)cache[url] = {at: Date.now(), body: body};
           return body;
-        }).finally(function() { delete inflight[url]; });
-      return inflight[url];
+        }).finally(function() { if(inflight[url]===running)delete inflight[url]; });
+      inflight[url]=running;
+      return running;
     }
 
     function post(action, params) {
-      return fetch(baseUrl, {
+      return fetchJson(baseUrl, {
         method: "POST",
         headers: {"content-type": "application/json"},
         credentials: "same-origin",
         body: JSON.stringify(Object.assign({action: action}, params || {}))
-      }).then(function(response) { return response.json(); })
+      }, 90000)
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
           // Any successful mutation may change queue, CE history, work, or
           // memory. Drop read caches only after confirmation from the server.
-          cache = {};
+          cache = {}; inflight = {}; generation++;
           return body;
         });
     }
 
     return {
+      extractMeeting: function(payload){return fetchJson("/api/review-extract",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(payload)},90000).then(function(body){cache={};generation++;return body;});},
       // The Review proxy derives this from the authenticated Google session.
       // UI writes must use it rather than asking a signed-in BGM to re-enter
       // their name in every browser/device.
       whoami: function() { return request("whoami", {}); },
       comments: function(identity, includeDeleted, options) {
-        return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted}), options);
+        var comments=[];
+        function page(before){return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted,before:before||""}), options).then(function(res){
+          comments=comments.concat(res.comments||[]);
+          return res.next_before?page(res.next_before):Object.assign({},res,{comments:comments});
+        });}
+        return page("");
       },
       saveComment: function(comment) {
         required(comment.author_name, "author_name");
@@ -65,7 +83,15 @@
       deleteComment: function(commentId, deletedBy) {
         return post("review_comment_delete", {comment_id: commentId, deleted_by: deletedBy});
       },
-      work: function(filter) { return request("review_work_list", filter || {}); },
+      work: function(filter) {
+        var rows=[],seen={};
+        function page(before){return request("review_work_list",Object.assign({},filter||{},before?{before:before}:{})).then(function(res){
+          rows=rows.concat(res.work_items||[]);
+          if(res.next_before){if(seen[res.next_before])throw new Error("Action history could not finish loading. Please retry.");seen[res.next_before]=true;return page(res.next_before);}
+          return Object.assign({},res,{work_items:rows});
+        });}
+        return page();
+      },
       saveWork: function(item) { return post("review_work_upsert", item); },
       deleteWork: function(workId, deletedBy) {
         required(workId, "work_id");
@@ -83,7 +109,7 @@
       recordTelemetry: function(event) { return post("review_telemetry_record", event); },
       reviewSet: function(identity) { return request("review_set_list", identity); },
       saveReviewSetItem: function(item) { return post("review_set_upsert", item); },
-      memory: function(identity, refresh) { return request("review_memory", identity, {refresh: !!refresh, ttl: 300000}); },
+      memory: function(identity, refresh) { return request("review_memory", identity, {refresh: !!refresh, ttl: 300000, timeoutMs:45000}); },
       weeklyCommentary: function(identity, before, limit, options) {
         return request("review_weekly_list", Object.assign({}, identity, {before: before || "", limit: limit || 26}), options);
       },
@@ -111,43 +137,13 @@
       suggestions: function(identity, includeDecided, options) {
         return request("review_suggestion_list", Object.assign({}, identity, {include_decided: !!includeDecided}), options);
       },
-      granolaSuggestions: function(identity, includeDecided) {
-        return request("review_suggestion_list", Object.assign({}, identity, {
-          source_type: "granola", include_decided: !!includeDecided
-        }));
-      },
-      attachGranolaMeeting: function(link) {
-        required(link.source_url, "source_url");
-        required(link.submitted_by, "submitted_by");
-        return post("review_granola_link_submit", link);
-      },
-      // A BGM-pasted meeting must use the authenticated, link-specific
-      // extractor.  The older attachGranolaMeeting call is retained only for
-      // historical source-inbox records; it merely queues a URL and does not
-      // produce CE suggestions.
-      ingestGranolaLink: function(payload) {
-        required(payload.source_url, "source_url");
-        required(payload.market_slug, "market_slug");
-        required(payload.week_start, "week_start");
-        required(payload.ces, "ces");
-        return fetch("/api/granola-link", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {"content-type": "application/json"},
-          body: JSON.stringify(payload)
-        }).then(function(response) { return response.json(); })
-          .then(function(body) {
-            if (!body || !body.ok) throw new Error((body && body.error) || "Granola meeting extraction failed");
-            return body;
-          });
-      },
       decideSuggestion: function(decision) { return post("review_suggestion_decide", decision); },
       sourceInbox: function(identity, includeReconciled) {
         return request("review_source_inbox", Object.assign({}, identity, {include_reconciled: !!includeReconciled}));
       },
       reconcileSource: function(match) { return post("review_source_reconcile", match); },
       prefetch: function(action, params, ttl) { return request(action, params || {}, {ttl: ttl || CACHE_MS}).catch(function() { return null; }); },
-      clearCache: function() { cache = {}; inflight = {}; }
+      clearCache: function() { cache = {}; inflight = {}; generation++; }
     };
   }
 

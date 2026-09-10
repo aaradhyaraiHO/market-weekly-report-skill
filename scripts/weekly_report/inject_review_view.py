@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Inject the live Review tab into deployed weekly-report-*.html shells.
+Inject the live Mini Audit tab into deployed weekly-report-*.html shells.
 
 The V2 shell (market-notebook-v2/weekly-report-<slug>.html) is a hand-authored, self-contained page
 whose whole app lives in one IIFE. This script wires the Review tab (from
-docs/weekly-review/final-wbr-review-mode.html) into it, backed by the live /api/review endpoints:
+review/review-view.js) into it, backed by the live /api/review endpoints:
 
   1. Enables the "Review" rail button (data-report-view="review").
   2. Inserts an empty <section id="review-view" class="report-view" hidden> container.
@@ -38,8 +38,8 @@ STYLE_ID = "rv-style"
 BOOT_START = "/*RV-BOOT-START*/"
 BOOT_END = "/*RV-BOOT-END*/"
 
-NAV_RE = re.compile(r'<button class="nav-item"[^>]*>Review</button>')
-NAV_ENABLED = '<button class="nav-item" type="button" data-report-view="review">Review</button>'
+NAV_RE = re.compile(r'<button class="nav-item"[^>]*>(?:Review|Mini Audit)</button>')
+NAV_ENABLED = '<button class="nav-item" type="button" data-report-view="review">Mini Audit</button>'
 HEADOUT_RE = re.compile(r"^weekly-report-headout(?:-\d{4}-\d{2}-\d{2})?\.html$")
 
 # insertion anchor: the all-ces section close + main close. We slot the review-view container
@@ -53,11 +53,13 @@ CONTAINER_HTML = ('      </section>\n'
 SWITCH_ANCHOR = "document.getElementById('all-ces-view').hidden=view!=='all-ces';"
 SWITCH_ADD = ("document.getElementById('all-ces-view').hidden=view!=='all-ces';"
               "var _rv=document.getElementById('review-view');if(_rv)_rv.hidden=view!=='review';"
-              "if(view==='review'&&window.__rv)window.__rv.onShow();")
+              "if(view==='review'&&window.__rv)window.__rv.onShow();else if(window.__rv&&window.__rv.onHide)window.__rv.onHide();")
+
+SWITCH_PREVIOUS = SWITCH_ADD.split(";else if(window.__rv", 1)[0] + ";"
 
 # the shell's IIFE ends with these three calls then `})();` — we boot just before the close.
 BOOT_ANCHOR = "      actionPrevPull();\n    })();"
-CE_REVIEW_CONTROL = '<button class="drawer-omni" id="ce-open-review" type="button">Open in Review →</button>'
+CE_REVIEW_CONTROL = '<button class="drawer-omni" id="ce-open-review" type="button">Open Mini Audit →</button>'
 CE_REVIEW_CONTROL_ANCHOR = '<a class="drawer-omni" id="ce-drawer-omni"'
 CE_REVIEW_WIRE_ANCHOR = "document.getElementById('ce-drawer-omni').href=omniLink(ce.ce_id);"
 CE_REVIEW_WIRE = CE_REVIEW_WIRE_ANCHOR + "document.getElementById('ce-open-review').onclick=()=>{if(window.__openReviewCe)window.__openReviewCe(String(ce.ce_id));};"
@@ -75,16 +77,13 @@ def _guard(js: str, label: str) -> str:
     return js
 
 
-APP_DIR = HERE / "review-app"
-
-
 def stage_review_api(deploy: Path) -> None:
     """Stage only the isolated Review routes beside the injected UI.
 
     The V1/V2 diagnostic actions route is deliberately excluded: it remains
     whatever the complete Market Notebook artifact already uses.  Keeping
     these copies in the same release command prevents a Preview from pairing a
-    new Review UI with an old Granola/Review proxy implementation.
+    new Review UI with an old Review proxy implementation.
     """
     api_dir = deploy / "api"
     api_dir.mkdir(parents=True, exist_ok=True)
@@ -92,37 +91,28 @@ def stage_review_api(deploy: Path) -> None:
     routes = {
         "review_proxy_api.js": "review.js",
         "review_summary_api.js": "review-summary.js",
-        "granola_link_api.js": "granola-link.js",
+        "review_extract_api.js": "review-extract.js",
     }
+    # Retire inherited link/automatic Granola ingestion endpoints from reused packages.
+    # Existing meeting history stays in Sheets; transcript extraction is the only import.
+    for retired in ("granola-link.js", "granola-pull.js", "granola-review.js"):
+        (api_dir / retired).unlink(missing_ok=True)
     for source, target in routes.items():
         shutil.copyfile(notes / source, api_dir / target)
+    lib_dir = deploy / "lib"
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(HERE / "lib" / "review_ai_provider.mjs", lib_dir / "review_ai_provider.mjs")
+    shutil.copyfile(HERE / "lib" / "review_meeting_import.mjs", lib_dir / "review_meeting_import.mjs")
 
 
-def build_boot(deploy: Path, native: bool = False):
-    if native:
-        css = _read(APP_DIR / "node_modules/@headout/pixie/styles.css")
-        view_js = _guard(_read(APP_DIR / "dist/review-view.js"), "native bundle")
-        client_js = ""  # the native bundle has its own /api/review client
-        style = f'<style id="{STYLE_ID}">\n{css}\n</style>'
-        boot = (
-            f"{BOOT_START}\n"
-            "try{\n"
-            "/* --- inlined native Eevee bundle (React + @headout/eevee) --- */\n"
-            f"{view_js}\n"
-            "if(window.initReviewView){\n"
-            "  window.__rv=window.initReviewView({\n"
-            "    root:document.getElementById('review-view'),\n"
-            "    getHeadline:function(){var h=currentHeadline(); var c=(typeof payload!=='undefined'&&payload.notes_channels)||h.notes_channels||{}; return Object.assign({},h,{notes_channels:c});}, getBaseHeadline:function(){var h=baseHeadline(); var c=(typeof payload!=='undefined'&&payload.notes_channels)||h.notes_channels||{}; return Object.assign({},h,{notes_channels:c});},\n"
-            "    openCeDrawer:(typeof openCeDrawer!=='undefined'?openCeDrawer:null)\n"
-            "  });\n"
-            "  window.__openReviewCe=function(ceId){if(typeof closeCeDrawer==='function')closeCeDrawer();var b=document.querySelector('[data-report-view=\"review\"]');if(b)b.click();if(window.__rv&&window.__rv.focusCe)window.__rv.focusCe(String(ceId));};\n"
-            "  setTimeout(function(){window.__rv&&window.__rv.prefetch&&window.__rv.prefetch();},250);\n"
-            "  if(typeof weekSelect!=='undefined'&&weekSelect)weekSelect.addEventListener('change',function(){window.__rv&&window.__rv.onWeekChange&&window.__rv.onWeekChange();});\n"
-            "}\n"
-            "}catch(_rvErr){console.warn('native review view init failed',_rvErr);}\n"
-            f"{BOOT_END}"
-        )
-        return style, boot
+
+AUDIT_MOUNT = """
+var _rvAnalytics=document.getElementById('ce-detail-drawer'),_rvAnalyticsHome=document.getElementById('ce-detail-root'),_rvAnalyticsCe='';
+function _rvReleaseAnalytics(){if(_rvAnalytics&&_rvAnalytics.parentNode!==_rvAnalyticsHome){_rvAnalyticsHome.appendChild(_rvAnalytics);_rvAnalytics.classList.remove('rv-embedded-data');_rvAnalytics.setAttribute('role','dialog');_rvAnalytics.setAttribute('aria-modal','true');_rvAnalyticsHome.hidden=true;}}
+function _rvMountAnalytics(host,ceId){if(!host||!_rvAnalytics)return;_rvAnalyticsHome.hidden=true;document.body.classList.remove('drawer-open');host.appendChild(_rvAnalytics);_rvAnalytics.classList.add('rv-embedded-data');_rvAnalytics.setAttribute('role','region');_rvAnalytics.removeAttribute('aria-modal');if(_rvAnalyticsCe!==String(ceId)||typeof activeCe==='undefined'||!activeCe||String(activeCe.ce_id)!==String(ceId)){var ce=(currentHeadline().all_ces||[]).find(function(c){return String(c.ce_id)===String(ceId);});if(ce){renderCeDrawer(ce);_rvAnalyticsCe=String(ceId);_rvAnalytics.scrollTop=0;}}}
+"""
+
+def build_boot(deploy: Path):
     css = _read(REVIEW_DIR / "review-view.css")
     view_js = _guard(_read(REVIEW_DIR / "review-view.js"), "review-view.js")
     # The browser client is source-controlled beside the Review backend. Do not
@@ -138,6 +128,7 @@ def build_boot(deploy: Path, native: bool = False):
         f"{client_js}\n"
         "/* --- inlined review-view.js --- */\n"
         f"{view_js}\n"
+        + AUDIT_MOUNT +
         "if(window.initReviewView){\n"
         "  window.__rv=window.initReviewView({\n"
         "    root:document.getElementById('review-view'),\n"
@@ -148,10 +139,11 @@ def build_boot(deploy: Path, native: bool = False):
         "      dateLabel:(typeof dateLabel!=='undefined'?dateLabel:null),\n"
         "      omniLink:(typeof omniLink!=='undefined'?omniLink:null),\n"
         "      count:(typeof count!=='undefined'?count:null)},\n"
-        "    openCeDrawer:(typeof openCeDrawer!=='undefined'?openCeDrawer:null)\n"
+        "    mountAnalytics:_rvMountAnalytics,releaseAnalytics:_rvReleaseAnalytics,openCeDrawer:(typeof openCeDrawer!=='undefined'?openCeDrawer:null)\n"
         "  });\n"
         "  window.__openReviewCe=function(ceId){if(typeof closeCeDrawer==='function')closeCeDrawer();var b=document.querySelector('[data-report-view=\"review\"]');if(b)b.click();if(window.__rv&&window.__rv.focusCe)window.__rv.focusCe(String(ceId));};\n"
         "  setTimeout(function(){window.__rv&&window.__rv.prefetch&&window.__rv.prefetch();},250);\n"
+        "  var _rvLink=new URL(location.href);if(_rvLink.searchParams.get('view')==='review'){var _rvCe=_rvLink.searchParams.get('ce_id');if(_rvCe)window.__openReviewCe(_rvCe);else document.querySelector('[data-report-view=\"review\"]').click();}\n"
         "  if(typeof weekSelect!=='undefined'&&weekSelect)weekSelect.addEventListener('change',function(){window.__rv&&window.__rv.onWeekChange();});\n"
         "}\n"
         "}catch(_rvErr){console.warn('review view init failed',_rvErr);}\n"
@@ -185,7 +177,7 @@ def remove_review(path: Path) -> bool:
     return True
 
 
-def inject(path: Path, deploy: Path, native: bool = False) -> bool:
+def inject(path: Path, deploy: Path) -> bool:
     if HEADOUT_RE.match(path.name):
         return remove_review(path)
     html = path.read_text()
@@ -193,7 +185,7 @@ def inject(path: Path, deploy: Path, native: bool = False) -> bool:
         print(f"  ! {path.name}: not a V2 shell (no report-data / nav) — skipped")
         return False
 
-    style, boot = build_boot(deploy, native)
+    style, boot = build_boot(deploy)
     html = strip_previous(html)
 
     # 1. nav button
@@ -209,7 +201,10 @@ def inject(path: Path, deploy: Path, native: bool = False) -> bool:
             return False
         html = html.replace(CONTAINER_ANCHOR, CONTAINER_HTML, 1)
 
-    # 3. view-switch
+    # 3. Upgrade previously injected artifacts as well as fresh renderings.
+    if SWITCH_ADD not in html:
+        html = html.replace(SWITCH_PREVIOUS, SWITCH_ADD)
+    # view-switch
     if "getElementById('review-view')" not in html:
         if SWITCH_ANCHOR not in html:
             print(f"  ! {path.name}: view-switch anchor not found — skipped")
@@ -228,6 +223,8 @@ def inject(path: Path, deploy: Path, native: bool = False) -> bool:
             print(f"  ! {path.name}: CE drawer Review wire anchor not found — skipped")
             return False
         html = html.replace(CE_REVIEW_WIRE_ANCHOR, CE_REVIEW_WIRE, 1)
+
+    html = html.replace("Open in Review →", "Open Mini Audit →")
 
     # 4. style before </head>
     html = html.replace("</head>", style + "\n</head>", 1)
@@ -259,12 +256,11 @@ def resolve_targets(args) -> list[Path]:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Inject the live Review tab into weekly-report shells")
+    ap = argparse.ArgumentParser(description="Inject the live Mini Audit tab into weekly-report shells")
     ap.add_argument("files", nargs="*", help="explicit HTML file paths")
     ap.add_argument("--market", help="market slug (current-week alias)")
     ap.add_argument("--all", action="store_true", help="all current and dated report pages in the deploy dir")
     ap.add_argument("--deploy", help="deploy dir (default: ~/analytics/market-notebook-v2 or $MMR_NOTEBOOK_DIR)")
-    ap.add_argument("--native", action="store_true", help="inject the native React/Eevee bundle + pixie.css instead of the vanilla view")
     args = ap.parse_args(argv)
     deploy = Path(os.path.expanduser(args.deploy)) if args.deploy else DEFAULT_DEPLOY
 
@@ -282,7 +278,7 @@ def main(argv=None):
             remove_review(path)
             excluded += 1
             continue
-        if inject(path, deploy, args.native):
+        if inject(path, deploy):
             enabled += 1
     print(f"\n  Review enabled: {enabled}; Headout/global excluded: {excluded}; total processed: {enabled + excluded}/{len(targets)}")
     if enabled:

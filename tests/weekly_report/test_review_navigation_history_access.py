@@ -19,7 +19,7 @@ CHANNELS = json.loads((ROOT / "alert/market_channels.json").read_text())["market
 class ReviewNavigationHistoryAccessContract(unittest.TestCase):
     def test_review_to_existing_drawer_uses_stable_ce_id(self):
         self.assertIn("ctx.openCeDrawer(String(ce.ce_id))", VIEW)
-        self.assertIn('data-open-drawer-ce=', VIEW)
+        self.assertIn('mountAnalytics', VIEW)
         self.assertNotIn("ctx.openCeDrawer(ce)", VIEW)
         self.assertIn("openCeDrawer:(typeof openCeDrawer", INJECTOR)
 
@@ -100,7 +100,7 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
             path = ROOT / f"tests/weekly_report/fixtures/captured/snapshot_{fixture}_2026-08-02.json.gz"
             self.assertTrue(path.is_file())
         self.assertNotIn('headout:{id:', VIEW)
-        self.assertIn("Missing history never blocks this report", VIEW)
+        self.assertIn("Previously loaded records remain below", VIEW)
 
     def test_navigation_paints_before_remote_review_state(self):
         load_queue = VIEW.split("function loadQueue()", 1)[1].split("function loadCe", 1)[0]
@@ -125,8 +125,8 @@ class ReviewNavigationHistoryAccessContract(unittest.TestCase):
         self.assertEqual(BACKEND.count('getRange(2, 1, last - 1, schema.length).getValues()'), 1)
 
     def test_save_and_slack_have_immediate_async_feedback(self):
-        for fragment in ('btn.textContent="Saving…"', 'btn.textContent="Posting…"', 'button.textContent = "Summarizing…"'):
-            self.assertIn(fragment, VIEW)
+        for text in ("Saving note…", "Sending to Slack…", "Summarizing…", "S.asyncBusy[key]", "Your writeup is preserved"):
+            self.assertIn(text, VIEW)
 
 
 if __name__ == "__main__":

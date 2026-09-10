@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { useReviewOpenAI, reviewAIConfigured, askReviewOpenAI } from "../lib/review_ai_provider.mjs";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.REVIEW_AI_MODEL || "claude-haiku-4-5-20251001";
@@ -91,10 +92,12 @@ function cleanRecords(records) {
 }
 
 async function askModel(instruction, payload, schema) {
+  if (useReviewOpenAI()) return askReviewOpenAI(instruction, payload, schema, 2500);
   const token = process.env.ANTHROPIC_API_KEY;
   if (!token) throw new Error("Anthropic API authentication unavailable");
   const response = await fetch(ANTHROPIC_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(45000),
     headers: { "x-api-key": token, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
@@ -128,10 +131,12 @@ export default async function handler(req, res) {
   if (!sameSecret(req.headers["x-review-secret"], expectedSecret))
     return res.status(401).json({ error: "unauthorized" });
 
-  if (!process.env.ANTHROPIC_API_KEY)
+  if (!reviewAIConfigured())
     return res.status(503).json({ error: "review summary unavailable" });
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+  let body;
+  try { body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {}); }
+  catch (_) { return res.status(400).json({ error: "invalid JSON" }); }
   const records = cleanRecords(body.records);
   if (!records.length) return res.status(400).json({ error: "source records required" });
   try {

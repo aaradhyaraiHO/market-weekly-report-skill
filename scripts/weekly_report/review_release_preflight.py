@@ -16,15 +16,22 @@ def is_headout_report(path: Path) -> bool:
     return stem == "weekly-report-headout" or stem.startswith("weekly-report-headout-20")
 
 
-def verify(directory: Path, report: str) -> list[str]:
-    # Review is only testable as a whole when the authenticated Granola-link
-    # route ships with the same artifact as the report and Review proxy.
-    required = ["index.html", "api/actions.js", "api/review.js", "api/review-summary.js", "api/granola-link.js", report]
+def verify(directory: Path, report: str, preserve_legacy_from: Path | None = None) -> list[str]:
+    # Transcript extraction ships with the report and authenticated Review proxy.
+    required = ["index.html", "api/actions.js", "api/review.js", "api/review-summary.js", "api/review-extract.js", report]
     missing = [item for item in required if not (directory / item).is_file()]
     if missing:
         return [f"missing required full-site artifact: {item}" for item in missing]
 
     failures: list[str] = []
+    for retired in ("granola-link.js", "granola-pull.js", "granola-review.js"):
+        if (directory / "api" / retired).exists():
+            failures.append(f"retired meeting import route remains: api/{retired}")
+    for route in ("review-summary.js", "review-extract.js"):
+        if "../lib/review_ai_provider.mjs" in (directory / "api" / route).read_text() and not (directory / "lib/review_ai_provider.mjs").is_file():
+            failures.append(f"{route} is missing its Review AI provider module")
+        if "../lib/review_meeting_import.mjs" in (directory / "api" / route).read_text() and not (directory / "lib/review_meeting_import.mjs").is_file():
+            failures.append(f"{route} is missing its meeting import module")
     reports = sorted(directory.glob("weekly-report-*.html"))
     if not reports:
         failures.append("no weekly report pages found")
@@ -37,6 +44,13 @@ def verify(directory: Path, report: str) -> list[str]:
             if 'id="review-view"' in shell or "initReviewView" in shell or 'data-report-view="review"' in shell:
                 failures.append(f"{page.name} must not contain Review")
             continue
+        # A full notebook retains historical V1 pages. Only an unchanged,
+        # explicitly supplied baseline may exempt these from the V2 bootstrap
+        # requirement; a requested test report or V2 page is never exempt.
+        if preserve_legacy_from and page.name != report and 'id="drawer"' in shell and "data-report-view" not in shell:
+            baseline = preserve_legacy_from / page.name
+            if baseline.is_file() and baseline.read_bytes() == page.read_bytes():
+                continue
         if 'id="review-view"' not in shell:
             failures.append(f"{page.name} has no Review container")
         if "initReviewView" not in shell:
@@ -48,8 +62,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate a complete-site Review Preview artifact")
     parser.add_argument("directory", type=Path)
     parser.add_argument("--report", default="weekly-report-north-america.html")
+    parser.add_argument("--preserve-legacy-from", type=Path,
+                        help="allow unchanged V1 archives compared with this existing notebook")
     args = parser.parse_args()
-    failures = verify(args.directory, args.report)
+    failures = verify(args.directory, args.report, args.preserve_legacy_from)
     if failures:
         print("Review release preflight failed:", file=sys.stderr)
         for failure in failures:

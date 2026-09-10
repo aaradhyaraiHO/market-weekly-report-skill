@@ -318,6 +318,7 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
         -- Feeds the Losing Money + Fluctuations 'weekly_google' money columns; the rest of the
         -- report keeps the Google+Bing rollup above. (SEARCH filter already applied in WHERE.)
         SUM(IF(ad_platform = 'Google Ads', sum_spend, 0))       AS spend_g,
+        SUM(IF(ad_platform = 'Google Ads', sum_coupon_and_wallet_credits, 0)) AS coupon_wallet_g,
         SUM(IF(ad_platform = 'Google Ads', CASE
             WHEN report_date >= '2025-09-01'
                  AND sum_conversion_value_offline_contribution_margin > 0

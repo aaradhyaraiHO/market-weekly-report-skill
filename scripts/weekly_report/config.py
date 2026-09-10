@@ -72,6 +72,16 @@ MARKETS = {
     "mexico_central_america": "Mexico & Central America",
 }
 
+# Shared operating-group reports keep the underlying market grains intact while
+# giving teams that share a Slack channel one report URL with a market switcher.
+MARKET_REPORT_GROUPS = {
+    "csee_nordics": {
+        "name": "CSEE + Nordics",
+        "markets": ("csee", "nordics"),
+        "ledger_slug": "csee-nordics",
+    },
+}
+
 # --------------------------------------------------------------------------- #
 # Window
 # --------------------------------------------------------------------------- #

@@ -35,12 +35,31 @@
     .nav-item:active:not(:disabled) { transform:scale(.96); }
     .nav-item:disabled { cursor:not-allowed; opacity:.48; }
     .nav-item.active { color:var(--purple-dark); background:var(--purple-soft); font-weight:500; }
+    /* Collapsible report navigation: only the left rail changes, never CE/notes DOM. */
+    .rail-toggle { display:none; align-items:center; justify-content:flex-start; gap:8px; width:100%; min-height:44px; margin:0 0 12px; padding:0 12px; border:0; border-radius:8px; color:var(--muted); background:transparent; cursor:pointer; font-size:12px; }
+    .rail-toggle:hover { color:var(--purple-dark); background:var(--purple-soft); }
+    .rail-toggle svg,.nav-icon { width:20px; height:20px; flex-shrink:0; }
+    .nav-icon { display:none; }
+    .rail-toggle:focus-visible,.nav-item:focus-visible { outline:2px solid var(--purple); outline-offset:2px; }
+    @media (min-width:901px) {
+      .rail-toggle { display:flex; }
+      .shell.rail-collapsed { grid-template-columns:68px minmax(0,1fr); }
+      .rail-collapsed .rail { padding-inline:12px; }
+      .rail-collapsed .brand { justify-content:center; padding-inline:0; }
+      .rail-collapsed .brand-copy { display:none; }
+      .rail-collapsed .rail-toggle,.rail-collapsed .nav-item { justify-content:center; width:44px; min-height:44px; padding:0; }
+      .rail-collapsed .rail-toggle svg { transform:rotate(180deg); }
+      .rail-collapsed .nav-icon { display:block; }
+      .rail-collapsed .nav-label,.rail-collapsed .rail-toggle-label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    }
+    /* End collapsible report navigation. */
     .main { min-width:0; }
     .topbar { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:80px; padding:16px 32px; border-bottom:1px solid var(--line); background:var(--surface); }
     .topbar h1 { margin:0; font-family:var(--font-text); font-size:21px; line-height:28px; font-weight:600; text-wrap:balance; }
     .topbar p { margin:5px 0 0; color:var(--muted); font-size:12px; }
     .filters { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
     .filter-field { display:grid; gap:5px; }
+    .filter-field[hidden] { display:none; }
     .filter-label { color:var(--muted); font-size:10px; line-height:12px; font-weight:500; letter-spacing:.6px; text-transform:uppercase; }
     .filter-select { min-height:42px; min-width:150px; padding:0 34px 0 12px; border:1px solid var(--line-dark); border-radius:var(--radius-control); background:var(--surface); }
     .filter-select:disabled { color:var(--muted); opacity:.72; cursor:not-allowed; }
@@ -193,6 +212,7 @@
     .mover-row:focus-visible { position:relative; z-index:1; outline:0; box-shadow:inset 0 0 0 2px var(--purple); }
     .mover-identity { display:block; min-width:0; }
     .mover-cell { min-width:0; text-align:right; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .mover-secondary { display:block; margin-top:3px; font-size:10px; font-weight:400; white-space:nowrap; }
     .mover-cell .mover-lens { margin-top:4px; }
     .mover-seasonality { justify-self:end; max-width:92px; padding:5px 7px; border-radius:8px; color:var(--muted); background:var(--soft); font-size:9px; font-weight:500; line-height:1.2; text-align:center; white-space:normal; }
     .mover-seasonality.seasonal { color:var(--purple-dark); background:var(--purple-soft); }
@@ -216,7 +236,7 @@
     .bucket-subhead { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 22px 11px; }
     .bucket-subhead h3 { margin:0; font-size:14px; }
     .bucket-subhead p { margin:3px 0 0; color:var(--muted); font-size:10px; }
-    .bucket-table-wrap { width:100%; min-width:0; max-width:100%; overflow-x:scroll; overflow-y:hidden; overscroll-behavior-inline:contain; scrollbar-gutter:stable; scrollbar-color:#a69daf #f1edf4; scrollbar-width:auto; border-top:1px solid var(--line); }
+    .bucket-table-wrap { width:100%; min-width:0; max-width:100%; overflow-x:scroll; overflow-y:auto; max-height:65vh; overscroll-behavior-inline:contain; scrollbar-gutter:stable; scrollbar-color:#a69daf #f1edf4; scrollbar-width:auto; border-top:1px solid var(--line); }
     .bucket-table-wrap:focus-visible { outline:2px solid var(--purple); outline-offset:-2px; }
     .bucket-table-wrap::-webkit-scrollbar { height:14px; }
     .bucket-table-wrap::-webkit-scrollbar-track { background:#f1edf4; border-top:1px solid var(--line); }
@@ -285,7 +305,7 @@
     .legacy-subhead h3 { margin:0; font-size:14px; }
     .legacy-subhead p { margin:4px 0 0; color:var(--muted); font-size:10px; line-height:1.45; }
     .legacy-summary { padding:12px 22px; border-top:1px solid var(--line); color:var(--muted); background:var(--soft); font-size:10px; line-height:1.5; font-variant-numeric:tabular-nums; }
-    .legacy-table-wrap { overflow:auto; border-top:1px solid var(--line); }
+    .legacy-table-wrap { max-height:65vh; overflow:auto; border-top:1px solid var(--line); }
     .legacy-table { width:100%; min-width:820px; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
     .legacy-table th { height:42px; padding:0 14px; color:var(--muted); background:var(--soft); font-size:9px; font-weight:600; letter-spacing:.05em; text-align:right; text-transform:uppercase; white-space:nowrap; }
     .legacy-table th:first-child,.legacy-table td:first-child { position:sticky; left:0; z-index:1; text-align:left; }
@@ -421,9 +441,10 @@
     .ce-contribution-fill.positive { left:50%; background:var(--green); }
     .ce-contribution-value { text-align:right; font-variant-numeric:tabular-nums; }
     .ce-contribution-value small { margin-left:7px; color:var(--muted); }
-    .ce-table-wrap { width:100%; max-width:100%; min-width:0; overflow:auto; overscroll-behavior-inline:contain; scrollbar-gutter:stable; }
+    .ce-table-wrap { max-height:65vh; width:100%; max-width:100%; min-width:0; overflow:auto; overscroll-behavior-inline:contain; scrollbar-gutter:stable; }
     .ce-table { width:100%; min-width:1740px; border-collapse:separate; border-spacing:0; font-size:11px; font-variant-numeric:tabular-nums; }
-    .ce-table th { position:sticky; top:0; z-index:1; height:44px; padding:0 12px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--surface); font-size:9px; letter-spacing:.05em; text-align:right; text-transform:uppercase; }
+    .ce-table thead { position:sticky; top:0; z-index:6; }
+    .ce-table th { position:static; top:0; z-index:1; height:44px; padding:0 12px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--surface); font-size:9px; letter-spacing:.05em; text-align:right; text-transform:uppercase; }
     .ce-table th:first-child { text-align:left; }
     .ce-table .ce-static-name { position:sticky; left:0; z-index:3; width:220px; min-width:220px; max-width:220px; background:var(--surface); text-align:left; }
     .ce-table .ce-static-trend { position:sticky; left:220px; z-index:3; width:112px; min-width:112px; max-width:112px; background:var(--surface); }
@@ -458,7 +479,7 @@
     .ce-table td:first-child { text-align:left; }
     .ce-table tbody .ce-static-name,.ce-table tbody .ce-static-trend,.ce-table tbody .ce-static-contribution { z-index:1; }
     .ce-table tr:hover td { background:var(--purple-soft); }
-    .ce-table tr.ce-total td { position:sticky; top:44px; z-index:2; height:56px; color:var(--ink); background:#ecd9ff; font-weight:600; }
+    .ce-table tr.ce-total td { position:sticky; top:var(--ce-head-height,44px); z-index:2; height:56px; color:var(--ink); background:#ecd9ff; font-weight:600; }
     .ce-table.ce-has-expanded tr.ce-total td { top:84px; }
     .ce-table tr.ce-total td:first-child { z-index:4; }
     .ce-table tr.ce-total .ce-static-name,.ce-table tr.ce-total .ce-static-trend,.ce-table tr.ce-total .ce-static-contribution { z-index:4; background:#ecd9ff; }
@@ -562,7 +583,7 @@
     .ce-resource-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .ce-resource-head h3 { margin:0 0 5px; font-size:17px; }
     .ce-resource-head p,.ce-source-note { margin:0; color:var(--muted); font-size:10px; line-height:1.55; }
-    .ce-resource-table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+    .ce-resource-table-wrap { overflow:auto; max-height:60vh; isolation:isolate; border:1px solid var(--line); border-radius:12px; }
     .ce-resource-table { width:100%; min-width:760px; border-collapse:collapse; font-size:12px; line-height:1.35; font-variant-numeric:tabular-nums; }
     .ce-resource-table th,.ce-resource-table td { padding:13px 14px; border-bottom:1px solid var(--line-dark); text-align:right; white-space:nowrap; }
     .ce-resource-table th { color:var(--muted); background:#fbfafc; font-size:9px; line-height:1.25; font-weight:650; letter-spacing:.07em; text-transform:uppercase; }
@@ -577,7 +598,34 @@
     .ce-metric-tabs { display:inline-flex; padding:3px; border-radius:12px; background:var(--soft); }
     .ce-metric-tab { min-height:40px; padding:0 14px; border:0; border-radius:9px; color:var(--muted); background:transparent; font-weight:600; cursor:pointer; }
     .ce-metric-tab[aria-pressed="true"] { color:var(--purple); background:var(--surface); box-shadow:0 2px 8px rgb(39 24 51 / .08); }
-    .ce-tgid-identity { min-width:250px; white-space:normal; }
+    .ce-tgid-identity { width:280px; min-width:280px; max-width:280px; white-space:normal; }
+    /* Each long table owns its scroll area; pin the complete header, including TGID bands. */
+    .bucket-table-wrap,.legacy-table-wrap { isolation:isolate; }
+    .bucket-table thead,.legacy-table thead,.ce-resource-table thead { position:sticky; top:0; z-index:4; background:var(--surface); box-shadow:0 1px 0 var(--line-dark); }
+    .ce-tgid-table { table-layout:fixed; }
+    .ce-tgid-table tbody td:first-child { width:280px; min-width:280px; max-width:280px; white-space:normal; overflow-wrap:anywhere; }
+    .ce-tgid-table thead th { white-space:normal; }
+    .scope-tag { display:inline-flex; align-items:center; gap:6px; margin-top:8px; padding:4px 8px; border-radius:6px; background:var(--purple-soft); color:var(--purple-dark); font-size:11px; line-height:16px; font-weight:400; }
+    .ce-metric-context { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:4px; color:var(--muted); font-size:11px; line-height:24px; }
+    .ce-metric-context .scope-tag { margin-top:0; }
+    .ce-breakdown-link { padding:4px 8px; min-height:26px; border:1px solid var(--line-dark); border-radius:6px; background:var(--surface); color:var(--purple-dark); cursor:pointer; font:inherit; line-height:16px; }
+    .ce-breakdown-link:hover { text-decoration:underline; }
+    .ce-breakdown-link:focus-visible { outline:2px solid var(--purple); outline-offset:2px; }
+    .metric-fyi { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.6; }
+    .metric-fyi summary { cursor:pointer; width:fit-content; }
+    .metric-fyi p { margin:6px 0 0; }
+    .table-floating-head { position:fixed; overflow:hidden; background:var(--surface); box-shadow:0 2px 4px rgb(0 0 0 / .1); z-index:120; }
+    .table-floating-head table { margin:0; table-layout:fixed; }
+    .table-floating-head thead { position:static; }
+    .ce-platform-toggle { display:flex; align-items:center; gap:6px; min-height:40px; padding:0; border:0; background:transparent; color:var(--ink); font:600 12px/1.35 var(--font-text); cursor:pointer; text-align:left; }
+    .ce-platform-toggle span:first-child { color:var(--purple); width:12px; }
+    .ce-platform-toggle:focus-visible,.bucket-comment-toggle:focus-visible { outline:2px solid var(--purple); outline-offset:2px; }
+    .ce-platform-row td { background:var(--purple-soft); }
+    .ce-platform-row td:first-child { padding-left:32px; }
+    .ce-platform-label { display:block; font-weight:500; }
+    .ce-platform-context { display:block; color:var(--muted); font-size:10px; font-weight:400; }
+    .bucket-comment-toggle { display:block; min-height:40px; width:100%; padding:4px 0; border:0; color:var(--purple-dark); background:transparent; font:400 11px/1.4 var(--font-text); text-align:left; cursor:pointer; }
+    .bucket-comment-preview { display:block; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ce-tgid-name { display:block; color:var(--ink); font-weight:700; line-height:1.35; text-wrap:pretty; }
     .ce-tgid-toggle { display:inline-flex; align-items:center; gap:6px; min-height:40px; margin-top:3px; padding:0; border:0; color:var(--purple); background:transparent; font-size:10px; font-weight:700; cursor:pointer; }
     .ce-tgid-toggle:focus-visible { outline:2px solid rgb(128 0 255 / .22); outline-offset:2px; border-radius:8px; }
@@ -588,8 +636,8 @@
     .ce-resource-trend .metric-spark { width:126px; height:34px; }
     .ce-tgid-table tbody td:nth-child(2),.ce-tgid-table tbody td:nth-child(6),
     .ce-tgid-table tbody td:nth-child(10),.ce-tgid-table tbody td:nth-child(14) { border-left:1px solid #d9cdef; }
-    .ce-tgid-table th:first-child,.ce-tgid-table td:first-child { position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:1px 0 var(--line); }
-    .ce-tgid-table thead th:first-child { z-index:2; background:#fbfafc; }
+    .ce-tgid-table thead tr:first-child th:first-child,.ce-tgid-table tbody td:first-child { position:sticky; left:0; z-index:1; background:var(--surface); box-shadow:1px 0 var(--line); }
+    .ce-tgid-table thead tr:first-child th:first-child { z-index:2; background:#fbfafc; }
     .ce-tgid-table.size-collapsed thead [data-ce-band-col="size"][data-ce-band-secondary],
     .ce-tgid-table.value-collapsed thead [data-ce-band-col="value"][data-ce-band-secondary],
     .ce-tgid-table.funnel-collapsed thead [data-ce-band-col="funnel"][data-ce-band-secondary],
@@ -708,12 +756,13 @@
 </head>
 <body>
   <div class="shell">
-    <aside class="rail">
+    <aside class="rail" id="report-sidebar">
       <div class="brand"><div class="brand-mark">W</div><div class="brand-copy"><strong>Weekly</strong><span>Market review</span></div></div>
+      <button class="rail-toggle" id="rail-toggle" type="button" aria-controls="report-sidebar" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg><span class="rail-toggle-label">Collapse sidebar</span></button>
       <nav class="nav" aria-label="Report sections"><button class="nav-item active" type="button" data-report-view="overview" aria-current="page">Overview</button><button class="nav-item" type="button" data-report-view="all-ces">All CEs</button><button class="nav-item" type="button" disabled title="Review mode is a later V2 phase">Review</button></nav>
     </aside>
     <main class="main">
-      <header class="topbar"><div><h1 id="market-name">Market</h1><p id="week-label">Weekly market review</p></div><div class="filters"><label class="filter-field"><span class="filter-label">Country</span><select id="country-select" class="filter-select" aria-label="Country"><option value="">All countries</option></select></label></div><select id="week-select" hidden aria-hidden="true" tabindex="-1"></select></header>
+      <header class="topbar"><div><h1 id="market-name">Market</h1><p id="week-label">Weekly market review</p></div><div class="filters"><label class="filter-field" id="market-filter-field" hidden><span class="filter-label">Market</span><select id="market-select" class="filter-select" aria-label="Market"></select></label><label class="filter-field"><span class="filter-label">Country</span><select id="country-select" class="filter-select" aria-label="Country"><option value="">All countries</option></select></label></div><select id="week-select" hidden aria-hidden="true" tabindex="-1"></select></header>
       <div class="content report-view" id="overview-view">
         <div class="section-kicker">Market headline</div>
         <article class="headline">
@@ -741,13 +790,13 @@
           <div class="okr-grid" id="okr-grid"></div>
         </section>
         <section class="attention" aria-labelledby="attention-title"><div class="section-head"><div><div class="section-kicker">What needs attention</div><h2 id="attention-title">Top revenue movers</h2><p>Shows up to five CEs with the largest revenue drops or gains, using whichever move is greater: versus last week or the trailing four-week average. Sort any column for a different view, or select a CE to open its detail.</p></div></div><div class="mover-grid"><article class="mover-card drop"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↓</span><div><h3>Top drops</h3><p>Largest negative revenue moves · up to 5</p></div></div></header><div class="mover-list" id="drops-list"></div></article><article class="mover-card gain"><header class="mover-head"><div class="mover-title"><span class="mover-icon" aria-hidden="true">↑</span><div><h3>Top gains</h3><p>Largest positive revenue moves · up to 5</p></div></div></header><div class="mover-list" id="gains-list"></div></article></div></section>
-        <div class="diagnostic-buckets" id="diagnostic-buckets" aria-label="V1 diagnostic buckets">
+        <div class="diagnostic-buckets" id="diagnostic-buckets" aria-label="Diagnostic tables">
           <section id="losing-money-section"></section>
           <section id="fluctuations-section"></section>
           <section id="new-ces-section"></section>
           <section id="iteration-section"></section>
         </div>
-        <div class="post-diagnostic" id="post-diagnostic-sections" aria-label="V1 post-diagnostic report sections">
+        <div class="post-diagnostic" id="post-diagnostic-sections" aria-label="Seasonality and commercial levers">
           <section id="seasonality-section"></section>
           <section id="levers-section"></section>
         </div>
@@ -770,9 +819,9 @@
       </section>
     </main>
   </div>
-  <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market performance · detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-section"><h3>Key metrics · 12-week trend</h3><p class="drawer-section-copy">W0 versus W-1, with solid this-year and dashed last-year trajectories on a shared scale per metric. Hover a sparkline for weekly values.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th><th>12-wk · TY vs LY</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div><p class="metric-footnote">* Paid metrics—Clicks, CVR, conversion value, average CM1 and Paid ROI—use Google Ads and Bing Search campaigns only; PMax, Display and Video are excluded. ROI 1 is broader: business CM1 divided by total marketing cost across all paid channels.</p></section><section class="drawer-section" id="shapley-section"><h3 id="shapley-title">WoW Shapley</h3><p class="drawer-section-copy">Five-factor decomposition of the V1 weekly revenue movement. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section" id="drawer-pacing-section"><h3>Performance &amp; pacing</h3><p class="drawer-section-copy">Same-period MTD movement and projected close against completed comparison periods.</p><div class="drawer-kpi-grid" id="target-comparisons"></div><div class="drawer-method-note"><span id="target-method"></span><span id="target-source"></span><span id="source-note"></span><span>Weekly calculations remain sourced from the frozen report snapshot.</span></div></section></div><div class="metric-tooltip" id="metric-tooltip" role="status" aria-live="polite"></div></aside></div>
-  <div class="drawer-root" id="portfolio-root" hidden><button class="drawer-scrim" id="portfolio-scrim" type="button" aria-label="Dismiss portfolio manager"></button><aside class="drawer portfolio-drawer" id="portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-title"><header class="drawer-header"><div><div class="drawer-kicker">All CE workspace</div><h2 class="drawer-title" id="portfolio-title">Manage portfolio</h2><p class="drawer-subtitle">CID-keyed context layered over the weekly snapshot.</p></div><button class="drawer-close" id="portfolio-close" type="button" aria-label="Close portfolio manager">×</button></header><nav class="portfolio-tabs" aria-label="Portfolio manager sections"><button class="portfolio-tab active" type="button" data-portfolio-tab="watchlist" aria-pressed="true">Watchlist</button><button class="portfolio-tab" type="button" data-portfolio-tab="groups" aria-pressed="false">Groups &amp; tags</button><button class="portfolio-tab" type="button" data-portfolio-tab="import" aria-pressed="false">Upload metadata</button></nav><div class="drawer-body"><section class="portfolio-panel" id="portfolio-watchlist-panel"><div id="portfolio-watchlist-body"></div></section><section class="portfolio-panel" id="portfolio-groups-panel" hidden><div id="portfolio-groups-body"></div></section><section class="portfolio-panel" id="portfolio-import-panel" hidden><h3>Upload CE metadata</h3><p class="drawer-section-copy">Use CID as the stable key. The upload only changes portfolio context; it never changes weekly calculations.</p><div class="portfolio-schema"><strong>Required:</strong> ce_id<br><strong>Optional:</strong> ce_name, primary_group, tags, watchlist<br>Separate multiple tags with a semicolon.</div><div class="portfolio-upload"><button class="portfolio-button" id="portfolio-download-template" type="button">Download CSV template</button><label class="portfolio-button primary" for="portfolio-file">Choose CSV</label><input class="sr-only" id="portfolio-file" type="file" accept=".csv,text/csv"></div><div class="portfolio-preview" id="portfolio-preview"><div class="portfolio-empty">Choose a CSV to preview matches, unknown CIDs and duplicates before applying.</div></div><div class="portfolio-actions"><button class="portfolio-button primary" id="portfolio-apply" type="button" disabled>Apply locally</button></div><p class="portfolio-status">Prototype storage is local to this browser and market. A shared Sheet adapter can replace storage without changing this CID-keyed contract.</p></section></div></aside></div>
-  <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><div class="drawer-identity"><h2 class="drawer-title" id="ce-drawer-title"></h2><button class="drawer-omni" id="ce-open-review" type="button">Open in Review →</button><a class="drawer-omni" id="ce-drawer-omni" target="_blank" rel="noopener">Open in Omni ↗</a></div><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week predicted revenue trajectory</h3><p class="drawer-section-copy">Solid = this year; dashed = last year on one shared scale. Hover or focus the plot for weekly values.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section" id="ce-weekly-evidence"><div class="ce-resource-head"><div><h3>Weekly evidence · V1 baseline</h3><p>W0 and W-1 values with the existing 12-week TY/LY series. LP→Order CVR uses the funnel source (LP2S × S2C × C2O); Paid CVR uses paid conversions ÷ paid clicks. Missing history is never synthesized.</p></div><div class="ce-metric-tabs" role="group" aria-label="Metric group"><button class="ce-metric-tab" type="button" data-ce-metric-group="overall" aria-pressed="true">Overall</button><button class="ce-metric-tab" type="button" data-ce-metric-group="paid" aria-pressed="false">Paid</button></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ</th><th>WoW</th><th>12-week TY / LY</th></tr></thead><tbody id="ce-metric-rows"></tbody></table></div></section><section class="drawer-section" id="ce-shapley-section"><h3>What moved revenue</h3><p class="drawer-section-copy">Mixpanel traffic and LP→Order CVR, plus business completion, AOV and take rate. Factor impacts reconcile to the factor product; the residual reconciles that product to predicted revenue.</p><div class="ce-shapley-list" id="ce-shapley-list"></div></section><div id="ce-resource-sections"></div></div><div class="metric-tooltip" id="ce-metric-tooltip" role="status" aria-live="polite"></div></aside></div>
+  <div class="drawer-root" id="detail-root" hidden><button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Dismiss market detail"></button><aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Market performance · detail</div><h2 class="drawer-title" id="drawer-title"></h2><p class="drawer-subtitle" id="drawer-subtitle"></p></div><button class="drawer-close" id="close-detail" type="button" aria-label="Close market detail">×</button></header><div class="drawer-body"><section class="drawer-section"><h3>Key metrics · 12-week trend</h3><p class="drawer-section-copy">W0 versus W-1, with solid this-year and dashed last-year trajectories on a shared scale per metric. Hover a sparkline for weekly values.</p><div style="overflow-x:auto"><table class="metric-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ abs</th><th>Δ %</th><th>12-wk · TY vs LY</th></tr></thead><tbody id="drawer-metrics"></tbody></table></div><p class="metric-footnote">* Paid metrics—Clicks, CVR, conversion value, average CM1 and Paid ROI—use Google Ads and Bing Search campaigns only; PMax, Display and Video are excluded. ROI 1 is broader: business CM1 divided by total marketing cost across all paid channels.</p></section><section class="drawer-section" id="shapley-section"><h3 id="shapley-title">WoW Shapley</h3><p class="drawer-section-copy">Revenue change split across traffic, conversion, order value, completion and take rate. Red is drag; green is lift.</p><div class="shapley-list" id="shapley-list"></div></section><section class="drawer-section" id="drawer-pacing-section"><h3>Performance &amp; pacing</h3><p class="drawer-section-copy">Same-period MTD movement and projected close against completed comparison periods.</p><div class="drawer-kpi-grid" id="target-comparisons"></div><div class="drawer-method-note"><span id="target-method"></span><span id="target-source"></span><span id="source-note"></span><span>Weekly calculations remain sourced from the frozen report snapshot.</span></div></section></div><div class="metric-tooltip" id="metric-tooltip" role="status" aria-live="polite"></div></aside></div>
+  <div class="drawer-root" id="portfolio-root" hidden><button class="drawer-scrim" id="portfolio-scrim" type="button" aria-label="Dismiss portfolio manager"></button><aside class="drawer portfolio-drawer" id="portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-title"><header class="drawer-header"><div><div class="drawer-kicker">All CE workspace</div><h2 class="drawer-title" id="portfolio-title">Manage portfolio</h2><p class="drawer-subtitle">Organize CEs with watchlists, groups and tags.</p></div><button class="drawer-close" id="portfolio-close" type="button" aria-label="Close portfolio manager">×</button></header><nav class="portfolio-tabs" aria-label="Portfolio manager sections"><button class="portfolio-tab active" type="button" data-portfolio-tab="watchlist" aria-pressed="true">Watchlist</button><button class="portfolio-tab" type="button" data-portfolio-tab="groups" aria-pressed="false">Groups &amp; tags</button><button class="portfolio-tab" type="button" data-portfolio-tab="import" aria-pressed="false">Upload metadata</button></nav><div class="drawer-body"><section class="portfolio-panel" id="portfolio-watchlist-panel"><div id="portfolio-watchlist-body"></div></section><section class="portfolio-panel" id="portfolio-groups-panel" hidden><div id="portfolio-groups-body"></div></section><section class="portfolio-panel" id="portfolio-import-panel" hidden><h3>Upload CE metadata</h3><p class="drawer-section-copy">Use CID as the stable key. The upload only changes portfolio context; it never changes weekly calculations.</p><div class="portfolio-schema"><strong>Required:</strong> ce_id<br><strong>Optional:</strong> ce_name, primary_group, tags, watchlist<br>Separate multiple tags with a semicolon.</div><div class="portfolio-upload"><button class="portfolio-button" id="portfolio-download-template" type="button">Download CSV template</button><label class="portfolio-button primary" for="portfolio-file">Choose CSV</label><input class="sr-only" id="portfolio-file" type="file" accept=".csv,text/csv"></div><div class="portfolio-preview" id="portfolio-preview"><div class="portfolio-empty">Choose a CSV to preview matches, unknown CIDs and duplicates before applying.</div></div><div class="portfolio-actions"><button class="portfolio-button primary" id="portfolio-apply" type="button" disabled>Apply locally</button></div><p class="portfolio-status">Portfolio changes are saved in this browser for the selected market.</p></section></div></aside></div>
+  <div class="drawer-root" id="ce-detail-root" hidden><button class="drawer-scrim" id="ce-drawer-scrim" type="button" aria-label="Dismiss CE detail"></button><aside class="drawer" id="ce-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="ce-drawer-title"><header class="drawer-header"><div><div class="drawer-kicker">Combined entity detail</div><div class="drawer-identity"><h2 class="drawer-title" id="ce-drawer-title"></h2><button class="drawer-omni" id="ce-open-review" type="button">Open in Review →</button><a class="drawer-omni" id="ce-drawer-omni" target="_blank" rel="noopener">Open in Omni ↗</a></div><p class="drawer-subtitle" id="ce-drawer-subtitle"></p><div class="ce-chip-row" id="ce-drawer-chips"></div></div><button class="drawer-close" id="ce-close-detail" type="button" aria-label="Close CE detail">×</button></header><div class="drawer-body"><section class="drawer-overview" id="ce-drawer-overview"></section><section class="drawer-section"><h3>12-week predicted revenue trajectory</h3><p class="drawer-section-copy">Solid = this year; dashed = last year on one shared scale. Hover or focus the plot for weekly values.</p><div class="ce-trend" id="ce-drawer-chart"></div></section><section class="drawer-section" id="ce-weekly-evidence"><div class="ce-resource-head"><div><h3>Weekly performance</h3><div class="ce-metric-context"><span class="scope-tag" id="ce-metric-scope">All channels</span><span id="ce-platform-controls" hidden><button class="ce-breakdown-link" id="ce-expand-platforms" type="button" aria-pressed="false">Show breakdown</button></span></div></div><div class="ce-metric-tabs" role="group" aria-label="Metric group"><button class="ce-metric-tab" type="button" data-ce-metric-group="overall" aria-pressed="true">Overall</button><button class="ce-metric-tab" type="button" data-ce-metric-group="paid" aria-pressed="false">Paid</button></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table"><thead><tr><th>Metric</th><th>W0</th><th>W-1</th><th>Δ</th><th>WoW</th><th>YoY</th><th>12-week TY / LY</th></tr></thead><tbody id="ce-metric-rows"></tbody></table></div><details class="metric-fyi"><summary>About these metrics</summary><p id="ce-metric-definition"></p><p>WoW compares with the previous week; YoY with the matched week last year. Changes are relative percentages, not percentage points. “—” means no comparison is available.</p></details></section><section class="drawer-section" id="ce-shapley-section"><h3>What moved revenue</h3><p class="drawer-section-copy">Mixpanel traffic and LP→Order CVR, plus business completion, AOV and take rate. Factor impacts reconcile to the factor product; the residual reconciles that product to predicted revenue.</p><div class="ce-shapley-list" id="ce-shapley-list"></div></section><div id="ce-resource-sections"></div></div><div class="metric-tooltip" id="ce-metric-tooltip" role="status" aria-live="polite"></div></aside></div>
   <script id="report-data" type="application/json">__REPORT_DATA_JSON__</script>
   <script>
     (() => {
@@ -784,6 +833,8 @@
         return;
       }
       const weekSelect = document.getElementById('week-select');
+      const marketSelect = document.getElementById('market-select');
+      const marketFilterField = document.getElementById('market-filter-field');
       const countrySelect = document.getElementById('country-select');
       let selectedCountry = '';
       const svgNS = 'http://www.w3.org/2000/svg';
@@ -792,6 +843,7 @@
       const ceState = {search:'',group:'',filters:{},collapsed:{},expanded:{},filtersOpen:false,watchOnly:false,topMovers:false,okrIds:null,okrCohortLabel:'',sortKey:'revenue',sortDir:-1,page:1,pageSize:50};
       let portfolioMetadata={},portfolioLoadedKey='',portfolioPreview=null,portfolioTab='watchlist';
       let activeCe=null, ceMetricGroup='overall', ceResourceTrendMetrics=new Map();
+      const ceExpandedPlatforms={},actionNoteExpanded={};
       const ceExpandedTgids={},ceExpandedMetrics={},ceTgidBands={size:true,value:true,funnel:true,booking:true};
       const CE_METRICS = [
         {key:'revenue',label:'Revenue',field:'revenue',format:'money',group:'overall'},
@@ -910,19 +962,20 @@
       }
       function renderMovers(item, kind) {
         const list=document.getElementById(`${kind}-list`),rows=[...(item.movers[kind]||[])],sort=moverSorts[kind],mode=sort.key,dir=sort.dir;
-        if(mode!=='rank')rows.sort((a,b)=>{const value=row=>mode==='name'?String(row.ce_name):mode==='wow'?row.wow_abs:mode==='fourWeek'?row.delta_4w:mode==='yoy'?row.yoy_pct:row.target_mtd_attainment_pct,av=value(a),bv=value(b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
+        if(mode!=='rank')rows.sort((a,b)=>{const value=row=>mode==='name'?String(row.ce_name):mode==='wow'?row.wow_abs:mode==='fourWeek'?row.delta_4w:mode==='yoy'?row.yoy_abs:row.target_mtd_attainment_pct,av=value(a),bv=value(b);if(av==null&&bv==null)return 0;if(av==null)return 1;if(bv==null)return -1;return typeof av==='string'?dir*av.localeCompare(bv):dir*(av-bv);});
         if (!rows.length) { list.innerHTML='<div class="mover-empty">No qualifying movers are available for this market and week.</div>'; return; }
-        const headings=[['name','CE'],['wow','vs LW %'],['fourWeek','vs L4W %'],['yoy','vs LY %'],['target','Aug target %']],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'';
-        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,5).map((row,index)=>`<button class="mover-row" type="button" data-mover-ce="${escapeHtml(row.ce_id)}" aria-label="Open ${escapeHtml(row.ce_name)} CE detail" title="${escapeHtml(row.ranking_method||'V1 source ranking')}"><span class="mover-rank">${mode==='rank'?(row.source_rank||index+1):index+1}</span><span class="mover-identity"><span class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</span><span class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</span></span><span class="mover-cell ${tone(row.wow_pct)}" data-label="vs LW">${pct(row.wow_pct,0)}</span><span class="mover-cell ${tone(row.delta_4w_pct)}" data-label="vs L4W">${pct(row.delta_4w_pct,0)}</span><span class="mover-cell ${tone(row.yoy_pct)}" data-label="vs LY" title="Same-week revenue versus last year; V1 seasonality: ${escapeHtml(row.seasonality_tag||'not available')}">${pct(row.yoy_pct,0)}</span><span class="mover-cell ${row.monthly_target==null?'':tone(row.target_mtd_attainment_pct-100)}" data-label="Aug target" title="MTD attainment versus calendar-prorated August target pace; dollar gap ${signedMoney(row.target_mtd_gap)}">${row.monthly_target==null?'No target':pct(row.target_mtd_attainment_pct,0).replace('+','')}</span></button>`).join('');
+        const targetMonth=item.monthly&&item.monthly.month?monthLabel(item.monthly.month).split(' ')[0]:'Monthly';
+        const targetLabel=`${targetMonth} target`,headings=[['name','CE'],['wow','vs LW'],['fourWeek','vs L4W'],['yoy','vs LY'],['target',`${targetLabel} %`]],arrow=key=>sort.key===key?(sort.dir<0?' ↓':' ↑'):'';
+        list.innerHTML=`<div class="mover-columns"><span></span>${headings.map(([key,label])=>`<button class="mover-column-sort ${key==='name'?'name':''}" type="button" data-mover-kind="${kind}" data-mover-sort="${key}" aria-sort="${sort.key===key?(sort.dir<0?'descending':'ascending'):'none'}">${label}${arrow(key)}</button>`).join('')}</div>`+rows.slice(0,5).map((row,index)=>`<button class="mover-row" type="button" data-mover-ce="${escapeHtml(row.ce_id)}" aria-label="Open ${escapeHtml(row.ce_name)} CE detail" title="Ranked by the larger revenue movement versus last week or the prior four-week average"><span class="mover-rank">${mode==='rank'?(row.source_rank||index+1):index+1}</span><span class="mover-identity"><span class="mover-name" title="${escapeHtml(row.ce_name)}">${escapeHtml(row.ce_name)}</span><span class="mover-meta">${escapeHtml(row.ce_id)} · ${money(row.revenue)}</span></span><span class="mover-cell ${tone(row.wow_pct)}" data-label="vs LW">${signedMoney(row.wow_abs)}<span class="mover-secondary">${pct(row.wow_pct,0)}</span></span><span class="mover-cell ${tone(row.delta_4w_pct)}" data-label="vs L4W">${signedMoney(row.delta_4w)}<span class="mover-secondary">${pct(row.delta_4w_pct,0)}</span></span><span class="mover-cell ${tone(row.yoy_pct)}" data-label="vs LY" title="Same-week revenue versus last year; seasonality: ${escapeHtml(row.seasonality_tag||'not available')}">${signedMoney(row.yoy_abs)}<span class="mover-secondary">${pct(row.yoy_pct,0)}</span></span><span class="mover-cell ${row.monthly_target==null?'':tone(row.target_mtd_attainment_pct-100)}" data-label="${targetLabel}" title="MTD attainment versus calendar-prorated ${targetMonth} target pace; dollar gap ${signedMoney(row.target_mtd_gap)}">${row.monthly_target==null?'No target':pct(row.target_mtd_attainment_pct,0).replace('+','')}</span></button>`).join('');
       }
       const legacyCe=(row,labelKey='ce_name')=>`<button class="legacy-ce-button" type="button" data-post-ce="${escapeHtml(row.ce_id)}">${escapeHtml(row[labelKey]||row.ce||'Unnamed experience')}</button>`;
       const legacyTable=(headers,rows)=>`<div class="legacy-table-wrap"><table class="legacy-table"><thead><tr>${headers.map(header=>`<th${header.left?' class="legacy-cell-left"':''}${header.title?` title="${escapeHtml(header.title)}"`:''}>${header.label}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
       function renderSeasonality(item) {
         const rows=(item.post_diagnostic||{}).seasonality_adjustments||[],root=document.getElementById('seasonality-section');
-        const body=!rows.length?'<div class="legacy-empty">No seasonality adjustments currently set for this market.</div>':legacyTable([
+        const body=!rows.length?'<div class="legacy-empty">Seasonality adjustments will be shown here.</div>':legacyTable([
           {label:'Combined Entity',left:true},{label:'Direction'},{label:'Adj %'},{label:'Window'},{label:'Status'},{label:'CM2 pre-4w'},{label:'CM2 in-window'},{label:'Δ Rev'},{label:'Recommendation',left:true}
         ],rows.map(row=>`<tr><td>${legacyCe(row)}</td><td><span class="legacy-chip ${row.direction==='down'?'negative':'positive'}">${escapeHtml(row.direction||'—')}</span></td><td>${row.pct==null?'—':`${row.direction==='down'?'−':'+'}${Math.abs(row.pct)}%`}</td><td class="legacy-mono">${escapeHtml(row.start_date||'—')} → ${escapeHtml(row.end_date||'—')}</td><td><span class="legacy-chip ${String(row.status||'').toLowerCase().includes('expir')?'amber':'positive'}">${escapeHtml(row.status||'—')}</span></td><td>${money(row.cm2_pre_4w_avg)}</td><td>${money(row.cm2_in_window_avg)}</td><td class="${tone(row.revenue_delta_pct)}">${pct(row.revenue_delta_pct)}</td><td class="legacy-cell-left">${escapeHtml(row.recommendation||'')}</td></tr>`));
-        root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">V1 visibility</div><h2>Seasonality visibility</h2><p>Adjustments set · CM2 pre-4w vs in-window · extend / expire</p></div><span class="legacy-count">${rows.length} adjustment${rows.length===1?'':'s'}</span></header>${body}</article>`;
+        root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">Commercial context</div><h2>Seasonality visibility</h2><p>Adjustments set · CM2 pre-4w vs in-window · extend / expire</p></div><span class="legacy-count">${rows.length} adjustment${rows.length===1?'':'s'}</span></header>${body}</article>`;
       }
       function renderLevers(item) {
         const data=item.post_diagnostic||{},levers=data.levers||[],pp=data.prepurchase||[],root=document.getElementById('levers-section');
@@ -934,7 +987,7 @@
           {label:'Combined Entity',left:true},{label:'Dated / Open',title:'Active ticket count by validity (fct_pp_tickets). Dated = DATE_TIME; Open = OPEN.'},{label:'STR nxt 2wk',title:'Sell-through for tickets whose experience date falls in the current + next 2 weeks.'},{label:'Expiring this mo',title:'UNSOLD dated tickets whose expiry is in the current calendar month.'},{label:'Loss-liab (dated)',title:'Loss liability for UNSOLD dated tickets.'},{label:'Run-rate last / need·wk',title:'Tickets sold last week versus tickets needed per week to clear remaining dated inventory before expiry.'},{label:'Net ROI',title:'Trailing-4wk CM1 less realized inventory loss, divided by trailing-4wk marketing cost.'},{label:'CVR (WoW)',title:'CE paid conversion rate, W0 level with week-over-week change.'}
         ];
         const ppBody=!pp.length?'<div class="legacy-empty">No active prepurchase allotments for this market.</div>':`<div class="legacy-summary">PP CEs: <strong>${pp.length}</strong> · dated <strong>${count(dated)}</strong> · open <strong>${count(openCount)}</strong> · dated loss-liab <strong>${money(liability)}</strong> · unsold expiring this mo <strong>${count(expiring)}</strong></div>`+legacyTable(ppHeaders,pp.map(row=>{const pace=row.needed_wk==null?`${count(row.sold_last_wk)} / —`:`${count(row.sold_last_wk)} / ${count(row.needed_wk)}`;return `<tr><td>${legacyCe(row,'ce')}</td><td>${count(row.dated)} / ${count(row.open_ct)}</td><td class="${row.str_nt==null?'':row.str_nt>=95?'negative':row.str_nt<60?'negative':'positive'}">${row.str_nt==null?'—':`${row.str_nt}%`}</td><td class="${row.expiring_unsold>0?'negative':''}">${row.expiring_unsold?count(row.expiring_unsold):'—'}</td><td>${money(row.loss_liab_dated)}</td><td class="${row.needed_wk!=null&&row.sold_last_wk<row.needed_wk?'negative':''}">${pace}</td><td>${row.net_roi==null?'—':`${row.net_roi}%`}</td><td>${row.cvr==null?'—':`${Number(row.cvr).toFixed(1)}% <span class="${tone(row.cvr_wow)}">${pct(row.cvr_wow)}</span>`}</td></tr>`;}))+`<details class="legacy-note"><summary>Source &amp; definitions</summary><p>Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry. Net ROI = (CM1 − realized loss) ÷ cost. No verdict — reviewer decides.</p></details>`;
-        root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">V1 visibility</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) prepurchase</p></div></header><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></article>`;
+        root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">Commercial context</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) prepurchase</p></div></header><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></article>`;
       }
       const NOTES_URL=payload.notes_url||'';
       // Mutations must pass through the authenticated same-origin proxy.  The
@@ -953,7 +1006,14 @@
       const actionWeek=()=>String(actionContext()?.week_start||'');
       const actionKey=(bucket,ceId)=>`${bucket}::${String(ceId)}`;
       const actionStateKey=(bucket,ceId)=>`${actionSlug()}::${actionWeek()}::${actionKey(bucket,ceId)}`;
-      function setActionSyncState(bucket,ceId,state,message=''){actionSyncState[actionStateKey(bucket,ceId)]={state,message};}
+      function setActionSyncState(bucket,ceId,state,message=''){
+        actionSyncState[actionStateKey(bucket,ceId)]={state,message};
+        document.querySelectorAll('[data-action-status]').forEach(select=>{
+          if(select.dataset.actionBucket!==bucket||select.dataset.actionCe!==String(ceId))return;
+          const feedback=select.closest('[data-action-cell]').querySelector('[data-action-feedback]');
+          if(feedback){feedback.textContent=message;feedback.className=`bucket-action-meta${state==='error'||state==='needs_comment'?' bucket-action-warning':''}`;}
+        });
+      }
       function getActionSyncState(bucket,ceId){return actionSyncState[actionStateKey(bucket,ceId)]||{};}
       const actionCacheKey=()=>`wr_actions::${actionSlug()}::${actionWeek()}`;
       function loadActionCache(){try{actionsData[actionSlug()]=JSON.parse(localStorage.getItem(actionCacheKey())||'{}');}catch(_){actionsData[actionSlug()]={};}actionLoadedKey=actionCacheKey();}
@@ -981,12 +1041,12 @@
       }
       function actionOptions(options,value){const list=[...options];if(value&&!list.some(option=>option[0]===value))list.push([value,value]);return list.map(([key,label])=>`<option value="${escapeHtml(key)}"${key===value?' selected':''}>${escapeHtml(label)}</option>`).join('');}
       function bucketActionCell(row,bucket,kind='lm'){
-        const action=getAction(bucket,row.ce_id),value=action.status||'',note=action.note||'',options=kind==='lm'?LM_ACTIONS:(bucket==='flux_up'?FX_ACTIONS_UP:FX_ACTIONS_DOWN),required=Boolean(value&&!note.trim()),showNote=kind==='lm'||value||note.trim();
+        const action=getAction(bucket,row.ce_id),value=action.status||'',note=action.note||'',options=kind==='lm'?LM_ACTIONS:(bucket==='flux_up'?FX_ACTIONS_UP:FX_ACTIONS_DOWN),required=Boolean(value&&!note.trim()),showNote=Boolean(required||actionNoteExpanded[`${actionSlug()}:${actionWeek()}:${bucket}:${row.ce_id}`]);
         const meta=[action.owner,action.updated?new Date(action.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''].filter(Boolean).join(' · ');
         const sync=getActionSyncState(bucket,row.ce_id),syncClass=sync.state==='error'||sync.state==='needs_comment'?' bucket-action-warning':'',syncMeta=sync.message?`<div class="bucket-action-meta${syncClass}">${escapeHtml(sync.message)}</div>`:'';
         const previous=getPrevAction(bucket,row.ce_id),previousLabel=previous.status?(options.find(option=>option[0]===previous.status)?.[1]||previous.status):'',previousMeta=previousLabel?`<div class="bucket-action-meta" title="${escapeHtml(previous.note||'')}">last wk: <strong>${escapeHtml(previousLabel)}</strong>${previous.owner?` · ${escapeHtml(previous.owner)}`:''}</div>`:'';
         const saveMeta=syncMeta||(required?'<div class="bucket-action-meta bucket-action-warning">Add a comment to sync</div>':meta?`<div class="bucket-action-meta">${escapeHtml(meta)}</div>`:'');
-        return `<div class="bucket-action" data-action-cell><select class="bucket-action-select" aria-label="Action for ${escapeHtml(row.ce_name||row.ce_id)}" data-action-status data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}">${actionOptions(options,value)}</select>${showNote?`<textarea class="bucket-action-note${required?' required':''}" data-action-note data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}" placeholder="${required?'Comment required — why?':kind==='lm'?'why?\ngrowth:\nperf:':'why?'}">${escapeHtml(note)}</textarea>`:''}${saveMeta}${previousMeta}</div>`;
+        return `<div class="bucket-action" data-action-cell><select class="bucket-action-select" aria-label="Action for ${escapeHtml(row.ce_name||row.ce_id)}" data-action-status data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}">${actionOptions(options,value)}</select>${showNote?`<textarea class="bucket-action-note${required?' required':''}" aria-label="Comment for ${escapeHtml(row.ce_name||row.ce_id)}" data-action-note data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}" placeholder="${required?'Comment required — why?':kind==='lm'?'why?\ngrowth:\nperf:':'why?'}">${escapeHtml(note)}</textarea>`:`<button class="bucket-comment-toggle" type="button" data-action-comment data-action-bucket="${bucket}" data-action-ce="${escapeHtml(row.ce_id)}" aria-expanded="false"><span class="bucket-comment-preview">${note.trim()?escapeHtml(note):'Add comment'}</span></button>`}<div data-action-feedback>${saveMeta}</div>${previousMeta}</div>`;
       }
       function actionSyncPull(){
         loadActionCache();if(!ACTION_SYNC_OK)return Promise.resolve();
@@ -1038,14 +1098,14 @@
         if(!rows.length)return '<div class="bucket-empty">No CEs in this cohort this week. ✅</div>';
         const rate=value=>value==null?'—':`${Number(value).toFixed(1)}%`,rate2=value=>value==null?'—':`${Number(value).toFixed(2)}%`,cash=value=>value==null?'—':money(value),integer=value=>value==null?'—':count(value),unit=value=>value==null?'—':`$${Number(value).toFixed(2)}`;
         const newHeads=kind==='new'?'<th>tROAS now</th><th>CM2 · 90d</th><th>Launched</th>':'';
-        return `<div class="bucket-table-wrap"><table class="bucket-table" style="min-width:${kind==='new'?'2040':'1780'}px"><thead><tr><th>Combined entity</th><th>Status</th><th title="V1 qualification rule and observed value; membership is supplied by buckets_final.">Criteria ⓘ</th><th>CM2 · W0</th><th>Revenue · W0</th><th>ROI · W0</th><th>tROAS · W0</th>${newHeads}<th>Clicks · W0</th><th>CVR · W0</th><th>CM1/conv · W0</th><th>CPC · W0</th><th>Driver</th><th class="bucket-left">Action</th></tr></thead><tbody>${rows.map(row=>{const label=String(row.label||'').replaceAll('_',' '),newCells=kind==='new'?`<td>${row.troas_now==null?'—':rate(row.troas_now)}${row.troas_l4w==null?'':`<span class="bucket-subvalue">L4W ${rate(row.troas_l4w)}</span>`}</td><td>${row.cm2_90d==null?'—':cash(row.cm2_90d)}</td><td>${escapeHtml(row.launch_date||'—')}${row.days_since_launch==null?'':`<span class="bucket-subvalue">${count(row.days_since_launch)}d ago</span>`}</td>`:'';return `<tr><td>${bucketCe(row)}</td><td><span class="bucket-pill ${row.label==='recovering'?'positive':row.label==='eroding'?'amber':'negative'}">${escapeHtml(label||'flagged')}</span><span class="bucket-subvalue">${row.flag_streak||1} wk streak</span></td><td>${losingCriteria(row)}</td><td>${bucketMetricCell(row,'cm2',cash)}</td><td>${bucketMetricCell(row,'cm1',cash)}</td><td>${bucketMetricCell(row,'roi',rate)}</td><td>${bucketMetricCell(row,'troas',rate)}</td>${newCells}<td>${bucketMetricCell(row,'clicks',integer)}</td><td>${bucketMetricCell(row,'cvr',rate2)}</td><td>${bucketMetricCell(row,'cm1conv',unit)}</td><td>${bucketMetricCell(row,'cpc',unit,-1)}</td><td class="bucket-left"><span class="bucket-driver">${escapeHtml(row.driver||'—')}</span>${row.drivers&&row.driver&&row.drivers[row.driver]!=null?`<span class="bucket-subvalue ${tone(row.drivers[row.driver])}">${money(row.drivers[row.driver])}</span>`:''}</td><td class="bucket-action">${bucketActionCell(row,'losing_money','lm')}</td></tr>`;}).join('')}</tbody></table></div>`;
+        return `<div class="bucket-table-wrap"><table class="bucket-table" style="min-width:${kind==='new'?'2040':'1780'}px"><thead><tr><th>Combined entity</th><th>Status</th><th title="The loss or decline that flagged this CE. W0 is the report week; comparisons use last week or the prior three-week average.">Criteria ⓘ</th><th>CM2 · W0</th><th title="Google Search contribution margin before ad spend; not booking revenue">Revenue · W0</th><th>ROI · W0</th><th>tROAS · W0</th>${newHeads}<th>Clicks · W0</th><th>CVR · W0</th><th>CM1/conv · W0</th><th>CPC · W0</th><th>Driver</th><th class="bucket-left">Action</th></tr></thead><tbody>${rows.map(row=>{const label=String(row.label||'').replaceAll('_',' '),newCells=kind==='new'?`<td>${row.troas_now==null?'—':rate(row.troas_now)}${row.troas_l4w==null?'':`<span class="bucket-subvalue">L4W ${rate(row.troas_l4w)}</span>`}</td><td>${row.cm2_90d==null?'—':cash(row.cm2_90d)}</td><td>${escapeHtml(row.launch_date||'—')}${row.days_since_launch==null?'':`<span class="bucket-subvalue">${count(row.days_since_launch)}d ago</span>`}</td>`:'';return `<tr><td>${bucketCe(row)}</td><td><span class="bucket-pill ${row.label==='recovering'?'positive':row.label==='eroding'?'amber':'negative'}">${escapeHtml(label||'flagged')}</span><span class="bucket-subvalue">${row.flag_streak||1} wk streak</span></td><td>${losingCriteria(row)}</td><td>${bucketMetricCell(row,'cm2',cash)}</td><td>${bucketMetricCell(row,'cm1',cash)}</td><td>${bucketMetricCell(row,'roi',rate)}</td><td>${bucketMetricCell(row,'troas',rate)}</td>${newCells}<td>${bucketMetricCell(row,'clicks',integer)}</td><td>${bucketMetricCell(row,'cvr',rate2)}</td><td>${bucketMetricCell(row,'cm1conv',unit)}</td><td>${bucketMetricCell(row,'cpc',unit,-1)}</td><td class="bucket-left"><span class="bucket-driver">${escapeHtml(row.driver||'—')}</span>${row.drivers&&row.driver&&row.drivers[row.driver]!=null?`<span class="bucket-subvalue ${tone(row.drivers[row.driver])}">${money(row.drivers[row.driver])}</span>`:''}</td><td class="bucket-action">${bucketActionCell(row,'losing_money','lm')}</td></tr>`;}).join('')}</tbody></table></div>`;
       }
       function renderLosingMoney(item) {
         const root=document.getElementById('losing-money-section'),data=item.diagnostic_buckets?.losing_money||{},existing=data.existing||[],newRows=data.new||[],total=existing.length+newRows.length,burn=data.burn_line||{},paused=data.paused||[],gap=data.tracking_gap||[];
-        const toggle=`<div class="bucket-week-toggle-row"><button class="bucket-week-toggle" id="diagnostic-week-toggle" type="button" aria-controls="lm-week-wrap fluctuations-week-wrap" aria-expanded="${String(!diagnosticWeeksHidden)}">${diagnosticWeeksHidden?'▸ Show weekly numbers':'▾ Hide weekly numbers'}</button><span class="bucket-week-helper">Collapsed = this week + WoW · Expanded = w1–w3 raw weekly values across Losing Money and RPC / CM1 tables.</span></div>`;
-        const content=!total?'<div class="bucket-empty">No CEs flagged on the Losing Money criteria this week. ✅</div>':`${toggle}<div id="lm-week-wrap" data-diagnostic-week-wrap class="${diagnosticWeeksHidden?'diagnostic-week-hidden':''}"><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>Existing CEs</h3><p>V1 order · biggest qualifying CM2 drop first</p></div><span class="bucket-count">${existing.length}</span></div>${losingMoneyTable(existing,'existing')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>New CEs</h3><p>Includes launch and trailing-90-day context from V1</p></div><span class="bucket-count">${newRows.length}</span></div>${losingMoneyTable(newRows,'new')}</section></div>`;
+        const toggle=`<div class="bucket-week-toggle-row"><button class="bucket-week-toggle" id="diagnostic-week-toggle" type="button" aria-controls="lm-week-wrap fluctuations-week-wrap" aria-expanded="${String(!diagnosticWeeksHidden)}">${diagnosticWeeksHidden?'▸ Show weekly numbers':'▾ Hide weekly numbers'}</button><span class="bucket-week-helper">W0 = current analysis week; WoW = change vs the previous week. Show weekly numbers to add W−1, W−2 and W−3. RPC analysis dates are shown below its title.</span></div>`;
+        const content=!total?'<div class="bucket-empty">No CEs flagged on the Losing Money criteria this week. ✅</div>':`${toggle}<div id="lm-week-wrap" data-diagnostic-week-wrap class="${diagnosticWeeksHidden?'diagnostic-week-hidden':''}"><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>Existing CEs</h3><p>Largest qualifying CM2 decline first</p></div><span class="bucket-count">${existing.length}</span></div>${losingMoneyTable(existing,'existing')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>New CEs</h3><p>Launch date and 90-day profitability provide context for newer CEs</p></div><span class="bucket-count">${newRows.length}</span></div>${losingMoneyTable(newRows,'new')}</section></div>`;
         const notes=[];if(paused.length)notes.push(`${paused.length} paused / low-spend CEs`);if(gap.length)notes.push(`${gap.length} tracking gaps`);if(burn.count)notes.push(`${burn.count} sub-$1K-spend losses · ${money(burn.bleed_wk)} weekly burn`);
-        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Defend</div><h2>Losing Money</h2><p>V1 criteria, membership, source ordering and action workflow are preserved. Weekly evidence is hidden by default.</p></div><span class="bucket-count">${total} flagged</span></header>${content}${notes.length?`<div class="bucket-footnote">${notes.join(' · ')}</div>`:''}<div class="bucket-footnote">Actions save to the established Weekly Actions Sheet when configured; otherwise they remain as local drafts.</div></article>`;
+        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Defend</div><h2>Losing Money</h2><span class="scope-tag">FYI · Google Search only</span></div><span class="bucket-count">${total} flagged</span></header>${content}<div class="bucket-footnote"><details class="metric-fyi"><summary>FYI · How to read these numbers</summary><p>CM1 is contribution margin before ad spend; CM2 is what remains after ad spend. The Revenue column uses the Google Search CM1 source, before ad spend. CVR = ad conversions ÷ clicks.</p></details></div>${notes.length?`<div class="bucket-footnote">${notes.join(' · ')}</div>`:''}<div class="bucket-footnote">Select an action and add a comment. The save status confirms whether it has synced or remains a local draft.</div></article>`;
       }
       function fluctuationTable(rows,direction) {
         if(!rows.length)return `<div class="bucket-empty">${direction==='down'?'No revenue-quality drops this week on a CE returning ≤180% ROI. ✅':'No revenue-quality spikes this week on a CE above break-even.'}</div>`;
@@ -1054,8 +1114,8 @@
         return `<div class="bucket-table-wrap"><table class="bucket-table" style="min-width:1960px"><thead><tr><th>Combined entity</th><th>Signal</th><th>Swing</th><th>Spend · W0</th><th>ROI · W0</th><th>Clicks · W0</th><th>CVR · W0</th><th>AOV · W0</th><th>Completion</th><th>Take rate</th><th>CM1/conv</th><th>CPC</th><th>Driver</th><th>Read</th><th class="bucket-left">Action</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${bucketCe(row)}</td><td><span class="bucket-pill ${direction==='down'?'negative':'positive'}">${escapeHtml(row.signal||'RPC')}</span></td><td class="${tone(row.swing_pct)}">${pct(row.swing_pct)}</td><td>${bucketMetricCell(row,'spend',cash)}</td><td>${bucketMetricCell(row,'roi',rate)}</td><td>${bucketMetricCell(row,'clicks',integer)}</td><td>${bucketMetricCell(row,'cvr',rate2)}</td><td>${bucketMetricCell(row,'aov',cash)}</td><td>${bucketMetricCell(row,'cr',rate)}</td><td>${bucketMetricCell(row,'tr',rate)}</td><td>${bucketMetricCell(row,'cm1conv',unit)}</td><td>${bucketMetricCell(row,'cpc',unit,-1)}</td><td class="bucket-left"><span class="bucket-driver">${escapeHtml(row.dominant||'—')}</span></td><td class="bucket-left"><span class="bucket-pill ${row.verdict==='+ve'?'positive':row.verdict==='-ve'?'negative':'amber'}">${escapeHtml(row.verdict||'watch')}</span><span class="bucket-subvalue">${escapeHtml(row.cause||'')} · ${escapeHtml(row.recommendation||'')}</span></td><td class="bucket-action">${bucketActionCell(row,bucket,'fx')}</td></tr>`).join('')}</tbody></table></div>`;
       }
       function renderFluctuations(item) {
-        const root=document.getElementById('fluctuations-section'),data=item.diagnostic_buckets?.fluctuations||{},down=data.down||[],up=data.up||[],window=data.window||{},windowCopy=window.fluctuation_window_start&&window.fluctuation_window_end?`${dateLabel(window.fluctuation_window_start)}–${dateLabel(window.fluctuation_window_end)} vs ${dateLabel(window.fluctuation_compare_start)}–${dateLabel(window.fluctuation_compare_end)}`:'V1 weekly comparison window';
-        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Revenue quality</div><h2>RPC / CM1 fluctuations</h2><p>V1 direction, qualifying signal, driver, verdict, recommendation and actions are unchanged · ${escapeHtml(windowCopy)}.</p></div><span class="bucket-count">${down.length+up.length} flagged</span></header><div id="fluctuations-week-wrap" data-diagnostic-week-wrap class="${diagnosticWeeksHidden?'diagnostic-week-hidden':''}"><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↓</h3><p>Defend · investigate revenue-quality deterioration</p></div><span class="bucket-count">${down.length}</span></div>${fluctuationTable(down,'down')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↑</h3><p>Compound · validate and act on revenue-quality improvement</p></div><span class="bucket-count">${up.length}</span></div>${fluctuationTable(up,'up')}</section></div></article>`;
+        const root=document.getElementById('fluctuations-section'),data=item.diagnostic_buckets?.fluctuations||{},down=data.down||[],up=data.up||[],window=data.window||{},windowCopy=window.fluctuation_window_start&&window.fluctuation_window_end?`${dateLabel(window.fluctuation_window_start)}–${dateLabel(window.fluctuation_window_end)} vs ${dateLabel(window.fluctuation_compare_start)}–${dateLabel(window.fluctuation_compare_end)}`:'Weekly comparison window';
+        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Diagnostic buckets · Revenue quality</div><h2>RPC / CM1 fluctuations</h2><span class="scope-tag">FYI · Google Search only</span><p>${escapeHtml(windowCopy)}</p></div><span class="bucket-count">${down.length+up.length} flagged</span></header><div id="fluctuations-week-wrap" data-diagnostic-week-wrap class="${diagnosticWeeksHidden?'diagnostic-week-hidden':''}"><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↓</h3><p>Defend · investigate revenue-quality deterioration</p></div><span class="bucket-count">${down.length}</span></div>${fluctuationTable(down,'down')}</section><section class="bucket-subsection"><div class="bucket-subhead"><div><h3>RPC fluctuations ↑</h3><p>Compound · validate and act on revenue-quality improvement</p></div><span class="bucket-count">${up.length}</span></div>${fluctuationTable(up,'up')}</section></div><div class="bucket-footnote"><details class="metric-fyi"><summary>FYI · How to read these numbers</summary><p>RPC = attributed revenue ÷ clicks. CVR = attributed orders ÷ clicks; Losing Money uses ad conversions instead. CM1/conv = contribution margin per ad conversion.</p></details></div></article>`;
       }
       function lifecycleTrend(row,item) {
         const ce=(item.all_ces||[]).find(candidate=>String(candidate.ce_id)===String(row.ce_id)),data=ce?.chart||[],values=data.flatMap(point=>[point.revenue,point.revenue_ly]).filter(value=>value!=null);
@@ -1070,8 +1130,8 @@
       }
       function renderNewCes(item) {
         const root=document.getElementById('new-ces-section'),rows=item.diagnostic_buckets?.lifecycle?.new_ces||[],graduated=rows.filter(row=>row.lane==='A_graduated').length,onPace=rows.filter(row=>row.lane==='B_on_pace').length;
-        const table=!rows.length?'<div class="bucket-empty">No CEs entered the V1 New CE lifecycle bucket this week.</div>':`<div class="bucket-table-wrap"><table class="bucket-table bucket-lifecycle-table"><thead><tr><th>Combined entity</th><th>Lane</th><th>Band</th><th>Mo since launch</th><th>Run-rate / mo</th><th>Paid ROI</th><th>Δ rev WoW</th><th>Clicks</th><th>RPC</th><th>Rev TY / LY</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${bucketCe(row)}</td><td>${lifecycleLane(row)}</td><td>${escapeHtml(row.band||'—')}</td><td>${row.mo_since_launch==null?'—':count(row.mo_since_launch)}</td><td>${money(row.run_rate_mo)}<span class="bucket-subvalue">${row.dollars_to_pro==null?(row.lane==='A_graduated'?'at Pro+':'—'):`${money(row.dollars_to_pro)} to Pro`}</span></td><td>${row.roi==null?'—':`${Number(row.roi).toFixed(0)}%`}</td><td class="${tone(row.rev_wow_pct)}">${pct(row.rev_wow_pct)}</td><td>${count(row.clicks)}<span class="bucket-subvalue ${tone(row.clicks_wow_pct)}">${pct(row.clicks_wow_pct)}</span></td><td>${row.rpc==null?'—':`$${Number(row.rpc).toFixed(2)}`}<span class="bucket-subvalue">CVR ${row.cvr_pct==null?'—':`${Number(row.cvr_pct).toFixed(1)}%`}</span></td><td class="bucket-lifecycle-trend">${lifecycleTrend(row,item)}</td></tr>`).join('')}</tbody></table></div>`;
-        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Lifecycle · Growth</div><h2>New CEs</h2><p>V1 lifecycle membership and ordering are preserved; revenue momentum, efficiency and trajectory show whether each CE is still climbing.</p></div><span class="bucket-count">${rows.length} CEs · ${graduated} graduated · ${onPace} on pace</span></header><div class="bucket-howto"><strong>How to read:</strong> CEs that just crossed Pro+ for the first time in four quarters, or are on pace to. Run-rate per month is read against the Pro line; revenue WoW shows current momentum.</div>${table}</article>`;
+        const table=!rows.length?'<div class="bucket-empty">No new CEs qualified this week.</div>':`<div class="bucket-table-wrap"><table class="bucket-table bucket-lifecycle-table"><thead><tr><th>Combined entity</th><th>Lane</th><th>Band</th><th>Mo since launch</th><th>Run-rate / mo</th><th>Paid ROI</th><th>Δ rev WoW</th><th>Clicks</th><th>RPC</th><th>Rev TY / LY</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${bucketCe(row)}</td><td>${lifecycleLane(row)}</td><td>${escapeHtml(row.band||'—')}</td><td>${row.mo_since_launch==null?'—':count(row.mo_since_launch)}</td><td>${money(row.run_rate_mo)}<span class="bucket-subvalue">${row.dollars_to_pro==null?(row.lane==='A_graduated'?'at Pro+':'—'):`${money(row.dollars_to_pro)} to Pro`}</span></td><td>${row.roi==null?'—':`${Number(row.roi).toFixed(0)}%`}</td><td class="${tone(row.rev_wow_pct)}">${pct(row.rev_wow_pct)}</td><td>${count(row.clicks)}<span class="bucket-subvalue ${tone(row.clicks_wow_pct)}">${pct(row.clicks_wow_pct)}</span></td><td>${row.rpc==null?'—':`$${Number(row.rpc).toFixed(2)}`}<span class="bucket-subvalue">CVR ${row.cvr_pct==null?'—':`${Number(row.cvr_pct).toFixed(1)}%`}</span></td><td class="bucket-lifecycle-trend">${lifecycleTrend(row,item)}</td></tr>`).join('')}</tbody></table></div>`;
+        root.innerHTML=`<article class="bucket-card"><header class="bucket-card-head"><div><div class="section-kicker">Lifecycle · Growth</div><h2>New CEs</h2><p>Track newly qualifying and on-pace CEs. Revenue and trends cover the whole CE; paid efficiency provides acquisition context.</p></div><span class="bucket-count">${rows.length} CEs · ${graduated} graduated · ${onPace} on pace</span></header><div class="bucket-howto"><strong>How to read:</strong> CEs that just crossed Pro+ for the first time in four quarters, or are on pace to. Run-rate per month is read against the Pro line; revenue WoW shows current momentum.</div>${table}</article>`;
       }
       function iterationReason(row) {
         const label=row.lane==='untapped'?'Untapped':row.reason||row.lane||'Iteration',kind=row.lane==='untapped'?'amber':'';
@@ -1079,8 +1139,8 @@
       }
       function renderIteration(item) {
         const root=document.getElementById('iteration-section'),rows=item.diagnostic_buckets?.lifecycle?.iteration||[],iteration=rows.filter(row=>row.lane!=='untapped').length,untapped=rows.filter(row=>row.lane==='untapped').length;
-        const table=!rows.length?'<div class="bucket-empty">No CEs entered the V1 Iteration / Untapped lifecycle bucket this week.</div>':`<div class="bucket-table-wrap"><table class="bucket-table bucket-lifecycle-table"><thead><tr><th>Combined entity</th><th>Reason</th><th>Band</th><th>Mo since launch</th><th>Run-rate / mo</th><th>Clicks · 4w</th><th>CVR · 4w</th><th>MMP handover</th><th>Rev TY / LY</th></tr></thead><tbody>${rows.map(row=>{const clicksWow=row.traction?.clicks_wow_pct;return `<tr><td>${bucketCe(row)}</td><td class="bucket-left">${iterationReason(row)}</td><td>${escapeHtml(row.band||'—')}</td><td>${row.mo_since_launch==null?'—':count(row.mo_since_launch)}</td><td>${money(row.run_rate_mo)}</td><td>${count(row.clicks_4w)}<span class="bucket-subvalue ${tone(clicksWow)}">${pct(clicksWow)}</span></td><td>${row.cvr_4w==null?'—':`${Number(row.cvr_4w).toFixed(1)}%`}<span class="bucket-subvalue">Category median ${row.cvr_cat_med==null?'—':`${Number(row.cvr_cat_med).toFixed(1)}%`}</span></td><td>${row.mmp_handover_date?dateLabel(row.mmp_handover_date):row.has_mmp?'Attached':'—'}<span class="bucket-subvalue">${row.mmp_iteration_count_l6m==null?'':`${count(row.mmp_iteration_count_l6m)} iterations · 6m`}</span></td><td class="bucket-lifecycle-trend">${lifecycleTrend(row,item)}</td></tr>`;}).join('')}</tbody></table></div>`;
-        root.innerHTML=`<details class="bucket-card bucket-lifecycle-card"><summary class="bucket-card-head"><div><div class="section-kicker">Lifecycle · Opportunity</div><h2>Iteration / Untapped</h2><p>V1 lifecycle membership, reason and ordering are preserved. Expand to review non-graduated CEs and unowned scale opportunities.</p></div><span class="bucket-count">${rows.length} CEs · ${iteration} iteration · ${untapped} untapped</span></summary><div class="bucket-howto"><strong>How to read:</strong> Iteration means the team is working the CE; its V1 reason explains what is blocked. Untapped means meaningful scale with no active owner. Clicks and CVR are pooled over four weeks.</div>${table}</details>`;
+        const table=!rows.length?'<div class="bucket-empty">No CEs qualified for Iteration / Untapped this week.</div>':`<div class="bucket-table-wrap"><table class="bucket-table bucket-lifecycle-table"><thead><tr><th>Combined entity</th><th>Reason</th><th>Band</th><th>Mo since launch</th><th>Run-rate / mo</th><th>Clicks · 4w</th><th>CVR · 4w</th><th>MMP handover</th><th>Rev TY / LY</th></tr></thead><tbody>${rows.map(row=>{const clicksWow=row.traction?.clicks_wow_pct;return `<tr><td>${bucketCe(row)}</td><td class="bucket-left">${iterationReason(row)}</td><td>${escapeHtml(row.band||'—')}</td><td>${row.mo_since_launch==null?'—':count(row.mo_since_launch)}</td><td>${money(row.run_rate_mo)}</td><td>${count(row.clicks_4w)}<span class="bucket-subvalue ${tone(clicksWow)}">${pct(clicksWow)}</span></td><td>${row.cvr_4w==null?'—':`${Number(row.cvr_4w).toFixed(1)}%`}<span class="bucket-subvalue">Category median ${row.cvr_cat_med==null?'—':`${Number(row.cvr_cat_med).toFixed(1)}%`}</span></td><td>${row.mmp_handover_date?dateLabel(row.mmp_handover_date):row.has_mmp?'Attached':'—'}<span class="bucket-subvalue">${row.mmp_iteration_count_l6m==null?'':`${count(row.mmp_iteration_count_l6m)} iterations · 6m`}</span></td><td class="bucket-lifecycle-trend">${lifecycleTrend(row,item)}</td></tr>`;}).join('')}</tbody></table></div>`;
+        root.innerHTML=`<details class="bucket-card bucket-lifecycle-card"><summary class="bucket-card-head"><div><div class="section-kicker">Lifecycle · Opportunity</div><h2>Iteration / Untapped</h2><p>Review CEs still working toward Pro and opportunities to scale. Revenue trends cover the whole CE; 4-week metrics show recent acquisition performance.</p></div><span class="bucket-count">${rows.length} CEs · ${iteration} iteration · ${untapped} untapped</span></summary><div class="bucket-howto"><strong>How to read:</strong> Iteration means the team is working the CE; the reason explains what is blocked. Untapped means meaningful scale with no active owner. Clicks and CVR are pooled over four weeks.</div>${table}</details>`;
       }
       function renderDiagnosticBuckets(item){renderLosingMoney(item);renderFluctuations(item);renderNewCes(item);renderIteration(item);}
       function renderPostDiagnostic(item){renderSeasonality(item);renderLevers(item);}
@@ -1229,7 +1289,7 @@
         const okrNote=document.getElementById('okr-cohort-note');okrNote.hidden=!ceState.okrIds;okrNote.innerHTML=ceState.okrIds?`<span>OKR cohort · ${escapeHtml(ceState.okrCohortLabel||'Selected OKR')} · ${count(ceState.okrIds.size)} CEs</span><button class="okr-cohort-clear" type="button" data-clear-okr-cohort>Clear</button>`:'';
         const filterCount=document.getElementById('ce-filter-count');filterCount.textContent=String(activeFilterCount);filterCount.dataset.active=String(activeFilterCount>0);
         const filterPanel=document.getElementById('ce-filter-panel'),filterToggle=document.getElementById('ce-filter-toggle');filterPanel.hidden=!ceState.filtersOpen;filterToggle.setAttribute('aria-expanded',String(ceState.filtersOpen));
-        document.getElementById('ce-filter-boundary').textContent=(cap?`Capped Headout view: showing ${cap.shown} of ${cap.total} CEs, covering ${coverage==null?'—':`${coverage.toFixed(1)}%`} of weekly revenue. `:'')+'Country and portfolio filters use the current weekly snapshot.';
+        document.getElementById('ce-filter-boundary').textContent=(cap?`Capped Headout view: showing ${cap.shown} of ${cap.total} CEs, covering ${coverage==null?'—':`${coverage.toFixed(1)}%`} of weekly revenue. `:'')+'Revenue covers all channels. Paid spend, RPC and profitability cover Google + Bing Search. Clicks and CVR use business-reported ad clicks and conversions; the drawer’s Paid CVR uses campaign conversions and clicks.';
       }
       function ceChart(ce) {
         const data=ce.chart||[], width=760,height=160,margin={top:10,right:12,bottom:24,left:52},values=data.flatMap(row=>[row.revenue,row.revenue_ly]).filter(value=>value!=null);
@@ -1252,7 +1312,7 @@
       const ceDelta=row=>row.delta_abs==null?'—':row.format==='pct'?pct(relativePct(row.w0,row.wm1)):row.format==='money'?signedMoney(row.delta_abs):row.format==='cpc'?`${row.delta_abs>0?'+':row.delta_abs<0?'−':''}$${Math.abs(row.delta_abs).toFixed(2)}`:`${row.delta_abs>0?'+':row.delta_abs<0?'−':''}${count(Math.abs(row.delta_abs))}`;
       const ceRateDelta=(current,previous,pointDelta=null)=>previous!=null?relativePct(current,previous):relativePctFromPoints(current,pointDelta);
       const omniLink=ceId=>{const f=encodeURIComponent(JSON.stringify({values:[String(ceId)]})),d=encodeURIComponent(JSON.stringify({left_side:'12 complete weeks ago',right_side:'12 weeks'})),c=encodeURIComponent('combined_entity_stats.report_timestamp[week]');return `https://headout.omniapp.co/dashboards/5368ab53?f--iv8lWOuS=${f}&f--uvd3KWWJ=${d}&c--fYgxW0mY=${c}`;};
-      function ceHistory(row){return (row.series||[]).map(point=>`<div class="ce-history-item"><small>${escapeHtml(dateLabel(point.week))}</small><strong>TY ${ceValue(point.ty,row.format)}</strong><small>${point.ly==null?'LY n/a':`LY ${ceValue(point.ly,row.format)}`}</small></div>`).join('')||'<div class="ce-unavailable">12-week history is unavailable from the V1 source.</div>';}
+      function ceHistory(row){return (row.series||[]).map(point=>`<div class="ce-history-item"><small>${escapeHtml(dateLabel(point.week))}</small><strong>TY ${ceValue(point.ty,row.format)}</strong><small>${point.ly==null?'LY n/a':`LY ${ceValue(point.ly,row.format)}`}</small></div>`).join('')||'<div class="ce-unavailable">12-week history is unavailable.</div>';}
       const resourceSeries=row=>(row.history||[]).map(point=>({week:point.week,ty:point.ty,ly:point.ly}));
       const resourceTrend=(row,key,label)=>{
         const series=resourceSeries(row);
@@ -1271,12 +1331,28 @@
         return Object.values(byWeek).sort((a,b)=>String(a.week).localeCompare(String(b.week)));
       };
       const ceSection=(title,copy,headers,rows,minWidth='760px')=>rows?`<section class="ce-resource"><div class="ce-resource-head"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(copy)}</p></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table" style="min-width:${minWidth}"><thead><tr>${headers.map(header=>`<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`:'';
-      const ceTgidSection=rows=>{if(!rows)return '';const state=Object.entries(ceTgidBands).filter(([,open])=>!open).map(([band])=>`${band}-collapsed`).join(' '),band=(key,label,count)=>`<th data-ce-band-head="${key}" colspan="${ceTgidBands[key]?count:1}"><button class="ce-band-toggle" type="button" data-ce-band="${key}" aria-expanded="${ceTgidBands[key]}">${ceTgidBands[key]?'▾':'▸'} ${label}</button></th>`,sub=(key,label,secondary=false)=>`<th data-ce-band-col="${key}"${secondary?' data-ce-band-secondary':''}>${label}</th>`;return `<section class="ce-resource"><div class="ce-resource-head"><div><h3>Top experiences · TGIDs</h3><p>Expand a TGID for reconciled booking-grain variants. Current rate values remain rates; all colored comparison lines are relative percentages.</p></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table ce-tgid-table ${state}" style="min-width:1500px"><thead><tr><th rowspan="2">Experience / Variant</th>${band('size','Size',4)}${band('value','Value',4)}${band('funnel','Funnel',4)}${band('booking','Booking window',3)}</tr><tr>${sub('size','Revenue / WoW')}${sub('size','W-1',true)}${sub('size','Orders / WoW',true)}${sub('size','Share / WoW',true)}${sub('value','RPC')}${sub('value','AOV',true)}${sub('value','CR',true)}${sub('value','TR',true)}${sub('funnel','Select users')}${sub('funnel','Traffic',true)}${sub('funnel','S2C',true)}${sub('funnel','C2O',true)}${sub('booking','0–2d')}${sub('booking','3–7d',true)}${sub('booking','7d+',true)}</tr></thead><tbody>${rows}</tbody></table></div></section>`;};
+      const ceTgidSection=rows=>{if(!rows)return '';const state=Object.entries(ceTgidBands).filter(([,open])=>!open).map(([band])=>`${band}-collapsed`).join(' '),band=(key,label,count)=>`<th data-ce-band-head="${key}" colspan="${ceTgidBands[key]?count:1}"><button class="ce-band-toggle" type="button" data-ce-band="${key}" aria-expanded="${ceTgidBands[key]}">${ceTgidBands[key]?'▾':'▸'} ${label}</button></th>`,sub=(key,label,secondary=false)=>`<th data-ce-band-col="${key}"${secondary?' data-ce-band-secondary':''}>${label}</th>`;return `<section class="ce-resource"><div class="ce-resource-head"><div><h3>Top experiences · TGIDs</h3><p>Actual revenue by experience; expand for booking variants. Variant revenue and orders sum to the experience total. Rates are current values; colored lines show relative changes.</p></div></div><div class="ce-resource-table-wrap"><table class="ce-resource-table ce-tgid-table ${state}" style="width:${280+Object.entries({size:4,value:4,funnel:4,booking:3}).reduce((sum,[key,count])=>sum+(ceTgidBands[key]?count:1)*116,0)}px;min-width:0"><colgroup><col style="width:280px">${Object.entries({size:4,value:4,funnel:4,booking:3}).map(([key,count])=>Array.from({length:ceTgidBands[key]?count:1},()=>'<col style="width:116px">').join('')).join('')}</colgroup><thead><tr><th rowspan="2">Experience / Variant</th>${band('size','Size',4)}${band('value','Value',4)}${band('funnel','Funnel',4)}${band('booking','Booking window',3)}</tr><tr>${sub('size','Revenue / WoW')}${sub('size','W-1',true)}${sub('size','Orders / WoW',true)}${sub('size','Share / WoW',true)}${sub('value','RPC')}${sub('value','AOV',true)}${sub('value','CR',true)}${sub('value','TR',true)}${sub('funnel','Select users')}${sub('funnel','Traffic',true)}${sub('funnel','S2C',true)}${sub('funnel','C2O',true)}${sub('booking','0–2d')}${sub('booking','3–7d',true)}${sub('booking','7d+',true)}</tr></thead><tbody>${rows}</tbody></table></div></section>`;};
       function renderCeMetrics(ce) {
         document.querySelectorAll('[data-ce-metric-group]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.ceMetricGroup===ceMetricGroup)));
-        const rows=((ce.drawer_metrics||{})[ceMetricGroup]||[]);
-        document.getElementById('ce-metric-rows').innerHTML=rows.map(row=>{const key=`${ceMetricGroup}:${row.key}`,open=ceExpandedMetrics[key]===true,wow=row.wow_kind==='pp'?ceRateDelta(row.w0,row.wm1,row.delta_pct):row.delta_pct;return `<tr><td><span class="ce-metric-label">${escapeHtml(row.label)}</span></td><td>${ceValue(row.w0,row.format)}</td><td>${ceValue(row.wm1,row.format)}</td><td class="${tone(row.format==='pct'?wow:row.delta_abs)}">${ceDelta(row)}</td><td class="${tone(wow)}">${pct(wow)}</td><td><button class="ce-metric-trend-button" type="button" data-ce-metric-detail="${escapeHtml(key)}" aria-expanded="${open}" aria-label="${open?'Hide':'View'} ${escapeHtml(row.label)} 12-week trend">${sparkline(row,false)}<span class="sr-only">${open?'Hide':'View'} trend</span></button></td></tr><tr class="ce-metric-detail" ${open?'':'hidden'}><td colspan="6"><div class="ce-history">${ceHistory(row)}</div></td></tr>`;}).join('')||'<tr><td colspan="6">No metrics are available for this source group.</td></tr>';
-        wireCeSparklines('#ce-metric-rows',new Map(rows.map(row=>[row.key,row])));
+        const rows=((ce.drawer_metrics||{})[ceMetricGroup]||[]),trendRows=[];
+        const allPlatformsOpen=rows.length>0&&rows.every(row=>ceExpandedPlatforms[row.key]);
+        document.getElementById('ce-platform-controls').hidden=ceMetricGroup!=='paid';
+        document.getElementById('ce-metric-scope').textContent=ceMetricGroup==='paid'?'Google + Bing Search only':'All channels';
+        document.getElementById('ce-metric-definition').textContent=ceMetricGroup==='paid'?'Revenue is campaign-attributed; CVR = ad conversions ÷ clicks. Expand a metric for Google and Bing.':'Revenue is predicted across all channels. LP→Order CVR measures conversion from landing-page visitors to purchasers.';
+        const expandAll=document.getElementById('ce-expand-platforms');
+        expandAll.textContent=allPlatformsOpen?'Hide breakdown':'Show breakdown';
+        expandAll.setAttribute('aria-pressed',String(allPlatformsOpen));
+        const metricRow=(row,child=false)=>{
+          trendRows.push(row);
+          const key=`${ceMetricGroup}:${row.key}`,open=ceExpandedMetrics[key]===true,expanded=ceExpandedPlatforms[row.key]===true,
+            wow=row.wow_kind==='pp'?ceRateDelta(row.w0,row.wm1,row.delta_pct):row.delta_pct;
+          const label=child?`<span class="ce-platform-label">${escapeHtml(row.label)}</span>${row.unavailable_reason?`<span class="ce-platform-context">${escapeHtml(row.unavailable_reason)}</span>`:''}`:
+            row.breakdown?`<button class="ce-platform-toggle" type="button" data-ce-platform="${escapeHtml(row.key)}" aria-expanded="${expanded}" aria-label="${expanded?'Collapse':'Expand'} ${escapeHtml(row.label)} by Google and Bing"><span aria-hidden="true">${expanded?'▾':'▸'}</span><span>${escapeHtml(row.label)}${expanded&&row.key!=='paid_sis_pct'?'<small class="ce-platform-context">Combined</small>':''}</span></button>`:`<span class="ce-metric-label">${escapeHtml(row.label)}</span>`;
+          const hasHistory=(row.series||[]).some(point=>point.ty!=null||point.ly!=null);
+          return `<tr${child?' class="ce-platform-row"':''}><td>${label}</td><td>${ceValue(row.w0,row.format)}</td><td>${ceValue(row.wm1,row.format)}</td><td class="${tone(row.format==='pct'?wow:row.delta_abs)}">${ceDelta(row)}</td><td class="${tone(wow)}">${pct(wow)}</td><td class="${tone(row.yoy_pct)}" title="${row.ly_w0==null?'Last-year base unavailable':`LY ${ceValue(row.ly_w0,row.format)}`}">${pct(row.yoy_pct)}</td><td>${hasHistory?`<button class="ce-metric-trend-button" type="button" data-ce-metric-detail="${escapeHtml(key)}" aria-expanded="${open}" aria-label="${open?'Hide':'View'} ${escapeHtml(row.label)} 12-week trend">${sparkline(row,false)}<span class="sr-only">${open?'Hide':'View'} trend</span></button>`:'<span class="ce-unavailable">—</span>'}</td></tr>${hasHistory?`<tr class="ce-metric-detail" ${open?'':'hidden'}><td colspan="7"><div class="ce-history">${ceHistory(row)}</div></td></tr>`:''}`;
+        };
+        document.getElementById('ce-metric-rows').innerHTML=rows.map(row=>metricRow(row)+(ceExpandedPlatforms[row.key]?(row.breakdown||[]).map(child=>metricRow(child,true)).join(''):'')).join('')||'<tr><td colspan="7">No metrics are available for this source group.</td></tr>';
+        wireCeSparklines('#ce-metric-rows',new Map(trendRows.map(row=>[row.key,row])));
       }
       function renderCeShapley(ce) {
         const source=ce.funnel_shapley, section=document.getElementById('ce-shapley-section');
@@ -1287,6 +1363,9 @@
         document.getElementById('ce-shapley-list').innerHTML=factors.map(row=>`<div class="shapley-row"><span>${escapeHtml(row.label)}</span><div class="shapley-track"><span class="shapley-fill ${tone(row.value)}" style="width:${Math.abs(row.value)/max*50}%"></span></div><span class="shapley-value ${tone(row.value)}">${signedMoney(row.value)}</span></div>`).join('')+`<div class="ce-shapley-reconciliation" aria-label="Revenue reconciliation"><span class="ce-shapley-reconciliation-label">FYI · reconciliation:</span><span>factor impacts</span><strong class="ce-shapley-reconciliation-value ${tone(source.factor_total)}">${signedMoney(source.factor_total)}</strong><span>+</span><span>residual</span><strong class="ce-shapley-reconciliation-value ${tone(source.residual)}">${signedMoney(source.residual)}</strong><span>=</span><span>predicted revenue WoW</span><strong class="ce-shapley-reconciliation-value ce-shapley-reconciliation-net ${tone(source.net_delta)}">${signedMoney(source.net_delta)}</strong></div>`;
       }
       function renderCeResources(ce) {
+        const resourceRoot=document.getElementById('ce-resource-sections'),resourceKey=`${actionWeek()}:${ce.ce_id}`;
+        const scrollPositions=resourceRoot.dataset.ceKey===resourceKey?[...document.querySelectorAll("#ce-resource-sections .ce-resource-table-wrap")].map(wrap=>({left:wrap.scrollLeft,top:wrap.scrollTop})):[];
+        resourceRoot.dataset.ceKey=resourceKey;
         ceResourceTrendMetrics=new Map();
         const channels=(ce.channels||[]).map(row=>`<tr><td><strong>${escapeHtml(row.channel)}</strong></td><td>${money(row.rev)}</td><td>${money(row.rev_wm1)}</td><td class="${tone(row.wow_pct)}">${pct(row.wow_pct)}</td><td class="${tone(row.yoy_pct)}">${pct(row.yoy_pct)}</td><td>${row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`}</td><td class="ce-resource-trend">${resourceTrend(row,`channel:${row.channel}`,`${row.channel} revenue`)}</td></tr>`).join('');
         const funnel=Object.entries(ce.funnel||{}).map(([stage,row])=>{const wow=stage==='LP Users'?row.wow:ceRateDelta(row.current,row.wm1,row.wow),yoy=stage==='LP Users'?row.yoy:relativePctFromPoints(row.current,row.yoy);return `<tr><td><strong>${escapeHtml(stage)}</strong></td><td>${stage==='LP Users'?count(row.current):(row.current==null?'—':`${row.current.toFixed(2)}%`)}</td><td>${stage==='LP Users'?count(row.wm1):(row.wm1==null?'—':`${row.wm1.toFixed(2)}%`)}</td><td class="${tone(wow)}">${pct(wow)}</td><td class="${tone(yoy)}">${pct(yoy)}</td></tr>`;}).join('');
@@ -1300,11 +1379,12 @@
         const lead=leadRows.map(row=>{const label=leadLabels[row.band]||[row.band,''],shareWow=relativePctFromPoints(row.share_pct,row.share_wow_pp),shareYoy=relativePctFromPoints(row.share_pct,row.share_yoy_pp);return `<tr><td class="ce-lead-name"><strong>${escapeHtml(label[0])}</strong>${label[1]?`<span>${escapeHtml(label[1])}</span>`:''}</td><td>${count(row.bookings)}</td><td class="${tone(row.bookings_wow)}">${pct(row.bookings_wow)}</td><td class="${tone(row.bookings_yoy)}">${pct(row.bookings_yoy)}</td><td>${money(row.rev)}</td><td class="${tone(row.rev_wow)}">${pct(row.rev_wow)}</td><td class="${tone(row.rev_yoy)}">${pct(row.rev_yoy)}</td><td>${ceSub(row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`,ceComparePair(shareWow,shareYoy))}</td><td class="ce-resource-trend">${resourceTrend(row,`lead:${row.band}`,`${label[0]} revenue`)}</td></tr>`;}).join('')+(leadRows.length?`<tr class="ce-lead-total"><td>Total</td><td>${count(leadRows.reduce((sum,row)=>sum+(row.bookings||0),0))}</td><td>—</td><td>—</td><td>${money(leadRows.reduce((sum,row)=>sum+(row.rev||0),0))}</td><td>—</td><td>—</td><td>100%</td><td class="ce-resource-trend">${resourceTrend({history:sumResourceHistory(leadRows)},'lead:total','Total lead-time revenue')}</td></tr>`:'');
         const countries=(ce.country_mix||[]).map(row=>`<tr><td><strong>${escapeHtml(row.country)}</strong></td><td>${count(row.orders)}</td><td class="${tone(row.orders_wow)}">${pct(row.orders_wow)}</td><td class="${tone(row.orders_yoy)}">${pct(row.orders_yoy)}</td><td>${money(row.revenue)}</td><td class="${tone(row.revenue_wow)}">${pct(row.revenue_wow)}</td><td class="${tone(row.revenue_yoy)}">${pct(row.revenue_yoy)}</td><td>${row.share_pct==null?'—':`${row.share_pct.toFixed(1)}%`}</td><td>${ceSub(money(row.aov),row.aov_ly==null?'LY —':`LY ${money(row.aov_ly)}`)}</td><td class="ce-resource-trend">${resourceTrend(row,`country:${row.country}`,`${row.country} revenue`)}</td></tr>`).join('');
         document.getElementById('ce-resource-sections').innerHTML=
-          ceSection('Channel mix','Actual revenue and relative weekly movement by acquisition channel.',['Channel','Revenue','W-1','WoW','YoY','Share','12W · TY / LY'],channels,'920px')+
-          ceSection('Funnel · LP → order','Current rates remain percentages; every comparison is relative percentage change.',['Stage','W0','W-1','WoW','YoY'],funnel)+
-          ceSection('Lead-time bands','Five production bands. Same-day and 1–2 day availability remain distinct; orders and actual revenue use matched W0, W-1 and LY windows.',['Band','Orders · W0','WoW','YoY','Revenue · W0','WoW','YoY','Share','12W · TY / LY'],lead,'1040px')+
+          ceSection('Channel mix','Actual booking revenue by acquisition channel. Google Search, Cross-sell and PMax are separate; their sum is broader than Google Search alone. Revenue is not CM1 and may differ from the predicted revenue above.',['Channel','Revenue','W-1','WoW','YoY','Share','12W · TY / LY'],channels,'920px')+
+          ceSection('Funnel · LP → order','LP users and progression to order from the product funnel. These user-based rates differ from advertising conversion rates; every comparison is relative percentage change.',['Stage','W0','W-1','WoW','YoY'],funnel)+
+          ceSection('Lead-time bands','Bookings by time between booking and experience. Same-day and 1–2 day bookings stay separate. Revenue is actual booking revenue; WoW and YoY use matched weekly windows.',['Band','Orders · W0','WoW','YoY','Revenue · W0','WoW','YoY','Share','12W · TY / LY'],lead,'1040px')+
           ceTgidSection(tgids)+
-          ceSection('Top countries','Customer-country orders and revenue with W0/W1/LY comparisons.',['Country','Orders','WoW','YoY','Revenue','WoW','YoY','Share','AOV / LY','12W · TY / LY'],countries,'1080px');
+          ceSection('Top countries','Actual booking revenue and orders by customer country, not experience location. WoW compares last week; YoY compares the aligned week last year.',['Country','Orders','WoW','YoY','Revenue','WoW','YoY','Share','AOV / LY','12W · TY / LY'],countries,'1080px');
+        document.querySelectorAll("#ce-resource-sections .ce-resource-table-wrap").forEach((wrap,index)=>{const position=scrollPositions[index];if(position){wrap.scrollLeft=position.left;wrap.scrollTop=position.top;}});
         wireCeSparklines('#ce-resource-sections',ceResourceTrendMetrics);
       }
       function renderCeDrawer(ce) {
@@ -1477,8 +1557,42 @@
         document.getElementById('source-note').textContent=monthly.source ? `Sources: frozen weekly snapshot and the ${monthLabel(monthly.month)} market target.` : 'Source: frozen weekly snapshot; no monthly target is attached.';
         renderRunway(item); renderTargets(item); drawChart(item); renderMarketOkrs(item); renderMovers(item,'drops'); renderMovers(item,'gains'); renderDiagnosticBuckets(item); renderPostDiagnostic(item); renderDrawer(item); renderAllCes(item);
       }
+      function toggleReportSidebar(){
+        // A layout-only change: preserve the mounted CE, notes, drafts and pending saves.
+        const shell=document.querySelector('.shell'),button=document.getElementById('rail-toggle');
+        const collapsed=shell.classList.toggle('rail-collapsed');
+        const label=collapsed?'Expand sidebar':'Collapse sidebar';
+        button.setAttribute('aria-expanded',String(!collapsed));
+        button.setAttribute('aria-label',label);
+        button.title=label;
+        button.querySelector('.rail-toggle-label').textContent=label;
+        scheduleFloatingHeader();
+      }
+      function initReportSidebar(){
+        const icons={overview:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>','all-ces':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M3 15h18"/>',review:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="m8 12 3 3 5-6"/>'};
+        document.querySelectorAll('.rail .nav-item').forEach(button=>{
+          const label=document.createElement('span');
+          label.className='nav-label';label.textContent=button.textContent;
+          if(!button.disabled)button.title=label.textContent;
+          const icon=icons[button.dataset.reportView]||icons.review;
+          button.replaceChildren(label);
+          button.insertAdjacentHTML('afterbegin',`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>`);
+        });
+        document.getElementById('rail-toggle').addEventListener('click',toggleReportSidebar);
+      }
+      initReportSidebar();
       payload.headlines.forEach((item,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${dateLabel(item.week_start)}–${dateLabel(item.week_end)}`; weekSelect.appendChild(option); });
-      weekSelect.value=String(Math.max(0,payload.headlines.length-1));
+      if(payload.report_group){
+        marketFilterField.hidden=false;
+        payload.headlines.forEach((item,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=item.market;marketSelect.appendChild(option);});
+        const requestedMarket=new URLSearchParams(location.search).get('market');
+        const requestedIndex=payload.headlines.findIndex(item=>item.market_slug===requestedMarket);
+        weekSelect.value=String(requestedIndex>=0?requestedIndex:0);
+        marketSelect.value=weekSelect.value;
+        marketSelect.addEventListener('change',()=>{selectedCountry='';weekSelect.value=marketSelect.value;const item=baseHeadline(),url=new URL(location.href);url.searchParams.set('market',item.market_slug);history.replaceState(null,'',url);render(Number(weekSelect.value));actionSyncPull();actionPrevPull();});
+      }else{
+        weekSelect.value=String(Math.max(0,payload.headlines.length-1));
+      }
       weekSelect.addEventListener('change',()=>{render(Number(weekSelect.value));actionSyncPull();actionPrevPull();});
       document.querySelectorAll('[data-report-view]').forEach(button=>button.addEventListener('click',()=>{ const view=button.dataset.reportView; document.getElementById('overview-view').hidden=view!=='overview'; document.getElementById('all-ces-view').hidden=view!=='all-ces'; document.querySelectorAll('[data-report-view]').forEach(item=>{ const active=item===button; item.classList.toggle('active',active); if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current'); }); }));
       document.querySelector('.attention').addEventListener('click',event=>{const sortButton=event.target.closest('[data-mover-sort][data-mover-kind]');if(sortButton){const kind=sortButton.dataset.moverKind,state=moverSorts[kind],key=sortButton.dataset.moverSort;if(state.key===key)state.dir*=-1;else{state.key=key;state.dir=key==='name'?1:(kind==='drops'?1:-1);}renderMovers(currentHeadline(),kind);return;}const mover=event.target.closest('[data-mover-ce]');if(mover)openCeDrawer(mover.dataset.moverCe);});
@@ -1508,14 +1622,34 @@
       let ceReturnFocus=null;
       function openCeDrawer(ceId){const item=currentHeadline(),ce=(item.all_ces||[]).find(row=>String(row.ce_id)===String(ceId));if(!ce)return;renderCeDrawer(ce);ceReturnFocus=document.activeElement;ceDrawerRoot.hidden=false;document.body.classList.add('drawer-open');ceClose.focus();}
       function closeCeDrawer(){ceDrawerRoot.hidden=true;document.body.classList.remove('drawer-open');if(ceReturnFocus)ceReturnFocus.focus();}
-      document.getElementById('diagnostic-buckets').addEventListener('click',event=>{const toggle=event.target.closest('#diagnostic-week-toggle');if(toggle){diagnosticWeeksHidden=!diagnosticWeeksHidden;document.querySelectorAll('[data-diagnostic-week-wrap]').forEach(wrap=>wrap.classList.toggle('diagnostic-week-hidden',diagnosticWeeksHidden));toggle.textContent=diagnosticWeeksHidden?'▸ Show weekly numbers':'▾ Hide weekly numbers';toggle.setAttribute('aria-expanded',String(!diagnosticWeeksHidden));try{localStorage.setItem('wr_v2_diagnostic_wk_hidden',diagnosticWeeksHidden?'1':'0');}catch(_){}return;}const button=event.target.closest('[data-bucket-ce]');if(button)openCeDrawer(button.dataset.bucketCe);});
-      document.getElementById('diagnostic-buckets').addEventListener('focusin',event=>{const note=event.target.closest('[data-action-note]');if(note&&!note.value&&note.dataset.actionBucket==='losing_money')note.value='growth: \nperf: ';});
+      document.getElementById('diagnostic-buckets').addEventListener('click',event=>{const comment=event.target.closest('[data-action-comment]');if(comment){const {actionBucket:bucket,actionCe:ceId}=comment.dataset;actionNoteExpanded[`${actionSlug()}:${actionWeek()}:${bucket}:${ceId}`]=true;const cell=comment.closest('[data-action-cell]'),note=document.createElement('textarea');note.className='bucket-action-note';note.dataset.actionNote='';note.dataset.actionBucket=bucket;note.dataset.actionCe=ceId;note.setAttribute('aria-label',`Comment for ${ceId}`);note.placeholder='Why?';note.value=getAction(bucket,ceId).note||'';comment.replaceWith(note);note.focus();return;}const toggle=event.target.closest('#diagnostic-week-toggle');if(toggle){diagnosticWeeksHidden=!diagnosticWeeksHidden;document.querySelectorAll('[data-diagnostic-week-wrap]').forEach(wrap=>wrap.classList.toggle('diagnostic-week-hidden',diagnosticWeeksHidden));toggle.textContent=diagnosticWeeksHidden?'▸ Show weekly numbers':'▾ Hide weekly numbers';toggle.setAttribute('aria-expanded',String(!diagnosticWeeksHidden));try{localStorage.setItem('wr_v2_diagnostic_wk_hidden',diagnosticWeeksHidden?'1':'0');}catch(_){}return;}const button=event.target.closest('[data-bucket-ce]');if(button)openCeDrawer(button.dataset.bucketCe);});
       document.getElementById('diagnostic-buckets').addEventListener('input',event=>{const note=event.target.closest('[data-action-note]');if(note)note.classList.toggle('required',Boolean(note.closest('[data-action-cell]')?.querySelector('[data-action-status]')?.value&&!note.value.trim()));});
-      document.getElementById('diagnostic-buckets').addEventListener('change',event=>{const status=event.target.closest('[data-action-status]'),note=event.target.closest('[data-action-note]');if(status){const bucket=status.dataset.actionBucket,ceId=status.dataset.actionCe,cell=status.closest('[data-action-cell]'),existing=cell.querySelector('[data-action-note]');saveBucketAction(bucket,ceId,{status:status.value,note:existing?.value||''}).then(()=>renderDiagnosticBuckets(currentHeadline()));return;}if(note){saveBucketAction(note.dataset.actionBucket,note.dataset.actionCe,{note:note.value}).then(()=>renderDiagnosticBuckets(currentHeadline()));}});
+      document.getElementById('diagnostic-buckets').addEventListener('change',event=>{
+        const status=event.target.closest('[data-action-status]'),note=event.target.closest('[data-action-note]');
+        if(status){
+          const bucket=status.dataset.actionBucket,ceId=status.dataset.actionCe,cell=status.closest('[data-action-cell]');
+          let editor=cell.querySelector('[data-action-note]');
+          const value=editor?editor.value:(getAction(bucket,ceId).note||'');
+          if(status.value){
+            actionNoteExpanded[`${actionSlug()}:${actionWeek()}:${bucket}:${ceId}`]=true;
+            if(!editor){
+              editor=document.createElement('textarea');editor.className='bucket-action-note';
+              editor.dataset.actionNote='';editor.dataset.actionBucket=bucket;editor.dataset.actionCe=ceId;
+              editor.setAttribute('aria-label',status.getAttribute('aria-label').replace('Action for','Comment for'));
+              editor.placeholder='Comment required — why?';editor.value=value;
+              cell.querySelector('[data-action-comment]')?.replaceWith(editor);
+            }
+          }
+          if(editor)editor.classList.toggle('required',Boolean(status.value&&!value.trim()));
+          saveBucketAction(bucket,ceId,{status:status.value,note:value});
+          return;
+        }
+        if(note)saveBucketAction(note.dataset.actionBucket,note.dataset.actionCe,{note:note.value});
+      });
       document.getElementById('post-diagnostic-sections').addEventListener('click',event=>{const button=event.target.closest('[data-post-ce]');if(button)openCeDrawer(button.dataset.postCe);});
       document.getElementById('ce-table-body').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch){toggleWatchlist(watch.dataset.ceWatch);return;}const group=event.target.closest('[data-ce-group-toggle]');if(group){const label=group.dataset.ceGroupToggle;ceState.collapsed[label]=!ceState.collapsed[label];renderAllCes(currentHeadline());return;}const button=event.target.closest('[data-ce-open]');if(button)openCeDrawer(button.dataset.ceOpen);});
       document.getElementById('ce-drawer-chips').addEventListener('click',event=>{const watch=event.target.closest('[data-ce-watch]');if(watch)toggleWatchlist(watch.dataset.ceWatch);});
-      document.getElementById('ce-detail-drawer').addEventListener('click',event=>{const metricTab=event.target.closest('[data-ce-metric-group]');if(metricTab&&activeCe){ceMetricGroup=metricTab.dataset.ceMetricGroup;renderCeMetrics(activeCe);return;}const metricDetail=event.target.closest('[data-ce-metric-detail]');if(metricDetail&&activeCe){const key=metricDetail.dataset.ceMetricDetail;ceExpandedMetrics[key]=metricDetail.getAttribute('aria-expanded')!=='true';renderCeMetrics(activeCe);return;}const band=event.target.closest('[data-ce-band]');if(band&&activeCe){ceTgidBands[band.dataset.ceBand]=band.getAttribute('aria-expanded')!=='true';renderCeResources(activeCe);return;}const tgid=event.target.closest('[data-ce-tgid]');if(tgid&&activeCe){ceExpandedTgids[tgid.dataset.ceTgid]=tgid.getAttribute('aria-expanded')!=='true';renderCeResources(activeCe);}});
+      document.getElementById('ce-detail-drawer').addEventListener('click',event=>{const expandAll=event.target.closest('#ce-expand-platforms');if(expandAll&&activeCe){const open=expandAll.getAttribute('aria-pressed')!=='true';(activeCe.drawer_metrics.paid||[]).forEach(row=>ceExpandedPlatforms[row.key]=open);renderCeMetrics(activeCe);return;}const platform=event.target.closest('[data-ce-platform]');if(platform&&activeCe){ceExpandedPlatforms[platform.dataset.cePlatform]=platform.getAttribute('aria-expanded')!=='true';renderCeMetrics(activeCe);document.querySelector(`[data-ce-platform="${platform.dataset.cePlatform}"]`)?.focus({preventScroll:true});return;}const metricTab=event.target.closest('[data-ce-metric-group]');if(metricTab&&activeCe){ceMetricGroup=metricTab.dataset.ceMetricGroup;renderCeMetrics(activeCe);return;}const metricDetail=event.target.closest('[data-ce-metric-detail]');if(metricDetail&&activeCe){const key=metricDetail.dataset.ceMetricDetail;ceExpandedMetrics[key]=metricDetail.getAttribute('aria-expanded')!=='true';renderCeMetrics(activeCe);return;}const band=event.target.closest('[data-ce-band]');if(band&&activeCe){ceTgidBands[band.dataset.ceBand]=band.getAttribute('aria-expanded')!=='true';renderCeResources(activeCe);document.querySelector(`[data-ce-band="${band.dataset.ceBand}"]`)?.focus({preventScroll:true});return;}const tgid=event.target.closest('[data-ce-tgid]');if(tgid&&activeCe){ceExpandedTgids[tgid.dataset.ceTgid]=tgid.getAttribute('aria-expanded')!=='true';renderCeResources(activeCe);}});
       ceClose.addEventListener('click',closeCeDrawer);document.getElementById('ce-drawer-scrim').addEventListener('click',closeCeDrawer);
       document.addEventListener('keydown',event=>{if(ceDrawerRoot.hidden)return;if(event.key==='Escape'){closeCeDrawer();return;}if(event.key==='Tab'){const controls=[...ceDrawer.querySelectorAll('button,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
       const portfolioRoot=document.getElementById('portfolio-root'),portfolioDrawer=document.getElementById('portfolio-drawer'),portfolioClose=document.getElementById('portfolio-close');let portfolioReturnFocus=null;
@@ -1530,6 +1664,159 @@
       document.getElementById('portfolio-apply').addEventListener('click',()=>{if(!portfolioPreview||!portfolioPreview.records.length)return;const item=currentHeadline();portfolioPreview.records.forEach(row=>portfolioMetadata[String(row.ce_id)]=normalizePortfolioRecord(row));savePortfolioMetadata(item);portfolioPreview=null;document.getElementById('portfolio-file').value='';renderAllCes(item);renderPortfolioDrawer();});
       document.addEventListener('keydown',event=>{if(portfolioRoot.hidden)return;if(event.key==='Escape'){closePortfolioDrawer();return;}if(event.key==='Tab'){const controls=[...portfolioDrawer.querySelectorAll('button,input,select,a[href],[tabindex]:not([tabindex="-1"])')].filter(node=>!node.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
       new ResizeObserver(()=>drawChart(currentHeadline())).observe(document.querySelector('.chart-wrap'));
+      // Native sticky headers handle in-table scrolling. A synchronized header
+      // follows the viewport when the page/drawer itself moves past a table.
+      const floatingHead=document.createElement('div');
+      floatingHead.className='table-floating-head';floatingHead.hidden=true;
+      floatingHead.setAttribute('aria-hidden','true');document.body.appendChild(floatingHead);
+      let floatingSource=null,floatingSignature='',floatingFrame=0;
+      // Definitions are attached after rendering so sorted, expanded and floating
+      // headers retain the same source-specific explanations.
+      function defineTableMetrics(){
+        const definitions={
+          'revenue':'Predicted revenue across all channels for the selected period.',
+          'gbv':'Gross booking value: the total value of bookings before deductions.',
+          'orders':'Number of bookings in the selected period.',
+          'aov':'Average order value: gross booking value divided by orders.',
+          'tr':'Take rate: revenue as a percentage of completed gross booking value.',
+          'take rate':'Take rate: revenue as a percentage of completed gross booking value.',
+          'cr':'Completion rate: completed gross booking value as a percentage of booked gross value.',
+          'completion':'Completion rate: completed gross booking value as a percentage of booked gross value.',
+          'cm1':'Contribution margin before advertising spend, as reported by the profitability source.',
+          'cm2':'Contribution margin after advertising spend.',
+          'roi':'CM1 divided by advertising spend plus coupon/wallet costs, expressed as a percentage.',
+          'roi 1':'Overall contribution margin divided by marketing costs, expressed as a percentage.',
+          'clicks':'Advertising clicks recorded for the selected period.',
+          'ctr':'Click-through rate: advertising clicks divided by impressions.',
+          'cpc':'Cost per click: advertising spend divided by paid clicks.',
+          'rpc':'Revenue per click: attributed revenue divided by paid clicks.',
+          'cvr':'Advertising conversions divided by clicks, expressed as a percentage.',
+          'conversions':'Conversions reported by the advertising source.',
+          'ads spend':'Advertising spend for the selected period.',
+          'spend':'Advertising spend for the selected period.',
+          'average cm1':'CM1 divided by advertising conversions.',
+          'cm1/conv':'CM1 divided by advertising conversions.',
+          'sis':'Google Search impression share: received impressions as a percentage of eligible impressions.',
+          'troas':'Target return on ad spend configured in advertising campaigns.',
+          'troas now':'Current target return on ad spend configured in advertising campaigns.',
+          'lp→order cvr':'Conversion from landing-page visitors to purchasers, using the product funnel.',
+          'traffic':'Landing-page users recorded by the product funnel.',
+          'select users':'Users who reached the product-selection stage.',
+          'lp users':'Users who visited a landing page.',
+          'lp2s':'Share of landing-page users who reached product selection.',
+          's2c':'Share of product-selection users who reached checkout.',
+          'c2o':'Share of checkout users who placed an order.',
+          'share':'This row’s share of revenue within the displayed breakdown.',
+          'contribution':'This CE’s share of the selected total revenue.',
+          'w0':'Value for the selected report week.',
+          'w-1':'Value for the previous week.',
+          'wow':'Relative percentage change versus the previous week; not percentage points.',
+          'yoy':'Relative percentage change versus the matched week last year; not percentage points.',
+          'δ':'Change versus the previous week. Rate metrics show relative percentage change; amounts and counts show the difference in their original units.',
+          'change':'Change versus the previous week. Rate metrics show relative percentage change; amounts and counts show the difference in their original units.',
+          '12-week ty / ly':'Twelve-week trend: solid is this year; dashed is last year.',
+          '12-wk':'Twelve-week trend: solid is this year; dashed is last year.',
+          'δ abs':'Difference in the metric’s original units versus the comparison period.',
+          'δ rev wow':'Relative percentage change in revenue versus the previous week.',
+          'rev ty / ly':'Revenue trend for this year versus the matched period last year.',
+          'launched':'Date the CE launched, with elapsed days where available.',
+          'swing':'Change in the flagged RPC or CM1-per-conversion metric over the analysis window shown above this table.',
+          '12w':'Twelve-week trend: solid line is this year; dashed line is the matched period last year.',
+          '12-week trend':'Twelve-week revenue trend: solid line is this year; dashed line is last year.',
+          '0–2d':'Bookings made zero to two days before the experience.',
+          '3–7d':'Bookings made three to seven days before the experience.',
+          '7d+':'Bookings in the source’s longest lead-time band.',
+          'run-rate / mo':'Monthly revenue run rate used to compare the CE with its qualification threshold.',
+          'mo since launch':'Number of months since the CE launched.',
+          'cm2 · 90d':'Cumulative contribution margin after advertising spend over the 90-day window.',
+          'size':'Revenue, orders and revenue share for this experience.',
+          'value':'Revenue per click, average order value, completion rate and take rate.',
+          'funnel':'User volumes and progression through selection, checkout and order.',
+          'booking window':'Time between booking and the experience date.'
+        };
+        const nodes=document.querySelectorAll('table th,#ce-metric-rows > tr:not(.ce-metric-detail) > td:first-child');
+        nodes.forEach(node=>{
+          if(node.title&&!node.dataset.metricDefinition)return;
+          let label=node.textContent.trim().toLowerCase().replace(/[▾▸↔⇔↓↑ⓘ<>]/g,'').replace(/\s+/g,' ').trim();
+          label=label.replace(/^paid /,'').replace(/\s*combined$/,'').replace(/\s*· google$/,'').trim();
+          label=label.replace('12-week trendty / ly','12-week trend').replace('contributionrevenue share','contribution');
+          let key=label in definitions?label:label.split(/\s*·\s*|\s*\/ wow|\s*\/ ly/)[0].replace(/ %$/,'').trim();
+          let definition=definitions[key];
+          const table=node.closest('table'),card=node.closest('.bucket-card'),isLosing=card?.querySelector('h2')?.textContent==='Losing Money',isRpc=card?.querySelector('h2')?.textContent==='RPC / CM1 fluctuations';
+          if(key==='revenue'&&isLosing)definition='This column uses Google Search CM1: contribution margin before ad spend. It retains the Revenue label; it is not booking revenue.';
+          else if(key==='revenue'&&table.classList.contains('ce-resource-table')&&!node.closest('#ce-weekly-evidence'))definition='Actual booking revenue for this row and period, from the resource breakdown.';
+          if(key==='roi'&&(isLosing||isRpc))definition='Google Search CM1 divided by Google Search ad spend, expressed as a percentage.';
+          if(key==='cvr'&&isRpc)definition='Google Search attributed orders divided by clicks. This differs from the advertising-conversion CVR in Losing Money.';
+          if(key==='cvr'&&table.classList.contains('ce-table'))definition='Business-reported advertising conversions divided by clicks; the CE drawer Paid view uses campaign-source conversions and clicks.';
+          if(key==='cm2'&&(table.classList.contains('ce-table')||node.closest('#ce-weekly-evidence')&&ceMetricGroup==='paid'))definition='Paid attributed revenue minus advertising spend.';
+          if(definition){
+            if(isLosing||isRpc)definition+=' Scope: Google Search only.';
+            if(node.closest('#ce-weekly-evidence')&&ceMetricGroup==='paid')definition+=' Scope: Google + Bing Search, except SIS which is Google only.';
+            if(/· w0/.test(label))definition+=' W0 is the selected report week.';
+            node.title=definition;node.dataset.metricDefinition='true';
+            node.setAttribute('aria-description',definition);
+          }
+        });
+      }
+      function floatingTableBounds(table,drawer){
+        // The Mini Audit drawer scrolls inside the report, not from viewport y=0.
+        // Its header is static, so pin to the visible pane edge and clip there.
+        const embedded=table.closest('.rv-embedded-data');
+        if(embedded){
+          const box=embedded.getBoundingClientRect();
+          return {top:Math.max(0,box.top),bottom:Math.min(innerHeight,box.bottom),left:Math.max(0,box.left),right:Math.min(innerWidth,box.right)};
+        }
+        return {top:drawer?Math.max(0,drawer.querySelector('.drawer-header').getBoundingClientRect().bottom):0,bottom:innerHeight,left:0,right:innerWidth};
+      }
+      function updateFloatingHeader(){
+        defineTableMetrics();
+        floatingFrame=0;
+        const drawer=[...document.querySelectorAll('.drawer-root:not([hidden]) .drawer')].find(el=>el.getBoundingClientRect().width);
+        const scope=drawer||document.querySelector('.report-view:not([hidden])');
+        let candidate=null;
+        const queueOpen=!drawer&&document.querySelector('#review-view:not([hidden]) .rv-queue-overlay');
+        for(const table of queueOpen?[]:scope?.querySelectorAll('.bucket-table,.legacy-table,.ce-resource-table,.ce-table')||[]){
+          const head=table.tHead,wrap=table.parentElement,box=wrap.getBoundingClientRect();
+          if(!head||!box.width||!box.height)continue;
+          const height=head.getBoundingClientRect().height;
+          const bounds=floatingTableBounds(table,drawer),boundary=bounds.top;
+          if(table.classList.contains('ce-table'))table.style.setProperty('--ce-head-height',`${height}px`);
+          if(bounds.bottom>boundary+height&&box.top<boundary&&box.bottom>boundary+height&&box.right>bounds.left&&box.left<bounds.right)candidate={table,head,wrap,box,height,bounds};
+        }
+        if(!candidate){floatingHead.hidden=true;floatingSource=null;floatingSignature='';return;}
+        const {table,head,wrap,box,height,bounds}=candidate;
+        const width=table.getBoundingClientRect().width;
+        const signature=head.outerHTML+table.className+width+box.width;
+        if(floatingSource!==table||floatingSignature!==signature){
+          floatingSource=table;floatingSignature=signature;
+          const copy=table.cloneNode(false);copy.removeAttribute('id');
+          copy.style.width=`${width}px`;copy.style.minWidth=`${width}px`;
+          for(const cols of table.querySelectorAll(':scope > colgroup'))copy.appendChild(cols.cloneNode(true));
+          const copyHead=head.cloneNode(true);copy.appendChild(copyHead);
+          const originals=[...head.querySelectorAll('th')];
+          copyHead.querySelectorAll('th').forEach((cell,index)=>{
+            const cellWidth=originals[index].getBoundingClientRect().width;
+            cell.style.width=`${cellWidth}px`;cell.style.minWidth=`${cellWidth}px`;cell.style.maxWidth=`${cellWidth}px`;
+          });
+          copy.querySelectorAll('[id]').forEach(el=>el.removeAttribute('id'));
+          copy.querySelectorAll('button,input,a,select,[tabindex]').forEach((el,index)=>{el.tabIndex=-1;el.dataset.floatingAction=String(index);});
+          floatingHead.replaceChildren(copy);
+        }
+        floatingHead.hidden=false;
+        const left=Math.max(box.left,bounds.left),right=Math.min(box.left+wrap.clientWidth,bounds.right);
+        Object.assign(floatingHead.style,{left:`${left}px`,top:`${bounds.top}px`,width:`${Math.max(0,right-left)}px`,height:`${height}px`});
+        floatingHead.scrollLeft=wrap.scrollLeft+left-box.left;
+      }
+      function scheduleFloatingHeader(){if(!floatingFrame)floatingFrame=requestAnimationFrame(updateFloatingHeader);}
+      floatingHead.addEventListener('click',event=>{
+        const control=event.target.closest('[data-floating-action]');
+        if(control&&floatingSource){const originals=floatingSource.tHead.querySelectorAll('button,input,a,select,[tabindex]');originals[Number(control.dataset.floatingAction)]?.click();scheduleFloatingHeader();}
+      });
+      document.addEventListener('scroll',scheduleFloatingHeader,true);
+      window.addEventListener('resize',scheduleFloatingHeader);
+      const headerObserver=new MutationObserver(scheduleFloatingHeader);
+      document.querySelectorAll('.report-view,.drawer-root').forEach(root=>headerObserver.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class','colspan']}));
+      scheduleFloatingHeader();
       render(Number(weekSelect.value));
       actionSyncPull();
       actionPrevPull();

@@ -44,8 +44,18 @@ def notebook_dir() -> Path:
     return Path(os.path.expanduser(env)) if env else Path(os.path.expanduser("~/analytics/market-notebook-v2"))
 
 
+def require_completed_week(week: str, today=None) -> None:
+    """Current aliases must never point at a next-run/incomplete preview."""
+    parsed = dt.date.fromisoformat(week)
+    if parsed > config.latest_complete_week(today):
+        raise ValueError(f"{week} is not a completed report week; keep it as a dated preview")
+
+
 def stage_v2_proxies(deploy: Path) -> tuple[Path, Path]:
     """Stage the isolated review and legacy diagnostic-action API routes."""
+    from inject_review_view import stage_review_api
+
+    stage_review_api(deploy)
     notes_dir = HERE / "notes"
     api_dir = deploy / "api"
     api_dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +64,20 @@ def stage_v2_proxies(deploy: Path) -> tuple[Path, Path]:
     shutil.copyfile(notes_dir / "review_proxy_api.js", review_target)
     shutil.copyfile(notes_dir / "actions_proxy_api.js", actions_target)
     return review_target, actions_target
+
+
+def stage_v2_review(deploy: Path) -> None:
+    """Keep newly generated V2 reports and their Mini Audit runtime together."""
+    from inject_review_view import HEADOUT_RE, inject, remove_review
+
+    for page in sorted(deploy.glob("weekly-report-*.html")):
+        shell = page.read_text()
+        if HEADOUT_RE.match(page.name):
+            remove_review(page)
+        elif "report-data" in shell and "data-report-view" in shell:
+            if not inject(page, deploy):
+                raise RuntimeError(f"Mini Audit packaging failed: {page.name}")
+        # Established V1 archives keep their original bytes.
 
 
 # weekly slug -> (ledger slug, name, flag, region)
@@ -170,6 +194,22 @@ def publish_headout(week, deploy, n, report_dir=None):
           f"({nm} markets, {len(series)} wks)")
     return {"report_path": "weekly-report-headout.html", "series": series,
             "spark": _sparkline([s["rev"] for s in series]), "n_markets": nm}
+
+
+def stage_market_groups(week, deploy, report_dir):
+    staged = []
+    for group_slug, group in config.MARKET_REPORT_GROUPS.items():
+        source = report_dir / f"report_{group_slug}_{week}.html"
+        if not source.exists():
+            continue
+        ledger_slug = group["ledger_slug"]
+        current = deploy / f"weekly-report-{ledger_slug}.html"
+        dated = deploy / f"weekly-report-{ledger_slug}-{week}.html"
+        shutil.copyfile(source, current)
+        shutil.copyfile(source, dated)
+        staged.extend((current, dated))
+        print(f"  ✓ {group['name']}: shared current + dated report")
+    return staged
 
 
 def _hero_sparkline(revs, w=140, h=40, pad=3):
@@ -350,6 +390,8 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
 
+    require_completed_week(args.week)
+
     deploy = notebook_dir()
     if not deploy.exists():
         sys.exit(f"notebook dir not found: {deploy} (set MMR_NOTEBOOK_DIR)")
@@ -371,8 +413,12 @@ def main(argv=None):
         ho = publish_headout(args.week, deploy, args.cols, report_dir=report_dir)
         if ho:
             state["headout"] = ho; n += 1
+    if args.renderer == "v2" and args.market in ("all", "csee", "nordics"):
+        stage_market_groups(args.week, deploy, report_dir)
     if not n:
         sys.exit("nothing published — run weekly_market_report.py / build_global.py first")
+    if args.renderer == "v2":
+        stage_v2_review(deploy)
     # union of column weeks across markets + headout (they share the same Mondays), trailing N
     weeks = sorted({s["week"] for m in state["markets"] for s in m.get("series", [])}
                    | {s["week"] for s in state.get("headout", {}).get("series", [])})[-args.cols:]
