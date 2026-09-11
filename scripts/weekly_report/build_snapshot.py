@@ -27,8 +27,6 @@ import pandas as pd
 
 import alerts
 import bucket_b1
-import bucket_b3
-import bucket_b4
 import config
 import fetch
 import flows
@@ -694,124 +692,6 @@ def _attach_resource_histories(ces, lead_df, country_df, channel_df) -> None:
             row["history"] = channels.get((cid, str(row.get("channel"))), [])
 
 
-# --------------------------------------------------------------------------- #
-# Cross-bucket cascade (spec §5) — one home per CE (B1>B2>B3>B4), dedup,
-# (also in …) chips, hard cap of 10 narrative rows by $ at stake.
-# --------------------------------------------------------------------------- #
-_CASCADE = ["B1", "B2", "B3", "B4"]
-_NARRATIVE_CAP = 10
-
-
-def _stake(label: str, row: dict) -> float:
-    """Rough weekly $ at stake, comparable across buckets, for ranking/cap."""
-    if label == "B1":
-        return abs(row.get("cm2_bleed_wk") or 0.0)
-    if label == "B2":
-        return abs(row.get("spend_wk") or 0.0)            # CM1-delta proxy
-    if label == "B3":
-        return abs(row.get("projected_monthly_loss") or 0.0) / 4.345   # → weekly
-    if label == "B4":
-        return abs(row.get("est_incremental_wk") or 0.0)
-    return 0.0
-
-
-def _apply_cascade(bucket_rows: dict) -> dict:
-    """
-    Mutates each row in-place with: home (bucket label), is_home (bool),
-    also_in (list of other buckets for the home row), stake_usd, in_store (bool
-    — beyond the 10-row narrative cap). B1 home rows are never capped. Returns a
-    summary {home_counts, rendered, in_store}.
-      bucket_rows = {"B1":[...], "B2":[...], "B3":[...], "B4":[...]}
-    """
-    home, also = {}, {}
-    for label in _CASCADE:
-        for r in bucket_rows.get(label, []):
-            cid = r["ce_id"]
-            if cid not in home:
-                home[cid] = label
-            elif label not in also.setdefault(cid, []):
-                also[cid].append(label)
-
-    # tag home / also_in / stake
-    home_rows = []
-    for label in _CASCADE:
-        for r in bucket_rows.get(label, []):
-            cid = r["ce_id"]
-            r["is_home"] = (home[cid] == label)
-            r["also_in"] = also.get(cid, []) if r["is_home"] else []
-            r["stake_usd"] = round(_stake(label, r), 0)
-            r["in_store"] = False
-            if r["is_home"]:
-                home_rows.append((label, r))
-
-    # B1 EXITs are WINS, not problems — render them in a separate "recovered"
-    # line, never competing for the problem-narrative cap.
-    wins, problems = [], []
-    for (l, r) in home_rows:
-        r["is_win"] = (l == "B1" and r.get("movement") == "EXIT")
-        (wins if r["is_win"] else problems).append((l, r))
-
-    # hard cap on the PROBLEM narrative: B1 problems never dropped; B2/B3/B4 fill
-    # the remainder by $ at stake, up to 10 total. Wins are always shown.
-    b1p = [(l, r) for (l, r) in problems if l == "B1"]
-    rest = sorted([(l, r) for (l, r) in problems if l != "B1"], key=lambda x: -x[1]["stake_usd"])
-    keep = set(id(r) for (_, r) in b1p) | set(id(r) for (_, r) in wins)
-    for _, r in rest[:max(0, _NARRATIVE_CAP - len(b1p))]:
-        keep.add(id(r))
-    in_store = 0
-    for _, r in home_rows:
-        if id(r) not in keep:
-            r["in_store"] = True
-            in_store += 1
-    return {
-        "home_counts": {l: sum(1 for (ll, _) in home_rows if ll == l) for l in _CASCADE},
-        "wins": len(wins),
-        "rendered_problems": len(keep) - len(wins),
-        "in_store": in_store,
-    }
-
-
-# --------------------------------------------------------------------------- #
-# P3 — per-bucket sparkline enrichment
-# --------------------------------------------------------------------------- #
-def _spark(ce, field, n):
-    """Extract last *n* values of *field* from ce['weekly']."""
-    wk = ce.get("weekly") or []
-    return [w.get(field) for w in wk[-n:]]
-
-
-def _enrich_b1_sparklines(rows, ce_by_id):
-    """B1: 8-week RPC sparkline (cliff vs gradual visual)."""
-    for r in rows:
-        ce = ce_by_id.get(r["ce_id"])
-        if not ce:
-            continue
-        r["spark_rpc"] = _spark(ce, "rpc", 8)
-
-
-def _enrich_b3_sparklines(rows, ce_by_id, ly_rev, w0_start):
-    """B3: 10-week revenue TY + 14-point LY (10 aligned + 4 forward weeks)."""
-    forward_weeks = [w0_start + dt.timedelta(days=7 * (i + 1)) for i in range(4)]
-    for r in rows:
-        ce = ce_by_id.get(r["ce_id"])
-        if not ce:
-            continue
-        r["spark_rev"] = _spark(ce, "revenue", 10)
-        wly = ce.get("weekly_ly") or []
-        ly_aligned = [w.get("revenue") for w in wly[-10:]]
-        ly_fwd = [_num(ly_rev.get((r["ce_id"], fw))) for fw in forward_weeks]
-        r["spark_rev_ly"] = ly_aligned + ly_fwd
-
-
-def _enrich_b4_sparklines(rows, ce_by_id):
-    """B4: 10-week revenue sparkline (growth momentum)."""
-    for r in rows:
-        ce = ce_by_id.get(r["ce_id"])
-        if not ce:
-            continue
-        r["spark_rev"] = _spark(ce, "revenue", 10)
-
-
 def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True) -> dict:
     market = config.MARKETS[market_slug]
     weeks = config.week_starts(w0_start, config.WEEKS_BACK)
@@ -1304,31 +1184,12 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
                 "current_streak_weeks_below_100": streak,
             })
 
-    # ---- Bucket B1: ROI/CM2 Movement (weekly flow view) ----
-    # Movement-only: renders CEs whose ROI state changed this week (NEW/CLIFF/
-    # ESCALATION/EXIT). weeks_below_100 streak comes from the transitions model.
+    # B1 remains a compatibility input for Scale-Up tROAS context.
+    # Current tables are produced by snapshot_finalize via buckets.build_buckets.
     streak_by_ce = {t["ce_id"]: t["current_streak_weeks_below_100"] for t in transitions}
     b1_result = bucket_b1.build_bucket_b1(ces, streak_by_ce, troas, w0_start, w0_end)
     b1_rows = b1_result["rows"]
     b1_standing = b1_result["standing_count"]
-
-    # ---- Bucket B3: Losing Ground (forecasting — on pace to fall a band) ----
-    b3_rows = bucket_b3.build_bucket_b3(ces)
-
-    # ---- Bucket B4: Scale Windows (sticky / NEW WAVE / LOADING lanes) ----
-    _struct = flows.per_ce_structural(ces, ly_forward_rev)
-    struct_by_ce = {c["ce_id"]: c["struct"] for c in _struct}
-    up_swing_ids = {r["ce_id"] for r in bucket1 if r.get("direction") == "up"}
-    b4_rows = bucket_b4.build_bucket_b4(ces, struct_by_ce, up_swing_ids, market_weekly)
-
-    # ---- P3: per-bucket sparkline enrichment ----
-    ce_by_id = {c["ce_id"]: c for c in ces}
-    _enrich_b1_sparklines(b1_rows, ce_by_id)
-    _enrich_b3_sparklines(b3_rows, ce_by_id, ly_rev, w0_start)
-    _enrich_b4_sparklines(b4_rows, ce_by_id)
-
-    # ---- cross-bucket cascade: one home per CE (B1>B2>B3>B4), dedup + cap 10 ----
-    cascade_summary = _apply_cascade({"B1": b1_rows, "B2": bucket1, "B3": b3_rows, "B4": b4_rows})
 
     # ---- follow-up (reads prior week's bucket1 output if present) ----
     followup = _build_followup(market_slug, wm1_start, bucket1, names, biz, w0_start, wm1_start)
@@ -1370,9 +1231,6 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             "burn_line": b1_result["burn_line"],
             "gray_zone": b1_result["gray_zone"],
         },
-        "bucket_b3": {"rows": b3_rows},
-        "bucket_b4": {"rows": b4_rows},
-        "bucket_cascade": cascade_summary,   # home dedup + hard-cap-10 summary
         "no_bid_campaigns": no_bid,
         "seasonality_adjustments": seasonality or [],
         "levers": levers,

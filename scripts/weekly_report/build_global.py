@@ -35,14 +35,10 @@ import fetch
 import flows
 import shapley
 from build_snapshot import (
-    _apply_cascade,
     _attach_channels_funnel,
     _attach_resource_histories,
     _attach_resource_breakdowns,
     _ce_levels,
-    _enrich_b1_sparklines,
-    _enrich_b3_sparklines,
-    _enrich_b4_sparklines,
     _num,
     _pct,
     _weekly_metrics,
@@ -509,7 +505,9 @@ def build_global(week: str) -> dict:
         shapley_by_ce={c["ce_id"]: c.get("shapley_wow") for c in ces},
     )
 
-    # Transitions + B1/B3/B4
+    # Compatibility inputs: B1 supplies Scale-Up tROAS context; B1/B3/B4
+    # also protect referenced CEs from the global drawer cap below. They do
+    # not classify the current tables, which use buckets_final.
     transitions = []
     for ce in ces:
         hist = []
@@ -541,13 +539,6 @@ def build_global(week: str) -> dict:
     struct_by_ce = {c["ce_id"]: c["struct"] for c in _struct}
     up_swing_ids = {r["ce_id"] for r in bucket1 if r.get("direction") == "up"}
     b4_rows = bucket_b4.build_bucket_b4(ces, struct_by_ce, up_swing_ids, market_weekly)
-
-    ce_by_id = {c["ce_id"]: c for c in ces}
-    _enrich_b1_sparklines(b1_rows, ce_by_id)
-    _enrich_b3_sparklines(b3_rows, ce_by_id, ly_rev, w0_start)
-    _enrich_b4_sparklines(b4_rows, ce_by_id)
-
-    cascade_summary = _apply_cascade({"B1": b1_rows, "B2": bucket1, "B3": b3_rows, "B4": b4_rows})
 
     # ---- 9. Market breakdown ----
     breakdown, n_hidden_markets = _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start)
@@ -677,9 +668,6 @@ def build_global(week: str) -> dict:
             "burn_line": b1_result["burn_line"],
             "gray_zone": b1_result["gray_zone"],
         },
-        "bucket_b3": {"rows": b3_rows},
-        "bucket_b4": {"rows": b4_rows},
-        "bucket_cascade": cascade_summary,
         "no_bid_campaigns": no_bid_result,
         "seasonality_adjustments": [],
         "levers": [],
