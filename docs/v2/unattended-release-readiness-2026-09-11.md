@@ -2,6 +2,9 @@
 
 ## State: NOT ACTIVATED
 
+Maintained operator instructions: `release-workflow.md`. This dated record is
+verification evidence, not permission to deploy, send, or activate scheduling.
+
 Google/Bing future comparison evidence is committed in `5275f70`. Shared metric
 SQL, formulas and bucket classification are unchanged. No historical report
 backfill or snapshot-archiving infrastructure was added.
@@ -10,8 +13,10 @@ The hardened V2 path is implemented with local regression tests, but has NOT
 completed a supervised production generation/deploy/new-Slack-delivery run.
 Do not describe code tests as live end-to-end verification.
 
-Verification evidence: 387 local weekly/V1 tests passed, including interrupted
+Verification evidence: 389 local weekly/V1 tests passed, including interrupted
 delivery, RCA batch constraints, notebook preservation and browser-proof tests.
+The additional handoff checks retain unexecuted verification/delivery commands
+in atomic run receipts and reject unrelated files newly added to the artifact.
 The existing full artifact passed the preservation/latest-route inspection for
 18 headlines and 41 HTTP targets (38 report routes plus landing/index/state).
 This was a local artifact check, not a fresh deployment. The existing Slack ledger
@@ -29,6 +34,9 @@ paused until the following blockers are resolved and the supervised run passes.
   `missing_scope`, needed `groups:history`. It matches the preserved ledger.
   An app administrator must approve that scope and install/re-authorize the
   app as appropriate. Do not change the channel or repost to work around it.
+  The signed-in Aaradhya browser account was rechecked: app management for
+  `A07ECLRAHTP` still says to contact an app collaborator. Workspace sign-in alone
+  does not permit editing this app's scopes.
 - The user clarified that notebook verification must use their signed-in
   browser, not a machine credential. Browser mode is the default. It captures
   original report script/style fingerprints (including the complete report-data
@@ -99,7 +107,8 @@ and inspect the displayed market/week; do not fabricate an observation receipt.
 Save observations as an array of `{file,url,sha256,visible_text,observed_at}` in
 the package's `browser_observations.json`, using apply_patch. Validate them with
 the `verify-live-reports` command in the run receipt (release_integrity.py browser),
-then run the frozen `post-alerts` command. Fresh evidence is required after an
+then run the frozen `post-alerts` command from `planned_steps` (the complete plan,
+including steps not attempted before the browser pause). Fresh evidence is required after an
 hour or a changed deployment. The agent must report the final Slack result,
 not interpret the pre-browser generation receipt as workflow success.
 

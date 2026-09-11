@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -139,6 +140,26 @@ class RunV2ReleaseTests(unittest.TestCase):
         self.assertEqual(payload["week"], self.week)
         self.assertEqual(len(payload["markets"]), len(release.config.MARKETS) + 1)
         self.assertEqual(payload["steps"][-1]["name"], "artifact-integrity")
+
+    def test_browser_pause_keeps_resume_commands_without_sending(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            observations = cache / 'observations.json'
+            plan = [
+                release.Step('deploy-vercel', ('deploy-placeholder',), str(ROOT), external_write=True),
+                release.Step('verify-live-reports', ('verify-placeholder', '--observations', str(observations)), str(ROOT)),
+                release.Step('post-alerts', ('frozen-delivery-placeholder',), str(ROOT), external_write=True),
+            ]
+            with patch.object(release, 'CACHE', cache), patch.object(release, 'git_metadata', return_value={}), \
+                    patch.object(release.subprocess, 'run') as run:
+                receipt_path = release.execute(plan, self.week, cache / 'notebook')
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(receipt['status'], 'awaiting_browser_verification')
+            self.assertEqual([s['name'] for s in receipt['planned_steps']], [s.name for s in plan])
+            self.assertEqual(receipt['planned_steps'][-1]['command'], ['frozen-delivery-placeholder'])
+            self.assertEqual([s['name'] for s in receipt['steps']], ['deploy-vercel', 'verify-live-reports'])
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0], ('deploy-placeholder',))
 
 
 if __name__ == "__main__":

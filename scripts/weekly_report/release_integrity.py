@@ -135,6 +135,9 @@ def verify_artifact(base, target, week):
     failures = [name for name, sha in before.items() if name not in mutable and after.get(name) != sha]
     if failures:
         raise ValueError(f'Notebook/history changed or removed outside this release: {failures}')
+    additions = sorted(after.keys() - before.keys() - mutable)
+    if additions:
+        raise ValueError(f'Unexpected files added outside this release: {additions}')
     headlines = {}
     for slug in (*config.MARKETS, 'headout'):
         route = LEDGER_SLUG[slug]

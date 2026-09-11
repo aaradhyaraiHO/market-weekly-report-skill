@@ -242,8 +242,8 @@ def git_metadata() -> dict[str, Any]:
 
 
 def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    from release_integrity import atomic_json
+    atomic_json(path, receipt)
 
 
 def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
@@ -262,6 +262,9 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
         "markets": [*config.MARKETS, "headout"],
         "notebook_dir": str(notebook_dir),
         "git": git_metadata(),
+        # Keep unexecuted commands available when browser verification pauses.
+        # This is a plan, not evidence that any step has passed.
+        "planned_steps": [step.public() for step in plan],
         "steps": [],
     }
     write_receipt(receipt_path, receipt)

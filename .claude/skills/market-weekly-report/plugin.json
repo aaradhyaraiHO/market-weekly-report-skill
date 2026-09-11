@@ -1,7 +1,7 @@
 {
   "name": "market-weekly-report",
   "version": "2.0.0",
-  "description": "Weekly market growth report for a Headout market. One command builds a self-contained HTML: trend movers (4-wk vs raw, seasonal-tagged) + dual-clock headlines, a per-market Digest (flagged-CE follow-ups + Slack-signal briefing + GM narrative), the full All-CE view with a CE drawer (vitals/funnel/Shapley/RE-SOURCE/GM notes), Defend/Compound/Lifecycle diagnostic buckets, seasonality, and prepurchase tracking. Default week = latest complete matured week. Agent mines Slack for signal beyond the data and folds it into the report.",
+  "description": "Headout weekly market reports and shared CE metrics, drawers and diagnostic buckets. Default week is the latest complete Sunday–Saturday week. Production V2 packaging and duplicate-safe delivery follow docs/v2/release-workflow.md; legacy V1 remains an explicit fallback. Deployment, Slack writes and scheduling activation require separate authorization.",
   "author": "Analytics Team",
   "category": "analytics",
   "tags": [

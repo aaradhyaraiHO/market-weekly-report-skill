@@ -269,7 +269,8 @@ def stage_alert_v2(slugs, week, post):
         else:
             run([*post_cmd, "--dry-run"], cwd=ALERT)
     if not post:
-        print("\n  V2 dry-run complete. Re-run with --post only after report/channel review.")
+        print("\n  V2 dry-run complete. Standalone --post is disabled; follow docs/v2/release-workflow.md "
+              "for verified frozen delivery through run_v2_release.py.")
 
 
 def _week_end(week):

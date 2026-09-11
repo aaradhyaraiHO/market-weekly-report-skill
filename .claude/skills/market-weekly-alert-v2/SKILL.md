@@ -5,7 +5,12 @@ description: "Build or revise the separate V2 Headout market weekly Slack alert:
 
 # Market Weekly Alert V2
 
-Build two Slack parent messages from the schema-v2 headline report produced by `codex/v2-market-headlines`. Keep V2 isolated under `alert/v2/`; leave `alert/weekly_alert.py` and the V1 flow unchanged.
+Build two Slack parent messages from the canonical schema-v2 headline report. Keep V2 isolated under `alert/v2/`; leave `alert/weekly_alert.py` and the V1 flow unchanged.
+
+Before release/delivery work, read `docs/v2/release-workflow.md` in the repository.
+The payload commands below are for inspection and dry runs, not a live-send path.
+All configured markets plus Headout and every selected Top/Bottom CE RCA are
+required by frozen delivery. Missing/failed RCA blocks all new parent sends.
 
 Read `references/input-contract.md` before changing the producer or builder. Read `references/okr-tracker.md` before changing OKR logic or refreshing the market sidecar.
 
@@ -42,18 +47,23 @@ python3 alert/post_message.py \
   --dry-run
 ```
 
-8. Inspect both parent messages and all CE threads. Only post live when the user explicitly requests it and confirms the destination.
+8. Inspect both parent messages and all CE threads. For authorized live delivery use the canonical release procedure and its frozen bundle, never this dry-run poster directly.
 
-The locked production handoff is available through the existing staged runner while V1 remains the default rollback path:
+The existing staged runner remains available for dry-run inspection only:
 
 ```bash
 python3 scripts/weekly_report/run_weekly.py <market|all> \
   --week <YYYY-MM-DD> --stage alert --alert-version v2
 ```
 
-Add `--post` only after the V2 report is live and the dry-run is approved. The V2 stage resolves approved BGMs, builds the current market-grain OKR sidecar, generates both parents, computes optional CE RCA, and hands the payload to the existing duplicate-guarded delivery layer.
+Do not add `--post`: that V2 path is disabled. Live release uses
+`run_v2_release.py` → `prepare_delivery.py` → `safe_delivery.py` with explicit
+authorization, complete notebook preservation and fresh exact-artifact browser
+proof before posting. Read-back access must work in every destination, including
+private Headout. Existing parents, complete RCA, duplicate ledger and delivery
+journals must survive retries. Ambiguous sends stop for reconciliation.
 
-Before an all-market dry run, run `python3 alert/v2/check_readiness.py`. Do not waive a missing BGM, channel, report route, or OKR market mapping; resolve the source configuration and rerun the gate.
+Before an all-market dry run, run `python3 alert/v2/check_readiness.py --include-headout`. Do not waive a missing BGM, channel, report route, or OKR market mapping; resolve the source configuration and rerun the gate. Local tests and no-new-replies smokes do not establish live E2E completion.
 
 ## Fixed V2 shape
 

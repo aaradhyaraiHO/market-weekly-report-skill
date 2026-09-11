@@ -143,7 +143,8 @@ dry-runs every market alert:
 
 ```sh
 python3 scripts/weekly_report/run_v2_release.py \
-  --week YYYY-MM-DD
+  --week YYYY-MM-DD \
+  --base-notebook /absolute/path/to/verified-complete-notebook
 ```
 
 The safe default performs no deployment, Slack post, or Sheet write. It records a
@@ -156,15 +157,14 @@ Production writes remain explicit and ordered after all gates:
 ```sh
 python3 scripts/weekly_report/run_v2_release.py \
   --week YYYY-MM-DD \
-  --notebook-dir ~/analytics/market-notebook-v2 \
-  --deploy
-
-# Only after reviewing the staged reports and alert dry run:
-python3 scripts/weekly_report/run_v2_release.py \
-  --week YYYY-MM-DD \
-  --notebook-dir ~/analytics/market-notebook-v2 \
+  --base-notebook /absolute/path/to/verified-complete-notebook \
   --deploy --post-alerts
 ```
+
+Use that authorized release command once, not first as a build and then again
+against the same populated staging directory. Browser mode pauses after deploy;
+resume the receipt's `planned_steps` verification and frozen-delivery commands,
+not generation/deployment. Read `docs/v2/release-workflow.md` before executing.
 
 The canonical V2 release now includes Headout in alert preparation and delivery.
 Supply `--base-notebook /absolute/path/to/verified-complete-notebook` (or
@@ -203,17 +203,23 @@ python3 scripts/weekly_report/run_weekly.py <market|all> \
   --week <YYYY-MM-DD> --stage alert --alert-version v2
 ```
 
-Only add `--post` after reviewing the dry run. The V2 stage reuses the existing
-V1 market-channel map and delivery ledger, requires approved real BGM Slack IDs,
-builds market-grain OKRs from the current central engine definitions, and keeps
-the CE RCA enrichment fail-soft. Before any live Slack write, the runner
-preflights the complete requested batch: every report must exist, every market
-must have a BGM and V1 channel route, the Slack token must be present, and the
-weekly duplicate ledger must be clean. A failed preflight sends nothing.
+Do not add `--post`; the standalone V2 live path is disabled. Use the canonical
+release and frozen delivery flow above. It requires approved BGM IDs/channel
+routes, exact-week reports, all selected CE RCA, live report proof and Slack
+read-back access before any new parent is sent. Missing required RCA fails closed.
+Preserve the existing duplicate ledger and per-message journals during retries.
 
 Deployment/runtime prerequisites that intentionally stay outside the repository:
 
 - authenticated read access to BigQuery for OKR and RCA enrichment;
 - `REVENUE_ALERT_SLACK_TOKEN` supplied by the deployment secret store (never a file);
 - the alert bot invited to every channel in `alert/market_channels.json`;
-- one reviewed all-market V2 dry run before the first explicit `--post`.
+- one reviewed all-market plus Headout package before authorized frozen delivery.
+
+## Maintained skill instructions
+
+The GitHub-tracked V2 skill is `.claude/skills/weekly-market-report-v2/SKILL.md`.
+Its release procedure is `docs/v2/release-workflow.md`; the legacy report and V2
+alert skills route there too. Keep any installed local copy of the V2 skill in
+sync with this version. Code tests/pushes, live deployment and scheduling
+activation are separate states.

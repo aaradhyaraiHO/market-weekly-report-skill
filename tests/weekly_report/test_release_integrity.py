@@ -46,6 +46,16 @@ class IntegrityTests(unittest.TestCase):
             gate.completed_week('2026-09-06', dt.date(2026, 9, 12))
         gate.completed_week('2026-09-06', dt.date(2026, 9, 13))
 
+    def test_new_api_or_archive_files_require_separate_approval(self):
+        gate.seed(self.base, self.target)
+        for name in ('api/unapproved.js', 'unrelated-archive.html'):
+            with self.subTest(name=name):
+                path = self.target / name
+                path.write_text('unexpected')
+                with self.assertRaisesRegex(ValueError, 'Unexpected files added'):
+                    gate.verify_artifact(self.base, self.target, '2026-08-30')
+                path.unlink()
+
     def test_login_redirect_and_wrong_week_are_not_success(self):
         manifest = {'week': '2026-08-30', 'files': {'weekly-report-headout.html': hashlib.sha256(b'correct').hexdigest()}}
         session = Mock()

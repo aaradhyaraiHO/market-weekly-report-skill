@@ -1,6 +1,6 @@
 ---
 name: market-weekly-report
-description: Weekly market growth report for a Headout market — one command builds a self-contained HTML with trend movers (4-wk vs raw, seasonal-tagged), a per-market Digest (flagged-CE follow-ups + a Slack-signal briefing + GM narrative), the full All-CE view with a CE drawer (vitals, funnel, Shapley, RE-SOURCE, GM notes), Defend/Compound/Lifecycle diagnostic buckets, seasonality, and prepurchase tracking. Runs `/market-weekly-report <market|all> [<week-Monday>]`; default week = latest complete matured week. Use for the Monday weekly market read; the agent then mines Slack for signal beyond the data and folds it into the report.
+description: Build and inspect Headout weekly market reports, shared snapshot metrics, CE drawers and diagnostic buckets. Uses complete Sunday–Saturday weeks. For production V2 packaging and delivery, follow the canonical weekly-market-report-v2 release procedure; legacy V1 workflows remain available only as an explicit fallback.
 ---
 
 # Market Weekly Report
@@ -10,14 +10,22 @@ description: Weekly market growth report for a Headout market — one command bu
 For a complete V2 release candidate—every configured market plus Headout—use:
 
 ```bash
-python3 scripts/weekly_report/run_v2_release.py --week <YYYY-MM-DD>
+python3 scripts/weekly_report/run_v2_release.py --week <YYYY-MM-DD> \
+  --base-notebook /absolute/path/to/verified-complete-notebook --plan
 ```
 
-This is dry-run safe by default: it builds V1 and V2 from the same snapshots,
-runs baseline/parity gates, stages a local notebook, and dry-runs market alerts.
-Use `--plan` to inspect the exact steps. Deployment requires `--deploy`; live
-Slack posting additionally requires `--post-alerts`. Never add either flag
-without explicit user authorization. V1 remains the rollback path.
+Read `docs/v2/release-workflow.md` before any release or alert operation. `--plan`
+is no-write; omitting it builds local artifacts and runs read-only source queries.
+The V2 path includes all 17 configured markets plus Headout, frozen required RCA,
+full-notebook preservation, signed-in browser proof and duplicate-safe delivery.
+Deployment requires `--deploy`; posting additionally requires `--post-alerts`,
+both with user authorization. `awaiting_browser_verification` is not completion;
+resume using the receipt's `planned_steps`, never by rerunning generation.
+
+The staged `run_weekly.py --alert-version v2 --post` path is disabled. Never use
+the legacy poster below for V2 delivery or retries. The S1–S5 descriptions below
+document the V1 fallback/curation flow, not the production V2 release procedure.
+Local regression tests do not prove live delivery or authorize activation.
 
 Weekly-cadence, market-level growth report. One orchestrator command builds a per-market snapshot
 (12 weeks, weekly grain, revenue = `sum_revenue_predicted`) and renders a **self-contained HTML**
@@ -38,19 +46,19 @@ Pipeline: `scripts/weekly_report/weekly_market_report.py` (orchestrator) → `bu
 ## Usage
 
 ```
-/market-weekly-report <market|all|headout> [<week-Monday>]
+/market-weekly-report <market|all|headout> [<week-Sunday>]
 ```
-- `/market-weekly-report north_america` — latest complete matured week
-- `/market-weekly-report all 2026-07-06` — all pilot markets for that week, one tabbed HTML
-- `/market-weekly-report headout 2026-07-06` — **true-global Headout rollup** (all ~69
+- `/market-weekly-report north_america` — latest complete Sunday–Saturday week
+- `/market-weekly-report all 2026-08-30` — all configured markets for that week
+- `/market-weekly-report headout 2026-08-30` — **true-global Headout rollup** (all ~69
   `business_market` values, not a sum of the 10 pilots). Own build path (`build_global.py`):
   queries BQ with NO market filter, so the headline is exact ($3.26M for 07-13, vs the merge-of-10's
   17.5%-undercounted $2.69M). Adds a §1 per-market breakdown, a Market column/filter/group-by, and
   bounds the expensive Mixpanel RE-SOURCE drawers to the surfaced-CE set only.
-- Markets (config.MARKETS): the 10 live pilot markets. `headout` is separate — it does not read
+- Markets: resolve current coverage from `config.MARKETS` (17 at this release). `headout` is separate — it does not read
   `config.MARKETS`, it queries every market in the warehouse.
 
-## Workflow
+## Legacy V1 workflow (not the V2 release path)
 
 **Full run (all markets), end-to-end** — driven by `run_weekly.py`, which chains the deterministic
 glue and stops at the two human/agent gates. Three stages:
@@ -68,8 +76,9 @@ script. Big markets (CSEE/SEA) can exceed BQ byte caps — `config.MAX_BYTES_BIL
 `weekly_rca_helper.MAX_BYTES_BILLED` (RCA) are both 80 GB. The stages below (S1–S5) document each piece.
 
 ### S1 · Resolve market(s) + week
-Slug or `all`. Omitted week → `config.latest_complete_week()` (most recent complete week whose
-Sunday end is ≥3 days matured). A non-Monday date → the Monday of that ISO week.
+Slug or `all`. Omitted week → `config.latest_complete_week()` (most recent complete
+Sunday–Saturday week). Use an explicit Sunday for releases. Bucket-specific
+maturity handling must not shift the headline week.
 
 ### S2 · Run the producer
 ```bash
@@ -88,8 +97,8 @@ The data can't see supply wins, bugs, supplier/payment/bid changes. Mine them an
 the producer auto-loads into §2 Market Review:
 
 1. Load Slack read tools: `ToolSearch("+slack read channel")`.
-2. Read the market channel(s) + the two global channels for the **report week window** (Mon 00:00 →
-   next Mon 00:00, as Unix ts):
+2. Read the market channel(s) + the two global channels for the **report week window** (Sun 00:00 →
+   next Sun 00:00, as Unix ts):
 
    | Market | Channel ID(s) |
    |--------|---------------|
