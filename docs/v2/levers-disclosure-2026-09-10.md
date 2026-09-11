@@ -1,6 +1,8 @@
 # Levers disclosure — 10 September 2026
 
-Status: implemented locally, not committed, pushed or deployed.
+Status: committed in `a7c7305` and deployed September 11. See
+`roi-levers-release-2026-09-11.md` for production evidence. The following records
+the original pre-deployment review.
 
 Levers visibility starts collapsed. Its whole header is a native HTML summary
 that expands both existing subsections together. Tagged-lever and prepurchase CE

@@ -1,6 +1,8 @@
 # Losing Money ROI WoW precision
 
-Status: implemented and verified locally; not committed, published or deployed.
+Status: committed in `a7c7305` and deployed. See
+`roi-levers-release-2026-09-11.md` for exact production verification. The following
+records the initial local implementation checks.
 
 ## Scope
 
