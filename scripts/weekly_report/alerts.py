@@ -265,6 +265,9 @@ def _week_blocks(ads_df, funnel_df, ce_id: str, w0_start: dt.date, w0_end: dt.da
         if roi is not None and not (config.ROI_MIN_PCT <= roi <= config.ROI_MAX_PCT):
             roi = None
         blk["roi"] = round(roi) if roi is not None else None
+        # Presentation operand only: preserve the legacy rounded ROI used by
+        # bucket gates, but never derive a displayed change from that integer.
+        blk["roi_unrounded"] = roi
         blk["clicks"] = int(clk) if clk else None
         blk["cm1conv"] = round(cm1 / conv, 2) if conv else None
         blk["cpc"] = round(sp / clk, 2) if clk else None

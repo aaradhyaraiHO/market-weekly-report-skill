@@ -357,6 +357,70 @@ def _losing_money_roi_precision(market, rows):
     return out
 
 
+def _fluctuation_roi_precision(market, rows):
+    """Presentation-only ROI WoW for the exact RPC/CM1 diagnostic window.
+
+    New blocks retain the daily producer's gated operand, including partial
+    windows. Frozen full-week blocks can use matching Google-only weekly
+    evidence; partial windows or mismatched caches must remain unavailable.
+    Never modify the rounded ROI that the authoritative verdict uses.
+    """
+    by_id = {str(ce.get("ce_id")): ce for ce in market.get("ces") or []}
+
+    def number(value):
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            value = float(value)
+        except (ValueError, TypeError):
+            return None
+        return value if math.isfinite(value) else None
+
+    out = deepcopy(rows or [])
+    for row in out:
+        row["roi_wow_pct"] = None
+        blocks = row.get("weeks") or []
+        if len(blocks) < 2:
+            continue
+        try:
+            dates = [dt.date.fromisoformat(b["week"]) for b in blocks[:2]]
+        except (KeyError, ValueError, TypeError):
+            continue
+        if ((dates[0] - dates[1]).days != 7 or blocks[0].get("span_days") not in range(1, 8)
+                or blocks[0].get("span_days") != blocks[1].get("span_days")):
+            continue
+        source = {w.get("week"): w for w in by_id.get(str(row.get("ce_id")), {}).get("weekly") or []}
+        values = []
+        for block in blocks[:2]:
+            if number(block.get("roi")) is None:
+                break
+            if "roi_unrounded" in block:
+                roi = number(block["roi_unrounded"])
+            else:
+                if block.get("span_days") != 7:
+                    break
+                week = source.get(block.get("week"), {})
+                sp, cm1, clk, conv = [number(week.get(k)) for k in
+                                     ("spend_g", "cm1_g", "paid_clicks_g", "conversions_g")]
+                if sp is None or sp <= 0 or cm1 is None or not clk or not conv or number(week.get("roi_g")) is None:
+                    break
+                # Independent rounded fields guard against a revised or wrong-
+                # scope cache being applied to the frozen diagnostic window.
+                if (block.get("spend") != round(sp) or block.get("clicks") != int(clk)
+                        or block.get("cpc") != round(sp / clk, 2)
+                        or block.get("cm1conv") != round(cm1 / conv, 2)):
+                    break
+                roi = 100 * cm1 / sp
+            if roi is None or not math.isfinite(roi) or round(roi) != block["roi"]:
+                break
+            values.append(roi)
+        if len(values) == 2 and values[1] != 0:
+            change = (values[0] / values[1] - 1) * 100
+            if math.isfinite(change):
+                row["roi_wow_pct"] = change
+    return out
+
+
 def _diagnostic_bucket_view(market):
     """Project the authoritative V1 diagnostic buckets without reclassification."""
     final = market.get("buckets_final") or {}
@@ -374,8 +438,8 @@ def _diagnostic_bucket_view(market):
             "burn_line": deepcopy(losing.get("burn_line") or {}),
         },
         "fluctuations": {
-            "down": deepcopy(defend.get("seasonality_down") or []),
-            "up": deepcopy(compound.get("seasonality_up") or []),
+            "down": _fluctuation_roi_precision(market, defend.get("seasonality_down")),
+            "up": _fluctuation_roi_precision(market, compound.get("seasonality_up")),
             "window": {
                 key: deepcopy(meta.get(key)) for key in (
                     "fluctuation_partial", "fluctuation_days",
