@@ -303,6 +303,60 @@ def _post_diagnostic_view(market):
     }
 
 
+def _losing_money_roi_precision(market, rows):
+    """Add presentation-only WoW from the original, same-week CM1/spend.
+
+    Bucket week blocks round ROI to integers. Never use those integers as
+    calculation operands, or change the authoritative criteria/weekly fields.
+    Mirror the producer's Google-Search/pre-split scope and respect its null
+    validity gate. Missing or mismatched frozen evidence remains unavailable.
+    """
+    ces = market.get("ces") or []
+    by_id = {str(ce.get("ce_id")): ce for ce in ces}
+    has_google = any("spend_g" in week for ce in ces for week in (ce.get("weekly") or []))
+    spend_key, cm1_key, roi_key = ("spend_g", "cm1_g", "roi_g") if has_google else ("spend", "cm1", "roi_pct")
+
+    def number(value):
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return None
+        return result if math.isfinite(result) else None
+
+    out = deepcopy(rows or [])
+    for row in out:
+        row["roi_wow_pct"] = None
+        blocks = row.get("weeks") or []
+        if len(blocks) < 2:
+            continue
+        try:
+            current_date, previous_date = (dt.date.fromisoformat(block["week"]) for block in blocks[:2])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (current_date - previous_date).days != 7:
+            continue
+        source = {week.get("week"): week for week in (by_id.get(str(row.get("ce_id")), {}).get("weekly") or [])}
+        values = []
+        for block in blocks[:2]:
+            week = source.get(block.get("week"), {})
+            spend, cm1 = number(week.get(spend_key)), number(week.get(cm1_key))
+            if number(week.get(roi_key)) is None or number(block.get("roi")) is None or spend is None or spend <= 0 or cm1 is None:
+                break
+            roi = 100 * cm1 / spend
+            if not math.isfinite(roi) or round(roi) != block["roi"]:
+                break
+            if block.get("cm1") != round(cm1) or block.get("spend") != round(spend):
+                break  # Do not mix a revised cache with a frozen published row.
+            values.append(roi)
+        if len(values) == 2 and values[1] != 0:
+            change = (values[0] / values[1] - 1) * 100
+            if math.isfinite(change):
+                row["roi_wow_pct"] = change
+    return out
+
+
 def _diagnostic_bucket_view(market):
     """Project the authoritative V1 diagnostic buckets without reclassification."""
     final = market.get("buckets_final") or {}
@@ -313,8 +367,8 @@ def _diagnostic_bucket_view(market):
     meta = market.get("meta") or {}
     return {
         "losing_money": {
-            "existing": deepcopy(losing.get("existing") or []),
-            "new": deepcopy(losing.get("new") or []),
+            "existing": _losing_money_roi_precision(market, losing.get("existing")),
+            "new": _losing_money_roi_precision(market, losing.get("new")),
             "paused": deepcopy(losing.get("paused") or []),
             "tracking_gap": deepcopy(losing.get("tracking_gap") or []),
             "burn_line": deepcopy(losing.get("burn_line") or {}),

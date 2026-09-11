@@ -300,6 +300,13 @@
     .legacy-card-head h2 { margin:0; font-size:19px; letter-spacing:-.02em; }
     .legacy-card-head p { max-width:620px; margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
     .legacy-count { flex:0 0 auto; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+    .legacy-disclosure > summary { min-height:44px; flex-wrap:wrap; list-style:none; cursor:pointer; }
+    .legacy-disclosure > summary::-webkit-details-marker { display:none; }
+    .legacy-disclosure > summary:hover { background:var(--soft); }
+    .legacy-disclosure > summary:focus-visible { outline:2px solid var(--purple); outline-offset:-3px; }
+    .legacy-disclosure:not([open]) > summary { border-bottom:0; }
+    .legacy-disclosure > summary .bucket-count::after { margin-left:6px; content:'▸'; }
+    .legacy-disclosure[open] > summary .bucket-count::after { content:'▾'; }
     .legacy-subsection + .legacy-subsection { border-top:1px solid var(--line-dark); }
     .legacy-subhead { padding:17px 22px 13px; }
     .legacy-subhead h3 { margin:0; font-size:14px; }
@@ -991,7 +998,7 @@
           {label:'Combined Entity',left:true},{label:'Dated / Open',title:'Active ticket count by validity (fct_pp_tickets). Dated = DATE_TIME; Open = OPEN.'},{label:'STR nxt 2wk',title:'Sell-through for tickets whose experience date falls in the current + next 2 weeks.'},{label:'Expiring this mo',title:'UNSOLD dated tickets whose expiry is in the current calendar month.'},{label:'Loss-liab (dated)',title:'Loss liability for UNSOLD dated tickets.'},{label:'Run-rate last / need·wk',title:'Tickets sold last week versus tickets needed per week to clear remaining dated inventory before expiry.'},{label:'Net ROI',title:'Trailing-4wk CM1 less realized inventory loss, divided by trailing-4wk marketing cost.'},{label:'CVR (WoW)',title:'CE paid conversion rate, W0 level with week-over-week change.'}
         ];
         const ppBody=!pp.length?'<div class="legacy-empty">No active prepurchase allotments for this market.</div>':`<div class="legacy-summary">PP CEs: <strong>${pp.length}</strong> · dated <strong>${count(dated)}</strong> · open <strong>${count(openCount)}</strong> · dated loss-liab <strong>${money(liability)}</strong> · unsold expiring this mo <strong>${count(expiring)}</strong></div>`+legacyTable(ppHeaders,pp.map(row=>{const pace=row.needed_wk==null?`${count(row.sold_last_wk)} / —`:`${count(row.sold_last_wk)} / ${count(row.needed_wk)}`;return `<tr><td>${legacyCe(row,'ce')}</td><td>${count(row.dated)} / ${count(row.open_ct)}</td><td class="${row.str_nt==null?'':row.str_nt>=95?'negative':row.str_nt<60?'negative':'positive'}">${row.str_nt==null?'—':`${row.str_nt}%`}</td><td class="${row.expiring_unsold>0?'negative':''}">${row.expiring_unsold?count(row.expiring_unsold):'—'}</td><td>${money(row.loss_liab_dated)}</td><td class="${row.needed_wk!=null&&row.sold_last_wk<row.needed_wk?'negative':''}">${pace}</td><td>${row.net_roi==null?'—':`${row.net_roi}%`}</td><td>${row.cvr==null?'—':`${Number(row.cvr).toFixed(1)}% <span class="${tone(row.cvr_wow)}">${pct(row.cvr_wow)}</span>`}</td></tr>`;}))+`<details class="legacy-note"><summary>Source &amp; definitions</summary><p>Source: fct_pp_tickets (per-ticket). Only DATED tickets carry loss liability; open-dated resell later (→ $0, no expiry). STR = current + next 2 weeks (experience-date). Expiring = unsold dated expiring this calendar month. Run-rate: last-wk sold vs needed/wk to clear remaining before expiry. Net ROI = (CM1 − realized loss) ÷ cost. No verdict — reviewer decides.</p></details>`;
-        root.innerHTML=`<article class="legacy-card"><header class="legacy-card-head"><div><div class="section-kicker">Commercial context</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) prepurchase</p></div></header><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></article>`;
+        root.innerHTML=`<details class="legacy-card legacy-disclosure"><summary class="legacy-card-head"><div><div class="section-kicker">Commercial context</div><h2>Levers visibility</h2><p>(a) tagged levers · (b) prepurchase</p></div><span class="bucket-count">${levers.length} tagged · ${pp.length} PP CEs</span></summary><section class="legacy-subsection"><div class="legacy-subhead"><h3>(a) CEs on marketing budgets / TR incentives</h3></div>${leverBody}</section><section class="legacy-subsection"><div class="legacy-subhead"><h3>(b) Prepurchase (dim_pp_allotments → CE)</h3></div>${ppBody}</section></details>`;
       }
       const NOTES_URL=payload.notes_url||'';
       // Mutations must pass through the authenticated same-origin proxy.  The
@@ -1078,7 +1085,7 @@
         return `<div class="bucket-week-lines">${weeks.map((week,index)=>`<div class="bucket-week-line" title="w${index+1}${week.week?` · wk of ${escapeHtml(week.week)}`:''}"><span class="bucket-week-label">w${index+1}</span>${formatter(week[key])}</div>`).join('')}</div>`;
       }
       function bucketMetricCell(row,key,formatter,good=1) {
-        const weeks=row.weeks||[],w0=weeks[0]||{},w1=weeks[1]||{},relative=bucketRelative(w0[key],w1[key]);
+        const weeks=row.weeks||[],w0=weeks[0]||{},w1=weeks[1]||{},relative=key==='roi'&&Object.prototype.hasOwnProperty.call(row,'roi_wow_pct')?row.roi_wow_pct:bucketRelative(w0[key],w1[key]);
         const delta=relative==null?'<span class="bucket-subvalue">vs LW —</span>':`<span class="bucket-subvalue ${tone(good<0?-relative:relative)}">${pct(relative)} vs LW</span>`;
         return `${formatter(w0[key])}${delta}${bucketWeekLines(row,key,formatter)}`;
       }
