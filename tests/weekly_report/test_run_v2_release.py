@@ -37,6 +37,7 @@ class RunV2ReleaseTests(unittest.TestCase):
             names,
             [
                 "baseline",
+                "seed-notebook",
                 "build-markets",
                 "build-headout",
                 "build-market-okrs",
@@ -45,6 +46,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 "alert-readiness",
                 "stage-notebook",
                 "alerts-dry-run",
+                "artifact-integrity",
             ],
         )
         self.assertFalse(any(step.external_write for step in plan))
@@ -109,9 +111,11 @@ class RunV2ReleaseTests(unittest.TestCase):
         plan = release.build_plan(
             self.week, self.notebook, deploy=True, post_alerts=True
         )
-        self.assertEqual([step.name for step in plan][-2:], ["deploy-vercel", "post-alerts"])
-        self.assertTrue(all(step.external_write for step in plan[-2:]))
-        self.assertIn("--post", plan[-1].command)
+        self.assertEqual([step.name for step in plan][-3:], ["deploy-vercel", "verify-live-reports", "post-alerts"])
+        self.assertTrue(plan[-3].external_write)
+        self.assertFalse(plan[-2].external_write)
+        self.assertTrue(plan[-1].external_write)
+        self.assertIn("--verified-release", plan[-1].command)
 
     def test_alert_post_requires_deployment(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires --deploy"):
@@ -134,7 +138,7 @@ class RunV2ReleaseTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["week"], self.week)
         self.assertEqual(len(payload["markets"]), len(release.config.MARKETS) + 1)
-        self.assertEqual(payload["steps"][-1]["name"], "alerts-dry-run")
+        self.assertEqual(payload["steps"][-1]["name"], "artifact-integrity")
 
 
 if __name__ == "__main__":

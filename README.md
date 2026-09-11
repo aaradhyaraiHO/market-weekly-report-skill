@@ -166,9 +166,16 @@ python3 scripts/weekly_report/run_v2_release.py \
   --deploy --post-alerts
 ```
 
-Headout is included in report generation, parity checking, and notebook staging;
-the alert batch remains market-only. V1 is built from the same snapshots and is
-the rollback artifact if a V2-only enrichment is unavailable.
+The canonical V2 release now includes Headout in alert preparation and delivery.
+Supply `--base-notebook /absolute/path/to/verified-complete-notebook` (or
+`WEEKLY_BASE_NOTEBOOK`) so staging preserves the whole notebook and its archives.
+Never deploy an empty report-only directory. The staging destination must be empty.
+All RCA is prepared before delivery; the frozen bundle is reused for retries.
+Live posting requires authenticated exact-artifact link checks and Slack read-back
+access for every destination, including private Headout (`groups:history`).
+The standalone V2 `run_weekly.py --post` path is disabled; V1 is unchanged.
+See `docs/v2/unattended-release-readiness-2026-09-11.md` for activation gates,
+credentials, and safe retry commands. V1 remains the rollback renderer.
 
 The V2 publish stage also installs `api/review.js` from
 `scripts/weekly_report/notes/review_proxy_api.js`. The notebook runtime must

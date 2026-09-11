@@ -212,6 +212,10 @@ def stage_alert_v2(slugs, week, post):
             raise SystemExit(
                 "V2 alert blocked: already posted for this week: " + ", ".join(duplicates)
             )
+        raise SystemExit(
+            'Direct V2 posting is disabled. Use run_v2_release.py and its verified frozen '
+            'delivery bundle; resume with alert/v2/safe_delivery.py after live verification.'
+        )
 
     print(f"  ✓ batch preflight passed for {len(slugs)} market(s); no Slack writes started")
     week_end = _week_end(week)

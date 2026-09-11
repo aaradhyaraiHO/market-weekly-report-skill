@@ -65,6 +65,8 @@ def build_plan(
     *,
     deploy: bool = False,
     post_alerts: bool = False,
+    base_notebook: Path | None = None,
+    verification_mode: str = 'browser',
 ) -> list[Step]:
     if post_alerts and not deploy:
         raise ValueError("--post-alerts requires --deploy")
@@ -72,6 +74,11 @@ def build_plan(
     python = sys.executable
     combined_manifest = CACHE / f"v2_release_full_{week}.json"
     okr_results = CACHE / f"okr_results_v2_{week}.json"
+    base_notebook = base_notebook or Path(os.environ.get('WEEKLY_BASE_NOTEBOOK', 'VERIFIED_BASE_NOTEBOOK_REQUIRED'))
+    integrity = str(SCRIPTS / 'release_integrity.py')
+    package = CACHE / f'v2_package_{week}'
+    bundle = package / 'delivery.json'
+    artifact = package / 'artifact.json'
     release_command = (
         python,
         str(SCRIPTS / "release_v2.py"),
@@ -87,6 +94,8 @@ def build_plan(
 
     steps = [
         Step("baseline", (python, str(SCRIPTS / "verify_baseline.py")), str(ROOT)),
+        Step('seed-notebook', (python, integrity, 'seed', '--base', str(base_notebook),
+                              '--target', str(notebook_dir), '--week', week), str(ROOT)),
         Step(
             "build-markets",
             (
@@ -150,7 +159,7 @@ def build_plan(
         ),
         Step(
             "alert-readiness",
-            (python, str(ROOT / "alert" / "v2" / "check_readiness.py")),
+            (python, str(ROOT / "alert" / "v2" / "check_readiness.py"), '--include-headout'),
             str(ROOT),
         ),
         Step(
@@ -172,43 +181,44 @@ def build_plan(
             "alerts-dry-run",
             (
                 python,
-                str(SCRIPTS / "run_weekly.py"),
-                "all",
-                "--week",
-                week,
-                "--stage",
-                "alert",
-                "--alert-version",
-                "v2",
+                str(ROOT / 'alert' / 'v2' / 'prepare_delivery.py'),
+                '--week', week, '--reports', str(V2_REPORTS),
+                '--okrs', str(okr_results), '--out', str(bundle),
             ),
             str(ROOT),
         ),
+        Step('artifact-integrity', (python, integrity, 'artifact', '--base', str(base_notebook),
+                                   '--target', str(notebook_dir), '--week', week,
+                                   '--manifest', str(artifact)), str(ROOT)),
     ]
 
     if deploy:
+        steps.insert(1, Step('slack-access-preflight',
+                            (python, str(ROOT / 'alert' / 'v2' / 'delivery_access.py')), str(ROOT)))
         steps.append(
             Step(
                 "deploy-vercel",
-                ("vercel", "deploy", "--prod", "--cwd", str(notebook_dir)),
+                ("vercel", "deploy", "--prod", "--yes", "--cwd", str(notebook_dir)),
                 str(ROOT),
                 external_write=True,
             )
         )
+        verify_command = (python, integrity, 'browser' if verification_mode == 'browser' else 'live',
+                          '--manifest', str(artifact), '--out', str(package / 'live_verification.json'))
+        if verification_mode == 'browser':
+            verify_command += ('--observations', str(package / 'browser_observations.json'))
+        steps.append(Step('verify-live-reports', verify_command, str(ROOT)))
     if post_alerts:
         steps.append(
             Step(
                 "post-alerts",
                 (
                     python,
-                    str(SCRIPTS / "run_weekly.py"),
-                    "all",
-                    "--week",
-                    week,
-                    "--stage",
-                    "alert",
-                    "--alert-version",
-                    "v2",
-                    "--post",
+                    str(ROOT / 'alert' / 'v2' / 'safe_delivery.py'),
+                    '--bundle', str(bundle), '--ledger', str(ROOT / 'alert' / 'posted_ledger.json'),
+                    '--state-dir', str(CACHE / 'delivery_state'),
+                    '--verified-release', str(package / 'live_verification.json'),
+                    '--artifact', str(artifact),
                 ),
                 str(ROOT),
                 external_write=True,
@@ -237,6 +247,8 @@ def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 
 
 def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
+    from release_integrity import completed_week
+    completed_week(week)
     package_dir = CACHE / f"v2_package_{week}"
     receipt_path = CACHE / f"v2_run_{week}.json"
     notebook_dir.mkdir(parents=True, exist_ok=True)
@@ -259,15 +271,24 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
         record: dict[str, Any] = {**step.public(), "status": "running"}
         receipt["steps"].append(record)
         write_receipt(receipt_path, receipt)
+        if step.name == 'verify-live-reports' and '--observations' in step.command:
+            observations = Path(step.command[step.command.index('--observations') + 1])
+            if not observations.exists():
+                record['status'] = 'awaiting_browser_verification'
+                receipt['status'] = 'awaiting_browser_verification'
+                write_receipt(receipt_path, receipt)
+                print('Deployment is not workflow completion. Capture fresh signed-in browser observations for every manifest route, '
+                      'run the verify-live-reports command, then resume the frozen safe_delivery command. No alerts sent.')
+                return receipt_path
         env = os.environ.copy()
         if step.env:
             env.update(step.env)
         try:
             subprocess.run(step.command, cwd=step.cwd, env=env, check=True)
-        except subprocess.CalledProcessError as exc:
+        except (subprocess.CalledProcessError, OSError) as exc:
             record.update(
                 status="failed",
-                exit_code=exc.returncode,
+                exit_code=getattr(exc, 'returncode', None),
                 duration_seconds=round(time.monotonic() - started, 3),
             )
             receipt.update(
@@ -296,6 +317,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Staging/deployment target (defaults to a repository-local release package)",
     )
     parser.add_argument("--plan", action="store_true", help="Print the plan; make no changes")
+    parser.add_argument('--base-notebook', type=Path, help='Verified complete notebook used as the preservation baseline')
+    parser.add_argument('--verification-mode', choices=['browser', 'http'], default='browser')
     parser.add_argument("--deploy", action="store_true", help="Deploy the staged notebook to Vercel")
     parser.add_argument(
         "--post-alerts",
@@ -317,6 +340,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         notebook_dir,
         deploy=args.deploy,
         post_alerts=args.post_alerts,
+        base_notebook=args.base_notebook,
+        verification_mode=args.verification_mode,
     )
     if args.plan:
         print(
@@ -333,8 +358,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    receipt = execute(plan, args.week, notebook_dir)
-    print(f"Weekly V2 package passed: {receipt}")
+    if not args.base_notebook and not os.environ.get('WEEKLY_BASE_NOTEBOOK'):
+        raise SystemExit('--base-notebook or WEEKLY_BASE_NOTEBOOK is required; never deploy an empty notebook')
+    sys.path.insert(0, str(ROOT / 'alert' / 'v2'))
+    from safe_delivery import locked
+    with locked(CACHE / 'v2_release.lock'):
+        receipt = execute(plan, args.week, notebook_dir)
+    print(f"Weekly V2 package {json.loads(receipt.read_text())['status']}: {receipt}")
     return 0
 
 
