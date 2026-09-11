@@ -51,17 +51,28 @@ latest links and alert history are preserved.
 The canonical `run_v2_release.py` plan exists, but is **not yet sufficient for
 unattended completion**:
 
-1. Local release commits and remote cleanup commit `a0b9f82` diverge. Preserve
-   the other task's dirty files; reconcile and push explicitly before choosing
-   the scheduler's immutable source revision.
+1. Source reconciliation completed after explicit approval: the five existing
+   cleanup files matched the conflict-free combined tree byte-for-byte. They
+   were committed separately as `280052e`, then `origin/main` was merged as
+   `b2d1ea8`. The combined checkout passes all 356 tests. Push/readback is still
+   required before choosing the scheduler's immutable source revision.
 2. Headout reports are generated, but the batch alert step uses `all`, which
    resolves only the 17 markets. Headout delivery needs an explicit step.
 3. V2 RCA failures currently leave parents sendable without CE replies. Require
    complete enrichment and resumable delivery/ledger handling before scheduling.
+   The current poster records parent timestamps only after the message loop and
+   does not enforce successful delivery of every reply. A crash can leave posted
+   parents unrecorded; a retry must reconcile Slack before sending anything new.
 4. There is no live report-week/content verification step between deploy and
    posting, nor a final Slack-thread completeness gate in the canonical plan.
-5. Choose an always-available execution host, persisted duplicate ledger,
-   unattended credentials, run time/timezone and a failure-notification route.
+   The runner also creates an empty default notebook directory while the
+   publisher adds weekly pages/APIs but not the full site's `index.html` and
+   archives. Seed staging from the verified full notebook and enforce complete-
+   site/archive preservation before deployment; do not deploy the empty-base
+   default package as the whole site.
+5. User confirmed the deadline: **Monday 11 AM IST**, reports and alerts ready
+   by then (not merely started at 11). Choose an execution host, persisted
+   duplicate ledger, unattended credentials and a failure-notification route.
    A laptop-based schedule cannot run while the laptop is off.
 6. Run one supervised complete-week release through those exact gates before
    enabling recurrence. As of Friday September 11, September 6–12 is incomplete;
