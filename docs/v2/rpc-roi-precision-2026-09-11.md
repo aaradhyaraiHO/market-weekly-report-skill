@@ -54,8 +54,9 @@ unattended completion**:
 1. Source reconciliation completed after explicit approval: the five existing
    cleanup files matched the conflict-free combined tree byte-for-byte. They
    were committed separately as `280052e`, then `origin/main` was merged as
-   `b2d1ea8`. The combined checkout passes all 356 tests. Push/readback is still
-   required before choosing the scheduler's immutable source revision.
+   `b2d1ea8`. The combined checkout passes all 356 tests. Release source and
+   readiness notes were pushed as `09eb3c1`; `git ls-remote` independently
+   confirmed GitHub's main matched the local revision.
 2. Headout reports are generated, but the batch alert step uses `all`, which
    resolves only the 17 markets. Headout delivery needs an explicit step.
 3. V2 RCA failures currently leave parents sendable without CE replies. Require
@@ -81,3 +82,33 @@ unattended completion**:
 Historical Google/Bing evidence gaps and true CSEE/Nordics aggregation remain
 explicitly deferred. They are not reasons to fabricate data or block new-week
 generation where fresh source data is complete.
+
+## Live verification
+
+- READY deployment `dpl_7joCjnyKg2f8fc7a3fLYNULSUGht`, promoted to
+  https://market-notebook.vercel.app. Independent CLI inspect of the canonical
+  domain returned this exact deployment ID.
+- Immutable artifact URL: https://market-notebook-pxcelh8zs-headout.vercel.app.
+  Its Google OAuth redirect is not registered, so candidate rendering was
+  checked locally from the exact artifact. Authenticated verification used
+  the canonical domain after promotion; no access control was bypassed.
+- Production North America CE6853: **-38.9%** ROI WoW, RPC swing **-50.3%**,
+  verdict **watch**. Prior LM CE3111 fix still shows **-6.1%**.
+- Production Headout CE6853: six-day operands remain unavailable for ROI WoW;
+  the UI shows **vs LW —**, not the seven-day market comparison.
+- All 19 current aliases match the Aug30 dated artifact byte-for-byte. Sep6
+  remains a dated incomplete-week preview. No frozen data was regenerated.
+- CSEE CE3286 Mini Audit: full visible notes, saved summary and actions text
+  exactly equal before/after authenticated reload. No new note, reply or
+  summary was created for this release. Prior live E2E evidence remains in
+  `docs/weekly-review/SIDEBAR_RELEASE_2026-09-10.md` and
+  `docs/weekly-review/NOTE_SAVE_REPAIR_2026-09-10.md`.
+- Alert ledger hash unchanged:
+  `14ad1074ae3bbd3457cfd0d1221d0d1b494b926a489702e645df80926151fe4f`.
+- Backend v19 and API/runtime files unchanged. V1 generation remains default;
+  V2 is explicit in the canonical release runner.
+- Rollback: `dpl_8Vb6FBgJT2YRSSUNzLtfMWcXrGxp`.
+
+The weekly-market-report-v2 skill constrained this work to additive,
+presentation-only precision and frozen-report preservation. Scheduling has
+not been enabled; the orchestration gates above remain open.
