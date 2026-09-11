@@ -231,20 +231,16 @@ def _weekly_metrics(
         # is not derivable from the 12-week array. Null where no LY data.
         "yoy_pct": _num(100.0 * (revenue / yoy_rev - 1)) if (yoy_rev and revenue is not None) else None,
     }
-    # Optional complete platform evidence. Old cached query frames omit this
-    # marker and retain their existing snapshot contract unchanged.
+    # Optional platform evidence. Keep every core metric unchanged; missing
+    # legacy source columns receive coverage metadata, never guessed values.
     if paid is not None and "coupon_wallet_g" in p:
-        from paid_platforms import platform_metrics
-        row["paid_platforms"] = platform_metrics(
-            {"spend": spend, "cm1": cm1, "paid_clicks": paid_clicks,
-             "paid_conversions": conversions, "paid_impressions": paid_impressions,
-             "paid_revenue": offline_rev, "coupon_wallet": coupon_wallet},
-            {"spend": spend_g, "cm1": cm1_g, "paid_clicks": paid_clicks_g,
-             "paid_conversions": conversions_g, "paid_impressions": sis_impr,
-             "paid_revenue": offline_revenue_g,
-             "coupon_wallet": _f(p, "coupon_wallet_g", None),
-             "sis_impr": sis_impr, "sis_elig": sis_elig},
-        )
+        from paid_platforms import source_platforms
+        row["paid_platforms"] = source_platforms(p)
+    if paid is not None:
+        from paid_platforms import missing_source_fields
+        missing = missing_source_fields(p)
+        if missing:
+            row["paid_platform_missing_fields"] = missing
     return row
 
 
@@ -887,6 +883,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
             # (sum-then-divide) instead of revenue-weighting the per-market ratios.
             "sis_impr": _num(sis_impr), "sis_elig": _num(sis_elig), "organic_gbv": _num(organic),
         })
+        from paid_platforms import attach_aggregate_platforms
+        attach_aggregate_platforms(market_weekly[-1], pw)
 
     # Headlines + top movers by raw WoW revenue delta.
     def _ce_rev(ce_id, wk):
@@ -1000,6 +998,8 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
         p = ly_mkt_paid.loc[wk] if (not ly_mkt_paid.empty and wk in ly_mkt_paid.index) else None
         row = _weekly_metrics(b, p)
         row["week"] = config.iso(wk)
+        from paid_platforms import attach_aggregate_platforms
+        attach_aggregate_platforms(row, paid_ly[paid_ly["aligned_week"] == wk] if not paid_ly.empty else paid_ly)
         weekly_ly.append(row)
 
     # Per-CE LY

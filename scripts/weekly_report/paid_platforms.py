@@ -8,6 +8,57 @@ import math
 
 import config
 
+SOURCE_FIELDS = {
+    "spend": "spend", "cm1": "cm1", "paid_clicks": "paid_clicks",
+    "paid_conversions": "conversions", "paid_impressions": "paid_impressions",
+    "paid_revenue": "offline_revenue", "coupon_wallet": "coupon_wallet",
+}
+GOOGLE_SOURCE_FIELDS = {
+    "spend": "spend_g", "cm1": "cm1_g", "paid_clicks": "paid_clicks_g",
+    "paid_conversions": "conversions_g", "paid_impressions": "sis_impr",
+    "paid_revenue": "offline_revenue_g", "coupon_wallet": "coupon_wallet_g",
+    "sis_impr": "sis_impr", "sis_elig": "sis_elig",
+}
+
+
+def _source_number(raw):
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        parsed = float(raw)
+    except (ValueError, TypeError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def missing_source_fields(source):
+    fields = set(SOURCE_FIELDS.values()) | set(GOOGLE_SOURCE_FIELDS.values())
+    return sorted(field for field in fields if _source_number(source.get(field)) is None)
+
+
+def source_platforms(source):
+    """Retain exact query operands, including nulls, without defaulting to zero."""
+    return platform_metrics(
+        {key: _source_number(source.get(field)) for key, field in SOURCE_FIELDS.items()},
+        {key: _source_number(source.get(field)) for key, field in GOOGLE_SOURCE_FIELDS.items()},
+    )
+
+
+def attach_aggregate_platforms(row, paid_frame):
+    """Add history to a manual market rollup without changing its core fields."""
+    if paid_frame.empty:
+        row["paid_platform_source_status"] = "no_rows"
+    else:
+        fields = set(SOURCE_FIELDS.values()) | set(GOOGLE_SOURCE_FIELDS.values())
+        # A partial sum is not a complete platform total: retain null if any
+        # constituent is missing. Core report aggregates remain untouched.
+        operands = {key: float(paid_frame[key].sum(min_count=len(paid_frame))) for key in fields if key in paid_frame}
+        if "coupon_wallet_g" in paid_frame:
+            row["paid_platforms"] = source_platforms(operands)
+        missing = missing_source_fields(operands)
+        if missing:
+            row["paid_platform_missing_fields"] = missing
+
 
 def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None

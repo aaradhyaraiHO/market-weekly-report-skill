@@ -345,6 +345,10 @@ def build_global(week: str) -> dict:
             "yoy_pct": _num(100.0 * (rev / ly_wk - 1)) if ly_wk else None,
             "sis_impr": _num(sis_impr), "sis_elig": _num(sis_elig), "organic_gbv": _num(organic),
         })
+        # Preserve the same platform history as the CE and market builders.
+        # Do not average platform ratios or turn an all-null source into zero.
+        from paid_platforms import attach_aggregate_platforms
+        attach_aggregate_platforms(market_weekly[-1], pw)
 
     # ---- 4. Headlines ----
     def _ce_rev(ce_id, wk):
@@ -437,6 +441,8 @@ def build_global(week: str) -> dict:
         p = ly_mkt_paid.loc[wk] if (not ly_mkt_paid.empty and wk in ly_mkt_paid.index) else None
         row = _weekly_metrics(b, p)
         row["week"] = config.iso(wk)
+        from paid_platforms import attach_aggregate_platforms
+        attach_aggregate_platforms(row, paid_ly[paid_ly["aligned_week"] == wk] if not paid_ly.empty else paid_ly)
         weekly_ly.append(row)
 
     for ce in ces:

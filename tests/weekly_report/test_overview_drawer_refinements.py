@@ -90,6 +90,7 @@ class DrawerEvidenceTest(unittest.TestCase):
         before = build_snapshot._weekly_metrics(None, raw)
         after = build_snapshot._weekly_metrics(None, {**raw, 'coupon_wallet_g': 80})
         self.assertEqual(after.pop('paid_platforms')['bing']['paid_rpc'], 3)
+        self.assertEqual(before.pop('paid_platform_missing_fields'), ['coupon_wallet_g'])
         self.assertEqual(after, before)
 
     def test_query_keeps_search_grain_and_adds_google_coupon_operand(self):

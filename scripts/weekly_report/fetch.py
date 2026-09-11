@@ -288,7 +288,7 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
     """
     Weekly CE paid rollup: spend, coupon+wallet, CM1 (with pre/post Sep-2025
     migration fallback), conversions, paid clicks, conv value.
-    Source: ads_campaign_stats (Google Ads + Microsoft/Bing, all campaign types).
+    Source: ads_campaign_stats (Google Ads + Microsoft/Bing Search only).
     """
     sql = f"""
     SELECT
@@ -353,7 +353,20 @@ def ce_weekly_ads(market: str | None, start: dt.date, end: dt.date) -> pd.DataFr
     params = {"start": config.iso(start), "end": config.iso(end)}
     if market:
         params["market"] = market
-    return query_df(sql, "ce_weekly_ads", params)
+    frame = query_df(sql, "ce_weekly_ads", params)
+    # Flag incomplete evidence without changing query values or core metrics.
+    from paid_platforms import SOURCE_FIELDS, GOOGLE_SOURCE_FIELDS
+    import logging
+    fields = set(SOURCE_FIELDS.values()) | set(GOOGLE_SOURCE_FIELDS.values())
+    missing_columns = sorted(fields - set(frame.columns))
+    null_counts = {field: int(frame[field].isna().sum()) for field in sorted(fields)
+                   if field in frame and frame[field].isna().any()}
+    if frame.empty or missing_columns or null_counts:
+        logging.getLogger(__name__).warning(
+            "Google/Bing source coverage [%s %s..%s]: rows=%s missing_columns=%s null_counts=%s",
+            market or "Headout", start, end, len(frame), missing_columns, null_counts,
+        )
+    return frame
 
 
 # --------------------------------------------------------------------------- #
