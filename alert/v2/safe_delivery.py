@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import uuid
@@ -19,6 +20,35 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from post_message import expand_blocks, chunk_blocks, normalize_to_messages, validate_payload
+
+
+# Only the emoji emitted by this alert/RCA format. Unknown rewrites fail closed.
+# Slack returns Unicode emoji as colon aliases and escapes &, <, > on read-back:
+# https://docs.slack.dev/messaging/formatting-message-text/
+SLACK_EMOJI = {
+    '📊': ':bar_chart:', '📈': ':chart_with_upwards_trend:',
+    '📉': ':chart_with_downwards_trend:', '📋': ':clipboard:',
+    '📝': ':memo:', '🎯': ':dart:', '🧵': ':thread:',
+    '🚦': ':vertical_traffic_light:', '🔴': ':red_circle:',
+    '🟢': ':large_green_circle:', '🟡': ':large_yellow_circle:',
+    '⚪': ':white_circle:', '⭐': ':star:',
+    '🔻': ':small_red_triangle_down:', '🔺': ':small_red_triangle:',
+    '➖': ':heavy_minus_sign:', '🛠️': ':hammer_and_wrench:',
+    '📎': ':paperclip:',
+}
+
+
+def slack_text(value):
+    """Compare display-equivalent text without changing frozen payload hashes.
+
+    Decode only Slack's three supported entities, once. Do not strip markup,
+    whitespace, mentions, numbers, or link destinations to force a match.
+    """
+    entities = {'&amp;': '&', '&lt;': '<', '&gt;': '>'}
+    value = re.sub(r'&(?:amp|lt|gt);', lambda m: entities[m[0]], value)
+    for unicode, alias in SLACK_EMOJI.items():
+        value = value.replace(unicode, alias)
+    return value
 
 
 def stable(value):
@@ -37,7 +67,17 @@ def matches(expected, actual):
     """Slack may add defaults/IDs; all authored fields must still match."""
     expected, actual = stable(expected), stable(actual)
     if isinstance(expected, dict):
-        return isinstance(actual, dict) and all(k in actual and matches(v, actual[k]) for k, v in expected.items())
+        if not isinstance(actual, dict):
+            return False
+        for key, value in expected.items():
+            if key not in actual:
+                return False
+            if key == 'text' and isinstance(value, str) and expected.get('type') in ('mrkdwn', 'plain_text', 'text'):
+                if not isinstance(actual[key], str) or slack_text(value) != slack_text(actual[key]):
+                    return False
+            elif not matches(value, actual[key]):
+                return False
+        return True
     if isinstance(expected, list):
         return isinstance(actual, list) and len(expected) == len(actual) and all(matches(a, b) for a, b in zip(expected, actual))
     return expected == actual
@@ -186,7 +226,8 @@ def deliver_market(market, slack, ledger_path, state_dir, verify_only=False):
         ts = record.get('ts') or (prior.get(key+'_ts') if operation['anchor'] is None else None)
         candidates = [m for m in rows if (ts and m.get('ts') == ts) or m.get('client_msg_id') == operation['client_msg_id']]
         if not candidates and not ts and not record:
-            candidates = [m for m in rows if matches(operation['blocks'], m.get('blocks')) and m.get('text') == operation['text']]
+            candidates = [m for m in rows if matches(operation['blocks'], m.get('blocks'))
+                          and isinstance(m.get('text'), str) and slack_text(m['text']) == slack_text(operation['text'])]
         if len(candidates) > 1:
             raise ValueError(f'{slug}/{key}: duplicate matching messages; manual reconciliation required')
         if candidates:

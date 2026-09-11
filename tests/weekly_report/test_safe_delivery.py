@@ -123,3 +123,25 @@ class DeliveryTests(unittest.TestCase):
         self.ledger.write_text(json.dumps(old))
         self.run_delivery()
         self.assertEqual(json.loads(self.ledger.read_text())['2026-08-23'], old['2026-08-23'])
+
+    def test_slack_emoji_and_entity_readback_is_reconciled_without_repost(self):
+        for op in self.market['operations']:
+            op['blocks'] = [block('📊 Top & Bottom · $123 · <https://example.com/?a=1&b=2|Report> · ' + op['key'])]
+        frozen_hash = delivery.digest(self.market)
+        self.run_delivery()
+        for rows in self.slack.rows.values():
+            for row in rows:
+                row['blocks'][0]['text']['text'] = row['blocks'][0]['text']['text'].replace('📊', ':bar_chart:').replace('&', '&amp;')
+        self.assertEqual(self.run_delivery()['status'], 'verified')
+        self.assertEqual(self.slack.posts, 3)
+        self.assertEqual(delivery.digest(self.market), frozen_hash)
+
+    def test_text_normalization_does_not_hide_material_changes(self):
+        expected = block('📊 $123 · <https://example.com/?a=1&b=2|Report> <@U123>')
+        self.assertTrue(delivery.matches(expected, block(':bar_chart: $123 · <https://example.com/?a=1&amp;b=2|Report> <@U123>')))
+        for actual in (':bar_chart: $124 · <https://example.com/?a=1&amp;b=2|Report> <@U123>',
+                       ':bar_chart: $123 · <https://other.example/?a=1&amp;b=2|Report> <@U123>',
+                       ':bar_chart: $123 · <https://example.com/?a=1&amp;b=2|Report> <@U999>'):
+            self.assertFalse(delivery.matches(expected, block(actual)))
+        self.assertFalse(delivery.matches({'url':'https://example.com/?a=1&b=2'}, {'url':'https://example.com/?a=1&amp;b=2'}))
+        self.assertEqual(delivery.slack_text('&amp;lt; &quot;'), '&lt; &quot;')

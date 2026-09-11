@@ -13,6 +13,12 @@ The hardened V2 path is implemented with local regression tests, but has NOT
 completed a supervised production generation/deploy/new-Slack-delivery run.
 Do not describe code tests as live end-to-end verification.
 
+A bounded real CSEE canary subsequently passed fresh generation, preview
+deployment, two browser route checks, two test parents plus ten RCA replies,
+and duplicate-free retry. It exposed and fixed Slack text-normalization handling.
+See `csee-test-channel-canary-2026-09-11.md` for exact evidence and limitations.
+This is not the full production runner/all-market gate. Latest suite: 391 tests.
+
 Verification evidence: 389 local weekly/V1 tests passed, including interrupted
 delivery, RCA batch constraints, notebook preservation and browser-proof tests.
 The additional handoff checks retain unexecuted verification/delivery commands
