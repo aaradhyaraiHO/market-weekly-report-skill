@@ -555,7 +555,7 @@
       if((S.resourceErrors[q.ce_id]||{}).suggestions){count='Suggestions unavailable';tabs[0][2]='—';}
       if(S.workError){count='Actions unavailable';tabs[1][2]='—';tabs[2][2]='—';}
       var active=S.workTab||'needs',panel=active==='needs'?(suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')):active==='open'?(openHtml||'<div class="rv-empty-state"><strong>No open work</strong><span>Approved actions will appear here.</span></div>'):active==='later'?(laterHtml||'<div class="rv-empty-state"><strong>Nothing scheduled</strong><span>Checks and explicit carry-forward items will appear here.</span></div>'):(doneHtml||'<div class="rv-empty-state"><strong>No completed work</strong><span>Recent completed items will appear here.</span></div>');
-      if(S.workError)panel='<p role="status" class="rv-audit-status">Could not load actions. Existing work has not been removed.</p><button class="rv-btn" type="button" id="rv-retry-work">Retry actions</button>'+openHtml;
+      if(S.workError)panel='<p role="status" class="rv-audit-status">Could not load actions. Existing work has not been removed. '+esc(S.workError)+'</p><button class="rv-btn" type="button" id="rv-retry-work"'+(S.workLoading?' disabled':'')+'>'+(S.workLoading?'Retrying actions…':'Retry actions')+'</button>'+openHtml;
       else if(S.workLoading&&!allWork.length)panel='<p role="status" class="rv-subtle">Loading open work…</p>';
       if((S.resourceErrors[q.ce_id]||{}).suggestions)panel='<p class="rv-subtle">Suggested actions could not load. <button class="rv-link" type="button" id="rv-retry-threads">Retry</button></p>'+panel;
       return '<section class="rv-flow-section rv-actions-module" id="rv-actions-section"><div class="rv-module-head"><span class="rv-module-icon attention" aria-hidden="true">✓</span><div class="rv-card-headings"><div class="rv-card-title">Actions</div><div class="rv-card-sub">Open work across all weeks.</div></div><span class="rv-card-count">'+count+'</span></div>' +
@@ -1059,8 +1059,8 @@
     }
     function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { if(CLOSED.indexOf(item.status)>=0)track("action_closed",{ce_id:item.ce_id,value_text:item.status,idempotency_key:"action_closed:"+item.work_id+":"+item.status});S.auditStatus[item.ce_id]=okMsg;toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
     function reloadWork() {
-      if(!api)return Promise.resolve();var market=S.market_slug;S.workLoading=true;
-      return api.work({market_slug:market}).then(function(res){if(S.market_slug!==market)return;S.work={};(res.work_items||[]).forEach(function(w){var k=String(w.ce_id);(S.work[k]=S.work[k]||[]).push(w);});S.workLoaded=true;S.workError="";}).catch(function(e){if(S.market_slug===market)S.workError=e.message||"Actions unavailable";}).finally(function(){if(S.market_slug===market){S.workLoading=false;render();}});
+      if(!api)return Promise.resolve();var market=S.market_slug;S.workLoading=true;render();
+      return api.work({market_slug:market},{refresh:true}).then(function(res){if(S.market_slug!==market)return;S.work={};(res.work_items||[]).forEach(function(w){var k=String(w.ce_id);(S.work[k]=S.work[k]||[]).push(w);});S.workLoaded=true;S.workError="";}).catch(function(e){if(S.market_slug===market)S.workError=e.message||"Actions unavailable";}).finally(function(){if(S.market_slug===market){S.workLoading=false;render();}});
     }
 
     function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }

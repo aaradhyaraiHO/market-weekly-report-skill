@@ -140,8 +140,11 @@ export default async function handler(req, res) {
     // A signed-request failure is a service problem, not an expired browser
     // session. Do not send the user through a pointless sign-in loop.
     let result; try { result = JSON.parse(text); } catch (_) {}
-    if (result && result.ok === false && result.error === "authenticated BGM identity required")
+    if (result && result.ok === false && result.error === "authenticated BGM identity required") {
+      // Never log request bodies, identities, signatures, or service credentials.
+      console.warn("review_backend_auth_failed", { action, elapsed_ms: Date.now() - started });
       return res.status(502).json({ ok: false, code: "REVIEW_BACKEND_AUTH_FAILED", error: "The note service could not verify this request. Your draft is kept; please retry. If it persists, report this error." });
+    }
     res.status(upstream.status);
     res.setHeader("content-type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
     return res.send(text);

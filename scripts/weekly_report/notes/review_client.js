@@ -110,9 +110,12 @@
       deleteComment: function(commentId, deletedBy) {
         return post("review_comment_delete", {comment_id: commentId, deleted_by: deletedBy});
       },
-      work: function(filter) {
+      work: function(filter, options) {
+        // The proxy may use two 20s read attempts. Do not abort actions at the
+        // generic 15s default while the same backend is still completing a read.
+        var opts=Object.assign({timeoutMs:45000},options||{});
         var rows=[],seen={};
-        function page(before){return request("review_work_list",Object.assign({},filter||{},before?{before:before}:{})).then(function(res){
+        function page(before){return request("review_work_list",Object.assign({},filter||{},before?{before:before}:{}),opts).then(function(res){
           rows=rows.concat(res.work_items||[]);
           if(res.next_before){if(seen[res.next_before])throw new Error("Action history could not finish loading. Please retry.");seen[res.next_before]=true;return page(res.next_before);}
           return Object.assign({},res,{work_items:rows});
