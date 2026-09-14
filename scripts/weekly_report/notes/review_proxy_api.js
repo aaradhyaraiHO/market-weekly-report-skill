@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { jwtVerify } from "jose";
 
 // The legacy proxy secret name is deliberately unsupported; Review owns separate credentials.
@@ -52,16 +52,48 @@ async function authenticatedActor(req) {
 // Two read attempts, including response-body reads, fit inside the browser's
 // 45-second budget. Mutations never enter this retry path.
 const READ_ATTEMPT_TIMEOUT_MS = 20000;
-async function readBackend(target) {
+// ContentService returns the result through a separate one-time URL. Follow
+// only its HTTPS content host, with no caching on *every* hop. Never replay the
+// original POST to recover an uncertain response.
+async function fetchReviewUpstream(target, init) {
+  let url = new URL(target), options = { ...init, redirect: "manual", cache: "no-store" };
+  for (let hop = 0; hop < 4; hop++) {
+    const response = await fetch(url, options);
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    if (!location) throw new Error("review redirect missing");
+    const next = new URL(location, url);
+    console.info("review_content_redirect", { hop: hop + 1, status: response.status, method: options.method, host: next.hostname });
+    if (next.protocol !== "https:" || next.hostname !== "script.googleusercontent.com")
+      throw new Error("unexpected review redirect");
+    // Never forward a mutation body or its signed credentials to a redirect.
+    if (options.method === "POST" && ![301, 302, 303].includes(response.status))
+      throw new Error("unsafe review POST redirect");
+    options = { method: "GET", redirect: "manual", cache: "no-store", signal: init.signal };
+    url = next;
+  }
+  throw new Error("review redirect limit");
+}
+async function readBackend(makeTarget, action) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), READ_ATTEMPT_TIMEOUT_MS);
     try {
-      const upstream = await fetch(target, { method: "GET", redirect: "follow", signal: controller.signal });
+      const upstream = await fetchReviewUpstream(makeTarget(), { method: "GET", signal: controller.signal });
       const text = await upstream.text();
-      if (upstream.status >= 500 && upstream.status <= 599) throw new Error("review upstream unavailable");
+      let body; try { body = JSON.parse(text); } catch (_) {}
+      // ContentService serves JSON via a one-time redirect. A transient HTML
+      // error (including a redirect 404) is not a Review result. Retry reads
+      // only; preserve genuine JSON validation/access errors without retrying.
+      const transportFailure = upstream.status === 429 || upstream.status >= 500 ||
+        (![401, 403].includes(upstream.status) && (!body || typeof body.ok !== "boolean"));
+      if (transportFailure) {
+        console.warn("review_read_transport_failure", { action, attempt: attempt + 1, status: upstream.status });
+        throw new Error("review upstream unavailable");
+      }
       return { upstream, text };
     } catch (error) {
+      console.warn("review_read_attempt_failed", { action, attempt: attempt + 1, timeout: controller.signal.aborted });
       if (attempt === 1) throw error;
     } finally {
       clearTimeout(timeout);
@@ -113,24 +145,35 @@ export default async function handler(req, res) {
   } catch (_) {
     return res.status(503).json({ ok: false, error: "isolated review backend misconfigured" });
   }
-  params.set("actor_email", actor.email);
-  params.set("actor_ts", String(Math.floor(Date.now() / 1000)));
-  const signature = createHmac("sha256", signingSecret)
-    .update(canonicalParams(params))
-    .digest("hex");
-  params.set("actor_sig", signature);
-  if (req.method === "GET") params.forEach((value, key) => target.searchParams.set(key, value));
+  function signParams() {
+    params.set("actor_email", actor.email);
+    params.set("actor_ts", String(Math.floor(Date.now() / 1000)));
+    // Distinct signed requests must not reuse a cached ContentService redirect.
+    // The nonce is covered by the existing signature; it adds no permission.
+    params.set("actor_nonce", randomUUID());
+    const signature = createHmac("sha256", signingSecret).update(canonicalParams(params)).digest("hex");
+    params.set("actor_sig", signature);
+  }
 
   res.setHeader("cache-control", "no-store");
   try {
     let upstream, text;
     if (req.method === "GET") {
-      ({ upstream, text } = await readBackend(target));
+      ({ upstream, text } = await readBackend(() => {
+        signParams();
+        const attemptTarget = new URL(target);
+        params.forEach((value, key) => attemptTarget.searchParams.set(key, value));
+        return attemptTarget;
+      }, action));
     } else {
+      signParams();
+      // Only an opaque nonce enters the POST URL; identity, text and secrets
+      // remain exclusively in the signed JSON body.
+      target.searchParams.set("transport_nonce", params.get("actor_nonce"));
       const controller = action === "review_comment_upsert" ? new AbortController() : null;
       if (controller) noteTimer = setTimeout(() => controller.abort(), 18000);
-      upstream = await fetch(target, {
-        method: "POST", redirect: "follow", headers: {"content-type": "application/json"},
+      upstream = await fetchReviewUpstream(target, {
+        method: "POST", headers: {"content-type": "application/json"},
         ...(controller ? { signal: controller.signal } : {}),
         body: JSON.stringify(Object.fromEntries(params.entries()))
       });
@@ -140,9 +183,10 @@ export default async function handler(req, res) {
     // A signed-request failure is a service problem, not an expired browser
     // session. Do not send the user through a pointless sign-in loop.
     let result; try { result = JSON.parse(text); } catch (_) {}
-    if (result && result.ok === false && result.error === "authenticated BGM identity required") {
+    if (result && result.ok === false && /^authenticated BGM identity required(?: \[(missing_field|expired|signature_mismatch)\])?$/.test(result.error || "")) {
       // Never log request bodies, identities, signatures, or service credentials.
-      console.warn("review_backend_auth_failed", { action, elapsed_ms: Date.now() - started });
+      const reason = String(result.error).match(/\[(missing_field|expired|signature_mismatch)\]$/);
+      console.warn("review_backend_auth_failed", { action, elapsed_ms: Date.now() - started, reason: reason ? reason[1] : "unclassified" });
       return res.status(502).json({ ok: false, code: "REVIEW_BACKEND_AUTH_FAILED", error: "The note service could not verify this request. Your draft is kept; please retry. If it persists, report this error." });
     }
     res.status(upstream.status);

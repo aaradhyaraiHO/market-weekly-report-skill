@@ -21,6 +21,15 @@ const reply = body => ({ok:true,status:200,json:async()=>body});
   const pending=t.api.work({market_slug:'csee'});
   t.tick(30000); finish();
   assert.equal((await pending).work_items[0].work_id,'old','work read must survive the backend retry budget');
+  for(const method of ['reviewSet','receipts','suggestions','threads','weeklyCommentary']){
+    let complete;
+    const slow=setup((url,opts)=>new Promise((resolve,reject)=>{
+      complete=()=>resolve(reply({ok:true}));
+      opts.signal.addEventListener('abort',()=>reject(Object.assign(new Error(),{name:'AbortError'})));
+    }));
+    const read=slow.api[method]({market_slug:'csee'});slow.tick(30000);complete();
+    assert.equal((await read).ok,true,method+' must use the proxy read deadline');
+  }
   let count=0;
   const p=setup(async url=>{
     count++;

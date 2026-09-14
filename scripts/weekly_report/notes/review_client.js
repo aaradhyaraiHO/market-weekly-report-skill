@@ -38,7 +38,9 @@
         var value = params[key];
         if (value !== undefined && value !== null) query.set(key, String(value));
       });
-      var url = baseUrl + "?" + query.toString(), now = Date.now(), opts = options || {};
+      // Every normal GET shares the proxy's two-attempt read budget. Explicit
+      // short recovery probes (e.g. uncertain note saves) retain their override.
+      var url = baseUrl + "?" + query.toString(), now = Date.now(), opts = Object.assign({timeoutMs:45000},options||{});
       if (!opts.refresh && cache[url] && now - cache[url].at < (opts.ttl || CACHE_MS)) return Promise.resolve(cache[url].body);
       if (!opts.refresh && inflight[url]) return inflight[url];
       var requestGeneration=generation;

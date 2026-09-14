@@ -311,7 +311,7 @@ function reviewSafeEqual(a, b) {
   return mismatch === 0;
 }
 
-function reviewSignedActorEmail(p) {
+function reviewSignedActorStatus(p) {
   var email = String(p.actor_email || "").trim().toLowerCase();
   var timestamp = parseInt(p.actor_ts || "0", 10);
   var signature = String(p.actor_sig || "").toLowerCase();
@@ -319,11 +319,24 @@ function reviewSignedActorEmail(p) {
   // carry a trailing newline. Keep the signed Review boundary strict while
   // normalising that transport-only whitespace on both sides.
   var secret = String(PropertiesService.getScriptProperties().getProperty("REVIEW_MODE_PROXY_SECRET") || "").trim();
-  if (!email || !timestamp || !signature || !secret) return "";
-  if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) return "";
+  if (!email || !timestamp || !signature || !secret) {
+    console.warn("review_signature_rejected", JSON.stringify({action:String(p.action||""),reason:"missing_field",email_present:!!email,timestamp_present:!!timestamp,signature_present:!!signature,secret_present:!!secret}));
+    return {email:"",reason:"missing_field"};
+  }
+  var age = Math.floor(Date.now() / 1000) - timestamp;
+  if (Math.abs(age) > 300) {
+    console.warn("review_signature_rejected", JSON.stringify({action:String(p.action||""),reason:"expired",age_seconds:age}));
+    return {email:"",reason:"expired"};
+  }
   var expected = reviewHex(Utilities.computeHmacSha256Signature(reviewActorCanonicalParams(p), secret));
-  return reviewSafeEqual(signature, expected) ? email : "";
+  if (!reviewSafeEqual(signature, expected)) {
+    console.warn("review_signature_rejected", JSON.stringify({action:String(p.action||""),reason:"signature_mismatch",age_seconds:age,field_count:Object.keys(p).length}));
+    return {email:"",reason:"signature_mismatch"};
+  }
+  return {email:email,reason:"ok"};
 }
+
+function reviewSignedActorEmail(p) { return reviewSignedActorStatus(p).email; }
 
 function reviewActorEmail(p) {
   var email = "";
@@ -338,7 +351,7 @@ function reviewAuthenticatedActor(p) {
   if (!reviewBool(PropertiesService.getScriptProperties().getProperty("REVIEW_ENFORCE_ACCESS")))
     return {ok:false,error:"Review access enforcement is not configured"};
   var email=reviewActorEmail(p);
-  if(!email)return {ok:false,error:"authenticated BGM identity required"};
+  if(!email)return {ok:false,error:"authenticated BGM identity required ["+reviewSignedActorStatus(p).reason+"]"};
   return {ok:true,actor_email:email,enforcement:"on"};
 }
 
