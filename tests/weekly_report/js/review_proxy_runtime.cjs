@@ -6,20 +6,24 @@ const { createHmac, randomUUID } = require('node:crypto');
 const source = fs.readFileSync('scripts/weekly_report/notes/review_proxy_api.js', 'utf8')
   .replace(/^import .*;\n/gm, '').replace('export default async function handler', 'async function handler');
 function setup(fetcher, options = {}) {
-  const calls = [], delays = [], timers = new Map(); let next = 0, authCalls = 0;
+  const calls = [], delays = [], logs = [], timers = new Map(); let next = 0, authCalls = 0;
   const env = { REVIEW_MODE_APPS_SCRIPT_URL:'https://backend.example/exec', REVIEW_MODE_PROXY_SECRET:'test-signing', AUTH_SECRET:'test-auth', VERCEL_AUTOMATION_BYPASS_SECRET:'server-bypass', ...options.env };
   const c = vm.createContext({ URL, URLSearchParams, TextEncoder, AbortController, createHmac, randomUUID, process:{env},
     jwtVerify:async (token, key) => { authCalls++; assert.equal(token,'signed-session'); assert.equal(Buffer.from(key).toString(),'test-auth'); if(options.rejectAuth) throw Error('private auth detail'); return {payload:options.actor || {email:'BGM@HEADOUT.COM',name:'BGM'}}; },
     fetch:async (url, init) => { calls.push({url:String(url),init}); return fetcher(url,init,calls.length); },
     setTimeout:(fn,delay) => { const id=++next;timers.set(id,fn);delays.push(delay);if(options.expire)queueMicrotask(()=>{if(timers.has(id))fn();});return id; },
-    clearTimeout:id=>timers.delete(id)
+    clearTimeout:id=>timers.delete(id),
+    console:{info:(event,fields)=>logs.push({event,...fields}),warn:(event,fields)=>logs.push({event,...fields})}
   });
   vm.runInContext(source,c);
+  // Mock the fresh-connection network boundary, like the original fetch edge.
+  // Its real stream/abort adapter is exercised in review_content_runtime.cjs.
+  c.fetchReviewContent=(url,signal)=>c.fetch(url,{method:'GET',redirect:'manual',cache:'no-store',signal});
   async function request(method='GET',url='/api/review?action=review_weekly_list&market_slug=north_america&week=2026-08-30',body,headers={cookie:'mmr_session=signed-session',host:'report.example'}) {
     const res={code:200,headers:{},status(n){this.code=n;return this;},setHeader(k,v){this.headers[k]=v;},json(v){this.body=v;return this;},send(v){this.body=v;return this;}};
     await c.handler({method,url,body,headers},res);return res;
   }
-  return {request,calls,delays,timers,authCalls:()=>authCalls};
+  return {request,calls,delays,timers,logs,authCalls:()=>authCalls};
 }
 const response=(status=200,body='{"ok":true,"weekly":[{"week_start":"2026-08-30"}]}')=>new Response(body,{status,headers:{'content-type':'application/json'}});
 function signed(call) {
@@ -106,7 +110,14 @@ function signed(call) {
     assert.equal(t.calls[1].init.method,'GET');assert.equal(t.calls[1].init.body,undefined);
     assert.equal(t.calls[1].init.headers,undefined);
     assert.ok(t.calls.every(x=>x.init.redirect==='manual'&&x.init.cache==='no-store'));
+    assert.equal(t.logs.filter(x=>x.event==='review_hop_headers').length,2);
+    assert.ok(t.logs.every(x=>x.request_id===r.headers['x-review-request-id']));
+    const safe=JSON.stringify(t.logs);
+    for(const privateValue of ['test-signing','bgm@headout.com','one_time=test','actor_sig','server-bypass'])assert.ok(!safe.includes(privateValue));
   }
+  let canceled=false;
+  t=setup((u,i,n)=>n===1?{status:302,headers:new Headers({location:'https://script.googleusercontent.com/result'}),body:{cancel:async()=>{canceled=true;}}}:(assert.equal(canceled,true),response()));
+  r=await t.request();assert.equal(r.code,200);assert.equal(canceled,true);
   t=setup((u,i,n)=>{if(n===1)return redirect();throw Error('content response lost');});
   r=await t.request('POST','/api/review',{action:'review_weekly_slack_post'});
   assert.equal(r.code,502);assert.equal(t.calls.filter(x=>x.init.method==='POST').length,1);

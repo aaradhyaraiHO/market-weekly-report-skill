@@ -69,10 +69,10 @@ class MiniAuditContract(unittest.TestCase):
         load=function('loadCe','select')
         for resource in ('resource("notes"','resource("comments"','resource("suggestions"','resource("threads"'):
             self.assertIn(resource,load)
-        self.assertIn('S.ceRequestSeq[ceId]===seq',load)
+        self.assertIn('S.ceResourceLoads[key]===loads',load)
         self.assertIn('api.weeklyCommentary({market_slug:market,ce_id:ceId,week:week}',load)
         self.assertIn('timeoutMs:45000',load)
-        self.assertIn('return pending.then',load)
+        self.assertIn('return entry.pending.then',load)
         self.assertIn('sameReport(id)',function('saveWriteup','ensureAuthor'))
 
     def test_failed_reads_are_not_reported_as_empty_or_complete(self):

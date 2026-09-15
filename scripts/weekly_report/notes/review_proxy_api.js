@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import { jwtVerify } from "jose";
 
 // The legacy proxy secret name is deliberately unsupported; Review owns separate credentials.
@@ -52,18 +53,95 @@ async function authenticatedActor(req) {
 // Two read attempts, including response-body reads, fit inside the browser's
 // 45-second budget. Mutations never enter this retry path.
 const READ_ATTEMPT_TIMEOUT_MS = 20000;
+// The one-time ContentService response is a GET, including after a mutation.
+// Keep this hop off fetch's shared connection pool: live timing isolated stalls
+// before its response headers while the original Apps Script hop was fast.
+// A fresh TLS connection retains normal certificate verification and the same
+// abort budget. It never re-executes the original action or forwards its body.
+function fetchReviewContentOnce(url, signal, trace) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const req = httpsRequest(url, { method: "GET", agent: false, signal }, response => {
+      const chunks = [];
+      const body = new Promise((done, fail) => {
+        response.on("data", chunk => chunks.push(chunk));
+        response.on("end", () => done(Buffer.concat(chunks).toString("utf8")));
+        response.on("error", fail);
+        response.on("aborted", () => fail(new Error("review content interrupted")));
+      });
+      // Redirect bodies can be canceled without a text() consumer.
+      body.catch(() => {});
+      resolve({ status: response.statusCode,
+        headers: { get: name => response.headers[name.toLowerCase()] || null },
+        body: { cancel: async () => response.destroy() }, text: () => body });
+    });
+    req.on("socket", socket => {
+      for (const phase of ["lookup", "connect", "secureConnect"])
+        socket.once(phase, () => console.info("review_content_connection", { ...trace, phase, elapsed_ms: Date.now() - started }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+async function fetchReviewContent(url, signal, trace) {
+  // A one-time mutation result can be consumed even if its acknowledgement is
+  // lost. Preserve its original deadline and durable-ID reconciliation; do not
+  // cut it short or assume the response URL can safely be reused.
+  if (trace.original_method === "POST") return fetchReviewContentOnce(url, signal, trace);
+  // Healthy content headers arrived in 85–137ms; stalled connections stayed
+  // silent after TLS until the entire 20s backend attempt expired. Recover
+  // that response GET, not the backend operation. Three 3s header budgets stay
+  // inside the existing overall read deadline; body reads retain that deadline.
+  for (let contentAttempt = 1; contentAttempt <= 3; contentAttempt++) {
+    if (signal?.aborted) throw new Error("review content aborted");
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (signal) signal.addEventListener("abort", abort, { once: true });
+    const timer = setTimeout(abort, 3000);
+    let handedOff = false;
+    const cleanup = () => { clearTimeout(timer); if (signal) signal.removeEventListener("abort", abort); };
+    try {
+      const response = await fetchReviewContentOnce(url, controller.signal, { ...trace, content_attempt: contentAttempt });
+      clearTimeout(timer);
+      handedOff = true;
+      const readText = response.text, cancel = response.body.cancel;
+      response.text = () => readText().finally(cleanup);
+      response.body.cancel = async () => { try { await cancel(); } finally { cleanup(); } };
+      return response;
+    } catch (error) {
+      console.warn("review_content_retry", { ...trace, content_attempt: contentAttempt, timeout: controller.signal.aborted, exhausted: contentAttempt === 3 });
+      if (signal?.aborted || contentAttempt === 3) throw error;
+    } finally {
+      if (!handedOff) cleanup();
+    }
+  }
+}
 // ContentService returns the result through a separate one-time URL. Follow
 // only its HTTPS content host, with no caching on *every* hop. Never replay the
 // original POST to recover an uncertain response.
-async function fetchReviewUpstream(target, init) {
+async function fetchReviewUpstream(target, init, trace = {}) {
   let url = new URL(target), options = { ...init, redirect: "manual", cache: "no-store" };
   for (let hop = 0; hop < 4; hop++) {
-    const response = await fetch(url, options);
+    const started = Date.now();
+    const fields = { ...trace, hop, host: url.hostname, method: options.method };
+    let response;
+    try {
+      response = url.hostname === "script.googleusercontent.com"
+        ? await fetchReviewContent(url, init.signal, { ...trace, original_method: init.method })
+        : await fetch(url, options);
+      console.info("review_hop_headers", { ...fields, status: response.status, elapsed_ms: Date.now() - started });
+    } catch (error) {
+      console.warn("review_hop_failed", { ...fields, phase: "headers", elapsed_ms: Date.now() - started, timeout: !!init.signal?.aborted });
+      throw error;
+    }
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get("location");
+    // Release the redirect response before issuing another fetch. Leaving its
+    // body unread can strand pooled connections during concurrent CE reads.
+    if (response.body) await response.body.cancel();
     if (!location) throw new Error("review redirect missing");
     const next = new URL(location, url);
-    console.info("review_content_redirect", { hop: hop + 1, status: response.status, method: options.method, host: next.hostname });
+    console.info("review_content_redirect", { ...trace, hop: hop + 1, status: response.status, method: options.method, host: next.hostname });
     if (next.protocol !== "https:" || next.hostname !== "script.googleusercontent.com")
       throw new Error("unexpected review redirect");
     // Never forward a mutation body or its signed credentials to a redirect.
@@ -74,13 +152,22 @@ async function fetchReviewUpstream(target, init) {
   }
   throw new Error("review redirect limit");
 }
-async function readBackend(makeTarget, action) {
+async function readBackend(makeTarget, action, request_id) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), READ_ATTEMPT_TIMEOUT_MS);
     try {
-      const upstream = await fetchReviewUpstream(makeTarget(), { method: "GET", signal: controller.signal });
-      const text = await upstream.text();
+      const trace = { action, request_id, attempt: attempt + 1 };
+      const upstream = await fetchReviewUpstream(makeTarget(), { method: "GET", signal: controller.signal }, trace);
+      const bodyStarted = Date.now();
+      let text;
+      try {
+        text = await upstream.text();
+        console.info("review_body_complete", { ...trace, elapsed_ms: Date.now() - bodyStarted, status: upstream.status });
+      } catch (error) {
+        console.warn("review_body_failed", { ...trace, elapsed_ms: Date.now() - bodyStarted, timeout: controller.signal.aborted });
+        throw error;
+      }
       let body; try { body = JSON.parse(text); } catch (_) {}
       // ContentService serves JSON via a one-time redirect. A transient HTML
       // error (including a redirect 404) is not a Review result. Retry reads
@@ -88,12 +175,12 @@ async function readBackend(makeTarget, action) {
       const transportFailure = upstream.status === 429 || upstream.status >= 500 ||
         (![401, 403].includes(upstream.status) && (!body || typeof body.ok !== "boolean"));
       if (transportFailure) {
-        console.warn("review_read_transport_failure", { action, attempt: attempt + 1, status: upstream.status });
+        console.warn("review_read_transport_failure", { action, request_id, attempt: attempt + 1, status: upstream.status });
         throw new Error("review upstream unavailable");
       }
       return { upstream, text };
     } catch (error) {
-      console.warn("review_read_attempt_failed", { action, attempt: attempt + 1, timeout: controller.signal.aborted });
+      console.warn("review_read_attempt_failed", { action, request_id, attempt: attempt + 1, timeout: controller.signal.aborted });
       if (attempt === 1) throw error;
     } finally {
       clearTimeout(timeout);
@@ -138,6 +225,8 @@ export default async function handler(req, res) {
 
   let target;
   const started = Date.now();
+  const requestId = randomUUID();
+  res.setHeader("x-review-request-id", requestId);
   let noteTimer;
   try {
     target = new URL(APPS_SCRIPT_URL);
@@ -164,7 +253,7 @@ export default async function handler(req, res) {
         const attemptTarget = new URL(target);
         params.forEach((value, key) => attemptTarget.searchParams.set(key, value));
         return attemptTarget;
-      }, action));
+      }, action, requestId));
     } else {
       signParams();
       // Only an opaque nonce enters the POST URL; identity, text and secrets
@@ -176,7 +265,7 @@ export default async function handler(req, res) {
         method: "POST", headers: {"content-type": "application/json"},
         ...(controller ? { signal: controller.signal } : {}),
         body: JSON.stringify(Object.fromEntries(params.entries()))
-      });
+      }, { action, request_id: requestId, attempt: 1 });
       text = await upstream.text();
     }
     res.setHeader("server-timing", `review;dur=${Date.now() - started}`);
@@ -197,6 +286,7 @@ export default async function handler(req, res) {
       return res.status(504).json({ ok: false, code: "REVIEW_SAVE_UNCONFIRMED", error: "The save response did not arrive. Check the saved note before retrying." });
     return res.status(502).json({ ok: false, error: "review backend unavailable" });
   } finally {
+    console.info("review_request_complete", { action, request_id: requestId, elapsed_ms: Date.now() - started });
     clearTimeout(noteTimer);
   }
 }

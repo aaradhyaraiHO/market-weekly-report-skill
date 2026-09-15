@@ -285,6 +285,7 @@
         if(S.market_slug)S.reportDrafts[S.market_slug+"|"+S.week_start]={writeups:S.slackDrafts,threads:S.threadOperationByCe};
         var saved=S.reportDrafts[(h.market_slug||h.market)+"|"+h.week_start]||{};
         S.slackDrafts=saved.writeups||{};S.threadOperationByCe=saved.threads||{};S.threadOperation="";
+        S.ceResourceLoads={};
         S.renderedCe=null;S.selected=null;S.loaded=false;S.loadingCe={};S.weekly={};S.weeklyHist={};S.comments={};S.suggestions={};S.work={};S.workLoaded=false;S.ceLoadedAt={};S.resourceErrors={};S.threadRegistry={};S.threadRegistryLoaded={};S.threadRegistryError={};S.auditStatus={};S.meetingResults=[];S.meetingUnmatched=[];S.processSummary="";S.compose="";S.noteDraft=null;
       }
       S.headline = h; S.market = h.market || h.market_slug || ""; S.market_slug = h.market_slug || h.market || "";
@@ -315,30 +316,41 @@
       ]);
     }
 
-    function loadCe(ceId, force) {
+    function loadCe(ceId, force, onlyResources) {
       ceId=String(ceId);
       if (!api) return Promise.resolve();
-      if (S.loadingCe[ceId]) {
-        if (!force) return S.loadingCe[ceId];
-        var pending=S.loadingCe[ceId],pendingMarket=S.market_slug,pendingWeek=S.week_start;
-        return pending.then(function(){if(S.market_slug===pendingMarket&&S.week_start===pendingWeek)return loadCe(ceId,true);});
-      }
-      if (!force && S.ceLoadedAt[ceId] && Date.now()-S.ceLoadedAt[ceId]<60000) return Promise.resolve();
-      var market=S.market_slug, week=S.week_start, seq=(S.ceRequestSeq[ceId]||0)+1;
-      var commentVersion=(S.commentVersions||{})[ceId]||0;
-      S.ceRequestSeq[ceId]=seq;
+      var market=S.market_slug, week=S.week_start,key=market+"|"+week+"|"+ceId;
+      S.ceResourceLoads=S.ceResourceLoads||{};
+      var loads=S.ceResourceLoads[key]=S.ceResourceLoads[key]||{};
       var options={refresh:!!force,timeoutMs:45000}, errors=S.resourceErrors[ceId]=S.resourceErrors[ceId]||{};
-      function current(){return S.market_slug===market&&S.week_start===week&&S.ceRequestSeq[ceId]===seq;}
-      function resource(name,call,apply){return call.then(function(res){if(!current())return;apply(res);delete errors[name];if(String(S.selected)===ceId)render();}).catch(function(error){if(!current())return;errors[name]=error.message||"Unavailable";if(name==="threads")S.threadRegistryError[ceId]=true;if(String(S.selected)===ceId)render();});}
+      function current(){return S.market_slug===market&&S.week_start===week&&S.ceResourceLoads[key]===loads;}
+      function resource(name,call,apply){
+        if(onlyResources&&onlyResources.indexOf(name)<0)return Promise.resolve();
+        var entry=loads[name];
+        if(entry&&entry.pending){
+          // Panel retry clicks coalesce. A full refresh after a mutation still
+          // waits for its older read, then fetches the confirmed new state.
+          if(force&&!onlyResources)return entry.pending.then(function(){if(current())return loadCe(ceId,true,[name]);});
+          return entry.pending;
+        }
+        if(!force&&entry&&entry.loadedAt&&Date.now()-entry.loadedAt<60000&&!errors[name])return Promise.resolve();
+        entry=loads[name]={loadedAt:0};
+        var commentVersion=(S.commentVersions||{})[ceId]||0;
+        entry.pending=call().then(function(res){if(!current()||loads[name]!==entry)return;
+          if(name!=="comments"||((S.commentVersions||{})[ceId]||0)===commentVersion)apply(res);
+          entry.loadedAt=Date.now();delete errors[name];
+        }).catch(function(error){if(!current()||loads[name]!==entry)return;errors[name]=error.message||"Unavailable";if(name==="threads")S.threadRegistryError[ceId]=true;
+        }).finally(function(){entry.pending=null;if(current()&&String(S.selected)===ceId)render();});
+        return entry.pending;
+      }
       var calls=[
-        resource("notes",api.weeklyCommentary({market_slug:market,ce_id:ceId,week:week},"",8,options),function(res){var rows=res.weekly||[];S.weeklyHist[ceId]=rows;S.weekly[ceId]=rows.find(function(r){return String(r.week_start)===week;})||null;}),
-        resource("suggestions",api.suggestions({market_slug:market,ce_id:ceId,week:week},false,options),function(res){S.suggestions[ceId]=res.suggestions||[];}),
-        resource("comments",api.comments({market_slug:market,ce_id:ceId,week:week},false,options),function(res){if(((S.commentVersions||{})[ceId]||0)===commentVersion)S.comments[ceId]=res.comments||[];}),
-        resource("threads",api.threads({market_slug:market,ce_id:ceId},options),function(res){S.threadRegistry[ceId]={active:res.active_thread||null,threads:res.threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];})
+        resource("notes",function(){return api.weeklyCommentary({market_slug:market,ce_id:ceId,week:week},"",8,options);},function(res){var rows=res.weekly||[];S.weeklyHist[ceId]=rows;S.weekly[ceId]=rows.find(function(r){return String(r.week_start)===week;})||null;}),
+        resource("suggestions",function(){return api.suggestions({market_slug:market,ce_id:ceId,week:week},false,options);},function(res){S.suggestions[ceId]=res.suggestions||[];}),
+        resource("comments",function(){return api.comments({market_slug:market,ce_id:ceId,week:week},false,options);},function(res){S.comments[ceId]=res.comments||[];}),
+        resource("threads",function(){return api.threads({market_slug:market,ce_id:ceId},options);},function(res){S.threadRegistry[ceId]={active:res.active_thread||null,threads:res.threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];})
       ];
-      S.loadingCe[ceId]=Promise.all(calls).finally(function(){if(current()){delete S.loadingCe[ceId];S.ceLoadedAt[ceId]=Object.keys(errors).length?0:Date.now();}});
-      if((S.memoryDisclosures||{})[market+"|"+ceId+"|memory"])loadMemoryInline(ceId,force);
-      return S.loadingCe[ceId];
+      if(!onlyResources&&(S.memoryDisclosures||{})[market+"|"+ceId+"|memory"])loadMemoryInline(ceId,force);
+      return Promise.all(calls);
     }
     function loadMemoryInline(ceId,force){
       if(!api)return;
@@ -557,7 +569,7 @@
       var active=S.workTab||'needs',panel=active==='needs'?(suggHtml+(pending.length>3?'<button class="rv-link rv-see-more" type="button" id="rv-more-suggestions">'+(S.showAllSuggestions?'Show fewer':'See '+(pending.length-3)+' more')+'</button>':'')):active==='open'?(openHtml||'<div class="rv-empty-state"><strong>No open work</strong><span>Approved actions will appear here.</span></div>'):active==='later'?(laterHtml||'<div class="rv-empty-state"><strong>Nothing scheduled</strong><span>Checks and explicit carry-forward items will appear here.</span></div>'):(doneHtml||'<div class="rv-empty-state"><strong>No completed work</strong><span>Recent completed items will appear here.</span></div>');
       if(S.workError)panel='<p role="status" class="rv-audit-status">Could not load actions. Existing work has not been removed. '+esc(S.workError)+'</p><button class="rv-btn" type="button" id="rv-retry-work"'+(S.workLoading?' disabled':'')+'>'+(S.workLoading?'Retrying actions…':'Retry actions')+'</button>'+openHtml;
       else if(S.workLoading&&!allWork.length)panel='<p role="status" class="rv-subtle">Loading open work…</p>';
-      if((S.resourceErrors[q.ce_id]||{}).suggestions)panel='<p class="rv-subtle">Suggested actions could not load. <button class="rv-link" type="button" id="rv-retry-threads">Retry</button></p>'+panel;
+      if((S.resourceErrors[q.ce_id]||{}).suggestions)panel='<p class="rv-subtle">Suggested actions could not load. <button class="rv-link" type="button" id="rv-retry-suggestions">Retry suggestions</button></p>'+panel;
       return '<section class="rv-flow-section rv-actions-module" id="rv-actions-section"><div class="rv-module-head"><span class="rv-module-icon attention" aria-hidden="true">✓</span><div class="rv-card-headings"><div class="rv-card-title">Actions</div><div class="rv-card-sub">Open work across all weeks.</div></div><span class="rv-card-count">'+count+'</span></div>' +
         '<div class="rv-source-bridge"><span aria-hidden="true">↓</span><strong>'+pending.length+' follow-up'+(pending.length===1?'':'s')+' suggested from '+esc((S.weekly[q.ce_id]||{}).slack_discussion_number?'Slack discussion #'+(S.weekly[q.ce_id]||{}).slack_discussion_number:'the active Slack discussion')+'</strong></div><div class="rv-action-surface"><p class="rv-focus-summary">'+esc(focus)+'</p><div class="rv-action-tabs" role="tablist">'+tabs.map(function(t){return '<button type="button" role="tab" class="rv-action-tab'+(active===t[0]?' active':'')+'" aria-selected="'+(active===t[0]?'true':'false')+'" data-work-tab="'+t[0]+'">'+t[1]+' <span>'+t[2]+'</span></button>';}).join('')+'</div><div class="rv-action-panel">'+panel+'</div>' +
         '<div class="rv-add-row"><button class="rv-btn ghost small" type="button" id="rv-add-action">＋ Add action</button></div>'+composer+'</div></section>';
@@ -695,8 +707,9 @@
       bind("#rv-save-writeup",saveWriteup);bind("#rv-send-writeup",sendWriteup);
       bind("#rv-new-writeup",function(){openWriteup('new');});
       bind("#rv-cancel-writeup",function(){closeWriteup(S.selected);render();});
-      bind("#rv-retry-notes",function(){loadCe(S.selected,true);});
-      bind("#rv-retry-discussion",function(){loadCe(S.selected,true);});
+      bind("#rv-retry-notes",function(){loadCe(S.selected,true,["comments"]);});
+      bind("#rv-retry-discussion",function(){loadCe(S.selected,true,["notes"]);});
+      bind("#rv-retry-suggestions",function(){loadCe(S.selected,true,["suggestions"]);});
       root.querySelectorAll("[data-edit-writeup]").forEach(function(b){b.onclick=function(){openWriteup('edit',b.dataset.editWriteup);};});
       root.querySelectorAll("[data-discuss-writeup]").forEach(function(b){b.onclick=function(){openWriteup('reply',b.dataset.discussWriteup);};});
       bind("#rv-memory-refresh",function(){loadCe(S.selected,true);reloadWork();});
@@ -749,7 +762,7 @@
       root.querySelectorAll("[data-role-delete]").forEach(function(b){b.onclick=function(){deleteRoleNote(b.dataset.roleDelete);};});
       root.querySelectorAll("[data-role-input]").forEach(function(el){el.oninput=function(){S.roleDrafts[roleDraftKey(el.dataset.roleInput)]=el.value;};});
       bind("#rv-start-slack", startSlack);
-      bind("#rv-retry-threads",function(){delete S.ceLoadedAt[S.selected];delete S.threadRegistryError[S.selected];loadCe(S.selected);render();});
+      bind("#rv-retry-threads",function(){loadCe(S.selected,true,["threads"]);});
       root.querySelectorAll("[data-resolve]").forEach(function(b){b.onclick=function(){focusRequirement(b.dataset.resolve);};});
       bind("#rv-save-finish-reason",function(){var input=root.querySelector("#rv-no-discussion-reason"),value=String(input?input.value:"").trim();if(!value){if(input)input.focus();toast("Add a concise reason");return;}S.noDiscussionDrafts[S.selected]=value;S.finishReasonOpen=false;render();toast("No-discussion reason ready for the review receipt");});
       var finishReason=root.querySelector("#rv-no-discussion-reason");if(finishReason)finishReason.oninput=function(){S.noDiscussionDrafts[S.selected]=finishReason.value;};
