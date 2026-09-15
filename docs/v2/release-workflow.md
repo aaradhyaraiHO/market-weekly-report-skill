@@ -2,7 +2,8 @@
 
 This is the operator contract for `run_v2_release.py`, `release_integrity.py`,
 `prepare_delivery.py` and `safe_delivery.py`. For latest observed deployment and
-activation evidence, consult `unattended-release-readiness-2026-09-11.md`.
+activation evidence, consult `recurring-run-closeout-2026-09-15.md`;
+`unattended-release-readiness-2026-09-11.md` is historical evidence.
 Implementation and local tests are not a supervised live-run pass.
 
 ## Prepare
@@ -99,8 +100,11 @@ existing `alert/posted_ledger.json` and persistent delivery journal.
 
 ## Activation
 
-Commit/push does not deploy or enable scheduling. Keep the existing Codex schedule
-paused until access works and a supervised completed-week release verifies every
-report link and Slack thread. Preserve comments, Mini Audit, CE memory, historical
-pages, Sheets and OKRs. Do not claim unattended readiness or the Monday 11 AM IST
-deadline is proven before measuring real runtime/upstream availability.
+Commit/push does not deploy or enable scheduling. Activation requires working
+access, a supervised completed-week release with every report link and Slack
+thread verified, and explicit user authorization. The September 14 run met the
+live verification gates after recovery; the user authorized recurring operation
+on September 15. See `recurring-run-closeout-2026-09-15.md` for the verified base
+and the schedule's operating contract. Preserve comments, Mini Audit, CE memory,
+historical pages, Sheets and OKRs. The Monday 11 AM IST deadline remains a target,
+not a proven guarantee; record actual runtime and upstream availability.

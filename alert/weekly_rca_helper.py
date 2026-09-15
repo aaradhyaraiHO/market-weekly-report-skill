@@ -242,7 +242,6 @@ def revenue_line_block(alert: dict) -> dict:
 
 
 def build_rca_entry(row, week_start: str, week_end: str) -> dict:
-    alert = analyze_ce_row(row, always=True, skip_floor_check=True, weekly=True)
     ce_id = str(row["combined_entity_id"])
     name = row.get("combined_entity_name") or "(unknown)"
     omni = build_omni_week_link(ce_id, week_start, week_end)
@@ -251,6 +250,36 @@ def build_rca_entry(row, week_start: str, week_end: str) -> dict:
         "elements": [{"type": "mrkdwn",
                       "text": f"📊  <{omni}|Open in Omni — week over week>"}],
     }
+
+    # A real zero baseline is evidence, not missing data. Multiplicative
+    # attribution is undefined here; do not manufacture a percentage or driver.
+    try:
+        pre = float(row.get("pre_revenue"))
+        post = float(row.get("post_revenue"))
+        usable = math.isfinite(pre) and math.isfinite(post) and pre >= 0
+    except (TypeError, ValueError):
+        usable = False
+    if usable and pre == 0 and post > 0:
+        previous_start = datetime.date.fromisoformat(week_start) - datetime.timedelta(days=7)
+        previous_end = previous_start + datetime.timedelta(days=6)
+        text = (
+            f"*Predicted revenue:* ${pre:,.2f} → ${post:,.2f} "
+            f"(absolute increase: ${post - pre:,.2f})\n"
+            f"Prior week: {previous_start}–{previous_end}; "
+            f"current week: {week_start}–{week_end}.\n"
+            "*WoW:* N/A — zero prior-week revenue.\n"
+            "*Driver attribution:* N/A — multiplicative comparison is undefined "
+            "from a zero revenue baseline. This alone does not establish a growth driver."
+        )
+        return {
+            "fallback": f"{name} — zero prior-week revenue; WoW and driver attribution N/A",
+            "blocks": [ce_header_block(name, ce_id),
+                       {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+                       omni_block, THICK_SEPARATOR],
+        }
+
+    alert = (analyze_ce_row(row, always=True, skip_floor_check=True, weekly=True)
+             if usable and pre > 0 else None)
 
     if alert is None:
         # Pre revenue was 0 / unusable — emit a minimal note instead of full RCA

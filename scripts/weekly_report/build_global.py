@@ -688,6 +688,7 @@ def build_global(week: str) -> dict:
     snapshot_finalize.finalize_common(snapshot)
 
     # Tag bucket rows with market (for §4 Market column in the global report)
+    ce_by_id = {c["ce_id"]: c for c in ces}
     for section_key in ("bucket1_fluctuations",):
         for r in snapshot.get(section_key, []):
             ce = ce_by_id.get(r.get("ce_id"))
