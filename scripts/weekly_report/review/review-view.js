@@ -262,6 +262,13 @@
         var id = String(r.ce_id); if (!id || seen[id]) return; seen[id] = true;
         queue.push({ ce_id: id, ce_name: r.ce_name || nameById[id] || ("CE " + id), reason: r.reason || "Added to review", source: "manual" });
       });
+      // Saved activity is durable queue membership, not a browser-only drawer
+      // selection. Keep diagnostic flags/order unchanged and append active notes.
+      Object.keys(S.comments || {}).sort().forEach(function(id) {
+        var notes=(S.comments[id]||[]).filter(function(c){return !c.deleted_at&&c.market_slug===S.market_slug&&String(c.week_start)===S.week_start;});
+        if(!notes.length||seen[id])return;seen[id]=true;
+        queue.push({ce_id:id,ce_name:nameById[id]||notes[0].ce_name||("CE "+id),reason:"Has saved notes",source:"activity"});
+      });
       S.queue = queue; S.byId = {};
       queue.forEach(function (q) { S.byId[q.ce_id] = q; });
     }
@@ -285,7 +292,7 @@
         if(S.market_slug)S.reportDrafts[S.market_slug+"|"+S.week_start]={writeups:S.slackDrafts,threads:S.threadOperationByCe};
         var saved=S.reportDrafts[(h.market_slug||h.market)+"|"+h.week_start]||{};
         S.slackDrafts=saved.writeups||{};S.threadOperationByCe=saved.threads||{};S.threadOperation="";
-        S.ceResourceLoads={};
+        S.ceResourceLoads={};S.queueCommentsLoad=null;S.queueCommentsError="";S.setRowsList=[];S.setRows={};
         S.renderedCe=null;S.selected=null;S.loaded=false;S.loadingCe={};S.weekly={};S.weeklyHist={};S.comments={};S.suggestions={};S.work={};S.workLoaded=false;S.ceLoadedAt={};S.resourceErrors={};S.threadRegistry={};S.threadRegistryLoaded={};S.threadRegistryError={};S.auditStatus={};S.meetingResults=[];S.meetingUnmatched=[];S.processSummary="";S.compose="";S.noteDraft=null;
       }
       S.headline = h; S.market = h.market || h.market_slug || ""; S.market_slug = h.market_slug || h.market || "";
@@ -312,8 +319,40 @@
       return Promise.all([
         api.reviewSet(id).then(function(res){if(!current())return;S.setRowsList=res.review_set||[];S.setRows={};S.setRowsList.forEach(function(r){S.setRows[String(r.ce_id)]=r;});var selected=S.selected;buildQueue();if(selected)ensureLocalCe(selected);render();}).catch(function(){}),
         api.receipts(id).then(function(res){if(!current())return;S.receipts={};(res.receipts||[]).forEach(function(r){S.receipts[String(r.ce_id)]=r;});render();}).catch(function(){}),
+        loadQueueComments(),
         reloadWork()
       ]);
+    }
+
+    function loadQueueComments(force) {
+      if(!api)return Promise.resolve();
+      var prior=S.queueCommentsLoad;
+      if(prior&&prior.pending)return prior.pending;
+      if(!force&&prior&&prior.loadedAt&&Date.now()-prior.loadedAt<60000&&!S.queueCommentsError)return Promise.resolve();
+      var market=S.market_slug,week=S.week_start,started=Date.now(),versions=Object.assign({},S.commentVersions||{});
+      var entry=S.queueCommentsLoad={loadedAt:0};
+      entry.pending=api.comments({market_slug:market,week:week},false,{refresh:!!force,timeoutMs:45000}).then(function(res){
+        if(S.queueCommentsLoad!==entry||S.market_slug!==market||S.week_start!==week)return;
+        var grouped={};(res.comments||[]).forEach(function(c){
+          if(c.deleted_at||c.market_slug!==market||String(c.week_start)!==week)return;
+          var id=String(c.ce_id);(grouped[id]=grouped[id]||[]).push(c);
+        });
+        var ids=Object.keys(Object.assign({},S.comments,grouped));
+        ids.forEach(function(id){
+          var key=market+"|"+week+"|"+id,loads=(S.ceResourceLoads||{})[key]||{},read=loads.comments;
+          // Never overwrite a newer save or a CE read that completed after this
+          // market read began. Empty successful results may remove deleted notes.
+          if(((S.commentVersions||{})[id]||0)!==(versions[id]||0)||(read&&read.loadedAt>started))return;
+          S.comments[id]=grouped[id]||[];
+          if(!read||!read.pending){S.ceResourceLoads=S.ceResourceLoads||{};S.ceResourceLoads[key]=loads;loads.comments={loadedAt:Date.now()};}
+        });
+        entry.loadedAt=Date.now();S.queueCommentsError="";
+        var selected=S.selected;buildQueue();if(selected)ensureLocalCe(selected);render();
+      }).catch(function(error){
+        if(S.queueCommentsLoad!==entry)return;
+        S.queueCommentsError=error.message||"Unavailable";render();
+      }).finally(function(){entry.pending=null;if(S.queueCommentsLoad===entry)render();});
+      return entry.pending;
     }
 
     function loadCe(ceId, force, onlyResources) {
@@ -346,10 +385,11 @@
       var calls=[
         resource("notes",function(){return api.weeklyCommentary({market_slug:market,ce_id:ceId,week:week},"",8,options);},function(res){var rows=res.weekly||[];S.weeklyHist[ceId]=rows;S.weekly[ceId]=rows.find(function(r){return String(r.week_start)===week;})||null;}),
         resource("suggestions",function(){return api.suggestions({market_slug:market,ce_id:ceId,week:week},false,options);},function(res){S.suggestions[ceId]=res.suggestions||[];}),
-        resource("comments",function(){return api.comments({market_slug:market,ce_id:ceId,week:week},false,options);},function(res){S.comments[ceId]=res.comments||[];}),
+        resource("comments",function(){return api.comments({market_slug:market,ce_id:ceId,week:week},false,options);},function(res){S.comments[ceId]=res.comments||[];if(typeof buildQueue==="function"){buildQueue();ensureLocalCe(ceId);}}),
         resource("threads",function(){return api.threads({market_slug:market,ce_id:ceId},options);},function(res){S.threadRegistry[ceId]={active:res.active_thread||null,threads:res.threads||[]};S.threadRegistryLoaded[ceId]=true;delete S.threadRegistryError[ceId];})
       ];
       if(!onlyResources&&(S.memoryDisclosures||{})[market+"|"+ceId+"|memory"])loadMemoryInline(ceId,force);
+      if(current()&&String(S.selected)===ceId)render();
       return Promise.all(calls);
     }
     function loadMemoryInline(ceId,force){
@@ -393,10 +433,11 @@
     function renderAuditQueueRows(){
       var needle=String(S.queueQuery||"").trim().toLowerCase();
       var rows=needle?(S.headline.all_ces||[]).filter(function(ce){return [ce.ce_id,ce.ce_name,ce.city].join(" ").toLowerCase().indexOf(needle)>=0;}):S.queue;
-      return rows.length?rows.slice(0,100).map(function(q){var count=openWorkFor(String(q.ce_id)).length;return '<button class="rv-ce-row'+(String(q.ce_id)===S.selected?' active':'')+'" type="button" data-select-ce="'+esc(q.ce_id)+'"><span class="rv-ce-copy"><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+(q.reason?' · '+esc(q.reason):'')+(count?' · '+count+' open actions':'')+'</small></span></button>';}).join(""):'<p class="rv-subtle">'+(needle?'No matching CEs.':'Search for any CE to begin.')+'</p>';
+      return rows.length?(needle?rows.slice(0,100):rows).map(function(q){var count=openWorkFor(String(q.ce_id)).length;return '<button class="rv-ce-row'+(String(q.ce_id)===S.selected?' active':'')+'" type="button" data-select-ce="'+esc(q.ce_id)+'"><span class="rv-ce-copy"><strong>'+esc(q.ce_name)+'</strong><small>CE '+esc(q.ce_id)+(q.reason?' · '+esc(q.reason):'')+(count?' · '+count+' open actions':'')+'</small></span></button>';}).join(""):'<p class="rv-subtle">'+(needle?'No matching CEs.':'Search for any CE to begin.')+'</p>';
     }
     function renderSide(){
-      return '<aside class="rv-side" aria-label="Mini Audit queue"><div class="rv-summary-heading"><h2>Choose a CE</h2><button class="rv-close" id="rv-close-queue" type="button" aria-label="Close CE browser">×</button></div><label class="rv-search"><span class="sr-only">Search CE</span><input id="rv-search-ce" aria-label="Search CE" type="search" placeholder="Search all CEs by name or ID" value="'+esc(S.queueQuery||"")+'"><button id="rv-clear-search" type="button" aria-label="Clear CE search">×</button></label><div class="rv-queue-panel" id="rv-queue-review">'+renderAuditQueueRows()+'</div></aside>';
+      var status=S.queueCommentsError?'<p class="rv-subtle" role="status">Saved-note queue could not refresh. Existing entries are kept. <button class="rv-link" id="rv-retry-queue-notes" type="button">Retry saved-note queue</button></p>':S.queueCommentsLoad&&S.queueCommentsLoad.pending?'<p class="rv-subtle" role="status">Loading CEs with saved notes…</p>':'';
+      return '<aside class="rv-side" aria-label="Mini Audit queue"><div class="rv-summary-heading"><h2>Choose a CE</h2><button class="rv-close" id="rv-close-queue" type="button" aria-label="Close CE browser">×</button></div><label class="rv-search"><span class="sr-only">Search CE</span><input id="rv-search-ce" aria-label="Search CE" type="search" placeholder="Search all CEs by name or ID" value="'+esc(S.queueQuery||"")+'"><button id="rv-clear-search" type="button" aria-label="Clear CE search">×</button></label>'+status+'<div class="rv-queue-panel" id="rv-queue-review">'+renderAuditQueueRows()+'</div></aside>';
     }
     function renderPickerResults() {
       var all = (S.headline.all_ces || []);
@@ -480,7 +521,8 @@
       var cards=notes.filter(function(c){return !editing||!editor.comment||c.comment_id!==editor.comment.comment_id;}).map(function(c){
         return '<article class="rv-saved-note" data-saved-note="'+esc(c.comment_id)+'"><div class="rv-note-content"><div class="rv-source-meta">'+esc(c.source_author||c.author_name||'Reviewer')+' · '+esc(fmtWhen(c.updated_at||c.created_at))+(c.updated_at&&c.created_at!==c.updated_at?' · Edited':'')+'</div><p>'+esc(c.body)+'</p>'+(c.source_url?'<a class="rv-source-link" href="'+esc(c.source_url)+'" target="_blank" rel="noopener">'+(c.source_type==='slack'?'View in Slack':'View source')+' ↗</a>':'')+'</div><div class="rv-note-actions">'+(c.source_type==='manual'?'<button class="rv-link" type="button" data-edit-writeup="'+esc(c.comment_id)+'"'+(busy||editor?' disabled':'')+'>Edit</button>':'')+'<button class="rv-link rv-note-discuss" type="button" data-discuss-writeup="'+esc(c.comment_id)+'"'+(busy||editor?' disabled':'')+'>Discuss in Slack</button></div></article>';
       }).join('');
-      var warning=(S.resourceErrors[q.ce_id]||{}).comments?'<p class="rv-subtle" role="status">Saved notes could not load. <button class="rv-link" id="rv-retry-notes" type="button">Retry</button></p>':'';
+      var noteLoad=(S.ceResourceLoads||{})[S.market_slug+"|"+S.week_start+"|"+q.ce_id],notePending=noteLoad&&noteLoad.comments&&noteLoad.comments.pending;
+      var warning=notePending?'<p class="rv-subtle" role="status">'+(notes.length?'Refreshing saved notes… Your confirmed notes remain below.':'Loading saved notes…')+'</p>':(S.resourceErrors[q.ce_id]||{}).comments?'<p class="rv-subtle" role="status">'+(notes.length?'Saved notes could not refresh. Showing the last confirmed notes.':'Saved notes could not load. This does not mean there are no saved notes.')+' <button class="rv-link" id="rv-retry-notes" type="button">Retry</button></p>':'';
       if(!compose)return '<div class="rv-field-label">This week’s notes</div>'+warning+cards+'<button class="rv-btn rv-new-writeup" id="rv-new-writeup" type="button"'+(busy?' disabled':'')+'><span aria-hidden="true">＋</span> Add a note or reply</button>';
       return (cards?'<div class="rv-field-label">This week’s notes</div>'+cards:'')+warning+'<label class="rv-field-label" for="rv-slack-message">'+(editing?'Edit note':replying?'Slack message':'Your writeup')+'</label><textarea id="rv-slack-message"'+(busy?' disabled':'')+' placeholder="What did you notice? Write a note or @mention someone to discuss it in Slack.">'+esc(S.slackDrafts[String(q.ce_id)]||'')+'</textarea><div class="rv-composer-actions">'+(editor?'<button class="rv-btn" id="rv-cancel-writeup" type="button"'+(busy?' disabled':'')+'>Cancel</button>':'')+(!replying?'<button class="rv-btn" id="rv-save-writeup" type="button"'+(busy?' disabled':'')+'>'+(S.asyncBusy['note:'+q.ce_id]?'Saving…':editing?'Save changes':'Save note')+'</button>':'')+(!editing?'<div class="rv-slack-send">'+renderSendDestination(q,loaded,busy,operation)+'<button class="rv-btn primary" id="rv-send-writeup" type="button"'+(!loaded||busy||summaryBusy?' disabled':'')+'>'+(S.asyncBusy['send:'+q.ce_id]?'Sending…':operation==='continue'?'Reply in Slack':'Start Slack thread')+'</button></div>':'')+'</div>';
     }
@@ -672,6 +714,7 @@
         if(!c||!c.comment_id)throw new Error("Could not confirm the save. Your writeup is preserved.");
         S.commentVersions=S.commentVersions||{};S.commentVersions[id.ce_id]=(S.commentVersions[id.ce_id]||0)+1;
         S.comments[id.ce_id]=[c].concat((S.comments[id.ce_id]||[]).filter(function(x){return x.comment_id!==c.comment_id;}));
+        buildQueue();ensureLocalCe(id.ce_id);
         closeWriteup(id.ce_id);delete S.sendRequests[draftKey];S.auditStatus[id.ce_id]=existing?"Note updated.":"Note saved.";
       }).catch(function(error){if(!sameReport(id))return;S.auditStatus[id.ce_id]=error.message||"Could not save. Your writeup is preserved.";}).finally(function(){clearTimeout(slowTimer);delete S.asyncBusy[key];if(sameReport(id)&&S.selected===id.ce_id){var box=root.querySelector("#rv-slack-message");if(box)box.value=S.slackDrafts[id.ce_id]||"";render();}});
     }
@@ -697,7 +740,8 @@
     }
     function wire() {
       bind("#rv-retry-work",reloadWork);
-      bind("#rv-audit-queue",function(){S.queueOpen=!S.queueOpen;render();var input=root.querySelector("#rv-search-ce");if(input)input.focus();});
+      bind("#rv-audit-queue",function(){S.queueOpen=!S.queueOpen;if(S.queueOpen)loadQueueComments();render();var input=root.querySelector("#rv-search-ce");if(input)input.focus();});
+      bind("#rv-retry-queue-notes",function(){loadQueueComments(true);render();});
       root.onkeydown=function(e){if(e.key==="Escape"&&S.queueOpen){e.preventDefault();S.queueOpen=false;render();root.querySelector("#rv-audit-queue").focus();}};
       var overlay=root.querySelector(".rv-queue-overlay");if(overlay){
         overlay.onclick=function(e){if(e.target===overlay){S.queueOpen=false;render();root.querySelector("#rv-audit-queue").focus();}};
@@ -1111,7 +1155,7 @@
       onShow: function () {
         var requested="";try{requested=new URL(location.href).searchParams.get("ce_id")||"";}catch(e){}
         if (refreshHeadline() || !S.loaded){loadQueue();if(requested&&ensureLocalCe(requested))select(requested);}
-        else if(requested&&ensureLocalCe(requested))select(requested);else render();
+        else {loadQueueComments();if(requested&&ensureLocalCe(requested))select(requested);else render();}
         visibleOnce = true;
         track("review_return_usage",{idempotency_key:"return:"+S.market_slug+":"+S.week_start+":"+sessionId()});
       },

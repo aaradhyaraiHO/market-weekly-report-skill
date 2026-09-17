@@ -66,7 +66,7 @@ async function viewCases(){
  const S={selected:'3286',market_slug:'csee',week_start:note.week_start,comments:{},writeupEditors:{},slackDrafts:{},asyncBusy:{},auditStatus:{},sendRequests:{}};
  const c=vm.createContext({S,Promise,Date,root:{querySelector:sel=>sel.includes('audit-status')?status:box},api:{saveComment:()=>{sends++;return new Promise(r=>resolve=r);}},
    setTimeout:(fn,ms)=>{assert.equal(ms,8000);timer=fn;return 1;},clearTimeout:()=>{timer=null;},ensureAuthor:()=>true,ident:()=>({...note}),author:()=> 'Tester',sameReport:id=>S.market_slug===id.market_slug&&S.week_start===id.week_start,
-   writeupEditorKey:()=> 'editor',composeDraftKey:(ce,k)=>ce+k,hash:()=> 'hash',captureVisibleDrafts:()=>{S.slackDrafts[S.selected]=box.value;},render(){},closeWriteup:ce=>{S.slackDrafts[ce]='';}
+   buildQueue(){},ensureLocalCe(){},writeupEditorKey:()=> 'editor',composeDraftKey:(ce,k)=>ce+k,hash:()=> 'hash',captureVisibleDrafts:()=>{S.slackDrafts[S.selected]=box.value;},render(){},closeWriteup:ce=>{S.slackDrafts[ce]='';}
  });
  vm.runInContext(view.slice(view.indexOf('    function saveWriteup('),view.indexOf('    function sendWriteup(')),c);
  c.saveWriteup();c.saveWriteup();assert.equal(sends,1);timer();assert.match(status.textContent,/Still saving/);assert.equal(box.value,'My pending note');

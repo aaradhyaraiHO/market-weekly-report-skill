@@ -311,7 +311,7 @@ async function savedNoteTests(){
   let box={value:''},sent=[],fail=false;
   const S={market_slug:id.market_slug,week_start:id.week_start,selected:id.ce_id,comments:{},writeupEditors:{},slackDrafts:{},asyncBusy:{},auditStatus:{},sendRequests:{},resourceErrors:{},threadRegistry:{},threadRegistryError:{}};
   const ui=vm.createContext({S,Promise,Date,JSON,setTimeout,clearTimeout,root:{querySelector:()=>box},api:{saveComment:async p=>{sent.push({...p});if(fail)throw Error('Save unavailable');return {comment:{...p,comment_id:p.comment_id||'saved',source_type:'manual',created_at:'2026-09-09T00:00:00Z',updated_at:'2026-09-09T01:00:00Z'}};}},
-    ensureAuthor:()=>true,author:()=> 'Reviewer',ident:()=>id,sameReport:()=>true,composeDraftKey:(ce,kind)=>[S.market_slug,S.week_start,ce,kind].join(':'),
+    buildQueue(){},ensureLocalCe(){},ensureAuthor:()=>true,author:()=> 'Reviewer',ident:()=>id,sameReport:()=>true,composeDraftKey:(ce,kind)=>[S.market_slug,S.week_start,ce,kind].join(':'),
     captureVisibleDrafts(){if(box)S.slackDrafts[S.selected]=box.value;},esc:v=>String(v??'').replace(/</g,'&lt;'),fmtWhen:v=>v,hash:()=> 'hash',render(){}});
   vm.runInContext(view.slice(view.indexOf('    function writeupEditorKey('),view.indexOf('    function renderCommentaryCard(')),ui);
   vm.runInContext(view.slice(view.indexOf('    function saveWriteup('),view.indexOf('    function sendWriteup(')),ui);
@@ -320,6 +320,13 @@ async function savedNoteTests(){
   let html=ui.renderWriteup({ce_id:id.ce_id},false,true,false,'continue');
   assert.ok(html.includes('A saved &lt;observation>'));assert.ok(html.includes('data-edit-writeup="saved"'));assert.ok(!html.includes('<textarea'));
   assert.ok(!html.includes('id="rv-thread-choice"'));
+  S.resourceErrors[id.ce_id]={comments:'Backend unavailable'};
+  html=ui.renderWriteup({ce_id:id.ce_id},false,true,false,'continue');
+  assert.ok(html.includes('Showing the last confirmed notes.'));assert.ok(html.includes('A saved &lt;observation>'));assert.ok(!html.includes('<textarea'));
+  S.ceResourceLoads={[S.market_slug+'|'+S.week_start+'|'+id.ce_id]:{comments:{pending:Promise.resolve()}}};
+  html=ui.renderWriteup({ce_id:id.ce_id},false,true,false,'continue');
+  assert.ok(html.includes('Refreshing saved notes'));assert.ok(html.includes('A saved &lt;observation>'));
+  S.ceResourceLoads={};S.resourceErrors={};
   box=null;ui.openWriteup('edit','saved');box={value:'Edited note'};ui.saveWriteup();await new Promise(r=>setImmediate(r));
   assert.equal(sent[1].comment_id,'saved');assert.ok(sent[1].expected_updated_at);assert.equal(S.comments[id.ce_id].length,1);assert.equal(S.comments[id.ce_id][0].body,'Edited note');
   box=null;ui.openWriteup('edit','saved');box={value:'Do not lose this draft'};fail=true;ui.saveWriteup();await new Promise(r=>setImmediate(r));

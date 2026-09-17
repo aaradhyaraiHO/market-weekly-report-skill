@@ -34,7 +34,7 @@ class Handler(SimpleHTTPRequestHandler):
    if a=='review_thread_list': return self.reply({'active_thread':(threads.get(ce)or[None])[0],'threads':threads.get(ce,[])})
    if a=='review_weekly_list': return self.reply({'weekly':history.get(ce,{}).get('weekly_commentary',[])+([summaries[ce]] if ce in summaries else [])})
    if a=='review_work_list': return self.reply({'work_items':work})
-   if a=='review_comment_list': return self.reply({'comments':[c for c in comments if c['ce_id']==ce]})
+   if a=='review_comment_list': return self.reply({'comments':[c for c in comments if (not p.get('ce_id') or c['ce_id']==p['ce_id']) and (not p.get('market_slug') or c.get('market_slug')==p['market_slug']) and (not p.get('week') or c.get('week_start')==p['week'])]})
    if a=='review_memory':
     time.sleep(.5)
     w=summaries.get(ce,{})
