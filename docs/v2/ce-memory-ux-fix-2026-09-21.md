@@ -1,6 +1,6 @@
 # CE Memory UX patch — 21 September 2026
 
-Status at initial review (September 21): implemented and verified locally. The user authorized commit, push and production deployment on September 23; live results are recorded separately in the release closeout.
+Status at initial review (September 21): implemented and verified locally. The user authorized commit, push and production deployment on September 23; completed live results are recorded in the [production release closeout](ce-memory-ux-release-2026-09-23.md).
 
 ## Scope and coverage
 
