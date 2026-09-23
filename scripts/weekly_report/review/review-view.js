@@ -396,8 +396,31 @@
       if(!api)return;
       var market=S.market_slug,week=S.week_start,key=market+"|"+week+"|"+ceId;
       if(S.memoryInflight[key])return force?S.memoryInflight[key].then(function(){if(S.market_slug===market&&S.week_start===week)return loadMemoryInline(ceId,true);}):S.memoryInflight[key];
-      if(!force&&S.memoryCache[key])return Promise.resolve();
-      S.memoryInflight[key]=api.memory({market_slug:market,ce_id:ceId},!!force).then(function(res){S.memoryCache[key]=res;if(S.market_slug===market&&S.week_start===week&&String(S.selected)===String(ceId))render();}).catch(function(error){S.memoryCache[key]=Object.assign({},S.memoryCache[key]||{},{error:error.message||"Memory unavailable"});if(String(S.selected)===String(ceId))render();}).finally(function(){delete S.memoryInflight[key];});
+      if(!force&&S.memoryCache[key]&&!S.memoryCache[key].error)return Promise.resolve();
+      S.memoryStatus=S.memoryStatus||{};
+      S.memoryStatus[key]={pending:true};
+      function paint(){if(S.market_slug===market&&S.week_start===week&&String(S.selected)===String(ceId))render();}
+      S.memoryInflight[key]=Promise.resolve().then(function(){return api.memory({market_slug:market,ce_id:ceId},!!force);}).then(function(res){
+        S.memoryCache[key]=res;S.memoryStatus[key]={updatedAt:new Date().toISOString()};
+      }).catch(function(error){
+        S.memoryCache[key]=Object.assign({},S.memoryCache[key]||{},{error:error.message||"Memory unavailable"});S.memoryStatus[key]={};
+      }).finally(function(){delete S.memoryInflight[key];paint();});
+      paint();
+      return S.memoryInflight[key];
+    }
+    function refreshMemory(){
+      var key=S.market_slug+"|"+S.week_start+"|"+S.selected;
+      // Repeated clicks reuse the active read; do not refresh unrelated panels.
+      return S.memoryInflight[key]||loadMemoryInline(S.selected,true);
+    }
+    function openMemorySource(button){
+      var target=Array.prototype.find.call(root.querySelectorAll("[data-memory-source-week]"),function(el){return el.dataset.memorySourceWeek===button.dataset.memorySource;});
+      if(!target)return;
+      target.open=true;S.memoryDisclosures=S.memoryDisclosures||{};
+      S.memoryDisclosures[S.market_slug+"|"+S.selected+"|"+target.dataset.memoryDetails]=true;
+      var record=Array.prototype.find.call(target.querySelectorAll("[data-memory-record]"),function(el){return el.dataset.memoryRecord===button.dataset.memorySourceId;});
+      var destination=record||target.querySelector("summary");
+      if(destination){destination.focus({preventScroll:true});destination.scrollIntoView({block:"center",behavior:"instant"});}
     }
 
     function select(ceId) {
@@ -679,15 +702,24 @@
         var key='week:'+w.week,title=w.week==='undated'?'Week unavailable':'Week of '+fmtDue(w.week);
         if(w.week!=='undated')title+=' '+w.week.slice(0,4);
         function sourceNumber(id){return w.sources.findIndex(function(r){return r.id===id;})+1;}
-        var prose=w.paragraphs.map(function(p){var perf=w.sources.filter(function(r){return p.sourceIds.indexOf(r.id)>=0&&r.label==='Performance action';});var perfMeta=perf.map(function(r){return '<div class="rv-memory-perf-meta">'+['Performance history',r.author,r.status?'Recorded status: '+String(r.status).replace(/_/g,' '):'',r.date?'Updated '+(fmtWhen(r.date)||r.date):''].filter(Boolean).map(esc).join(' · ')+(r.outcome?'<p>Recorded outcome: '+esc(r.outcome)+'</p>':'')+'</div>';}).join('');return '<div class="rv-memory-passage"><p>'+esc(p.text||(perf.length?'No action description recorded.':''))+' <button type="button" class="rv-memory-citation" data-memory-source="'+esc(w.week)+'" aria-label="Show original sources for '+esc(title)+'">'+p.sourceIds.map(function(id){return '['+sourceNumber(id)+']';}).join(' ')+'</button></p>'+perfMeta+'</div>';}).join('');
+        var prose=w.paragraphs.map(function(p){
+          var sources=w.sources.filter(function(r){return p.sourceIds.indexOf(r.id)>=0;});
+          var perf=sources.filter(function(r){return r.label==='Performance action';});
+          var provenance=sources.map(function(r){return '<div class="rv-memory-provenance">'+['['+sourceNumber(r.id)+']',r.label==='Performance action'?'Performance history':r.label,r.author,r.date?fmtWhen(r.date)||r.date:''].filter(Boolean).map(esc).join(' · ')+'</div>';}).join('');
+          var perfMeta=perf.map(function(r){return '<div class="rv-memory-perf-meta">'+[r.status?'Recorded status: '+String(r.status).replace(/_/g,' '):''].filter(Boolean).map(esc).join(' · ')+(r.outcome?'<p>Recorded outcome: '+esc(r.outcome)+'</p>':'')+'</div>';}).join('');
+          var citations=p.sourceIds.map(function(id){var number=sourceNumber(id);return '<button type="button" class="rv-memory-citation" data-memory-source="'+esc(w.week)+'" data-memory-source-id="'+esc(id)+'" aria-label="Show original source '+number+' for '+esc(title)+'">['+number+']</button>';}).join('');
+          return '<div class="rv-memory-passage">'+provenance+'<p>'+esc(p.text||(perf.length?'No action description recorded.':''))+'</p><div class="rv-memory-citations">'+citations+'</div>'+perfMeta+'</div>';
+        }).join('');
         var work=w.work.length?'<div class="rv-memory-followthrough"><strong>Follow-through</strong>'+w.work.map(function(r){return '<div class="rv-memory-work-ref">'+(findWork(r.workId)&&!findWork(r.workId).archived_at?'<button class="rv-link" type="button" data-memory-work="'+esc(r.workId)+'">'+esc(r.body)+' →</button>':'<span>'+esc(r.body)+'</span>')+'<div class="rv-source-meta">'+[r.author,r.status?String(r.status).replace(/_/g,' '):'',r.due?'Due '+fmtDue(r.due):''].filter(Boolean).map(esc).join(' · ')+'</div>'+(r.evidence?'<p>'+esc(r.evidence)+'</p>':'')+(r.outcome?'<p>'+esc(r.outcome)+'</p>':'')+'</div>';}).join('')+'</div>':'';
         var sourceKey='sources:'+w.week;
-        return '<details class="rv-memory-week" data-memory-details="'+esc(key)+'"'+(disclosure(key,index===0)?' open':'')+'><summary><strong>'+esc(title)+'</strong></summary><div class="rv-memory-week-body"><div class="rv-memory-account">'+prose+'</div>'+work+'<details class="rv-memory-originals" data-memory-details="'+esc(sourceKey)+'" data-memory-source-week="'+esc(w.week)+'"'+(disclosure(sourceKey,false)?' open':'')+'><summary>Sources · '+w.sources.length+'</summary>'+w.sources.map(function(r,i){return '<div class="rv-memory-original"><span class="rv-source-meta">['+(i+1)+']</span>'+card(r)+'</div>';}).join('')+'</details></div></details>';
+        return '<details class="rv-memory-week" data-memory-details="'+esc(key)+'"'+(disclosure(key,index===0)?' open':'')+'><summary><strong>'+esc(title)+'</strong></summary><div class="rv-memory-week-body"><div class="rv-memory-account">'+prose+'</div>'+work+'<details class="rv-memory-originals" data-memory-details="'+esc(sourceKey)+'" data-memory-source-week="'+esc(w.week)+'"'+(disclosure(sourceKey,false)?' open':'')+'><summary>Sources · '+w.sources.length+'</summary>'+w.sources.map(function(r,i){return '<div class="rv-memory-original" data-memory-record="'+esc(r.id)+'" tabindex="-1" role="group" aria-label="Source '+(i+1)+' · '+esc(r.label)+'"><span class="rv-source-meta">['+(i+1)+']</span>'+card(r)+'</div>';}).join('')+'</details></div></details>';
       }
-      var warning=(!memory?'Loading CE history…':memory.error?'History could not refresh. Previously loaded records remain below.':'');
+      var state=(S.memoryStatus||{})[key]||{},pending=!!state.pending;
+      var warning=pending?(memory?'Refreshing CE history… Previously loaded records remain below.':'Loading CE history…'):(!memory?'Loading CE history…':memory.error?'History could not refresh. Previously loaded records remain below.':'');
       if((errors.comments||{}).unavailable)warning+=' Earlier comments source is unavailable.';
       if((errors.actions||{}).unavailable)warning+=' Performance history source is unavailable.';
-      return currentContext.map(weekCard).join('')+'<details class="rv-flow-section rv-memory-shell" data-memory-details="memory"'+(disclosure('memory',false)?' open':'')+'><summary><h3>CE memory</h3></summary><div class="rv-memory-shell-body"><div class="rv-summary-heading"><span>Other weeks</span><button class="rv-link" id="rv-memory-refresh" type="button">Refresh</button></div>'+(warning?'<p role="status" class="rv-subtle">'+esc(warning)+'</p>':'')+weeks.map(weekCard).join('')+(!weeks.length&&!warning?'<p class="rv-subtle">No earlier CE history recorded yet.</p>':'')+'</div></details>';
+      var status=warning||(state.updatedAt?'History updated · '+fmtWhen(state.updatedAt):'');
+      return currentContext.map(weekCard).join('')+'<details class="rv-flow-section rv-memory-shell" data-memory-details="memory"'+(disclosure('memory',false)?' open':'')+'><summary><h3>CE memory</h3></summary><div class="rv-memory-shell-body"><div class="rv-summary-heading"><span>Other weeks</span><button class="rv-link" id="rv-memory-refresh" type="button"'+(pending?' disabled':'')+'>'+(pending?'Refreshing…':memory&&memory.error?'Retry':'Refresh')+'</button></div><p role="status" aria-live="polite" aria-atomic="true" class="rv-subtle rv-memory-feedback">'+esc(status)+'</p>'+weeks.map(weekCard).join('')+(!weeks.length&&!warning?'<p class="rv-subtle">No earlier CE history recorded yet.</p>':'')+'</div></details>';
     }
 
     function renderMeetingInput(){return '<section class="rv-meeting-input"><div class="rv-summary-heading"><strong>Weekly meeting notes</strong><button class="rv-link" id="rv-process-cancel" type="button">Close</button></div><label class="rv-field-label" for="rv-process-text">Paste the meeting transcript</label><textarea id="rv-process-text" placeholder="Paste meeting notes or transcript">'+esc(S.meetingDraft||"")+'</textarea><button class="rv-btn primary" id="rv-process-run" type="button"'+(S.meetingBusy?' disabled':'')+'>'+(S.meetingBusy?'Extracting…':'Find CE summaries &amp; actions')+'</button>'+(S.processSummary?'<p role="status">'+esc(S.processSummary)+'</p>':'')+(S.meetingUnmatched||[]).map(function(item){return '<blockquote>'+esc(item.body)+'</blockquote>';}).join('')+(S.meetingResults||[]).filter(function(c){return (c.suggestions||[]).length;}).map(function(c){return '<button class="rv-btn small" type="button" data-meeting-ce="'+esc(c.ce_id)+'">'+esc(c.ce_name)+' · '+(c.suggestions||[]).length+' to review →</button>';}).join('')+'</section>';}
@@ -756,9 +788,9 @@
       bind("#rv-retry-suggestions",function(){loadCe(S.selected,true,["suggestions"]);});
       root.querySelectorAll("[data-edit-writeup]").forEach(function(b){b.onclick=function(){openWriteup('edit',b.dataset.editWriteup);};});
       root.querySelectorAll("[data-discuss-writeup]").forEach(function(b){b.onclick=function(){openWriteup('reply',b.dataset.discussWriteup);};});
-      bind("#rv-memory-refresh",function(){loadCe(S.selected,true);reloadWork();});
+      bind("#rv-memory-refresh",refreshMemory);
       root.querySelectorAll("[data-memory-details]").forEach(function(el){var summary=el.querySelector("summary");if(summary)summary.onclick=function(){S.memoryDisclosures=S.memoryDisclosures||{};S.memoryDisclosures[S.market_slug+"|"+S.selected+"|"+el.dataset.memoryDetails]=!el.open;if(el.dataset.memoryDetails==="memory"&&!el.open)loadMemoryInline(S.selected);};});
-      root.querySelectorAll("[data-memory-source]").forEach(function(b){b.onclick=function(){var target=Array.prototype.find.call(root.querySelectorAll("[data-memory-source-week]"),function(el){return el.dataset.memorySourceWeek===b.dataset.memorySource;});if(target){target.open=true;S.memoryDisclosures=S.memoryDisclosures||{};S.memoryDisclosures[S.market_slug+"|"+S.selected+"|"+target.dataset.memoryDetails]=true;var summary=target.querySelector("summary");summary.focus();summary.scrollIntoView({block:"nearest",behavior:"smooth"});}};});
+      root.querySelectorAll("[data-memory-source]").forEach(function(b){b.onclick=function(){openMemorySource(b);};});
       root.querySelectorAll("[data-memory-work]").forEach(function(b){b.onclick=function(){var w=findWork(b.dataset.memoryWork);if(!w)return;S.workTab=CLOSED.indexOf(w.status)>=0?"completed":"open";render();var target=Array.prototype.find.call(root.querySelectorAll("[data-work-status]"),function(el){return el.dataset.workStatus===w.work_id;});if(target){var details=target.closest("details");if(details)details.open=true;target.scrollIntoView({block:"center",behavior:"smooth"});target.focus({preventScroll:true});}};});
       var threadChoice=root.querySelector("#rv-thread-choice");if(threadChoice)threadChoice.onchange=function(){captureVisibleDrafts();S.threadOperation=threadChoice.value;S.threadOperationByCe[S.selected]=threadChoice.value;render();};
       var meeting=root.querySelector("#rv-process-text");if(meeting)meeting.oninput=function(){S.meetingDraft=meeting.value;};

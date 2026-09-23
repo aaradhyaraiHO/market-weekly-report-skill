@@ -482,13 +482,23 @@
 #review-view .rv-memory-week>summary{padding:14px 0;cursor:pointer;font-size:14px;color:var(--rv-g900)}
 #review-view .rv-memory-week-body{padding:0 0 18px}
 #review-view .rv-memory-account p{font-size:14px;line-height:1.7;white-space:pre-wrap;text-wrap:pretty;margin:0 0 12px}
-#review-view .rv-memory-citation{border:0;background:none;color:var(--rv-purps);font:inherit;font-size:11px;cursor:pointer;padding:4px}
+#review-view .rv-memory-citation{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border:0;border-radius:6px;background:none;color:var(--rv-purps);font:inherit;font-size:12px;cursor:pointer;padding:8px}
 #review-view .rv-memory-citation:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-memory-citation:hover,#review-view #rv-memory-refresh:hover:not(:disabled){background:var(--rv-purps-20)}
+#review-view .rv-memory-citations{display:flex;flex-wrap:wrap;gap:4px;margin-top:-6px}
+#review-view .rv-memory-passage{margin-bottom:18px;min-width:0}
+#review-view .rv-memory-provenance{font-size:12px;line-height:1.6;color:var(--rv-g700);margin-bottom:6px;overflow-wrap:anywhere}
+#review-view .rv-memory-account p,#review-view .rv-memory-entry p,#review-view .rv-memory-entry .rv-source-meta{overflow-wrap:anywhere}
+#review-view #rv-memory-refresh{min-width:76px;min-height:44px;padding:8px;border-radius:6px}
+#review-view #rv-memory-refresh:disabled{cursor:wait;color:var(--rv-muted)}
+#review-view #rv-memory-refresh:focus-visible{outline:2px solid var(--rv-purps);outline-offset:2px}
+#review-view .rv-memory-feedback{min-height:20px;margin:0 0 12px}
 #review-view .rv-memory-followthrough{margin:16px 0;font-size:13px}
 #review-view .rv-memory-work-ref{padding:8px 0}
 #review-view .rv-memory-work-ref p{font-size:13px;margin:4px 0}
 #review-view .rv-memory-originals>summary{cursor:pointer;padding:10px 0;font-size:12px;color:var(--rv-g600)}
 #review-view .rv-memory-original{padding-left:12px;border-left:2px solid var(--rv-g200);margin-top:12px}
+#review-view .rv-memory-original:focus{outline:2px solid var(--rv-purps);outline-offset:3px;background:var(--rv-purps-10)}
 #review-view .rv-memory-original .rv-memory-entry{padding:0 0 12px}
 #review-view .rv-memory-week .rv-source-meta{color:var(--rv-g600)}
 

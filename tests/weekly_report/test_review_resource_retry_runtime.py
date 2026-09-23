@@ -7,6 +7,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ReviewResourceRetryRuntime(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node required')
+    def test_memory_ux(self):
+        result = subprocess.run(['node', 'tests/weekly_report/js/review_memory_ux_runtime.cjs'], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('regressions passed', result.stdout)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node required')
     def test_saved_note_queue_membership(self):
         result = subprocess.run(['node', 'tests/weekly_report/js/review_queue_activity_runtime.cjs'], cwd=ROOT, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
