@@ -52,6 +52,10 @@ Its sibling receipts are `deployment_receipt.json`, `preservation.json`, `artifa
 
 The fresh memory reads succeeded, but displayed loading states before completion. This UI-only patch does not claim to eliminate backend latency or outages. Failure preservation/retry and stale-response isolation were covered by runtime tests; a production failure was not deliberately induced. No new-save-to-memory, Slack-send or AI-summary mutation was performed during this release.
 
+Follow-up: the [latency investigation](ce-memory-latency-investigation-2026-09-23.md) measured 4.3–28.0 second CE Memory reads and found other API reads returning 502 in this verification window. The error-level-only scan above missed failures logged at warning/info levels; it is not evidence that the backend had no failures.
+
+Later on September 23, the user-approved [proxy-only Mumbai release](ce-memory-proxy-region-release-2026-09-23.md) superseded this deployment while preserving all report/UI/API bytes. Use that release's matching complete artifact as the production baseline while it remains current; this UI-release artifact remains the rollback baseline.
+
 Vercel build emitted an existing edge-runtime deprecation warning in middleware; it did not fail the build and was left unchanged. Observability drains were not inspected or changed. Recommended follow-up is to monitor real memory read failures/latency during normal use; no new monitor or schedule was created.
 
 The unrelated untracked `alert/posted_ledger.lock` was left untouched. Rollback, if separately authorized, must use the complete previous deployment, not a report-only artifact.
