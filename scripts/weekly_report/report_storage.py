@@ -121,13 +121,44 @@ def writer_lock(label, lock_path=None):
 
 
 @contextmanager
-def release_guard(label, paths, *, baseline=None, lock_path=None):
+def release_guard(label, paths, *, baseline=None, lock_path=None, audit=False):
     # Do not grant space savings for possible clones: estimate full copies.
     working = max(MIN_WORKING, tree_bytes(baseline, exclude_build_cache=True) * 3 if baseline else 0)
     require_space(paths, working_bytes=working)
     with writer_lock(label, lock_path):
         result = require_space(paths, working_bytes=working)
+        if audit:
+            result['retention_audit'] = record_retention_audit(label)
         yield result
+
+
+def record_retention_audit(label):
+    """Record a fresh diagnostic under the writer lock; never apply retention."""
+    import importlib
+    scripts = str(Path(__file__).parent)
+    sys.path.insert(0, scripts)
+    try:
+        retention = importlib.import_module('storage_retention')
+    finally:
+        sys.path.pop(0)
+    if Path(retention.__file__).resolve() != Path(__file__).with_name('storage_retention.py').resolve():
+        raise RuntimeError('Retention auditor loaded from an unexpected release')
+    payload = retention.audit_policy(STATE / 'retention-audit-policy.json')
+    payload['operation'] = label
+    payload['observed_at'] = time.time()
+    directory = no_symlinks(STATE / 'audits')
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / (str(time.time_ns()) + '-' + uuid.uuid4().hex + '.json')
+    with path.open('x') as stream:
+        json.dump(payload, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    summary = {'path': str(path), 'status': payload['status'],
+               'candidate_count': len(payload.get('candidates', [])),
+               'eligible_count': sum(row.get('safe', False) for row in payload.get('candidates', [])),
+               'deletion_enabled': False, 'blockers': payload.get('blockers', [])}
+    print('Storage retention dry-run: ' + json.dumps(summary), flush=True)
+    return summary
 
 
 def stream_sha256(stream):

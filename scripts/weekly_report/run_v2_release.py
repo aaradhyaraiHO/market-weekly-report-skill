@@ -379,7 +379,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sys.path.insert(0, str(ROOT / 'alert' / 'v2'))
     from safe_delivery import locked
     base = args.base_notebook or Path(os.environ['WEEKLY_BASE_NOTEBOOK'])
-    with report_storage.release_guard('weekly:' + args.week, [CACHE, notebook_dir, V2_REPORTS], baseline=base):
+    with report_storage.release_guard('weekly:' + args.week, [CACHE, notebook_dir, V2_REPORTS], baseline=base, audit=True):
         with locked(CACHE / 'v2_release.lock'):
             receipt = execute(plan, args.week, notebook_dir)
     print(f"Weekly V2 package {json.loads(receipt.read_text())['status']}: {receipt}")

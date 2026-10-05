@@ -60,6 +60,19 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 42)
         self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
 
+    def test_release_audit_runs_under_shared_lock_before_work(self):
+        lock = self.root / 'lock'
+        def audit(label):
+            self.assertEqual(label, 'weekly:fixture')
+            with self.assertRaises(RuntimeError):
+                with storage.writer_lock('retention', lock):
+                    self.fail('audit did not hold shared lock')
+            return {'deletion_enabled': False}
+        with patch.object(storage, 'record_retention_audit', side_effect=audit) as checked:
+            with storage.release_guard('weekly:fixture', [self.root], lock_path=lock, audit=True) as result:
+                checked.assert_called_once()
+                self.assertFalse(result['retention_audit']['deletion_enabled'])
+
     def test_low_disk_stops_before_lock_creation(self):
         with patch.object(storage.shutil, 'disk_usage') as disk:
             disk.return_value.free = 49 * storage.GIB

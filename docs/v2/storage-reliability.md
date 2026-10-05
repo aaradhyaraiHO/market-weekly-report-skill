@@ -110,6 +110,16 @@ to an independently backed-up and restore-verified manifest, never all old files
 in a directory. Application requires the exact reviewed plan hash and a journal
 outside the candidate cache. It is not enabled as an unattended delete job.
 
+Every canonical weekly/monthly run now records a retention dry-run under
+`.cache/report_storage/audits/` while holding the shared writer lock, before
+generation. Its configuration is `.cache/report_storage/retention-audit-policy.json`,
+containing explicit `registry` and `candidates` objects. Missing configuration,
+expired references or changed evidence produce an `unconfigured`/`blocked`
+receipt; they do not enable deletion or silently refresh reference observations.
+The run prints the receipt path, candidate/eligible counts and blockers. This
+diagnostic never calls the retention application's deletion path. It evaluates
+only the configured scope; it does not discover unknown files by their age.
+
 The registry must supply fresh production/rollback/monthly/recovery references,
 explicit pins, hashed supporting evidence and a verified backup/restore receipt.
 References expire after one hour. A candidate must be HTML in an explicitly
@@ -183,8 +193,8 @@ preserved; renderer comparisons use the same frozen inputs and renderer on both
 sides, not unrelated historical report versions.
 
 This is a local frozen-source end-to-end rehearsal, **not** a new fresh-BQ release
-or a live Mini Audit read/write test. Local commits do not push, deploy, activate
-pruning or sync the monthly analytics mirror. The monthly mirror must not receive
+or a live Mini Audit read/write test. Local commits do not push, deploy or activate
+pruning. The monthly mirror must not receive
 a broad sync of unrelated uncommitted source edits. Use the canonical entrypoint
 with the matching weekly guard, or review that mirror update separately.
 

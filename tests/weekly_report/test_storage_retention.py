@@ -59,6 +59,34 @@ class RetentionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             retention.plan(self.registry, self.rows)
 
+    def test_release_audit_reports_expired_references_without_enabling_deletion(self):
+        self.registry['references_verified_at'] = '2020-01-01T00:00:00+00:00'
+        policy = self.work / 'audit-policy.json'
+        policy.write_text(json.dumps({'registry': self.registry, 'candidates': self.rows}))
+        with patch.object(retention, 'apply', side_effect=AssertionError('audit attempted deletion')):
+            result = retention.audit_policy(policy)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertFalse(result['deletion_enabled'])
+        self.assertFalse(result['candidates'][0]['safe'])
+        self.assertIn('expired', result['blockers'][0])
+        self.assertTrue((self.root / self.rows[0]['candidate']).exists())
+
+    def test_release_audit_validates_fresh_pair_and_keeps_it(self):
+        policy = self.work / 'audit-policy.json'
+        policy.write_text(json.dumps({'registry': self.registry, 'candidates': self.rows}))
+        result = retention.audit_policy(policy)
+        self.assertEqual(result['status'], 'evaluated')
+        self.assertTrue(result['candidates'][0]['safe'])
+        self.assertFalse(result['deletion_enabled'])
+        (self.root / self.rows[0]['retained_equivalent']).write_text('changed')
+        self.assertFalse(retention.audit_policy(policy)['candidates'][0]['safe'])
+        self.assertTrue((self.root / self.rows[0]['candidate']).exists())
+
+    def test_release_audit_unconfigured_protects_everything(self):
+        result = retention.audit_policy(self.work / 'missing-policy.json')
+        self.assertEqual(result['status'], 'unconfigured')
+        self.assertFalse(result['deletion_enabled'])
+
     def test_backup_evidence_change_blocks(self):
         self.receipt.write_text('{}')
         with self.assertRaises(ValueError):

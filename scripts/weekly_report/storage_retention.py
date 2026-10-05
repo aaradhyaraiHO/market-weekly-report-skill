@@ -115,6 +115,57 @@ def discover(registry):
     return list(archived.values())
 
 
+def audit_policy(path):
+    """Read-only diagnostics for each release, including blocked policy inputs.
+
+    Old observations are reported as expired, never refreshed from the clock.
+    An audit cannot authorize deletion and never calls apply().
+    """
+    result = {'schema': 1, 'mode': 'dry_run', 'deletion_enabled': False,
+              'status': 'unconfigured', 'blockers': [], 'candidates': []}
+    path = storage.no_symlinks(path)
+    if not path.exists():
+        result['blockers'] = ['No retention audit policy; all artifacts remain protected']
+        return result
+    registry, rows = {}, []
+    try:
+        if not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
+            raise ValueError('Retention audit policy must be a regular file under 8 MiB')
+        policy = json.loads(path.read_text())
+        registry, rows = policy['registry'], policy['candidates']
+        if not isinstance(rows, list):
+            raise ValueError('Retention audit candidates must be a list')
+        result['policy_sha256'] = storage.sha256(path)
+        checked = plan(registry, rows)
+        result.update(status='evaluated', candidates=checked['candidates'],
+                      plan_sha256=checked['plan_sha256'],
+                      eligible_allocated_bytes=checked['eligible_allocated_bytes'])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        reason = str(exc)
+        result.update(status='blocked', blockers=[reason], eligible_allocated_bytes=0)
+        backup = {}
+        try:
+            record = registry['backup']
+            manifest = verified_json(record['manifest'], record['manifest_sha256'])
+            backup = {r['candidate']: r for r in manifest['files']}
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        for item in rows if isinstance(rows, list) else []:
+            if not isinstance(item, dict):
+                continue
+            blockers = [reason]
+            name = item.get('candidate', '')
+            classification = registry.get('artifacts', {}).get(name.split('/')[0], {})
+            if classification.get('kind') != 'duplicate_working' or classification.get('status') != 'closed_verified':
+                blockers.append('unknown_or_unfinished_artifact')
+            archived = backup.get(name, {})
+            if archived.get('sha256') != item.get('sha256') or archived.get('size') != item.get('size'):
+                blockers.append('not_in_verified_backup')
+            result['candidates'].append({**item, 'reason': 'duplicate candidate requires verified evidence',
+                                         'safe': False, 'blockers': blockers})
+    return result
+
+
 def plan(registry, candidates, now=None):
     now = time.time() if now is None else now
     root, backup = validate_registry(registry, now)

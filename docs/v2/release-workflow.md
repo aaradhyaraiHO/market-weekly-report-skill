@@ -23,6 +23,11 @@ Implementation and local tests are not a supervised live-run pass.
    Staging uses independent APFS copy-on-write files where supported, with a
    verified full-copy fallback. Retired/incomplete staging payloads are rejected.
    See `storage-reliability.md` for retention, fallback and recovery boundaries.
+   Each canonical run saves a retention dry-run receipt before generation under
+   the same writer lock. Expired references/missing backup proof leave candidates
+   blocked; this diagnostic never enables deletion. Read its printed receipt path
+   for candidate counts and blockers. The remaining October 5 duplicate batch
+   stays protected pending separate backup/reference checks and deletion approval.
 3. Check read-only BigQuery access and approved target sources. Google/Bing raw
    evidence, including TY/LY comparisons, follows the existing metric definitions;
    missing source fields stay unavailable. See `future-platform-history-2026-09-11.md`.
