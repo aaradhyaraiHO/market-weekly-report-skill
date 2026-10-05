@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 import config
+from notebook_tools import render_tools_nav
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
@@ -355,11 +356,12 @@ def render_matrix(state, week, cols, deploy=None):
  @media (max-width:900px){{.board{{font-size:12px}}}}
 </style></head><body>
 <div style="position:sticky;top:0;z-index:40;backdrop-filter:blur(12px);background:rgba(243,240,249,0.84);border-bottom:1px solid #E7E1F1">
- <div class="wrap" style="padding:13px 40px;display:flex;align-items:center;justify-content:space-between;gap:18px">
+ <div class="wrap notebook-nav-row" style="padding:13px 40px;display:flex;align-items:center;justify-content:space-between;gap:18px">
   <div style="display:flex;align-items:center;gap:11px">
    <span style="flex:none;width:26px;height:26px;border-radius:50% 50% 50% 4px;background:#8000FF"></span>
    <span style="font:800 16px 'Figtree'">Market Weekly</span><span style="color:#6E6680;font-size:13px">· The Ledger</span></div>
   <div class="toggle"><a href="/">Monthly</a><a class="on" href="/weekly">Weekly</a></div>
+  {render_tools_nav()}
  </div>
 </div>
 <div class="wrap" style="padding:36px 40px 100px">

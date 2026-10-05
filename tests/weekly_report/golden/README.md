@@ -13,3 +13,7 @@ not execute a browser test.
 Do not refresh a hash merely because a test fails. First inspect the full output difference and confirm
 that the behavior change is intentional and approved; this baseline exists to expose changes to report
 structure, calculations/bucket results, Sheet output, Slack payloads, and URLs.
+
+2026-10-01: updated only the Ledger output hash for the user-approved Tools navigation.
+The complete old/new matrix is byte-identical after removing the new menu fragment
+and its navbar wrapping class. Series, report routes, metrics, alerts and Sheets are unchanged.

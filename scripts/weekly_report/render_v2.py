@@ -10,6 +10,7 @@ import os
 
 import render as render_v1
 from headline_v2 import build_headline_payload
+from notebook_tools import render_tools_nav
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "report_v2_template.html")
@@ -106,7 +107,9 @@ def render(
         _json_safe(payload), separators=(",", ":"), allow_nan=False
     ).replace("<", "\\u003c")
     names = " · ".join(item["market"] for item in payload["headlines"])
-    return html.replace("__REPORT_DATA_JSON__", data_json).replace("__TITLE__", f"Weekly V2 — {names}")
+    return (html.replace("__REPORT_DATA_JSON__", data_json)
+            .replace("__TITLE__", f"Weekly V2 — {names}")
+            .replace("__NOTEBOOK_TOOLS__", render_tools_nav()))
 
 
 def out_path(markets):

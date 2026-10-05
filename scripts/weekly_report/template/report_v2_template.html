@@ -54,7 +54,8 @@
     }
     /* End collapsible report navigation. */
     .main { min-width:0; }
-    .topbar { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:80px; padding:16px 32px; border-bottom:1px solid var(--line); background:var(--surface); }
+    .topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:80px; padding:16px 32px; border-bottom:1px solid var(--line); background:var(--surface); }
+    .topbar-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; }
     .topbar h1 { margin:0; font-family:var(--font-text); font-size:21px; line-height:28px; font-weight:600; text-wrap:balance; }
     .topbar p { margin:5px 0 0; color:var(--muted); font-size:12px; }
     .filters { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
@@ -704,7 +705,9 @@
       .ce-name-button { max-width:164px; }
     }
     @media (max-width:560px) {
-      .topbar { align-items:flex-start; flex-direction:column; padding:16px 18px; }
+      .topbar { align-items:flex-start; flex-direction:column; gap:10px; padding:12px 18px; }
+      .topbar-actions { width:100%; }
+      .topbar-actions .filters { flex:1; min-width:0; }
       .filters,.filter-field,.filter-select { width:100%; }
       .content { padding:20px 14px 60px; }
       .all-ce-view { padding:20px 14px 60px; }
@@ -773,7 +776,7 @@
       <nav class="nav" aria-label="Report sections"><button class="nav-item active" type="button" data-report-view="overview" aria-current="page">Overview</button><button class="nav-item" type="button" data-report-view="all-ces">All CEs</button><button class="nav-item" type="button" disabled title="Review mode is a later V2 phase">Review</button></nav>
     </aside>
     <main class="main">
-      <header class="topbar"><div><h1 id="market-name">Market</h1><p id="week-label">Weekly market review</p></div><div class="filters"><label class="filter-field" id="market-filter-field" hidden><span class="filter-label">Market</span><select id="market-select" class="filter-select" aria-label="Market"></select></label><label class="filter-field"><span class="filter-label">Country</span><select id="country-select" class="filter-select" aria-label="Country"><option value="">All countries</option></select></label></div><select id="week-select" hidden aria-hidden="true" tabindex="-1"></select></header>
+      <header class="topbar"><div><h1 id="market-name">Market</h1><p id="week-label">Weekly market review</p></div><div class="topbar-actions"><div class="filters"><label class="filter-field" id="market-filter-field" hidden><span class="filter-label">Market</span><select id="market-select" class="filter-select" aria-label="Market"></select></label><label class="filter-field"><span class="filter-label">Country</span><select id="country-select" class="filter-select" aria-label="Country"><option value="">All countries</option></select></label></div>__NOTEBOOK_TOOLS__</div><select id="week-select" hidden aria-hidden="true" tabindex="-1"></select></header>
       <div class="content report-view" id="overview-view">
         <div class="section-kicker">Market headline</div>
         <article class="headline">
