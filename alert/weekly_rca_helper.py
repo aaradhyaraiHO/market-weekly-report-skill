@@ -37,6 +37,7 @@ import urllib.parse
 from pathlib import Path
 
 from google.cloud import bigquery
+from rca_scan import bounded_dataframe
 
 from revenue_drop_alert import (
     PROJECT_ID,
@@ -55,7 +56,7 @@ RECENT_LABEL = "L4W avg"   # Long-term Context recent-baseline column label (wee
 
 OMNI_DASHBOARD_URL = "https://headout.omniapp.co/dashboards/5368ab53"
 
-# Cap every query at 10 GB (analytics-skill requirement) and label it so it's
+# Keep the existing 80 GiB cap on every query and label it so it's
 # identifiable in BQ audit logs / the billing dashboard.
 MAX_BYTES_BILLED = 80 * 1024 ** 3   # 80GB — large markets (SEA) exceeded 40GB on ~10-CE RCA
 JOB_LABELS = {"source": "analytics_skill", "alert": "weekly_wow_rca"}
@@ -127,7 +128,7 @@ def _load_context_period(
         .replace("{{PERIOD_END}}", period_end.isoformat())
     )
     log.info("Running partition-pruned %s context query (%s..%s)…", label, period_start, period_end)
-    df = client.query(sql, job_config=_query_config()).to_dataframe()
+    df = bounded_dataframe(client, sql, ce_ids, period_start, period_end, _query_config, _sql_quote)
     log.info("Returned %d %s context rows", len(df), label)
     return df
 
@@ -215,7 +216,9 @@ def run_wow_query(ce_ids: list[str], week_start: str):
     sql = sql.replace("{{CE_IDS}}", quoted).replace("{{WEEK_START}}", week_start)
     log.info("Running WoW RCA query for %d CE(s), week starting %s…", len(ce_ids), week_start)
     client = bigquery.Client(project=PROJECT_ID)
-    df = client.query(sql, job_config=_query_config()).to_dataframe()
+    start = datetime.date.fromisoformat(week_start)
+    df = bounded_dataframe(client, sql, ce_ids, start - datetime.timedelta(days=7),
+                           start + datetime.timedelta(days=6), _query_config, _sql_quote)
     log.info("Returned %d base rows", len(df))
     df = _attach_l4w_context(df, client, ce_ids, week_start)
     return _attach_ly_context(df, client, ce_ids, week_start)
