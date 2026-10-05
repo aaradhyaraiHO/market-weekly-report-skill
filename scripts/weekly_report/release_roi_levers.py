@@ -9,6 +9,7 @@ from functools import lru_cache
 import json
 from pathlib import Path
 import shutil
+from report_storage import copy_notebook
 import subprocess
 
 from headline_v2 import _losing_money_roi_precision
@@ -33,7 +34,7 @@ def stage(source, target, cache):
     css = '\n'.join(line for line in template.splitlines() if line.strip().startswith('.legacy-disclosure'))
     if not css:
         raise ValueError('Disclosure CSS missing')
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
+    copy_notebook(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
     receipt = {'source': str(source), 'target': str(target), 'pages': [], 'unchanged_files': [],
                'snapshots': {}, 'roi_available': 0, 'roi_unavailable': 0}
 

@@ -67,8 +67,8 @@ def main() -> None:
                     help="do not open the rendered HTML")
     ap.add_argument("--validate", action="store_true",
                     help="run the NA reference gate when north_america is in the set")
-    ap.add_argument("--renderer", choices=("v1", "v2", "both"), default="v1",
-                    help="render V1 (default), V2, or both from the same snapshots")
+    ap.add_argument("--renderer", choices=("v1", "v2", "both", "snapshots"), default="v1",
+                    help="render V1 (default), V2, both, or defer rendering to the canonical release gate")
     ap.add_argument("--no-v2-goals", action="store_true",
                     help="skip the optional live monthly-target enrichment for V2")
     args = ap.parse_args()

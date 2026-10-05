@@ -28,6 +28,7 @@ V2_REPORTS = ROOT / "thoughts" / "shared" / "weekly-report-v2"
 
 sys.path.insert(0, str(SCRIPTS))
 import config  # noqa: E402
+import report_storage  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,7 @@ def build_plan(
                 "--week",
                 week,
                 "--renderer",
-                "both",
+                "snapshots",
                 "--no-open",
             ),
             str(ROOT),
@@ -119,7 +120,7 @@ def build_plan(
                 "--week",
                 week,
                 "--renderer",
-                "both",
+                "snapshots",
                 "--no-open",
             ),
             str(ROOT),
@@ -270,6 +271,18 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
     write_receipt(receipt_path, receipt)
 
     for step in plan:
+        # Recheck before queries/copies/deployment, not just at process start.
+        try:
+            working = max(report_storage.MIN_WORKING,
+                          report_storage.tree_bytes(notebook_dir, exclude_build_cache=True) * 3)
+            report_storage.require_space([CACHE, notebook_dir, V2_REPORTS], working_bytes=working)
+            if step.name in ('stage-notebook', 'deploy-vercel', 'artifact-integrity'):
+                report_storage.deployable(notebook_dir)
+        except (OSError, ValueError, RuntimeError) as exc:
+            receipt['steps'].append({**step.public(), 'status': 'blocked_storage', 'error': str(exc)})
+            receipt.update(status='blocked_storage', finished_at=datetime.now(timezone.utc).isoformat())
+            write_receipt(receipt_path, receipt)
+            raise
         started = time.monotonic()
         record: dict[str, Any] = {**step.public(), "status": "running"}
         receipt["steps"].append(record)
@@ -365,8 +378,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit('--base-notebook or WEEKLY_BASE_NOTEBOOK is required; never deploy an empty notebook')
     sys.path.insert(0, str(ROOT / 'alert' / 'v2'))
     from safe_delivery import locked
-    with locked(CACHE / 'v2_release.lock'):
-        receipt = execute(plan, args.week, notebook_dir)
+    base = args.base_notebook or Path(os.environ['WEEKLY_BASE_NOTEBOOK'])
+    with report_storage.release_guard('weekly:' + args.week, [CACHE, notebook_dir, V2_REPORTS], baseline=base):
+        with locked(CACHE / 'v2_release.lock'):
+            receipt = execute(plan, args.week, notebook_dir)
     print(f"Weekly V2 package {json.loads(receipt.read_text())['status']}: {receipt}")
     return 0
 

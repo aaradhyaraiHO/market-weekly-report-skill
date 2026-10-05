@@ -11,6 +11,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 import requests
+import report_storage
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'alert' / 'v2'))
@@ -103,6 +104,9 @@ def files(root):
 
 
 def seed(base, target):
+    report_storage.deployable(base)
+    report_storage.deployable(target)
+    report_storage.require_space([base, target], working_bytes=max(report_storage.MIN_WORKING, report_storage.tree_bytes(base, exclude_build_cache=True) * 3))
     base, target = base.resolve(), target.resolve()
     if base == target or base in target.parents or target in base.parents:
         raise ValueError('Use separate non-nested source and staging directories')
@@ -114,12 +118,12 @@ def seed(base, target):
     for name in files(base):
         dest = target / name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(base / name, dest)
+        report_storage.copy_independent(base / name, dest)
     # Project identity only, never copy credentials or build cache.
     project = base / '.vercel' / 'project.json'
     if project.exists():
         (target / '.vercel').mkdir(exist_ok=True)
-        shutil.copy2(project, target / '.vercel' / 'project.json')
+        report_storage.copy_independent(project, target / '.vercel' / 'project.json')
 
 
 def report_names(week):
@@ -128,6 +132,8 @@ def report_names(week):
 
 
 def verify_artifact(base, target, week):
+    report_storage.deployable(base)
+    report_storage.deployable(target)
     completed_week(week)
     before, after = files(base), files(target)
     names = report_names(week)

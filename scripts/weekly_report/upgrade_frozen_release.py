@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+from report_storage import copy_notebook
 
 import config
 import headline_v2
@@ -90,7 +91,7 @@ def stage_proxy(source, target):
     source, target = Path(source).resolve(), Path(target).resolve()
     if target.exists() or source == target:
         raise ValueError('target must be a new artifact directory')
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*'))
+    copy_notebook(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
     proxy = Path(__file__).parent / 'notes' / 'review_proxy_api.js'
     shutil.copyfile(proxy, target / 'api' / 'review.js')
     receipt = {'source': str(source), 'target': str(target), 'mode': 'review-proxy-only',
@@ -120,7 +121,7 @@ def stage_presentation(source, target, resume=False):
     if (target.exists() and not resume) or source == target:
         raise ValueError('target must be a new artifact directory')
     if not target.exists():
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*'))
+        copy_notebook(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
     template = Path(render_v2.TEMPLATE).read_text()
     receipt = {'source': str(source), 'target': str(target), 'mode': 'presentation-only',
                'pages': [], 'source_hashes': {}, 'unchanged_files': []}
@@ -186,7 +187,7 @@ def stage(source, target, cache, latest, resume=False):
         raise ValueError('target must be a new artifact directory')
     publish_weekly.require_completed_week(latest)
     if not target.exists():
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*'))
+        copy_notebook(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
     template = Path(render_v2.TEMPLATE).read_text()
     receipt = {'latest': latest, 'source': str(source), 'target': str(target),
                'pages': [], 'parity': [], 'snapshot_hashes': {}, 'source_hashes': {}}

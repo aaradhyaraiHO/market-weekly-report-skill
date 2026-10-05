@@ -141,6 +141,11 @@ The canonical full-run command packages all 17 configured markets plus Headout,
 runs the V1 baseline and V2 parity gates, stages a self-contained notebook, and
 dry-runs every market alert:
 
+Normal V2 releases build snapshots without legacy HTML, then render V2 once
+after enrichment. `--renderer both` above is an explicit compatibility tool,
+not the recurring release path. Storage safety and measured lifecycle:
+[Storage reliability](docs/v2/storage-reliability.md).
+
 ```sh
 python3 scripts/weekly_report/run_v2_release.py \
   --week YYYY-MM-DD \

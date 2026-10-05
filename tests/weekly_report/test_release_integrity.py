@@ -15,7 +15,7 @@ class IntegrityTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.base, self.target = self.root / 'base', self.root / 'target'
         for name in ('index.html', 'middleware.js', 'vercel.json', 'package.json', 'api/review.js', 'api/review-summary.js', 'old-report.html'):
             path = self.base / name

@@ -5,6 +5,7 @@ from functools import lru_cache
 import json
 from pathlib import Path
 import shutil
+from report_storage import copy_notebook
 
 from headline_v2 import _fluctuation_roi_precision
 from upgrade_frozen_release import DATA, assert_payload_preserved, digest
@@ -15,7 +16,7 @@ def stage(source, target, cache):
     source, target, cache = map(Path, (source, target, cache))
     if target.exists():
         raise ValueError('Candidate must be a new directory')
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
+    copy_notebook(source, target, ignore=shutil.ignore_patterns('node_modules', 'output', '.env*', '.git'))
     receipt = {'source': str(source), 'target': str(target), 'pages': [], 'unchanged_files': [],
                'snapshots': {}, 'roi_available': 0, 'roi_unavailable': 0}
 

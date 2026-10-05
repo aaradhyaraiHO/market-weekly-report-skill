@@ -37,6 +37,7 @@ REPORT_DIR_V1 = REPO_ROOT / "thoughts" / "shared" / "weekly-report-v1"
 REPORT_DIR_V2 = REPO_ROOT / "thoughts" / "shared" / "weekly-report-v2"
 # Compatibility alias for existing callers/tests. V1 remains the safe default.
 REPORT_DIR = REPORT_DIR_V1
+from report_storage import copy_independent
 N_COLS = 6
 
 
@@ -79,6 +80,19 @@ def stage_v2_review(deploy: Path, pages: list[Path]) -> None:
             if not inject(page, deploy):
                 raise RuntimeError(f"Mini Audit packaging failed: {page.name}")
         # Established V1 archives keep their original bytes.
+
+
+def share_identical_route_storage(pages: list[Path], week: str) -> None:
+    """Keep exact latest/dated bytes and URLs; share APFS blocks, not inodes."""
+    import report_storage
+    for dated in pages:
+        suffix = '-' + week + '.html'
+        if dated.name.endswith(suffix):
+            current = dated.with_name(dated.name[:-len(suffix)] + '.html')
+            if current in pages:
+                if report_storage.sha256(current) != report_storage.sha256(dated):
+                    raise ValueError('Latest/dated bytes differ; refusing storage optimization')
+                report_storage.copy_independent(dated, current)
 
 
 # weekly slug -> (ledger slug, name, flag, region)
@@ -169,8 +183,8 @@ def publish_market(slug, week, deploy, n, report_dir=None):
     rep_p = (report_dir or REPORT_DIR) / f"report_{slug}_{week}.html"
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! missing snapshot/report for {slug} {week} — run the producer first"); return None
-    shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}.html")            # current alias
-    shutil.copyfile(rep_p, deploy / f"weekly-report-{ledger_slug}-{week}.html")     # week archive → Ledger history
+    copy_independent(rep_p, deploy / f"weekly-report-{ledger_slug}.html")          # current alias
+    copy_independent(rep_p, deploy / f"weekly-report-{ledger_slug}-{week}.html")   # week archive → Ledger history
     series = weekly_series(json.loads(snap_p.read_text()), n)
     print(f"  ✓ {name}: {_money(series[-1]['rev'])} · WoW {_pct(series[-1]['wow_pct'])} "
           f"({len(series)} wks)")
@@ -186,8 +200,8 @@ def publish_headout(week, deploy, n, report_dir=None):
     rep_p = (report_dir or REPORT_DIR) / f"report_headout_{week}.html"
     if not snap_p.exists() or not rep_p.exists():
         print(f"  ! no headout snapshot/report for {week} — run build_global.py first"); return None
-    shutil.copyfile(rep_p, deploy / "weekly-report-headout.html")
-    shutil.copyfile(rep_p, deploy / f"weekly-report-headout-{week}.html")           # week archive
+    copy_independent(rep_p, deploy / "weekly-report-headout.html")
+    copy_independent(rep_p, deploy / f"weekly-report-headout-{week}.html")          # week archive
     snap = json.loads(snap_p.read_text())
     series = weekly_series(snap, n)
     nm = (snap.get("meta") or {}).get("n_markets")
@@ -206,8 +220,8 @@ def stage_market_groups(week, deploy, report_dir):
         ledger_slug = group["ledger_slug"]
         current = deploy / f"weekly-report-{ledger_slug}.html"
         dated = deploy / f"weekly-report-{ledger_slug}-{week}.html"
-        shutil.copyfile(source, current)
-        shutil.copyfile(source, dated)
+        copy_independent(source, current)
+        copy_independent(source, dated)
         staged.extend((current, dated))
         print(f"  ✓ {group['name']}: shared current + dated report")
     return staged
@@ -395,6 +409,9 @@ def main(argv=None):
     require_completed_week(args.week)
 
     deploy = notebook_dir()
+    import report_storage
+    report_storage.deployable(deploy)
+    report_storage.require_space([deploy, CACHE_DIR])
     if not deploy.exists():
         sys.exit(f"notebook dir not found: {deploy} (set MMR_NOTEBOOK_DIR)")
     staged_proxies = stage_v2_proxies(deploy) if args.renderer == "v2" else ()
@@ -426,6 +443,7 @@ def main(argv=None):
         sys.exit("nothing published — run weekly_market_report.py / build_global.py first")
     if args.renderer == "v2":
         stage_v2_review(deploy, published_pages)
+        share_identical_route_storage(published_pages, args.week)
     # union of column weeks across markets + headout (they share the same Mondays), trailing N
     weeks = sorted({s["week"] for m in state["markets"] for s in m.get("series", [])}
                    | {s["week"] for s in state.get("headout", {}).get("series", [])})[-args.cols:]

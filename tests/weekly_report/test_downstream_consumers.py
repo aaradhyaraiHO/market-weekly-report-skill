@@ -285,7 +285,7 @@ class DownstreamConsumerCoverage(unittest.TestCase):
 
     def test_publish_market_and_headout_to_temporary_ledger(self):
         with tempfile.TemporaryDirectory(prefix="weekly-publish-") as tmp:
-            tmp = Path(tmp)
+            tmp = Path(tmp).resolve()
             cache, reports, deploy = tmp / "cache", tmp / "reports", tmp / "deploy"
             cache.mkdir(); reports.mkdir(); deploy.mkdir()
             for fixture_slug, publish_slug in (("sparse", "gcc"), ("global", "headout")):
@@ -313,7 +313,7 @@ class DownstreamConsumerCoverage(unittest.TestCase):
 
     def test_publish_weekly_can_explicitly_stage_v2_without_changing_v1_default(self):
         with tempfile.TemporaryDirectory(prefix="weekly-publish-v2-") as tmp:
-            tmp = Path(tmp)
+            tmp = Path(tmp).resolve()
             cache, v1_reports, v2_reports, deploy = (
                 tmp / "cache", tmp / "v1", tmp / "v2", tmp / "deploy"
             )

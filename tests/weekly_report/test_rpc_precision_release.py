@@ -22,7 +22,7 @@ class FrozenRpcRelease(unittest.TestCase):
         template = (ROOT / 'scripts/weekly_report/template/report_v2_template.html').read_text()
         html = template.replace('__REPORT_DATA_JSON__', json.dumps(payload))
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             source, target, cache = root/'source', root/'target', root/'cache'
             source.mkdir(); cache.mkdir()
             (source/'weekly-report-test.html').write_text(html)

@@ -17,6 +17,12 @@ Implementation and local tests are not a supervised live-run pass.
    seed includes notebook/auth/API/archive files but excludes credentials and build
    caches. Only this week's current/dated report files and weekly index/state may
    change; unrelated added files also fail the gate.
+   The canonical weekly and monthly release entrypoints share a nonblocking
+   writer lock and a disk preflight. Free space must cover at least 20 GiB of
+   working allocation plus a 30 GiB reserve; a larger base raises the estimate.
+   Staging uses independent APFS copy-on-write files where supported, with a
+   verified full-copy fallback. Retired/incomplete staging payloads are rejected.
+   See `storage-reliability.md` for retention, fallback and recovery boundaries.
 3. Check read-only BigQuery access and approved target sources. Google/Bing raw
    evidence, including TY/LY comparisons, follows the existing metric definitions;
    missing source fields stay unavailable. See `future-platform-history-2026-09-11.md`.
@@ -49,6 +55,11 @@ queries and constrains batches; byte-cap failures split the batch without raisin
 the cap. Missing/failed RCA stops the batch before any parent is posted. The
 shared CSEE/Nordics page continues to contain separate datasets, not combined
 totals; aggregation remains paused.
+
+The canonical generator builds snapshots first, then renders V2 once after
+goals/OKRs. It does not generate legacy HTML. Explicit V1/`both` fallback commands
+remain available for deliberate compatibility work. Do not invoke fallback or
+low-level publish scripts concurrently with a canonical release or retention.
 
 Never substitute `run_weekly.py --alert-version v2 --post` or the V1 poster. The
 staged V2 command is dry-run-only; V1 code remains the explicit fallback, not an

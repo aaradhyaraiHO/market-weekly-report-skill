@@ -71,7 +71,7 @@ class RunV2ReleaseTests(unittest.TestCase):
 
     def test_shared_market_report_is_staged_to_current_and_dated_routes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             reports = root / "reports"
             deploy = root / "deploy"
             reports.mkdir()
@@ -143,7 +143,7 @@ class RunV2ReleaseTests(unittest.TestCase):
 
     def test_browser_pause_keeps_resume_commands_without_sending(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            cache = Path(directory)
+            cache = Path(directory).resolve()
             observations = cache / 'observations.json'
             plan = [
                 release.Step('deploy-vercel', ('deploy-placeholder',), str(ROOT), external_write=True),
