@@ -36,7 +36,14 @@ class MiniAuditPackagingTests(unittest.TestCase):
             for route in ("granola-link.js", "granola-pull.js", "granola-review.js"):
                 (stage / "api" / route).write_text("stale endpoint")
             publish_weekly.stage_v2_proxies(stage)
-            publish_weekly.stage_v2_review(stage)
+            pages = [stage / report, stage / "weekly-report-north-america-2026-08-02.html", stage / "weekly-report-headout.html"]
+            archived = stage / "weekly-report-france-2026-07-19.html"
+            archived.write_text(shell)
+            publish_weekly.stage_v2_review(stage, [archived])
+            archived.write_text(archived.read_text().replace('</head>', '<style id="notebook-tools-layout">historical placement</style></head>'))
+            archived_bytes = archived.read_bytes()
+            publish_weekly.stage_v2_review(stage, pages)
+            self.assertEqual(archived.read_bytes(), archived_bytes)
             self.assertEqual(review_release_preflight.verify(stage, report, baseline), [])
             self.assertTrue((stage / "api/review-extract.js").is_file())
             for route in ("granola-link.js", "granola-pull.js", "granola-review.js"):
@@ -46,7 +53,8 @@ class MiniAuditPackagingTests(unittest.TestCase):
             for module in ("review_ai_provider.mjs", "review_meeting_import.mjs"):
                 self.assertTrue((stage / "lib" / module).is_file())
             before = (stage / report).read_bytes()
-            publish_weekly.stage_v2_review(stage)
+            publish_weekly.stage_v2_review(stage, pages)
+            self.assertEqual(archived.read_bytes(), archived_bytes)
             self.assertEqual((stage / report).read_bytes(), before)
 
     def test_broken_v2_mount_stops_packaging(self):
@@ -56,7 +64,7 @@ class MiniAuditPackagingTests(unittest.TestCase):
                 '<script id="report-data"></script><nav data-report-view="overview"></nav>'
             )
             with self.assertRaisesRegex(RuntimeError, "Mini Audit packaging failed"):
-                publish_weekly.stage_v2_review(stage)
+                publish_weekly.stage_v2_review(stage, [stage / "weekly-report-france.html"])
 
 
 if __name__ == "__main__":

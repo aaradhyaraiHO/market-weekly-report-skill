@@ -25,7 +25,10 @@ def query_rca(batch, week, end, path):
                              '--out', str(path)], capture_output=True, text=True, cwd=ROOT / 'alert')
     if result.returncode:
         error = result.stderr or ''
-        cap_hit = any(term in error.lower() for term in ('maximum bytes billed', 'maximum_bytes_billed', 'bytes billed limit'))
+        cap_hit = any(term in error.lower() for term in (
+            'maximum bytes billed', 'maximum_bytes_billed', 'bytes billed limit',
+            'limit for bytes billed', 'bytesbilledlimitexceeded',
+        ))
         if cap_hit and len(batch) > 1:
             mid = len(batch) // 2
             return {**query_rca(batch[:mid], week, end, path.with_name(path.stem + '-a.json')),

@@ -67,11 +67,11 @@ def stage_v2_proxies(deploy: Path) -> tuple[Path, Path]:
     return review_target, actions_target
 
 
-def stage_v2_review(deploy: Path) -> None:
-    """Keep newly generated V2 reports and their Mini Audit runtime together."""
+def stage_v2_review(deploy: Path, pages: list[Path]) -> None:
+    """Package only reports written by this publish; archives retain exact bytes."""
     from inject_review_view import HEADOUT_RE, inject, remove_review
 
-    for page in sorted(deploy.glob("weekly-report-*.html")):
+    for page in sorted(set(pages)):
         shell = page.read_text()
         if HEADOUT_RE.match(page.name):
             remove_review(page)
@@ -407,20 +407,25 @@ def main(argv=None):
 
     state = load_state(deploy)
     n = 0
+    published_pages = []
     for slug in targets:
         e = publish_market(slug, args.week, deploy, args.cols, report_dir=report_dir)
         if e:
             upsert(state, e); n += 1
+            current = deploy / e["report_path"]
+            published_pages.extend((current, current.with_name(f"{current.stem}-{args.week}.html")))
     if args.market in ("headout", "all"):
         ho = publish_headout(args.week, deploy, args.cols, report_dir=report_dir)
         if ho:
             state["headout"] = ho; n += 1
+            current = deploy / ho["report_path"]
+            published_pages.extend((current, current.with_name(f"{current.stem}-{args.week}.html")))
     if args.renderer == "v2" and args.market in ("all", "csee", "nordics"):
-        stage_market_groups(args.week, deploy, report_dir)
+        published_pages.extend(stage_market_groups(args.week, deploy, report_dir))
     if not n:
         sys.exit("nothing published — run weekly_market_report.py / build_global.py first")
     if args.renderer == "v2":
-        stage_v2_review(deploy)
+        stage_v2_review(deploy, published_pages)
     # union of column weeks across markets + headout (they share the same Mondays), trailing N
     weeks = sorted({s["week"] for m in state["markets"] for s in m.get("series", [])}
                    | {s["week"] for s in state.get("headout", {}).get("series", [])})[-args.cols:]
