@@ -276,7 +276,8 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("REVIEW_MODE_AI_WEBHOOK_SECRET", summary_api)
         self.assertIn('tool_choice: { type: "tool", name: "emit_result"', summary_api)
         self.assertNotIn("strict: true", summary_api)
-        self.assertIn("var nextCycle=reviewRows(\"weekly\")", self.backend)
+        self.assertIn("function reviewWeeklyCycle(p,state,thread,threads)", self.backend)
+        self.assertIn("var nextCycle=rows.filter", self.backend)
         self.assertIn("slackThreadReplies(token,channel,threadTs,oldest,latest)", self.backend)
 
     def test_slack_directory_refresh_preserves_curated_aliases(self):

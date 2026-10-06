@@ -1175,6 +1175,10 @@ function reviewThreadNumber(thread,threads) {
 function reviewSummarySourceMatches(row,thread,state,latest) {
   var explicit=String(row.thread_binding_id||""),location=reviewSlackLocation(row.source_url),ref=String(row.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d+)$/);
   if(explicit&&explicit!==String(thread.binding_id||""))return false;
+  if(!ref||ref[1]!==String(thread.slack_channel))return false;
+  if(location&&(location.channel!==String(thread.slack_channel)||
+      (location.hasParent&&location.parent!==String(thread.slack_thread_ts))||
+      (location.message!==ref[2]&&location.message!==String(thread.slack_thread_ts))))return false;
   if(!explicit){
     if(!location||!ref||location.channel!==ref[1]||location.channel!==String(thread.slack_channel)||
       location.parent!==String(thread.slack_thread_ts))return false;
@@ -1186,6 +1190,45 @@ function reviewSummarySourceMatches(row,thread,state,latest) {
   // Legacy unbound records still require both permalink proof and the boundary.
   var ts=ref?ref[2]:"";
   return !ts||((!!explicit||!state.slack_post_ts||ts>=String(state.slack_post_ts))&&(!latest||ts<latest));
+}
+
+// Resolve a reporting cycle, not just the durable CE discussion. A parent can
+// be reused for many weeks, but it must never become a new week's starter by
+// default. This is read-only: uncertain legacy rows/approved summaries survive.
+function reviewWeeklyCycle(p,state,thread,threads) {
+  var week=ymd(p.week_start),binding=String(thread.binding_id||""),parent=String(thread.slack_thread_ts||"");
+  var rows=reviewRows("weekly").filter(function(r){return r.market_slug===p.market_slug&&
+    String(r.ce_id)===String(p.ce_id)&&String((reviewResolveWeeklyThread(r,threads)||{}).binding_id||"")===binding;});
+  var sources=reviewRows("suggestions").filter(function(r){return r.market_slug===p.market_slug&&
+    String(r.ce_id)===String(p.ce_id)&&r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact";});
+  function lower(row) {
+    var start=String(row.slack_post_ts||""),w=ymd(row.week_start);
+    if(!/^\d+\.\d{6}$/.test(start))return "";
+    // The same starter cannot own multiple weeks. Keep the original cycle;
+    // ignore the malformed later row when bounding that original cycle.
+    if(rows.some(function(other){return ymd(other.week_start)<w&&String(other.slack_post_ts||"")===start;}))return "";
+    if(start===parent&&thread.replacement_week&&ymd(thread.replacement_week)!==w)return "";
+    // Older versions moved the saved post forward on each same-week relay.
+    // Exact, already-owned sources recover the first boundary without rewriting.
+    sources.forEach(function(r){
+      var ref=String(r.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d{6})$/);
+      if(ymd(r.week_start)===w&&ref&&ref[1]===String(thread.slack_channel)&&
+          reviewSummarySourceMatches(r,thread,row,"")&&ref[2]<start)start=ref[2];
+    });
+    return start;
+  }
+  var start=state?lower(state):"";
+  if(!start&&(!state||!state.slack_post_ts)){
+    if(ymd(thread.weekly_starter_week)===week)start=String(thread.weekly_starter_ts||"");
+    else if(ymd(thread.replacement_week)===week)start=parent;
+  }
+  if(!start||!/^\d+\.\d{6}$/.test(start))return {ok:false,error:"No verified Slack starter for this reporting week. Start or continue this week's discussion; older CE Memory is preserved."};
+  var nextCycle=rows.filter(function(r){return ymd(r.week_start)>week&&lower(r)>start;})
+    .sort(function(a,b){return ymd(a.week_start).localeCompare(ymd(b.week_start));})[0];
+  var latest=nextCycle?lower(nextCycle):"";
+  if(ymd(thread.weekly_starter_week)>week&&String(thread.weekly_starter_ts||"")>start&&
+      (!latest||String(thread.weekly_starter_ts)<latest))latest=String(thread.weekly_starter_ts);
+  return {ok:true,start:start,latest:latest};
 }
 
 function reviewSummaryDecide(p){
@@ -1205,6 +1248,19 @@ function reviewSummaryDecide(p){
   var trusted=reviewTrustedAuthor(p,p.decided_by),now=reviewNow(),draft=String(p.summary_json||state.summary_draft_json||"");
   if(decision==="approved"){
     var parsed=reviewJson(draft,null);if(!parsed)return jsonResp({ok:false,error:"approved summary must be valid JSON"});
+    if(state.last_error==="source_incomplete")return jsonResp({ok:false,error:"Slack scan is incomplete. Finish reading sources before approval."});
+    var threads=reviewThreadsFor(p.market_slug,p.ce_id),thread=reviewResolveWeeklyThread(state,threads);
+    var cycle=thread?reviewWeeklyCycle(p,state,thread,threads):{ok:false};
+    if(!cycle.ok)return jsonResp({ok:false,error:"Summary week cannot be verified. Existing CE Memory is preserved."});
+    var refs=parsed.source_refs,allowed={};
+    reviewRows("suggestions").forEach(function(r){
+      var ref=String(r.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d{6})$/);
+      if(r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start)&&
+          r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact"&&ref&&
+          ref[2]>=cycle.start&&(!cycle.latest||ref[2]<cycle.latest)&&reviewSummarySourceMatches(r,thread,state,cycle.latest))allowed[r.source_ref]=true;
+    });
+    if(!Array.isArray(refs)||!refs.length||refs.some(function(ref){return !allowed[ref];}))
+      return jsonResp({ok:false,error:"Summary contains missing or out-of-week sources. Refresh and review before approval."});
   }
   var next=reviewWeeklyMutate(p,function(rec){
     if(String(rec.thread_binding_id||"")!==String(state.thread_binding_id||"")||String(rec.slack_discussion_number||"")!==String(state.slack_discussion_number||""))throw new Error("CE thread changed before summary save");
@@ -1409,6 +1465,8 @@ function reviewWeeklySyncCore(p){
   if(hasHistory&&!thread)return {ok:false,error:"Cannot establish this week's Slack thread from saved history.",weekly:state};
   if(!thread)return {ok:false,error:"no matching CE Slack thread",weekly:state};
   if(wanted&&String(thread.binding_id||"")!==wanted)return {ok:false,error:"CE thread changed. Refresh before summarizing."};
+  var cycle=reviewWeeklyCycle(p,state,thread,threads);
+  if(!cycle.ok)return {ok:false,error:cycle.error,weekly:state};
   var recoverBinding=state&&(!state.thread_binding_id||!state.slack_discussion_number);
   if(!state||!state.slack_post_ts||recoverBinding){
     var expectedBinding=String((state||{}).thread_binding_id||""),expectedPost=String((state||{}).slack_post_ts||"");
@@ -1416,7 +1474,7 @@ function reviewWeeklySyncCore(p){
       if(String(rec.thread_binding_id||"")!==expectedBinding||String(rec.slack_post_ts||"")!==expectedPost)throw new Error("CE thread changed before legacy binding recovery");
       rec.thread_binding_id=rec.thread_binding_id||thread.binding_id||"";
       rec.slack_discussion_number=rec.slack_discussion_number||reviewThreadNumber(thread,threads);
-      rec.slack_post_ts=rec.slack_post_ts||thread.slack_thread_ts;rec.slack_post_permalink=rec.slack_post_permalink||thread.slack_permalink;rec.last_scanned_ts=rec.last_scanned_ts||rec.slack_post_ts;return rec;
+      rec.slack_post_ts=rec.slack_post_ts||cycle.start;rec.slack_post_permalink=rec.slack_post_permalink||thread.slack_permalink;rec.last_scanned_ts=rec.last_scanned_ts||rec.slack_post_ts;return rec;
     });
   }
   if(wanted&&String(state.thread_binding_id||"")!==wanted)return {ok:false,error:"CE thread changed. Refresh before summarizing."};
@@ -1425,16 +1483,22 @@ function reviewWeeklySyncCore(p){
   // A CE may reuse its active Slack thread, so each weekly cycle needs an
   // explicit upper boundary. Otherwise a late scan of W31 can also ingest W32
   // replies after the W32 starter has been posted.
-  var nextCycle=reviewRows("weekly").filter(function(r){return r.market_slug===p.market_slug&&
-    String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)>ymd(p.week_start)&&r.slack_post_ts&&
-    String((reviewResolveWeeklyThread(r,threads)||{}).binding_id||"")===String(thread.binding_id||"");})
-    .sort(function(a,b){return ymd(a.week_start).localeCompare(ymd(b.week_start));})[0];
-  var latest=nextCycle?String(nextCycle.slack_post_ts):"";
-  var since=String(state.last_scanned_ts||state.slack_post_ts),scan=slackThreadReplies(token,
+  var latest=cycle.latest;
+  var since=String(state.last_scanned_ts||cycle.start);if(since<cycle.start)since=cycle.start;
+  if(latest&&since>=latest)return {ok:false,error:"Saved Slack cursor is outside this week's discussion. Existing sources are preserved for review.",weekly:state};
+  var scan=slackThreadReplies(token,
     thread.slack_channel,thread.slack_thread_ts,since,latest);
   if(!scan.ok)return {ok:false,error:scan.error,weekly:state};
+  var messages=(scan.messages||[]).filter(function(msg){var ts=String(msg.ts||"");
+    return ts&&ts>since&&(!latest||ts<latest)&&ts!==String(thread.slack_thread_ts)&&!msg.bot_id&&!msg.subtype;});
+  // Never silently borrow, move or omit a source already assigned elsewhere.
+  // A previous bad scan needs human review, not automatic historical backfill.
+  var ownershipConflict=messages.some(function(msg){return reviewRows("suggestions").some(function(r){
+    return r.market_slug===p.market_slug&&String(r.ce_id)===String(p.ce_id)&&r.source_type==="slack"&&
+      r.kind==="comment"&&r.source_ref===thread.slack_channel+":"+String(msg.ts)&&ymd(r.week_start)!==ymd(p.week_start);});});
+  if(ownershipConflict)return {ok:false,error:"A Slack source belongs to another saved week. Existing sources and approvals are preserved for review.",weekly:state};
   var newest=since,created=[];
-  (scan.messages||[]).forEach(function(msg){
+  messages.forEach(function(msg){
     var ts=String(msg.ts||"");
     if(!ts||ts<=since||(latest&&ts>=latest)||ts===String(thread.slack_thread_ts)||msg.bot_id||msg.subtype)return;
     newest=ts>newest?ts:newest;
@@ -1449,7 +1513,8 @@ function reviewWeeklySyncCore(p){
   var raw=reviewRows("suggestions").filter(function(r){return r.market_slug===p.market_slug&&
     String(r.ce_id)===String(p.ce_id)&&ymd(r.week_start)===ymd(p.week_start)&&
     r.source_type==="slack"&&r.kind==="comment"&&r.confidence==="source_exact"&&
-    reviewSummarySourceMatches(r,thread,state,latest);});
+    reviewSummarySourceMatches(r,thread,state,latest)&&
+    String(r.source_ref||"").split(":").pop()>=cycle.start;});
   var contributors=[];raw.forEach(function(r){if(r.source_author&&contributors.indexOf(r.source_author)<0)contributors.push(r.source_author);});
   // App-relayed replies have already been stored as exact sources, but Slack
   // identifies them as bot messages. Include their timestamps in the summary
@@ -1457,9 +1522,9 @@ function reviewWeeklySyncCore(p){
   var summaryNewest=newest;
   raw.forEach(function(r){var ref=String(r.source_ref||"").match(/^([CG][A-Z0-9]+):(\d+\.\d+)$/);
     if(ref&&ref[2]>summaryNewest)summaryNewest=ref[2];});
-  if(!created.length && Number(state.reply_count||0)===raw.length && state.summary_upto_ts===summaryNewest && ["pending","approved"].indexOf(String(state.summary_status))>=0)
+  if(!scan.truncated && state.sync_status!=="summary_delayed" && !created.length && Number(state.reply_count||0)===raw.length && state.summary_upto_ts===summaryNewest && ["pending","approved"].indexOf(String(state.summary_status))>=0)
     return {ok:true,weekly:state,new_replies:[],ai_status:"current"};
-  var ai=raw.length?reviewAiWeeklySummary(raw,state,p):{status:"no_new_source"};
+  var ai=scan.truncated?{status:"source_incomplete"}:(raw.length?reviewAiWeeklySummary(raw,state,p):{status:"no_new_source"});
   var latestState=reviewWeeklyFor(p.market_slug,p.ce_id,p.week_start);
   if(String((latestState||{}).thread_binding_id||"")!==String(state.thread_binding_id||""))return {ok:false,error:"CE thread changed while summarizing. Refresh to summarize the new thread."};
   var next=reviewWeeklyMutate(p,function(rec){

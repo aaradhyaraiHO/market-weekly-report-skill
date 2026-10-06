@@ -21,15 +21,16 @@ function backend() {
   context.reviewNow=()=> '2026-09-09T00:00:00Z';context.reviewId=prefix=>prefix+'_'+(++serial);
   context.reviewTrustedAuthor=()=> 'Reviewer';
   context.slackUserName=()=> 'Priya';context.getPermalink=()=> 'https://example.com/test';
-  const thread={...id,binding_id:'active',binding_status:'active',slack_thread_ts:'100.000001',slack_channel:'C0BQHT29WMB',slack_permalink:'https://example.com/test',created_at:'2026-08-30'};
+  const thread={...id,binding_id:'active',binding_status:'active',slack_thread_ts:'100.000001',slack_channel:'C0BQHT29WMB',slack_permalink:'https://example.com/test',created_at:'2026-08-30',replacement_week:id.week_start};
   context.reviewWrite('threads',null,thread);
   context.slackThreadReplies=()=>({ok:true,messages:[{ts:'101.000001',text:'Confirm slots',user:'U1'}]});
   let calls=0, records=[];
-  context.reviewAiWeeklySummary=raw=>{calls++;records=raw;return {status:'ok',summary:{findings:['Capacity gap'],action_suggestions:[{text:'Confirm replacement slots',owner:'Priya'}]}};};
+  context.reviewAiWeeklySummary=raw=>{calls++;records=raw;return {status:'ok',summary:{source_refs:raw.map(r=>r.source_ref),findings:['Capacity gap'],action_suggestions:[{text:'Confirm replacement slots',owner:'Priya'}]}};};
   return {c:context,t:tables,thread,aiCalls:()=>calls,aiRecords:()=>records};
 }
 function backendTests(){
-  // A historical CE thread can be summarized without sending a new weekly starter.
+  // A historical CE thread can be summarized under its proven original week,
+  // without resending its starter. It cannot be relabelled as a later week.
   let b=backend(),res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
   assert.equal(res.ok,true);assert.equal(res.weekly.thread_binding_id,'active');assert.equal(b.aiCalls(),1);
   assert.equal(b.t.suggestions.filter(r=>r.kind==='action').length,1);
@@ -101,7 +102,70 @@ function backendTests(){
   b.c.slackThreadReplies=()=>({ok:true,truncated:true,messages:[{ts:'101.500001',user:'U2',text:'Earlier unread human reply'}]});
   res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
   assert.equal(res.weekly.last_scanned_ts,'101.500001');assert.equal(res.weekly.summary_upto_ts,'103.000001');
-  assert.ok(b.aiRecords().some(r=>r.body==='Earlier unread human reply'));
+  assert.equal(res.ai_status,'source_incomplete');
+  assert.ok(b.t.suggestions.some(r=>r.body==='Earlier unread human reply'));
+  b.c.slackThreadReplies=()=>({ok:true,messages:[]});
+  res=b.c.reviewWeeklySyncCore({...id,thread_binding_id:'active'});
+  assert.equal(res.ai_status,'ok');assert.ok(b.aiRecords().some(r=>r.body==='Earlier unread human reply'));
+}
+
+function chicagoWeekBoundaryTests(){
+  const identity={market_slug:'north_america',ce_id:'18 - Chicago',ce_name:'Cruises - Chicago'};
+  const channel='C0BQHT29WMB',parent='1789466637.943559',starter='1790052745.943929';
+  const url=ts=>'https://headout.slack.com/archives/'+channel+'/p'+ts.replace('.','')+'?thread_ts='+parent;
+  const replies=[
+    {ts:'1789466671.878219',text:'Search demand drop?',user:'U1'},
+    {ts:'1789466729.463579',text:'31% clicks drop; 185% ROI',user:'U2'},
+    {ts:'1789467146.225649',text:'Any action to scale?',user:'U1'},
+    {ts:'1789467449.928479',text:'Positive seasonality risks higher CPC',user:'U2'},
+    {ts:starter,text:'Apply negative seasonality',bot_id:'B1'},
+    {ts:'1790053417.758089',text:'This week analysis; check supplier demand',user:'U1'}];
+  function fixture(){
+    const b=backend();b.t.threads=[];
+    const thread={...identity,binding_id:'chicago',slack_channel:channel,slack_thread_ts:parent,
+      slack_permalink:url(parent),binding_status:'active',created_at:'2026-09-15T10:03:57Z',
+      weekly_starter_week:'2026-09-13',weekly_starter_ts:starter,replacement_week:'2026-09-06'};
+    b.c.reviewWrite('threads',null,thread);
+    for(const [week,ts] of [['2026-09-06',parent],['2026-09-13',starter],['2026-09-27',parent]])
+      b.c.reviewWeeklyMutate({...identity,week_start:week},r=>({...r,thread_binding_id:'chicago',
+        slack_discussion_number:'1',slack_post_ts:ts,slack_post_permalink:url(ts),last_scanned_ts:ts}));
+    b.t.weekly[2].summary_status='approved';b.t.weekly[2].summary_approved_json='{"findings":["Preserve existing approval"]}';
+    b.c.reviewSuggestionRecord({...identity,week_start:'2026-09-13',source_type:'slack',kind:'comment',
+      confidence:'source_exact',thread_binding_id:'chicago',source_ref:channel+':'+starter,
+      source_url:url(starter),body:'Apply negative seasonality'});
+    b.c.getPermalink=(_token,_channel,ts)=>url(ts);
+    b.c.slackThreadReplies=(_token,_channel,_parent,since,latest)=>({ok:true,messages:replies.filter(r=>r.ts>since&&(!latest||r.ts<latest))});
+    return b;
+  }
+  let b=fixture(),approved=clone(b.t.weekly[2]),later=clone(b.t.weekly[1]);
+  let res=b.c.reviewWeeklySyncCore({...identity,week_start:'2026-09-06'});
+  assert.equal(res.ok,true);assert.equal(b.aiRecords().length,4);
+  assert.ok(!b.aiRecords().some(r=>r.body.includes('negative seasonality')));
+  assert.deepEqual(b.t.weekly[1],later);assert.deepEqual(b.t.weekly[2],approved);
+  res=b.c.reviewWeeklySyncCore({...identity,week_start:'2026-09-13'});
+  assert.equal(res.ok,true);assert.deepEqual(Array.from(b.aiRecords(),r=>r.body),
+    ['Apply negative seasonality','This week analysis; check supplier demand']);
+  assert.deepEqual(b.t.weekly[2],approved);
+  const before=JSON.stringify(b.t),calls=b.aiCalls();
+  res=b.c.reviewWeeklySyncCore({...identity,week_start:'2026-09-27'});
+  assert.equal(res.ok,false);assert.match(res.error,/verified Slack starter/);
+  assert.equal(JSON.stringify(b.t),before);assert.equal(b.aiCalls(),calls);
+  // A new week without any starter also fails without creating a Sheet row.
+  res=b.c.reviewWeeklySyncCore({...identity,week_start:'2026-10-04'});
+  assert.equal(res.ok,false);assert.equal(JSON.stringify(b.t),before);
+  // Wrong sources cannot be approved even if the discussion ID is correct.
+  b.t.weekly[1].summary_thread_binding_id='chicago';b.t.weekly[1].summary_slack_discussion_number='1';
+  const saved=JSON.stringify(b.t);
+  res=b.c.reviewSummaryDecide({...identity,week_start:'2026-09-13',decision:'approved',decided_by:'Reviewer',
+    thread_binding_id:'chicago',slack_discussion_number:'1',summary_json:JSON.stringify({source_refs:[channel+':1789467449.928479']})});
+  assert.equal(res.ok,false);assert.match(res.error,/out-of-week/);assert.equal(JSON.stringify(b.t),saved);
+  // Previously mis-owned human sources require review: never steal or hide them.
+  b=fixture();b.c.reviewSuggestionRecord({...identity,week_start:'2026-09-27',source_type:'slack',kind:'comment',
+    confidence:'source_exact',thread_binding_id:'chicago',source_ref:channel+':1789466671.878219',body:'mis-owned'});
+  const conflict=JSON.stringify(b.t);
+  res=b.c.reviewWeeklySyncCore({...identity,week_start:'2026-09-06'});
+  assert.equal(res.ok,false);assert.match(res.error,/another saved week/);
+  assert.equal(JSON.stringify(b.t),conflict);assert.equal(b.aiCalls(),0);
 }
 
 function historicalBindingTests(){
@@ -383,4 +447,4 @@ async function savedNoteTests(){
   assert.ok(ui.renderCommentaryCard({ce_id:id.ce_id}).includes('Preserve cached summary'),'refresh failure retains previously loaded content');
 }
 
-memoryTests();backendTests();historicalBindingTests();Promise.all([clientTests(),historicalUiBindingTest(),savedNoteTests()]).then(()=>console.log('Mini Audit runtime regressions passed')).catch(e=>{console.error(e);process.exitCode=1;});
+memoryTests();backendTests();historicalBindingTests();chicagoWeekBoundaryTests();Promise.all([clientTests(),historicalUiBindingTest(),savedNoteTests()]).then(()=>console.log('Mini Audit runtime regressions passed')).catch(e=>{console.error(e);process.exitCode=1;});
