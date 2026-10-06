@@ -61,3 +61,31 @@ New-summary persistence/approval needs a separately approved test discussion and
 period. Read-only checks do not prove that write workflow. Next real weekly/monthly
 runs must measure storage savings while passing their preservation/live gates;
 do not rerun an already-delivered week to manufacture those measurements.
+
+## Verified backend rollout
+
+The signed-in Apps Script UI and authenticated API identified `WBR Review Backend`
+project `1PcyDdbEK8zpSm_L8lhopGOIJlode56Y1bMBSiABcQ0GoBqcIpcKRRsP6` and the
+existing Review deployment ending `SPppxfSoqAX-o3aQy`. Its frozen version 21
+matched the repository's exact pre-fix source (`acf385524eee…`).
+
+On October 6, the shared writer lock protected a scoped rollout of commit
+`8eff0c7` as immutable version **22**, source SHA-256
+`335e1b4ad9ce81563a5c2809ad8160d54b3c2c31ec244aec993e274d6ab615f4`.
+The endpoint, execution/access configuration, manifest and unrelated deployments
+were preserved. The distinct editable project HEAD was restored exactly.
+Version 21 and its exact deployment configuration remain the rollback point.
+
+The update response confirmed version 22 while the immediate GET returned stale
+version 21. A later read-only reconciliation confirmed the exact intended version
+and source; the deployment update was **not replayed**. All populated values in
+the 16-tab Review workbook matched before/after, including approved summaries,
+notes, actions, access rows and thread mappings. No Sheet or Slack write was sent
+by this rollout. Production report HTML and its Vercel deployment were untouched.
+
+Private receipts and source backups are in
+`.cache/weekly_report/ce_summary_boundary_backend_2026-10-06/`; the
+`activation-receipt.json` records the single update and read-only reconciliation.
+The 445-test suite verifies the repaired source's week-selection, incomplete-scan,
+source-ownership and approval guards. This rollout verification does not replace
+a separately authorized fresh-summary write/persistence test.
