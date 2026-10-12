@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / 'scripts' / 'weekly_report'))
 import config
-from weekly_alert_v2 import load_headline, build_payload, LEDGER_SLUG
+from weekly_alert_v2 import load_headline, build_payload, LEDGER_SLUG, resolve_growth_recipients
 from safe_delivery import atomic_json, compile_market, digest, validate_bundle
 from check_readiness import check
 
@@ -50,6 +50,8 @@ def prepare(week, reports, okrs, out):
     if not readiness['ready']:
         raise ValueError(f'Alert routing not ready: {readiness["blockers"]}')
     bgms = json.loads((HERE / 'market_bgms.json').read_text())
+    bgms, recipient_resolution = resolve_growth_recipients(bgms)
+    atomic_json(out.parent / 'recipient_resolution.json', recipient_resolution)
     channels = json.loads((ROOT / 'alert' / 'market_channels.json').read_text())['markets']
     okr_data = json.loads(okrs.read_text())
     payloads = {}
@@ -84,7 +86,8 @@ def prepare(week, reports, okrs, out):
     for market in markets:
         market['headline_sha256'] = digest(headlines[market['slug']])
     bundle = {'schema': 'weekly-v2-delivery/v1', 'week': week,
-              'markets': markets, 'sha256': digest(markets)}
+              'markets': markets, 'sha256': digest(markets),
+              'recipient_resolution': recipient_resolution}
     validate_bundle(bundle)
     atomic_json(out, bundle)
     return bundle

@@ -1,0 +1,11 @@
+{
+  "_note": "Owner-approved market Growth groups, verified in Headout Slack on 2026-10-12. UK Growth also covers Benelux per the owner's request. Unlisted markets retain verified individual BGM tags; never guess regional/global replacements.",
+  "team_id": "T029AQ5LB",
+  "markets": {
+    "united_kingdom": {"id": "S0AF7JQV3U2", "handle": "uk-growth"},
+    "benelux": {"id": "S0AF7JQV3U2", "handle": "uk-growth"},
+    "italy": {"id": "S09EL7MF2DT", "handle": "itgrowth"},
+    "iberia": {"id": "S0ASHUP5D19", "handle": "growth-iberia-southamerica"},
+    "south_america": {"id": "S0ASHUP5D19", "handle": "growth-iberia-southamerica"}
+  }
+}

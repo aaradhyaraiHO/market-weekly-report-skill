@@ -7,6 +7,8 @@ produced by ``codex/v2-market-headlines``. V1 remains independent.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
+from datetime import datetime, timezone
 import json
 import re
 from pathlib import Path
@@ -15,6 +17,8 @@ from typing import Any, Iterable
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_BGMS = HERE / "market_bgms.json"
+DEFAULT_GROWTH_GROUPS = HERE / "market_growth_groups.json"
+DEFAULT_GROUP_AVAILABILITY = HERE.parents[1] / ".cache/weekly_report/slack_group_availability.json"
 DEFAULT_FEEDBACK_CANVAS_URL = "https://headout.slack.com/docs/T029AQ5LB/F0BKPP4C7GC"
 DEFAULT_OKR_TRACKER_URL = "https://central-tracking.vercel.app/okr-tracker"
 LOCKED_FORMAT_VERSION = "2026-08-17.2"
@@ -240,13 +244,86 @@ def alert_1_kpi_blocks(headline: dict, kpis: dict) -> list[dict]:
     ]
 
 
+def resolve_growth_recipients(
+    bgms: dict,
+    groups_path: Path = DEFAULT_GROWTH_GROUPS,
+    availability_path: Path = DEFAULT_GROUP_AVAILABILITY,
+    *, now: datetime | None = None,
+) -> tuple[dict, dict]:
+    """Add only allowlisted, freshly verified active groups; retain individuals.
+
+    This is a local read of a Slack verification receipt, not a network lookup.
+    Unavailable optional groups never remove the mandatory individual recipients.
+    Freeze this resolution once per bundle; do not re-resolve delivery retries.
+    """
+    resolved = deepcopy(bgms)
+    configured = _read_json(groups_path, {"markets": {}, "team_id": "T029AQ5LB"})
+    active = {}
+    availability_state = "unavailable"
+    try:
+        observed = json.loads(availability_path.read_text())
+        if not isinstance(observed, dict) or not isinstance(observed.get("observed_at"), str):
+            raise ValueError("Invalid group verification timestamp")
+        stamp = datetime.fromisoformat(observed["observed_at"].replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            raise ValueError("Slack observation must include a timezone")
+        age = ((now or datetime.now(timezone.utc)) - stamp).total_seconds()
+        if (observed.get("schema") != "weekly-slack-group-availability/v1"
+                or observed.get("team_id") != configured.get("team_id")
+                or not 0 <= age <= 86400):
+            raise ValueError("Missing, wrong-workspace, future or stale group verification")
+        for group in observed["groups"]:
+            if not isinstance(group, dict):
+                raise ValueError("Invalid group observation")
+            if group["id"] in active or not isinstance(group.get("disabled"), bool):
+                raise ValueError("Ambiguous group availability")
+            if "member_count" in group and (type(group["member_count"]) is not int or group["member_count"] < 0):
+                raise ValueError("Invalid group member count")
+            active[group["id"]] = group
+        availability_state = "fresh"
+    except (OSError, ValueError, KeyError, TypeError):
+        active = {}
+    receipt = {"schema": "weekly-alert-recipient-resolution/v1",
+               "team_id": configured.get("team_id"),
+               "observed_at": stamp.isoformat() if availability_state == "fresh" else None,
+               "availability": availability_state, "markets": {}}
+    for slug, entry in (resolved.get("markets") or {}).items():
+        # Do not accept stale group IDs embedded in an old caller's BGM config.
+        entry["slack_usergroup_ids"] = []
+        group = (configured.get("markets") or {}).get(slug)
+        reason = "no_verified_market_group"
+        if group:
+            if (not re.fullmatch(r"S[A-Z0-9]+", str(group.get("id", "")))
+                    or not re.fullmatch(r"[a-z0-9_-]+", str(group.get("handle", "")))):
+                raise ValueError(f"Invalid configured Growth group for {slug}")
+            current = active.get(group["id"])
+            if (current and current.get("handle") == group["handle"]
+                    and current.get("disabled") is False
+                    and current.get("member_count", 1) > 0):
+                entry["slack_usergroup_ids"] = [group["id"]]
+                reason = "active_verified_group_plus_individuals"
+            else:
+                reason = "group_unavailable_individuals_retained"
+        receipt["markets"][slug] = {"individual_ids": list(entry.get("slack_user_ids") or []),
+                                    "group_ids": list(entry["slack_usergroup_ids"]), "reason": reason}
+    resolved["_growth_recipients_resolved"] = True
+    return resolved, receipt
+
+
 def bgm_mentions(slug: str, config: dict) -> list[str]:
     entry = (config.get("markets") or {}).get(slug, {})
     ids = entry.get("slack_user_ids") or []
     invalid = [value for value in ids if not re.fullmatch(r"U[A-Z0-9]+", str(value))]
     if invalid:
         raise ValueError(f"Invalid Slack user IDs for {slug}: {invalid}")
-    return [f"<@{user_id}>" for user_id in ids]
+    # A group alone is never enough: individual fallback is mandatory.
+    if not ids:
+        return []
+    groups = entry.get("slack_usergroup_ids") or []
+    if any(not re.fullmatch(r"S[A-Z0-9]+", str(value)) for value in groups):
+        raise ValueError(f"Invalid Slack group IDs for {slug}")
+    return ([f"<@{user_id}>" for user_id in dict.fromkeys(ids)]
+            + [f"<!subteam^{group_id}>" for group_id in dict.fromkeys(groups)])
 
 
 def _okr_rows(slug: str, results: dict | None, week_start: str | None = None) -> list[dict]:
@@ -436,6 +513,8 @@ def build_payload(
     report_url: str | None = None,
     feedback_canvas_url: str = DEFAULT_FEEDBACK_CANVAS_URL,
 ) -> dict:
+    if not bgms.get("_growth_recipients_resolved"):
+        bgms, _ = resolve_growth_recipients(bgms)
     slug = headline["market_slug"]
     week_start = str(headline.get("week_start") or "").strip()
     ledger_slug = LEDGER_SLUG.get(slug, slug.replace("_", "-"))

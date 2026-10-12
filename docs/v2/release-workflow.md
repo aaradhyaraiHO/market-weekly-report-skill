@@ -36,6 +36,24 @@ Implementation and local tests are not a supervised live-run pass.
    runtime token is `REVENUE_ALERT_SLACK_TOKEN`; never print or commit it. Private
    Headout requires `groups:history` and app membership. Only an authorized app
    collaborator/admin can change scopes and re-authorize the app.
+5. Before preparing a **new** alert bundle, use the connected Headout Slack
+   `slack_list_user_groups` read tool to verify the groups allowlisted in
+   `alert/v2/market_growth_groups.json`. Save a fresh local observation to
+   `.cache/weekly_report/slack_group_availability.json` with schema
+   `weekly-slack-group-availability/v1`, `team_id: T029AQ5LB`, timezone-aware
+   ISO `observed_at`, and `groups: [{id, handle, disabled, member_count}]`
+   (`member_count` is Slack's `user_count` when available). Record actual tool
+   results only; do not reuse old evidence or invent availability. This is a
+   read-only check; the bot need not be granted additional scopes. The current
+   bot cannot list user groups, but can mention verified IDs. If this read is
+   unavailable, leave the observation absent: alerts retain mandatory verified
+   individual BGM mentions. Missing/disabled/empty/renamed groups and observations
+   older than 24 hours also fall back to individuals. Active verified Growth
+   groups are added to the first parent alert; individual tags remain present
+   even then. No global/regional group is inferred for an unmapped market.
+   `prepare_delivery.py` freezes the result into `recipient_resolution.json`
+   and the new bundle. Existing bundles, alerts and retries are never rebuilt
+   to change recipients; no separate follow-up notification is needed next run.
 
 ```sh
 python3 scripts/weekly_report/run_v2_release.py --week YYYY-MM-DD \
