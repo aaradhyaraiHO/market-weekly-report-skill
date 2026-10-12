@@ -116,7 +116,16 @@
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
     };
-    var api = global.createWeeklyReviewApi ? global.createWeeklyReviewApi("/api/review") : null;
+    var api = global.createWeeklyReviewApi ? global.createWeeklyReviewApi("/api/review",function(){
+      // Session-only context must not survive a lost authenticated session.
+      // Drafts are deliberately separate and remain untouched.
+      captureVisibleDrafts();
+      S.memoryCache={};S.memoryStatus={};S.memoryInflight={};S.ceResourceLoads={};
+      S.comments={};S.weekly={};S.weeklyHist={};S.work={};S.suggestions={};S.threadRegistry={};S.threadRegistryLoaded={};
+      S.queueCommentsLoad=null;S.receipts={};S.setRowsList=[];S.setRows={};S.workLoaded=false;S.workLoading=false;
+      S.authRequired=true;
+      render();
+    }) : null;
 
     var S = {
       headline: null, market: "", market_slug: "", week_start: "", week_end: "", channel: null,
@@ -134,6 +143,8 @@
     // blocking meeting imports/actions behind an unrelated manual name field.
     if (api && api.whoami) {
       api.whoami().then(function (identity) {
+        S.actorEmail=identity&&identity.actor_email||"";
+        S.authRequired=false;
         if (identity && identity.actor_name && !author()) {
           setAuthor(identity.actor_name);
           if (S.loaded) render();
@@ -314,8 +325,8 @@
         S.loaded = true; render();
         if (S.selected) loadCe(S.selected);
       }
-      var market=S.market_slug,week=S.week_start,id={market_slug:market,week:week};
-      function current(){return S.market_slug===market&&S.week_start===week;}
+      var market=S.market_slug,week=S.week_start,id={market_slug:market,week:week},session=S.ceResourceLoads;
+      function current(){return S.market_slug===market&&S.week_start===week&&S.ceResourceLoads===session;}
       return Promise.all([
         api.reviewSet(id).then(function(res){if(!current())return;S.setRowsList=res.review_set||[];S.setRows={};S.setRowsList.forEach(function(r){S.setRows[String(r.ce_id)]=r;});var selected=S.selected;buildQueue();if(selected)ensureLocalCe(selected);render();}).catch(function(){}),
         api.receipts(id).then(function(res){if(!current())return;S.receipts={};(res.receipts||[]).forEach(function(r){S.receipts[String(r.ce_id)]=r;});render();}).catch(function(){}),
@@ -373,12 +384,14 @@
           return entry.pending;
         }
         if(!force&&entry&&entry.loadedAt&&Date.now()-entry.loadedAt<60000&&!errors[name])return Promise.resolve();
-        entry=loads[name]={loadedAt:0};
+        entry=loads[name]={loadedAt:entry&&entry.loadedAt||0,state:"loading"};
         var commentVersion=(S.commentVersions||{})[ceId]||0;
         entry.pending=call().then(function(res){if(!current()||loads[name]!==entry)return;
           if(name!=="comments"||((S.commentVersions||{})[ceId]||0)===commentVersion)apply(res);
-          entry.loadedAt=Date.now();delete errors[name];
-        }).catch(function(error){if(!current()||loads[name]!==entry)return;errors[name]=error.message||"Unavailable";if(name==="threads")S.threadRegistryError[ceId]=true;
+          var rows=res[{notes:"weekly",comments:"comments",suggestions:"suggestions",threads:"threads"}[name]];
+          entry.loadedAt=Date.now();entry.state=Array.isArray(rows)&&!rows.length?"empty":"loaded";delete errors[name];
+          S.authRequired=false;
+        }).catch(function(error){if(!current()||loads[name]!==entry)return;entry.state="failed";errors[name]=error.message||"Unavailable";if(name==="threads")S.threadRegistryError[ceId]=true;
         }).finally(function(){entry.pending=null;if(current()&&String(S.selected)===ceId)render();});
         return entry.pending;
       }
@@ -398,13 +411,22 @@
       if(S.memoryInflight[key])return force?S.memoryInflight[key].then(function(){if(S.market_slug===market&&S.week_start===week)return loadMemoryInline(ceId,true);}):S.memoryInflight[key];
       if(!force&&S.memoryCache[key]&&!S.memoryCache[key].error)return Promise.resolve();
       S.memoryStatus=S.memoryStatus||{};
-      S.memoryStatus[key]={pending:true};
+      var previous=S.memoryStatus[key]||{};
+      S.memoryStatus[key]={pending:true,state:"loading",updatedAt:previous.updatedAt};
+      var cache=S.memoryCache,status=S.memoryStatus,inflight=S.memoryInflight;
       function paint(){if(S.market_slug===market&&S.week_start===week&&String(S.selected)===String(ceId))render();}
       S.memoryInflight[key]=Promise.resolve().then(function(){return api.memory({market_slug:market,ce_id:ceId},!!force);}).then(function(res){
-        S.memoryCache[key]=res;S.memoryStatus[key]={updatedAt:new Date().toISOString()};
+        if(S.memoryCache!==cache||S.memoryStatus!==status)return;
+        if(!res||!["comments","weekly_commentary","work_items","timeline"].every(function(field){return Array.isArray(res[field]);}))throw new Error("Previous context returned an incomplete response. Please retry.");
+        if(["actions","comments"].some(function(source){return typeof ((res.historical_source_status||{})[source]||{}).unavailable!=="boolean";}))throw new Error("Previous context did not confirm its source status. Please retry.");
+        var partial=Object.keys(res.historical_source_status||{}).some(function(source){return !!res.historical_source_status[source].unavailable;});
+        var empty=["comments","weekly_commentary","work_items","timeline","perf_history","historical_comments","slack_threads"].every(function(field){return !(res[field]||[]).length;});
+        S.memoryCache[key]=res;S.memoryStatus[key]={state:partial?"partial":empty?"empty":"loaded",updatedAt:new Date().toISOString()};
+        S.authRequired=false;
       }).catch(function(error){
-        S.memoryCache[key]=Object.assign({},S.memoryCache[key]||{},{error:error.message||"Memory unavailable"});S.memoryStatus[key]={};
-      }).finally(function(){delete S.memoryInflight[key];paint();});
+        if(S.memoryCache!==cache||S.memoryStatus!==status)return;
+        S.memoryCache[key]=Object.assign({},S.memoryCache[key]||{},{error:error.message||"Memory unavailable"});S.memoryStatus[key]={state:"failed",updatedAt:previous.updatedAt};
+      }).finally(function(){delete inflight[key];paint();});
       paint();
       return S.memoryInflight[key];
     }
@@ -545,7 +567,7 @@
         return '<article class="rv-saved-note" data-saved-note="'+esc(c.comment_id)+'"><div class="rv-note-content"><div class="rv-source-meta">'+esc(c.source_author||c.author_name||'Reviewer')+' · '+esc(fmtWhen(c.updated_at||c.created_at))+(c.updated_at&&c.created_at!==c.updated_at?' · Edited':'')+'</div><p>'+esc(c.body)+'</p>'+(c.source_url?'<a class="rv-source-link" href="'+esc(c.source_url)+'" target="_blank" rel="noopener">'+(c.source_type==='slack'?'View in Slack':'View source')+' ↗</a>':'')+'</div><div class="rv-note-actions">'+(c.source_type==='manual'?'<button class="rv-link" type="button" data-edit-writeup="'+esc(c.comment_id)+'"'+(busy||editor?' disabled':'')+'>Edit</button>':'')+'<button class="rv-link rv-note-discuss" type="button" data-discuss-writeup="'+esc(c.comment_id)+'"'+(busy||editor?' disabled':'')+'>Discuss in Slack</button></div></article>';
       }).join('');
       var noteLoad=(S.ceResourceLoads||{})[S.market_slug+"|"+S.week_start+"|"+q.ce_id],notePending=noteLoad&&noteLoad.comments&&noteLoad.comments.pending;
-      var warning=notePending?'<p class="rv-subtle" role="status">'+(notes.length?'Refreshing saved notes… Your confirmed notes remain below.':'Loading saved notes…')+'</p>':(S.resourceErrors[q.ce_id]||{}).comments?'<p class="rv-subtle" role="status">'+(notes.length?'Saved notes could not refresh. Showing the last confirmed notes.':'Saved notes could not load. This does not mean there are no saved notes.')+' <button class="rv-link" id="rv-retry-notes" type="button">Retry</button></p>':'';
+      var warning=S.authRequired?'<p class="rv-subtle" role="status">Please sign in again in another tab, then retry here. Your draft is kept.</p>':notePending?'<p class="rv-subtle" role="status">'+(notes.length?'Refreshing saved notes… Your confirmed notes remain below.':'Loading saved notes…')+'</p>':(S.resourceErrors[q.ce_id]||{}).comments?'<p class="rv-subtle" role="status">'+(notes.length?'Saved notes could not refresh. Showing the last confirmed notes.':'Saved notes could not load. This does not mean there are no saved notes.')+' <button class="rv-link" id="rv-retry-notes" type="button">Retry</button></p>':'';
       if(!compose)return '<div class="rv-field-label">This week’s notes</div>'+warning+cards+'<button class="rv-btn rv-new-writeup" id="rv-new-writeup" type="button"'+(busy?' disabled':'')+'><span aria-hidden="true">＋</span> Add a note or reply</button>';
       return (cards?'<div class="rv-field-label">This week’s notes</div>'+cards:'')+warning+'<label class="rv-field-label" for="rv-slack-message">'+(editing?'Edit note':replying?'Slack message':'Your writeup')+'</label><textarea id="rv-slack-message"'+(busy?' disabled':'')+' placeholder="What did you notice? Write a note or @mention someone to discuss it in Slack.">'+esc(S.slackDrafts[String(q.ce_id)]||'')+'</textarea><div class="rv-composer-actions">'+(editor?'<button class="rv-btn" id="rv-cancel-writeup" type="button"'+(busy?' disabled':'')+'>Cancel</button>':'')+(!replying?'<button class="rv-btn" id="rv-save-writeup" type="button"'+(busy?' disabled':'')+'>'+(S.asyncBusy['note:'+q.ce_id]?'Saving…':editing?'Save changes':'Save note')+'</button>':'')+(!editing?'<div class="rv-slack-send">'+renderSendDestination(q,loaded,busy,operation)+'<button class="rv-btn primary" id="rv-send-writeup" type="button"'+(!loaded||busy||summaryBusy?' disabled':'')+'>'+(S.asyncBusy['send:'+q.ce_id]?'Sending…':operation==='continue'?'Reply in Slack':'Start Slack thread')+'</button></div>':'')+'</div>';
     }
@@ -715,10 +737,11 @@
         return '<details class="rv-memory-week" data-memory-details="'+esc(key)+'"'+(disclosure(key,index===0)?' open':'')+'><summary><strong>'+esc(title)+'</strong></summary><div class="rv-memory-week-body"><div class="rv-memory-account">'+prose+'</div>'+work+'<details class="rv-memory-originals" data-memory-details="'+esc(sourceKey)+'" data-memory-source-week="'+esc(w.week)+'"'+(disclosure(sourceKey,false)?' open':'')+'><summary>Sources · '+w.sources.length+'</summary>'+w.sources.map(function(r,i){return '<div class="rv-memory-original" data-memory-record="'+esc(r.id)+'" tabindex="-1" role="group" aria-label="Source '+(i+1)+' · '+esc(r.label)+'"><span class="rv-source-meta">['+(i+1)+']</span>'+card(r)+'</div>';}).join('')+'</details></div></details>';
       }
       var state=(S.memoryStatus||{})[key]||{},pending=!!state.pending;
-      var warning=pending?(memory?'Refreshing CE history… Previously loaded records remain below.':'Loading CE history…'):(!memory?'Loading CE history…':memory.error?'History could not refresh. Previously loaded records remain below.':'');
+      var warning=pending?(state.updatedAt?'Refreshing CE history… Previously loaded records remain below.':'Loading CE history…'):(!memory?'Loading CE history…':memory.error?'Couldn’t load previous context — Retry. '+(state.updatedAt?'Previously loaded records remain below.':'This does not mean there are no previous notes.'):'');
+      if(S.authRequired)warning='Please sign in again in another tab, then retry here. Your draft is kept.';
       if((errors.comments||{}).unavailable)warning+=' Earlier comments source is unavailable.';
       if((errors.actions||{}).unavailable)warning+=' Performance history source is unavailable.';
-      var status=warning||(state.updatedAt?'History updated · '+fmtWhen(state.updatedAt):'');
+      var status=warning+(warning&&state.updatedAt?' Last confirmed · '+fmtWhen(state.updatedAt):'')|| (state.updatedAt?'History updated · '+fmtWhen(state.updatedAt):'');
       return currentContext.map(weekCard).join('')+'<details class="rv-flow-section rv-memory-shell" data-memory-details="memory"'+(disclosure('memory',false)?' open':'')+'><summary><h3>CE memory</h3></summary><div class="rv-memory-shell-body"><div class="rv-summary-heading"><span>Other weeks</span><button class="rv-link" id="rv-memory-refresh" type="button"'+(pending?' disabled':'')+'>'+(pending?'Refreshing…':memory&&memory.error?'Retry':'Refresh')+'</button></div><p role="status" aria-live="polite" aria-atomic="true" class="rv-subtle rv-memory-feedback">'+esc(status)+'</p>'+weeks.map(weekCard).join('')+(!weeks.length&&!warning?'<p class="rv-subtle">No earlier CE history recorded yet.</p>':'')+'</div></details>';
     }
 
@@ -1148,8 +1171,9 @@
     }
     function saveWorkItem(item, okMsg) { var key="work:"+String(item.work_id||"")+":"+String(item.status||"");if(S.asyncBusy[key])return;S.asyncBusy[key]=true;api.saveWork(item).then(function () { if(CLOSED.indexOf(item.status)>=0)track("action_closed",{ce_id:item.ce_id,value_text:item.status,idempotency_key:"action_closed:"+item.work_id+":"+item.status});S.auditStatus[item.ce_id]=okMsg;toast(okMsg); return reloadWork(); }).catch(function () { toast("Could not save work item"); }).finally(function(){delete S.asyncBusy[key];}); }
     function reloadWork() {
-      if(!api)return Promise.resolve();var market=S.market_slug;S.workLoading=true;render();
-      return api.work({market_slug:market},{refresh:true}).then(function(res){if(S.market_slug!==market)return;S.work={};(res.work_items||[]).forEach(function(w){var k=String(w.ce_id);(S.work[k]=S.work[k]||[]).push(w);});S.workLoaded=true;S.workError="";}).catch(function(e){if(S.market_slug===market)S.workError=e.message||"Actions unavailable";}).finally(function(){if(S.market_slug===market){S.workLoading=false;render();}});
+      if(!api)return Promise.resolve();var market=S.market_slug,session=S.ceResourceLoads;S.workLoading=true;render();
+      function current(){return S.market_slug===market&&S.ceResourceLoads===session;}
+      return api.work({market_slug:market},{refresh:true}).then(function(res){if(!current())return;S.work={};(res.work_items||[]).forEach(function(w){var k=String(w.ce_id);(S.work[k]=S.work[k]||[]).push(w);});S.workLoaded=true;S.workError="";}).catch(function(e){if(current())S.workError=e.message||"Actions unavailable";}).finally(function(){if(current()){S.workLoading=false;render();}});
     }
 
     function findWork(id) { var f = null; Object.keys(S.work).forEach(function (k) { S.work[k].forEach(function (w) { if (String(w.work_id) === String(id)) f = w; }); }); return f; }

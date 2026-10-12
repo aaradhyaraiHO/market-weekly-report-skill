@@ -24,7 +24,7 @@ const reply = body => ({ok:true,status:200,json:async()=>body});
   for(const method of ['reviewSet','receipts','suggestions','threads','weeklyCommentary']){
     let complete;
     const slow=setup((url,opts)=>new Promise((resolve,reject)=>{
-      complete=()=>resolve(reply({ok:true}));
+      complete=()=>resolve(reply({ok:true,weekly:[]}));
       opts.signal.addEventListener('abort',()=>reject(Object.assign(new Error(),{name:'AbortError'})));
     }));
     const read=slow.api[method]({market_slug:'csee'});slow.tick(30000);complete();

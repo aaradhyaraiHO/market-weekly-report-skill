@@ -313,7 +313,7 @@ class ReviewBackendContract(unittest.TestCase):
         self.assertIn("function reviewSignedActorEmail(p)", self.backend)
         self.assertIn("computeHmacSha256Signature(reviewActorCanonicalParams(p), secret)", self.backend)
         self.assertIn("if (!email) email = reviewSignedActorEmail(p);", self.backend)
-        self.assertIn('global.createWeeklyReviewApi("/api/review")', review_view)
+        self.assertIn('global.createWeeklyReviewApi("/api/review",function()', review_view)
 
     def test_diagnostic_actions_use_actions_proxy_not_review_proxy(self):
         template = TEMPLATE.read_text()

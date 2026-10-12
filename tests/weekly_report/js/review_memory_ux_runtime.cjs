@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync('scripts/weekly_report/review/review-view.js', 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const key = 'csee|2026-09-13|3286';
+const memory=extra=>({comments:[],weekly_commentary:[],work_items:[],timeline:[],historical_source_status:{actions:{unavailable:false},comments:{unavailable:false}},...extra});
 async function run() {
   const S = {market_slug:'csee',week_start:'2026-09-13',selected:'3286',memoryCache:{},memoryInflight:{}};
   const calls = []; let paints = 0;
@@ -14,17 +15,17 @@ async function run() {
   assert.equal(S.memoryStatus[key].pending,true);
   assert.equal(c.refreshMemory(),first,'rapid refresh shares in-flight request');
   await tick(); assert.equal(calls.length,1);
-  calls[0].resolve({comments:[{body:'Preserve this note'}]}); await first;
+  calls[0].resolve(memory({comments:[{body:'Preserve this note'}]})); await first;
   assert.ok(S.memoryStatus[key].updatedAt);
   const failed = c.refreshMemory(); await tick();
   calls[1].reject(new Error('Offline')); await failed;
   assert.equal(S.memoryCache[key].comments[0].body,'Preserve this note');
   assert.equal(S.memoryCache[key].error,'Offline');
   const retry = c.loadMemoryInline('3286',false); await tick();
-  calls[2].resolve({comments:[{body:'Recovered'}]}); await retry;
+  calls[2].resolve(memory({comments:[{body:'Recovered'}]})); await retry;
   assert.equal(S.memoryCache[key].error,undefined);
   const switched = c.refreshMemory(); await tick(); S.selected='other'; const before=paints;
-  calls[3].resolve({comments:[]}); await switched;
+  calls[3].resolve(memory()); await switched;
   assert.equal(paints,before,'late result cannot repaint another CE'); S.selected='3286';
   const focused=[];
   const record=id=>({dataset:{memoryRecord:id},focus:()=>focused.push(id),scrollIntoView:()=>focused.push('scroll:'+id)});
@@ -49,11 +50,33 @@ async function run() {
   assert.match(html,/Different text/);
   assert.match(html,/data-memory-source-id="a"/); assert.match(html,/data-memory-source-id="b"/);
   assert.match(html,/data-memory-record="b" tabindex="-1"/);
-  S.memoryStatus[key]={pending:true}; html=c.renderMemoryRail({ce_id:'3286'});
+  S.memoryStatus[key]={pending:true,updatedAt:'2026-10-06T08:00:00Z'}; html=c.renderMemoryRail({ce_id:'3286'});
   assert.match(html,/disabled>Refreshing…/); assert.match(html,/role="status" aria-live="polite"/);
   assert.match(html,/Previously loaded records remain below/);
   S.memoryStatus[key]={}; S.memoryCache[key].error='Offline';
   assert.match(c.renderMemoryRail({ce_id:'3286'}),/>Retry<\/button>/);
+  // Failure/malformed/partial are not genuine empty, including first-load.
+  c.ceMemoryEntries=()=>[];
+  S.memoryCache={};S.memoryInflight={};S.memoryStatus={};
+  let bad=c.refreshMemory();await tick();calls.at(-1).reject(Error('Network'));await bad;
+  assert.equal(S.memoryStatus[key].state,'failed');
+  html=c.renderMemoryRail({ce_id:'3286'});assert.match(html,/Couldn’t load previous context/);assert.doesNotMatch(html,/No earlier CE history/);
+  bad=c.refreshMemory();await tick();calls.at(-1).resolve({comments:[]});await bad;
+  assert.equal(S.memoryStatus[key].state,'failed');assert.doesNotMatch(c.renderMemoryRail({ce_id:'3286'}),/No earlier CE history/);
+  let good=c.refreshMemory();await tick();calls.at(-1).resolve(memory());await good;
+  assert.equal(S.memoryStatus[key].state,'empty');assert.match(c.renderMemoryRail({ce_id:'3286'}),/No earlier CE history/);
+  good=c.refreshMemory();await tick();calls.at(-1).resolve(memory({historical_source_status:{actions:{unavailable:true},comments:{unavailable:false}}}));await good;
+  assert.equal(S.memoryStatus[key].state,'partial');assert.doesNotMatch(c.renderMemoryRail({ce_id:'3286'}),/No earlier CE history/);
+  // Read-only last-good survives transient failures and keeps its real timestamp.
+  good=c.refreshMemory();await tick();calls.at(-1).resolve(memory({comments:[{body:'Last good'}]}));await good;
+  const updated=S.memoryStatus[key].updatedAt;
+  bad=c.refreshMemory();await tick();calls.at(-1).reject(Error('Offline'));await bad;
+  assert.equal(S.memoryCache[key].comments[0].body,'Last good');assert.equal(S.memoryStatus[key].updatedAt,updated);
+  assert.match(c.renderMemoryRail({ce_id:'3286'}),/Last confirmed/);
+  // Replacing session maps invalidates old responses; they cannot fill a new session.
+  const old=c.refreshMemory();await tick();S.memoryCache={};S.memoryStatus={};S.memoryInflight={};
+  calls.at(-1).resolve(memory({comments:[{body:'Wrong session'}]}));await old;
+  assert.equal(S.memoryCache[key],undefined);
   const css=fs.readFileSync('scripts/weekly_report/review/review-view.css','utf8');
   assert.match(css,/\.rv-memory-citation\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/s);
   console.log('CE Memory UX regressions passed');

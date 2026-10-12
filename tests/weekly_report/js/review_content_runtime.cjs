@@ -9,7 +9,7 @@ function setup(){
     request=new EventEmitter();request.end=()=>ends++;
     opts.signal.addEventListener('abort',()=>{request.emit('error',Error('aborted'));if(response)response.emit('aborted');});
     return request;
-  }});vm.runInContext(fn,c);
+  }});c.readBackoff=async()=>{};vm.runInContext(fn,c);
   return {c,run:(signal,trace={})=>c.fetchReviewContent(new URL('https://script.googleusercontent.com/result'),signal,trace),
     respond(status=200){response=new EventEmitter();response.statusCode=status;response.headers={'content-type':'application/json'};response.destroy=()=>response.emit('aborted');callback(response);return response;},
     get options(){return options;},get ends(){return ends;}};

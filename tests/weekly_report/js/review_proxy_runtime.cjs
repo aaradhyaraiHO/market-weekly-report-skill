@@ -11,7 +11,7 @@ function setup(fetcher, options = {}) {
   const c = vm.createContext({ URL, URLSearchParams, TextEncoder, AbortController, createHmac, randomUUID, process:{env},
     jwtVerify:async (token, key) => { authCalls++; assert.equal(token,'signed-session'); assert.equal(Buffer.from(key).toString(),'test-auth'); if(options.rejectAuth) throw Error('private auth detail'); return {payload:options.actor || {email:'BGM@HEADOUT.COM',name:'BGM'}}; },
     fetch:async (url, init) => { calls.push({url:String(url),init}); return fetcher(url,init,calls.length); },
-    setTimeout:(fn,delay) => { const id=++next;timers.set(id,fn);delays.push(delay);if(options.expire)queueMicrotask(()=>{if(timers.has(id))fn();});return id; },
+    setTimeout:(fn,delay) => { const id=++next;timers.set(id,fn);delays.push(delay);if(delay<=200)queueMicrotask(()=>{timers.delete(id);fn();});else if(options.expire)queueMicrotask(()=>{if(timers.has(id))fn();});return id; },
     clearTimeout:id=>timers.delete(id),
     console:{info:(event,fields)=>logs.push({event,...fields}),warn:(event,fields)=>logs.push({event,...fields})}
   });
@@ -51,6 +51,9 @@ function signed(call) {
   assert.ok(t.calls.every(x=>x.init.cache==='no-store'));
   assert.equal(signed(t.calls[1]).get('week'),'2026-08-30');assert.equal(signed(t.calls[1]).has('review_ai_protection_bypass'),false);
   assert.equal(r.headers['cache-control'],'no-store');assert.equal(t.timers.size,0);
+  const outcome=t.logs.find(x=>x.event==='review_read_outcome'&&x.final_outcome==='loaded');
+  assert.equal(outcome.endpoint,'/api/review');assert.equal(outcome.attempt,2);assert.equal(outcome.status,200);assert.ok(outcome.timestamp);assert.ok(outcome.request_id);assert.ok(outcome.elapsed_ms>=0);
+  assert.ok(t.delays.includes(200),'read retry uses bounded backoff, no browser retry multiplication');
 
   t=setup((u,i,n)=>response(n===1?503:200));r=await t.request();assert.equal(r.code,200);assert.equal(t.calls.length,2);
   for(const fetcher of [()=>{throw Error('secret upstream URL');},()=>response(502,'private upstream HTML')]){
@@ -62,7 +65,7 @@ function signed(call) {
       const stall=()=>new Promise((resolve,reject)=>{if(init.signal.aborted)return reject(Error('aborted'));init.signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true});});
       return bodyStall?{status:200,text:stall}:stall();
     },{expire:true});
-    r=await t.request();assert.equal(r.code,502);assert.equal(t.calls.length,2);assert.deepEqual(t.delays,[20000,20000]);assert.ok(t.delays.reduce((a,b)=>a+b,0)<45000);assert.equal(t.timers.size,0);assert.ok(t.calls.every(x=>x.init.signal.aborted));
+    r=await t.request();assert.equal(r.code,502);assert.equal(t.calls.length,2);assert.deepEqual(t.delays,[20000,200,20000]);assert.ok(t.delays.reduce((a,b)=>a+b,0)<45000);assert.equal(t.timers.size,0);assert.ok(t.calls.every(x=>x.init.signal.aborted));
   }
   t=setup(()=>response(403,'{"ok":false,"error":"access denied"}'));r=await t.request();assert.equal(t.calls.length,1);assert.equal(r.code,403);
   for(const status of [401,403]){

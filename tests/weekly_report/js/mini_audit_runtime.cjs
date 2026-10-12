@@ -273,6 +273,16 @@ async function clientTests(){
   const api=c.createWeeklyReviewApi('/api/review'),reply=body=>({ok:true,status:200,json:async()=>body});
   let reads=0;fetcher=async()=>{reads++;return reply({ok:true,comments:[]});};
   await Promise.all([api.comments(id),api.comments(id)]);assert.equal(reads,1);
+  for(const method of ['comments','weeklyCommentary','memory']){
+    api.clearCache();fetcher=async()=>reply({ok:true});
+    await assert.rejects(api[method](id),e=>e.code==='INVALID_RESPONSE');
+  }
+  api.clearCache();fetcher=async()=>reply({ok:true,comments:[],weekly_commentary:[],work_items:[],timeline:[]});
+  await assert.rejects(api.memory(id),e=>e.code==='INVALID_RESPONSE');
+  // A complete response with unavailable historical sources is partial, not
+  // an invented empty result. Its source status survives to the UI.
+  fetcher=async()=>reply({ok:true,comments:[],weekly_commentary:[],work_items:[],timeline:[],historical_source_status:{actions:{unavailable:true},comments:{unavailable:false}}});
+  assert.equal((await api.memory(id)).historical_source_status.actions.unavailable,true);
   // An HTML authentication error surfaces a sign-in message, not a JSON exception.
   fetcher=async()=>({ok:false,status:401,json:async()=>{throw Error('HTML');}});
   await assert.rejects(api.threads(id),/sign in/);

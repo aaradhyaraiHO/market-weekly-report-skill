@@ -37,6 +37,12 @@ async function clientCases(){
  for(const [status,body,code] of [[401,{ok:false,error:'authenticated BGM identity required'},'AUTH_REQUIRED'],[200,{ok:false,error:'authenticated BGM identity required'},'BACKEND_AUTH_FAILED'],[502,{ok:false,code:'REVIEW_BACKEND_AUTH_FAILED',error:'Verification failed'},'REVIEW_BACKEND_AUTH_FAILED'],[403,{ok:false,error:'Forbidden'},'REQUEST_FAILED'],[200,{ok:false,error:'newer edit'},'REQUEST_FAILED']]){
    t=setup(async()=>reply(body,status));await assert.rejects(t.api.saveComment(note),e=>e.code===code);assert.equal(t.calls.length,1);
  }
+ // A middleware login redirect never becomes an uncertain save/reconciliation.
+ for(const response of [{type:'opaqueredirect',status:0},{status:302}]){
+   t=setup(async()=>response);
+   await assert.rejects(t.api.saveComment(note),e=>e.code==='AUTH_REQUIRED');
+   assert.equal(t.calls.length,1);assert.equal(t.calls[0].init.redirect,'manual');
+ }
  t=setup(async()=>reply({ok:true}));await t.api.syncWeeklyDiscussion(note);assert.deepEqual(t.delays,[90000]);
 }
 function backendCases(){

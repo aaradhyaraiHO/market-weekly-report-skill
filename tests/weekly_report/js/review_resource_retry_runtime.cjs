@@ -42,5 +42,28 @@ const tick=()=>new Promise(r=>setImmediate(r));
   assert.equal(S.comments['4054'][0].body,'Latest saved note');
   for(const [button,resource] of [['notes','comments'],['discussion','notes'],['suggestions','suggestions'],['threads','threads']])
     assert.ok(source.includes('bind("#rv-retry-'+button+'",function(){loadCe(S.selected,true,["'+resource+'"]);});'));
+  let lostSession;
+  S.slackDrafts={4054:'Keep this draft'};S.sendRequests={note:'same durable ID'};
+  c.captureVisibleDrafts=()=>{};
+  c.global={createWeeklyReviewApi:(url,fn)=>{lostSession=fn;return {};}};
+  vm.runInContext(source.slice(source.indexOf('    var api = global.createWeeklyReviewApi'),source.indexOf('    var S = {')),c);
+  lostSession();
+  assert.equal(Object.keys(S.comments).length,0);assert.equal(Object.keys(S.memoryCache).length,0);assert.equal(S.authRequired,true);
+  assert.equal(S.slackDrafts[4054],'Keep this draft');assert.equal(S.sendRequests.note,'same durable ID');
+  // Queue/work reads started before auth loss must not refill the new session.
+  c.buildQueue=()=>{};c.ensureLocalCe=()=>{};
+  vm.runInContext(source.slice(source.indexOf('    function loadQueueComments('),source.indexOf('    function loadCe(')),c);
+  let finishQueue;
+  c.api={comments:()=>new Promise(resolve=>{finishQueue=resolve;})};
+  const oldQueue=c.loadQueueComments(true);lostSession();
+  finishQueue({comments:[{market_slug:S.market_slug,week_start:S.week_start,ce_id:'4054',body:'Old session'}]});await oldQueue;
+  assert.equal(S.comments['4054'],undefined);assert.equal(S.queueCommentsLoad,null);
+  const workStart=source.indexOf('    function reloadWork() {');
+  vm.runInContext(source.slice(workStart,source.indexOf('\n    function ',workStart+10)),c);
+  let finishWork;
+  c.api={work:()=>new Promise(resolve=>{finishWork=resolve;})};
+  const oldWork=c.reloadWork();lostSession();
+  finishWork({work_items:[{ce_id:'4054',body:'Old session'}]});await oldWork;
+  assert.equal(S.work['4054'],undefined);assert.equal(S.workLoaded,false);
   console.log('Independent CE resource retry regressions passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

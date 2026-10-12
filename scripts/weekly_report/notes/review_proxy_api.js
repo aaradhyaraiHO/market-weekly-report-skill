@@ -53,6 +53,7 @@ async function authenticatedActor(req) {
 // Two read attempts, including response-body reads, fit inside the browser's
 // 45-second budget. Mutations never enter this retry path.
 const READ_ATTEMPT_TIMEOUT_MS = 20000;
+function readBackoff(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 // The one-time ContentService response is a GET, including after a mutation.
 // Keep this hop off fetch's shared connection pool: live timing isolated stalls
 // before its response headers while the original Apps Script hop was fast.
@@ -111,6 +112,7 @@ async function fetchReviewContent(url, signal, trace) {
     } catch (error) {
       console.warn("review_content_retry", { ...trace, content_attempt: contentAttempt, timeout: controller.signal.aborted, exhausted: contentAttempt === 3 });
       if (signal?.aborted || contentAttempt === 3) throw error;
+      await readBackoff(100 * 2 ** (contentAttempt - 1));
     } finally {
       if (!handedOff) cleanup();
     }
@@ -152,12 +154,13 @@ async function fetchReviewUpstream(target, init, trace = {}) {
   }
   throw new Error("review redirect limit");
 }
-async function readBackend(makeTarget, action, request_id) {
+async function readBackend(makeTarget, action, request_id, ce_id) {
   for (let attempt = 0; attempt < 2; attempt++) {
+    const started = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), READ_ATTEMPT_TIMEOUT_MS);
     try {
-      const trace = { action, request_id, attempt: attempt + 1 };
+      const trace = { action, request_id, ce_id, endpoint: "/api/review", timestamp: new Date().toISOString(), attempt: attempt + 1 };
       const upstream = await fetchReviewUpstream(makeTarget(), { method: "GET", signal: controller.signal }, trace);
       const bodyStarted = Date.now();
       let text;
@@ -178,13 +181,16 @@ async function readBackend(makeTarget, action, request_id) {
         console.warn("review_read_transport_failure", { action, request_id, attempt: attempt + 1, status: upstream.status });
         throw new Error("review upstream unavailable");
       }
+      console.info("review_read_outcome", { ...trace, status: upstream.status, elapsed_ms: Date.now() - started, final_outcome: body?.ok ? "loaded" : "rejected" });
       return { upstream, text };
     } catch (error) {
       console.warn("review_read_attempt_failed", { action, request_id, attempt: attempt + 1, timeout: controller.signal.aborted });
+      console.warn("review_read_outcome", { action, request_id, ce_id, endpoint: "/api/review", timestamp: new Date().toISOString(), attempt: attempt + 1, elapsed_ms: Date.now() - started, error_code: controller.signal.aborted ? "TIMEOUT" : "TRANSPORT", final_outcome: attempt === 1 ? "failed" : "retrying" });
       if (attempt === 1) throw error;
     } finally {
       clearTimeout(timeout);
     }
+    await readBackoff(200);
   }
 }
 
@@ -253,7 +259,7 @@ export default async function handler(req, res) {
         const attemptTarget = new URL(target);
         params.forEach((value, key) => attemptTarget.searchParams.set(key, value));
         return attemptTarget;
-      }, action, requestId));
+      }, action, requestId, String(params.get("ce_id") || "").slice(0,100)));
     } else {
       signParams();
       // Only an opaque nonce enters the POST URL; identity, text and secrets

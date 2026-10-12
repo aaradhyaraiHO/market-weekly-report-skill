@@ -11,9 +11,9 @@
     if (value == null || String(value).trim() === "") throw new Error(name + " is required");
   }
 
-  function createWeeklyReviewApi(baseUrl) {
+  function createWeeklyReviewApi(baseUrl, onAuthRequired) {
     required(baseUrl, "baseUrl");
-    var cache = {}, inflight = {}, generation=0, CACHE_MS = 60000;
+    var cache = {}, inflight = {}, generation=0, actorEmail="", CACHE_MS = 60000;
 
     function failure(message, code, status) {
       var error = new Error(message); error.code = code; error.status = status; return error;
@@ -22,14 +22,28 @@
     function fetchJson(url,options,timeoutMs){
       var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},timeoutMs||15000);
       var opts=Object.assign({},options||{},{signal:controller.signal});
+      // API calls must not follow middleware's login redirect into an OAuth
+      // page and misreport it as an ambiguous save. Authentication stays intact.
+      opts.redirect="manual";
       return fetch(url,opts).then(function(response){
+        if(response.type==="opaqueredirect" || (response.status>=300&&response.status<400))
+          throw failure("Please sign in again in another tab, then retry here. Your draft is kept.","AUTH_REQUIRED",401);
         return response.json().catch(function(){throw failure(response.status===401?"Please sign in again in another tab, then retry here. Your draft is kept.":"The audit service did not return a valid response.",response.status===401?"AUTH_REQUIRED":"INVALID_RESPONSE",response.status);}).then(function(body){
           if(response.status===401)throw failure("Please sign in again in another tab, then retry here. Your draft is kept.","AUTH_REQUIRED",401);
           if(body&&body.error==="authenticated BGM identity required")throw failure("The note service could not verify this request. Your draft is kept; please retry. If it persists, report this error.","BACKEND_AUTH_FAILED",response.status);
           if(!response.ok||!body||!body.ok)throw failure(body&&body.error||"Audit request failed ("+response.status+")",body&&body.code||"REQUEST_FAILED",response.status);
           return body;
         });
-      }).catch(function(error){if(error.name==="AbortError")throw failure("The audit service took too long. Your draft is preserved. Retry when ready.","TIMEOUT");throw error;}).finally(function(){clearTimeout(timer);});
+      }).catch(function(error){if(error.code==="AUTH_REQUIRED"){cache={};inflight={};generation++;if(onAuthRequired)onAuthRequired();}if(error.name==="AbortError")throw failure("The audit service took too long. Your draft is preserved. Retry when ready.","TIMEOUT");throw error;}).finally(function(){clearTimeout(timer);});
+    }
+
+    function validateRead(action,body){
+      var fields={review_comment_list:["comments"],review_weekly_list:["weekly"],review_memory:["comments","weekly_commentary","work_items","timeline"]}[action];
+      if(fields&&fields.some(function(field){return !Array.isArray(body[field]);}))
+        throw failure("Previous context returned an incomplete response. Please retry.","INVALID_RESPONSE");
+      if(action==="review_memory"&&["actions","comments"].some(function(source){return typeof ((body.historical_source_status||{})[source]||{}).unavailable!=="boolean";}))
+        throw failure("Previous context did not confirm its source status. Please retry.","INVALID_RESPONSE");
+      return body;
     }
 
     function request(action, params, options) {
@@ -44,11 +58,22 @@
       if (!opts.refresh && cache[url] && now - cache[url].at < (opts.ttl || CACHE_MS)) return Promise.resolve(cache[url].body);
       if (!opts.refresh && inflight[url]) return inflight[url];
       var requestGeneration=generation;
-      var running = fetchJson(url, {redirect: "follow", credentials: "same-origin"}, opts.timeoutMs)
+      var started=Date.now();
+      var running = fetchJson(url, {credentials: "same-origin"}, opts.timeoutMs)
         .then(function(body) {
           if (!body || !body.ok) throw new Error((body && body.error) || "Weekly Review request failed");
+          validateRead(action,body);
+          if(action==="whoami"){
+            var nextActor=String(body.actor_email||"").toLowerCase();
+            if(actorEmail&&nextActor!==actorEmail){cache={};inflight={};generation++;if(onAuthRequired)onAuthRequired();}
+            actorEmail=nextActor;
+          }
           if(requestGeneration===generation)cache[url] = {at: Date.now(), body: body};
           return body;
+        }).catch(function(error){
+          // Safe categories only: no URL/query, note content, author or secret.
+          console.warn("review_client_read_failed",{endpoint:"/api/review",action:action,ce_id:String((params||{}).ce_id||"").slice(0,100),timestamp:new Date().toISOString(),status:error.status||null,error_code:error.code||"NETWORK",latency_ms:Date.now()-started,attempt:1,final_outcome:"failed"});
+          throw error;
         }).finally(function() { if(inflight[url]===running)delete inflight[url]; });
       inflight[url]=running;
       return running;
@@ -75,7 +100,7 @@
       // The Review proxy derives this from the authenticated Google session.
       // UI writes must use it rather than asking a signed-in BGM to re-enter
       // their name in every browser/device.
-      whoami: function() { return request("whoami", {}); },
+      whoami: function() { return request("whoami", {}, {refresh:true}); },
       comments: function(identity, includeDeleted, options) {
         var comments=[];
         function page(before){return request("review_comment_list", Object.assign({}, identity, {include_deleted: !!includeDeleted,before:before||""}), options).then(function(res){
