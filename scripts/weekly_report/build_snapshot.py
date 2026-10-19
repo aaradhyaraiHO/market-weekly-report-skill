@@ -263,8 +263,10 @@ def _dp(cur, ly):
 
 
 def _dpp(cur_pct, ly_pct):
-    """Percentage-point delta, None when either missing."""
+    """Percentage-point delta; unavailable operands stay JSON null, not NaN."""
     if cur_pct is None or ly_pct is None:
+        return None
+    if not (math.isfinite(cur_pct) and math.isfinite(ly_pct)):
         return None
     return round(cur_pct - ly_pct, 1)
 
@@ -576,6 +578,8 @@ def _attach_channels_funnel(ces, chan_df, funnel_df) -> None:
     def _chg(cur, base):
         """% change cur vs base, None when base missing/zero."""
         cur, base = float(cur or 0), float(base or 0)
+        if not (math.isfinite(cur) and math.isfinite(base)):
+            return None
         return round(100.0 * (cur / base - 1), 1) if base else None
 
     for ce in ces:

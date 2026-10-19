@@ -31,6 +31,15 @@ Implementation and local tests are not a supervised live-run pass.
 3. Check read-only BigQuery access and approved target sources. Google/Bing raw
    evidence, including TY/LY comparisons, follows the existing metric definitions;
    missing source fields stay unavailable. See `future-platform-history-2026-09-11.md`.
+   The pipeline uses Application Default Credentials (ADC), not just the browser
+   login. For the Drive-backed target table, renew with
+   `gcloud auth login aaradhya.rai@headout.com --enable-gdrive-access --update-adc --force`.
+   A later plain `gcloud auth login --update-adc` can replace those credentials
+   without Drive scope; do not run it during a release. Verify the actual target
+   source after renewal. On October 19, CLI command logs established that a plain
+   login at 11:03 IST replaced the successful Drive-enabled 10:58 login; the
+   initiating person/process was not established. Never print credential files,
+   tokens or OAuth request/response logs when checking this boundary.
 4. Before authorized deployment, run `python3 alert/v2/delivery_access.py`. All
    configured markets plus Headout must support Slack history/thread reads. The
    runtime token is `REVENUE_ALERT_SLACK_TOKEN`; never print or commit it. Private

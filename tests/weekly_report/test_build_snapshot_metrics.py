@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,56 @@ import headline_v2  # noqa: E402
 
 
 class WeeklyMetricContractTests(unittest.TestCase):
+    def test_optional_percentage_point_delta_rejects_nonfinite_operands(self):
+        for invalid in (None, float('nan'), float('inf'), -float('inf')):
+            with self.subTest(invalid=invalid):
+                self.assertIsNone(build_snapshot._dpp(invalid, 12.5))
+                self.assertIsNone(build_snapshot._dpp(12.5, invalid))
+
+    def test_finite_percentage_point_formula_and_precision_are_unchanged(self):
+        for current, previous in ((0, 0), (61.23456, 38.76543), (-3.1, 7.2), (100, 0)):
+            self.assertEqual(build_snapshot._dpp(current, previous), round(current - previous, 1))
+
+    def test_missing_channel_baseline_cannot_emit_nan_or_invent_zero_share_change(self):
+        ces = [{'ce_id': '1019 - London'}]
+        channels = pd.DataFrame([
+            {'combined_entity_id': '1019 - London', 'channel': name, 'period': period, 'rev': revenue}
+            for name, current, previous in [('Google Search', 75.0, float('nan')), ('Organic', 25.0, 20.0)]
+            for period, revenue in [('w0', current), ('wm1', previous)]
+        ])
+        before = channels.copy(deep=True)
+        build_snapshot._attach_channels_funnel(ces, channels, pd.DataFrame())
+        rows = {row['channel']: row for row in ces[0]['channels']}
+        self.assertEqual(rows['Google Search']['rev'], 75.0)
+        self.assertIsNone(rows['Google Search']['rev_wm1'])
+        self.assertIsNone(rows['Google Search']['wow_pct'])
+        self.assertIsNone(rows['Google Search']['share_wow_pp'])
+        self.assertIsNone(rows['Organic']['share_wow_pp'])
+        self.assertEqual(rows['Organic']['wow_pct'], 25.0)
+        self.assertEqual(rows['Organic']['share_pct'], 25.0)
+        json.dumps(ces, allow_nan=False)
+        pd.testing.assert_frame_equal(channels, before)
+
+    def test_nonfinite_channel_change_is_null_but_real_zero_and_finite_values_remain(self):
+        for invalid in (float('nan'), float('inf'), -float('inf')):
+            ces = [{'ce_id': 'test'}]
+            channels = pd.DataFrame([
+                {'combined_entity_id': 'test', 'channel': 'Google Search', 'period': 'w0', 'rev': invalid},
+                {'combined_entity_id': 'test', 'channel': 'Google Search', 'period': 'wm1', 'rev': 10.0},
+            ])
+            build_snapshot._attach_channels_funnel(ces, channels, pd.DataFrame())
+            self.assertIsNone(ces[0]['channels'][0]['wow_pct'])
+            json.dumps(ces, allow_nan=False)
+        ces = [{'ce_id': 'test'}]
+        channels = pd.DataFrame([
+            {'combined_entity_id': 'test', 'channel': 'Google Search', 'period': 'w0', 'rev': 0.0},
+            {'combined_entity_id': 'test', 'channel': 'Google Search', 'period': 'wm1', 'rev': 10.0},
+        ])
+        build_snapshot._attach_channels_funnel(ces, channels, pd.DataFrame())
+        self.assertEqual(ces[0]['channels'][0]['wow_pct'], -100.0)
+        self.assertEqual(ces[0]['channels'][0]['rev'], 0.0)
+        self.assertIsNone(ces[0]['channels'][0]['share_wow_pp'])
+
     def test_take_rate_uses_actual_order_revenue(self):
         business = pd.Series({
             "revenue": 3_113.78,
