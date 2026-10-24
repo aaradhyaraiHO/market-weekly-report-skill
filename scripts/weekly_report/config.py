@@ -36,8 +36,10 @@ MAX_BYTES_BILLED = 80 * 1024 ** 3  # 80 GB cap per query (SEA/CSEE-sized markets
 CE_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.combined_entity_stats`"
 ADS_STATS = f"`{BQ_PROJECT}.{BQ_DATASET}.ads_campaign_stats`"
 DIM_CE = f"`{BQ_PROJECT}.{BQ_DATASET}.dim_combined_entities`"
-FCT_ORDERS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_orders`"
-FCT_BOOKINGS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_bookings`"
+# Data-team realtime cutover: legacy relations were retired in October 2026.
+# Orders remain order_id-grain; booking dimensions now come from orders.
+FCT_ORDERS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_orders_lambda`"
+FCT_BOOKINGS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_bookings_lambda`"
 MIXPANEL_FUNNEL = f"`{BQ_PROJECT}.{BQ_DATASET}.mixpanel_user_page_funnel_progression`"
 INV_AVAIL = f"`{BQ_PROJECT}.{BQ_DATASET}.inventory_availability`"
 

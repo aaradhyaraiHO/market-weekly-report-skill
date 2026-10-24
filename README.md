@@ -146,6 +146,20 @@ after enrichment. `--renderer both` above is an explicit compatibility tool,
 not the recurring release path. Storage safety and measured lifecycle:
 [Storage reliability](docs/v2/storage-reliability.md).
 
+Order-level source reads use `fct_orders_lambda`; booking-grain reads use
+`fct_bookings_lambda` joined to orders for CE/market/TGID/variant dimensions.
+The retired table names are not fallback sources. Booking lead-time dates
+retain `America/New_York`, the old `date_created_at_et` basis; order dates
+remain UTC. The old booking model's Uncaptured exclusion is preserved.
+Order-owned variant economics remain visible even if an order has no eligible
+booking; its booking-derived lead-time shares stay unavailable, not zero.
+Read-only source verification (no reports, deployment, alerts or source writes):
+
+```sh
+python3 scripts/weekly_report/verify_lambda_sources.py --week YYYY-MM-DD
+# Add --reconcile for aggregate checks over a completed week and 12-week TY/LY.
+```
+
 ```sh
 python3 scripts/weekly_report/run_v2_release.py \
   --week YYYY-MM-DD \

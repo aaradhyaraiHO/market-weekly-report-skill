@@ -9,7 +9,7 @@
 }}
 
 /* Weekly channel-attribution split + BNPL for the CE weekly system. One row per
-   combined entity per Monday week, from fct_orders ground-truth attribution
+   combined entity per Monday week, from fct_orders_lambda ground-truth attribution
    (the same channel taxonomy + order filters as perf-audit and the monthly
    ce_buckets GA-contribution query).
 
@@ -45,7 +45,7 @@ WITH orders AS (
             ELSE 'other'
         END AS channel_bucket
 
-    FROM {{ ref('fct_orders') }}
+    FROM {{ ref('fct_orders_lambda') }}
 
     WHERE order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
         AND user_type = 'Customer'

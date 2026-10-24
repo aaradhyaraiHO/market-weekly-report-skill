@@ -18,6 +18,29 @@ from bq import query_df
 REV = config.REVENUE_COL
 
 
+def _bookings_with_order_dimensions() -> str:
+    """Project the old booking-query contract over the realtime sources.
+
+    Only source ownership changes: booking economics/lead time stay at booking
+    grain; CE/market/TGID dimensions come from the one-row-per-order relation.
+    Preserve the old model's Uncaptured exclusion (including NULL statuses) and
+    its New York booking-creation date, not UTC or the experience date. The old
+    dbt model computed date_created_at_et from the raw booking creation time;
+    lambda.created_at is that raw timestamp, not the old component-adjusted one.
+    No DISTINCT/ROW_NUMBER hides source-key duplication; verification must fail
+    if the source's order_id/booking_id uniqueness contract is broken.
+    """
+    return f"""(
+        SELECT b.booking_id, b.order_id, b.tour_id, b.lead_time_days,
+               b.price_net_usd, b.price_payable_usd,
+               DATE(b.created_at, 'America/New_York') AS date_created_at_et,
+               o.combined_entity_id, o.business_market, o.experience_id
+        FROM {config.FCT_BOOKINGS} b
+        LEFT JOIN {config.FCT_ORDERS} o USING (order_id)
+        WHERE b.booking_status != 'Uncaptured' OR b.booking_status IS NULL
+    )"""
+
+
 # --------------------------------------------------------------------------- #
 # CE-level weekly business funnel  (combined_entity_stats)
 # --------------------------------------------------------------------------- #
@@ -554,11 +577,14 @@ def ce_variants(
 ) -> pd.DataFrame:
     """Booking-grain variant children with order economics allocated exactly once.
 
-    `fct_orders` has the canonical TGID revenue but no variant key.  The join to
-    `fct_bookings` allocates each order's economics across its bookings by
+    `fct_orders_lambda` owns TGID/variant dimensions and canonical revenue.
+    The join to `fct_bookings_lambda` allocates each order's economics across its bookings by
     payable-value share (equal share when the denominator is zero).  Order
     credit is split across distinct variants on an order so child totals remain
     additive.  Null variant IDs are retained as an explicit unattributed bucket.
+    Orders with no eligible booking still have real order-owned variant/economic
+    facts. Retain them through the LEFT JOIN; their booking lead-time shares
+    remain NULL (COUNT(DISTINCT booking_id)=0), never fabricated booking facts.
     """
     mkt = "AND o.business_market = @market" if market else ""
     sql = """
@@ -566,8 +592,8 @@ def ce_variants(
         SELECT
             o.combined_entity_id,
             CAST(o.experience_id AS STRING)                         AS tgid,
-            COALESCE(CAST(b.variant_id AS STRING), '__UNATTRIBUTED__') AS variant_id,
-            COALESCE(b.variant_name, 'Unattributed variant')        AS variant_name,
+            COALESCE(CAST(o.variant_id AS STRING), '__UNATTRIBUTED__') AS variant_id,
+            COALESCE(o.variant_name, 'Unattributed variant')        AS variant_name,
             b.booking_id,
             o.order_id,
             b.lead_time_days,
@@ -584,8 +610,10 @@ def ce_variants(
             o.amount_revenue_usd,
             o.order_value_usd,
             o.order_status
-        FROM {bookings} b
-        JOIN {orders} o USING (order_id)
+        FROM {orders} o
+        LEFT JOIN {bookings} b ON b.order_id = o.order_id
+            AND (b.booking_status != 'Uncaptured' OR b.booking_status IS NULL)
+            AND CAST(b.experience_id AS STRING) = CAST(o.experience_id AS STRING)
         WHERE (DATE(o.created_at) BETWEEN @w0_s AND @w0_e
                OR DATE(o.created_at) BETWEEN @wm1_s AND @wm1_e
                OR DATE(o.created_at) BETWEEN @ly_s AND @ly_e)
@@ -593,7 +621,6 @@ def ce_variants(
               AND o.order_status NOT IN ('Dummy', 'Cancelled - Fraudulent')
               AND o.user_type = 'Customer'
               AND o.experience_id IS NOT NULL
-              AND CAST(b.experience_id AS STRING) = CAST(o.experience_id AS STRING)
     ), allocated AS (
         SELECT *, COALESCE(payable_weight, SAFE_DIVIDE(1, booking_count)) AS weight
         FROM booking_rows WHERE period IS NOT NULL
@@ -775,7 +802,7 @@ def ce_tgid_leadtime(
         MAX(IF(b.period = 'wm1', SAFE_DIVIDE(b.cnt, t.total), NULL)) AS pct_wm1
     FROM banded b JOIN tgid_totals t USING (combined_entity_id, tgid, period)
     GROUP BY 1, 2, 3
-    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt)
+    """.format(tbl=_bookings_with_order_dimensions(), mkt=mkt)
     params = {
         "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
         "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
@@ -831,7 +858,7 @@ def ce_leadtime(
           AND lead_time_days >= 0
 
     GROUP BY 1, 2
-    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt)
+    """.format(tbl=_bookings_with_order_dimensions(), mkt=mkt)
     params = {
         "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
         "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),
@@ -925,7 +952,7 @@ def ce_leadtime_history(
     )
     SELECT combined_entity_id, band, week, period, SUM(revenue) AS rev
     FROM base WHERE band IS NOT NULL GROUP BY 1, 2, 3, 4
-    """.format(tbl=config.FCT_BOOKINGS, mkt=mkt, cid_filter=cid_filter)
+    """.format(tbl=_bookings_with_order_dimensions(), mkt=mkt, cid_filter=cid_filter)
     params = {"start": config.iso(start), "end": config.iso(end),
               "ly_start": config.iso(ly_start), "ly_end": config.iso(ly_end)}
     if market:
@@ -1330,10 +1357,12 @@ def ce_daily_paid_google(market: str | None, daily_start: dt.date, w0_end: dt.da
 
 
 def ce_daily_orders_google(market: str | None, daily_start: dt.date, w0_end: dt.date) -> pd.DataFrame:
-    """Daily GOOGLE-SEARCH paid ORDER funnel from fct_orders (2026-07-20): order-grounded
+    """Legacy (not used by the weekly builder) order-grounded Google funnel.
+
+    Daily GOOGLE-SEARCH paid ORDER funnel from fct_orders_lambda: order-grounded
     booked / completed / net-revenue so the paid decomposition can separate Completion from
     Take-rate (the ad-attribution table can't — completed/booked >100%). ad_network filter =
-    Google Search; valid_to IS NULL dedups to the current SCD2 version (1 row/order). Paired
+    Google Search; the lambda source already has one current row/order. Paired
     with ce_daily_paid_google clicks → CVR=orders/clicks · AOV=booked/orders · CR=completed/booked
     · TR=revenue/completed, reconciling to paid RPC = revenue/clicks."""
     sql = f"""
@@ -1350,7 +1379,6 @@ def ce_daily_orders_google(market: str | None, daily_start: dt.date, w0_end: dt.
     WHERE DATE(created_at) BETWEEN @start AND @end
           {'AND business_market = @market' if market else ''}
           AND ad_network = 'Google: Search'
-          AND valid_to_timestamp IS NULL
 
     GROUP BY 1, 2
     """
@@ -1415,7 +1443,7 @@ def availability_signal(
             CAST(tour_id AS STRING)     AS tour_id,
             combined_entity_id
 
-        FROM {config.FCT_BOOKINGS}
+        FROM {_bookings_with_order_dimensions()}
 
         WHERE combined_entity_id IN UNNEST(@ce_ids)
               AND tour_id IS NOT NULL

@@ -54,7 +54,9 @@ class CeDrawerLiveSourceContract(unittest.TestCase):
         self.assertIn("__UNATTRIBUTED__", variant_sql)
         self.assertIn("price_payable_usd", variant_sql)
         self.assertIn("order_credit", variant_sql)
-        self.assertIn("CAST(b.experience_id AS STRING) = CAST(o.experience_id AS STRING)", variant_sql)
+        self.assertIn("CAST(o.variant_id AS STRING)", variant_sql)
+        self.assertNotIn("b.variant_id", variant_sql)
+        self.assertIn("b.booking_status != 'Uncaptured' OR b.booking_status IS NULL", variant_sql)
         self.assertEqual(variant_params["ly_s"], "2025-08-03")
 
         lead_sql, _ = by_label["ce_leadtime"]

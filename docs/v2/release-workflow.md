@@ -40,6 +40,35 @@ Implementation and local tests are not a supervised live-run pass.
    login at 11:03 IST replaced the successful Drive-enabled 10:58 login; the
    initiating person/process was not established. Never print credential files,
    tokens or OAuth request/response logs when checking this boundary.
+   The October 2026 source cutover uses `fct_orders_lambda` and
+   `fct_bookings_lambda`; neither retired name is an automatic fallback.
+   Booking CE/market/TGID/variant dimensions come from orders via `order_id`.
+   Booking dates retain the old `America/New_York` creation-date boundary and
+   the old Uncaptured exclusion, including NULL-status behavior. Order dates,
+   economic allocations, report formulas, bucket rules and the 80 GiB cap are
+   unchanged. `verify_lambda_sources.py --week YYYY-MM-DD` dry-runs all market
+   and Headout order/booking consumers. Add `--reconcile` for read-only key-grain,
+   variant/TGID and W0/W-1/LY history checks on a completed week. Never treat a
+   dry run as value parity, or a partial current week as a completed report.
+   Variants retain known order-owned economics when eligible booking context is
+   absent, without inventing booking IDs/counts or lead-time shares. The
+   verifier labels matching null facts `passed_with_source_gaps`, never a clean
+   value-parity pass or a substituted zero; inspect its unavailable examples.
+   That diagnostic status does not waive missing required release evidence.
+   Old tables are no longer available for a live old/new comparison; frozen
+   reports remain untouched, and source restatements must not be relabelled as
+   proven equality to an old publication.
+   October 24 source verification: 199 dry runs passed for all 17 markets plus
+   Headout. Completed-week (October 11–17) reconciliation covered 12 TY/LY weeks:
+   2,514,386 unique orders, 3,485,853 unique bookings and 5,398 reconciled TGID
+   parent/variant groups. Two pre-existing source gaps were retained and flagged:
+   CE 5809 / week September 27 has one order with NULL actual revenue; Amsterdam
+   CE 1019 / October 4 / 5–7-day lead time has one booking with NULL net value
+   (the legacy period SUM/CASE showed zero, while its history was NULL). Both
+   patterns also exist in the frozen October 19 snapshots. No historical data
+   was rewritten. Full fixture verification passed 470 tests with disk capacity
+   mocked only in the test process; real release preflight still required
+   50 GiB and failed at approximately 43 GiB free. Do not bypass that guard.
 4. Before authorized deployment, run `python3 alert/v2/delivery_access.py`. All
    configured markets plus Headout must support Slack history/thread reads. The
    runtime token is `REVENUE_ALERT_SLACK_TOKEN`; never print or commit it. Private
