@@ -153,6 +153,9 @@ retain `America/New_York`, the old `date_created_at_et` basis; order dates
 remain UTC. The old booking model's Uncaptured exclusion is preserved.
 Order-owned variant economics remain visible even if an order has no eligible
 booking; its booking-derived lead-time shares stay unavailable, not zero.
+The variant combo-booking exclusion restores the former booking TGID from
+`analytics_intermediate.components`, with the latest raw booking log TGID as
+fallback. It does not use the order TGID as a substitute for a component TGID.
 Read-only source verification (no reports, deployment, alerts or source writes):
 
 ```sh

@@ -159,7 +159,10 @@ class LambdaSourceContracts(unittest.TestCase):
         self.assertNotIn('b.variant_name', sql)
         self.assertIn('CAST(b.experience_id AS STRING) = CAST(o.experience_id AS STRING)', sql)
         self.assertIn('FROM ' + config.FCT_ORDERS + ' o', sql)
-        self.assertIn('LEFT JOIN ' + config.FCT_BOOKINGS + ' b ON b.order_id = o.order_id', sql)
+        self.assertIn('LEFT JOIN ' + fetch._variant_bookings_with_tgid() + ' b ON b.order_id = o.order_id', sql)
+        self.assertIn('COALESCE(c.experience_id, r.experience_id)', sql)
+        self.assertIn(config.BOOKING_LOGS, sql)
+        self.assertIn('WHERE update_rank = 1', sql)
         self.assertNotIn('booking_id IS NOT NULL', sql)
         self.assertIn('PARTITION BY o.order_id', sql)
         self.assertIn('COALESCE(payable_weight, SAFE_DIVIDE(1, booking_count))', sql)
@@ -182,7 +185,10 @@ class LambdaSourceContracts(unittest.TestCase):
                 variant_id TEXT, variant_name TEXT, created_at TEXT, business_market TEXT,
                 amount_revenue_usd REAL, order_value_usd REAL, order_status TEXT, user_type TEXT);
             CREATE TABLE bookings(booking_id INTEGER PRIMARY KEY, order_id INTEGER, lead_time_days INTEGER,
-                price_payable_usd REAL, booking_status TEXT, experience_id TEXT);
+                price_payable_usd REAL, booking_status TEXT, component_id INTEGER);
+            CREATE TABLE components(component_id INTEGER PRIMARY KEY, experience_id TEXT);
+            CREATE TABLE booking_logs(booking_id INTEGER, experience_id TEXT, updated_at TEXT,
+                _metadata_timestamp TEXT, _metadata_log_file TEXT, _metadata_log_position INTEGER);
             INSERT INTO orders VALUES
                 (1,'CE-1','100','201','Combo','2026-10-11','North America',100,300,'Completed','Customer'),
                 (2,'CE-1','100','202','Zero weights','2026-10-11','North America',30,60,'Completed','Customer'),
@@ -191,13 +197,26 @@ class LambdaSourceContracts(unittest.TestCase):
                 (5,'CE-1','100',NULL,NULL,'2026-10-04','North America',10,50,'Completed','Customer'),
                 (6,'CE-1','100','206','Last year','2025-10-12','North America',20,80,'Completed','Customer');
             INSERT INTO bookings VALUES
-                (11,1,0,50,'Completed','100'), (12,1,2,50,'Completed','100'),
-                (13,1,10,500,'Completed','999'),
-                (21,2,3,0,'Completed','100'), (22,2,4,0,'Completed','100'),
-                (41,4,1,100,'Uncaptured','100'), (51,5,1,50,'Completed','100'), (61,6,2,80,'Completed','100');
+                (11,1,0,50,'Completed',101), (12,1,2,50,'Completed',NULL),
+                (13,1,10,500,'Completed',103),
+                (21,2,3,0,'Completed',101), (22,2,4,0,NULL,101),
+                (41,4,1,100,'Uncaptured',101), (51,5,1,50,'Completed',101), (61,6,2,80,'Completed',101);
+            INSERT INTO components VALUES (101,'100'),(103,'999');
+            INSERT INTO booking_logs VALUES
+                (11,'999','2026-10-12','2026-10-12','a',1),
+                (12,'999','2026-10-10','2026-10-10','a',1),
+                (12,'100','2026-10-12','2026-10-12','a',2),
+                (13,'100','2026-10-12','2026-10-12','a',1);
         ''')
-        with patch.object(config, 'FCT_ORDERS', 'orders'), patch.object(config, 'FCT_BOOKINGS', 'bookings'):
+        with patch.object(config, 'FCT_ORDERS', 'orders'), patch.object(config, 'FCT_BOOKINGS', 'bookings'), \
+                patch.object(config, 'COMPONENTS', 'components'), patch.object(config, 'BOOKING_LOGS', 'booking_logs'):
             sql, _, params = self.capture(fetch.ce_variants, 'North America', *self.windows)
+            projected = [dict(r) for r in db.execute('SELECT * FROM ' + fetch._variant_bookings_with_tgid())]
+        self.assertEqual(len(projected), 8)  # Log updates must not multiply bookings.
+        tgid_by_booking = {r['booking_id']: r['experience_id'] for r in projected}
+        self.assertEqual(tgid_by_booking[11], '100')  # Component precedes raw TGID.
+        self.assertEqual(tgid_by_booking[12], '100')  # Latest raw update, not stale TGID.
+        self.assertEqual(tgid_by_booking[13], '999')  # Unrelated combo child remains excluded.
         rows = [dict(r) for r in db.execute(sql, params)]
         self.assertAlmostEqual(sum(r['rev'] for r in rows), 135)
         self.assertAlmostEqual(sum(r['gbv'] for r in rows), 458.25)
@@ -209,6 +228,7 @@ class LambdaSourceContracts(unittest.TestCase):
         by_name = {r['variant_name']: r for r in rows}
         self.assertEqual(by_name['Combo']['lt_0d'], .5)
         self.assertEqual(by_name['Combo']['lt_12d'], .5)
+        self.assertEqual(by_name['Zero weights']['lt_37d'], 1)
         for name in ('No booking', 'Only uncaptured'):
             self.assertIsNone(by_name[name]['lt_0d'])
             self.assertIsNone(by_name[name]['lt_12d'])

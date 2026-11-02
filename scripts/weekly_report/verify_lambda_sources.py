@@ -128,6 +128,9 @@ def reconcile(client, week):
         UNION ALL
         SELECT 'bookings', COUNT(*), COUNT(DISTINCT booking_id), COUNTIF(booking_id IS NULL)
         FROM {config.FCT_BOOKINGS} WHERE {period}
+        UNION ALL
+        SELECT 'components', COUNT(*), COUNT(DISTINCT component_id), COUNTIF(component_id IS NULL)
+        FROM {config.COMPONENTS}
     """, 'source_key_grain', params)
     for row in grain.to_dict('records'):
         evidence.append({'label': row['source']+'_unique_keys', **row,

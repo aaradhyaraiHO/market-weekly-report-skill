@@ -18,6 +18,33 @@ from bq import query_df
 REV = config.REVENUE_COL
 
 
+def _variant_bookings_with_tgid() -> str:
+    """Restore only the retired booking TGID used to exclude combo children.
+
+    The old fct_bookings model used COALESCE(components.experience_id,
+    raw_bookings.experience_id). Logs are update-grain, so select the latest
+    raw booking update before joining; never deduplicate the booking facts.
+    Do not substitute the order TGID: that would admit unrelated combo bookings.
+    All economics, status and lead time still come from fct_bookings_lambda.
+    """
+    return f"""(
+        SELECT b.booking_id, b.order_id, b.lead_time_days,
+               b.price_payable_usd, b.booking_status,
+               COALESCE(c.experience_id, r.experience_id) AS experience_id
+        FROM {config.FCT_BOOKINGS} b
+        LEFT JOIN {config.COMPONENTS} c USING (component_id)
+        LEFT JOIN (
+            SELECT booking_id, experience_id FROM (
+                SELECT booking_id, experience_id,
+                       ROW_NUMBER() OVER (PARTITION BY booking_id ORDER BY
+                           updated_at DESC, _metadata_timestamp DESC,
+                           _metadata_log_file DESC, _metadata_log_position DESC) AS update_rank
+                FROM {config.BOOKING_LOGS}
+            ) WHERE update_rank = 1
+        ) r USING (booking_id)
+    )"""
+
+
 def _bookings_with_order_dimensions() -> str:
     """Project the old booking-query contract over the realtime sources.
 
@@ -668,7 +695,7 @@ def ce_variants(
     FROM allocated a
     JOIN order_totals o USING (combined_entity_id, tgid, variant_id)
     GROUP BY 1, 2, 3, o.orders, o.orders_wm1, o.orders_ly
-    """.format(bookings=config.FCT_BOOKINGS, orders=config.FCT_ORDERS, mkt=mkt)
+    """.format(bookings=_variant_bookings_with_tgid(), orders=config.FCT_ORDERS, mkt=mkt)
     params = {
         "w0_s": config.iso(w0_start), "w0_e": config.iso(w0_end),
         "wm1_s": config.iso(wm1_start), "wm1_e": config.iso(wm1_end),

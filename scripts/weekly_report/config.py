@@ -40,6 +40,10 @@ DIM_CE = f"`{BQ_PROJECT}.{BQ_DATASET}.dim_combined_entities`"
 # Orders remain order_id-grain; booking dimensions now come from orders.
 FCT_ORDERS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_orders_lambda`"
 FCT_BOOKINGS = f"`{BQ_PROJECT}.{BQ_DATASET}.fct_bookings_lambda`"
+# Lambda bookings no longer carry the booking/component TGID. Preserve the
+# former fct_bookings COALESCE(component TGID, raw booking TGID) contract.
+COMPONENTS = f"`{BQ_PROJECT}.analytics_intermediate.components`"
+BOOKING_LOGS = f"`{BQ_PROJECT}.analytics_staging.stg_database__bookings_logs`"
 MIXPANEL_FUNNEL = f"`{BQ_PROJECT}.{BQ_DATASET}.mixpanel_user_page_funnel_progression`"
 INV_AVAIL = f"`{BQ_PROJECT}.{BQ_DATASET}.inventory_availability`"
 

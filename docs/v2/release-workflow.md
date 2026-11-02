@@ -69,6 +69,13 @@ Implementation and local tests are not a supervised live-run pass.
    was rewritten. Full fixture verification passed 470 tests with disk capacity
    mocked only in the test process; real release preflight still required
    50 GiB and failed at approximately 43 GiB free. Do not bypass that guard.
+   November 2: lambda bookings no longer expose `experience_id`. The variant
+   query restores the old `COALESCE(component TGID, raw booking TGID)` lookup
+   from `analytics_intermediate.components` and the latest update per booking in
+   `analytics_staging.stg_database__bookings_logs`. Retain its existing combo
+   exclusion, order economics/allocation and NULL lead-time semantics. Never
+   remove the TGID predicate or replace booking TGID with order TGID to compile.
+   Source reconciliation also checks component-key uniqueness to detect fan-out.
 4. Before authorized deployment, run `python3 alert/v2/delivery_access.py`. All
    configured markets plus Headout must support Slack history/thread reads. The
    runtime token is `REVENUE_ALERT_SLACK_TOKEN`; never print or commit it. Private
