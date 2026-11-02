@@ -209,6 +209,19 @@ this authenticated proxy confirms the existing Weekly Actions Sheet write.
 
 ## Weekly Market Alert V2
 
+Selected OKR badges are not fixed official-status overrides. The company GEL
+badge follows the central tracker's exact-calendar QTD YoY versus the verified
+H2 2026 +100% target: neutral `Tracking` before 30% of Sunday-start quarter weeks
+have elapsed, then `On track` at/above target and `At risk` below it. It uses
+unrounded inputs and records the rule, cutoff and target in the sidecar. Missing
+comparisons/targets are `Status unavailable`. Market contributions have no
+verified market targets here, so they cannot inherit a company badge. The other
+three selected KRs also remain unavailable until their central projection and
+qualification rules are verified, rather than displaying old fixed statuses.
+This status-only projection does not alter the underlying OKR measurements,
+weekly metrics or buckets. Existing frozen sidecars/delivery packages are not
+rewritten by a code update; correcting an already-sent alert is a separate action.
+
 The locked two-parent V2 alert is isolated under `alert/v2/` and consumes the
 live schema-v2 report. V1 remains the default alert and rollback path.
 

@@ -6,6 +6,8 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -781,6 +783,59 @@ class HeadlineV2Contract(unittest.TestCase):
             r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
         ).group(1))
         self.assertNotIn("market_okrs", payload["headlines"][0])
+
+    def test_unknown_okr_status_uses_neutral_badge_not_amber_or_green(self):
+        html = render_v2.render([self.market], okr_results={
+            "week_start": "2026-08-02", "markets": {"north_america": [{
+                "id": "grow_non_poi_gel_revenue_yoy", "current": "+49.0% YoY",
+                "status": "Status unavailable", "value": 49.0,
+            }]},
+        })
+        self.assertIn(".okr-status.neutral { color:var(--muted); }", html)
+        self.assertIn("/at risk/i.test(status(row))?'risk':'neutral'", html)
+        payload = json.loads(re.search(
+            r'<script id="report-data" type="application/json">(.*?)</script>', html, re.S
+        ).group(1))
+        row = payload["headlines"][0]["market_okrs"][0]
+        self.assertEqual(row["status"], "Status unavailable")
+        self.assertEqual(row["value"], 49.0)
+
+    def test_okr_badge_runtime_keeps_unavailable_and_tracking_neutral(self):
+        template = (REPORT_DIR / "template" / "report_v2_template.html").read_text()
+        renderer = template.split("      function renderMarketOkrs(item) {", 1)[1]
+        renderer = "function renderMarketOkrs(item) {" + renderer.split(
+            "      function renderMovers(item, kind)", 1
+        )[0]
+        harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const code = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+const section = {hidden: true}, grid = {innerHTML: '', replaceChildren(){this.innerHTML='';}};
+const context = {document: {getElementById: id => id === 'market-okrs' ? section : grid},
+                 escapeHtml: value => String(value)};
+vm.createContext(context);
+vm.runInContext(code, context);
+for (const [status, css, label] of [
+  [':large_yellow_circle: At risk', 'risk', 'At risk'],
+  [':large_green_circle: On track', 'track', 'On track'],
+  ['Status unavailable', 'neutral', 'Status unavailable'],
+  ['Tracking', 'neutral', 'Tracking'], ['', 'neutral', 'Status unavailable'],
+]) {
+  const item = {market:'Headout', market_okrs:[{status, current:'+49.0% YoY'}]};
+  const before = JSON.stringify(item);
+  context.renderMarketOkrs(item);
+  assert.ok(grid.innerHTML.includes(`class="okr-status ${css}">${label}</span>`));
+  assert.equal(JSON.stringify(item), before);
+  assert.equal(section.hidden, false);
+}
+context.renderMarketOkrs({market_okrs:[]});
+assert.equal(section.hidden, true);
+assert.equal(grid.innerHTML, '');
+"""
+        result = subprocess.run([shutil.which("node"), "-e", harness],
+                                input=json.dumps(renderer), capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_non_finite_okr_values_are_embedded_as_strict_json_null(self):
         html = render_v2.render([self.market], okr_results={

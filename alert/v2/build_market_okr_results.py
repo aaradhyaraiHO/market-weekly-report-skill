@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -26,15 +27,12 @@ OKR_IDS = (
     "grow_non_poi_gel_revenue_yoy",
 )
 
-# Current H2 2026 official statuses from the authoritative central OKR engine.
-# These are company KR statuses displayed beside market-grain evidence; they are
-# not inferred from company targets or recomputed per market.
-OFFICIAL_STATUS = {
-    "grow_cumulative_pro_plus_ces": ":large_yellow_circle: At risk",
-    "launch_new_pro_plus_mature": ":large_yellow_circle: At risk",
-    "launch_new_pro_plus_emerging_growth": ":large_yellow_circle: At risk",
-    "grow_non_poi_gel_revenue_yoy": ":large_green_circle: On track",
-}
+STATUS_UNAVAILABLE = "Status unavailable"
+GEL_STATUS_RULE = "central-okr/flowrev-progress-v1"
+# The central tracker's flowrev computeKr + krStatus contract uses exact QTD
+# YoY / target, with a neutral first-30%-of-quarter period. Never copy its old
+# official_status constants or apply a company target to market contributions.
+GEL_STATUS_SOURCE = "scripts/band_dashboards/okr_tracker_template.html:computeKr/krStatus"
 
 # Company-grain targets from the authoritative H2 2026 OKR tracker. These are
 # deliberately attached only to the Headout roll-up: comparing a company goal
@@ -320,7 +318,8 @@ def _number(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -346,6 +345,54 @@ def _pct(value: Any) -> str:
 
 def _ce_ids(value: Any) -> list[str]:
     return [item for item in str(value or "").split(",") if item]
+
+
+def _gel_status(
+    *, slug: str, year: int, week_start: dt.date, value: Any,
+    target: str | None, revenue_ly: Any,
+) -> dict:
+    """Status-only projection; never changes the measured QTD YoY or SQL.
+
+    Only the H2 2026 company GEL target/rule is verified here. Other KRs need
+    their own central projection/qualification inputs; market targets are not
+    supplied by this sidecar. Both cases must remain neutral, not guessed.
+    """
+    evidence = {
+        "status": STATUS_UNAVAILABLE,
+        "status_reason": "market_target_unavailable",
+        "status_as_of": str(week_start + dt.timedelta(days=6)),
+        "status_grain": "market" if slug != "headout" else "company",
+    }
+    if slug != "headout":
+        return evidence
+    if year != 2026 or target != "+100% YoY":
+        return {**evidence, "status_reason": "verified_target_unavailable"}
+    observed, baseline = _number(value), _number(revenue_ly)
+    if observed is None or baseline is None or baseline <= 0:
+        return {**evidence, "status_reason": "comparison_unavailable"}
+    quarter_month = (week_start.month - 1) // 3 * 3 + 1
+    start = dt.date(year, quarter_month, 1)
+    end = (dt.date(year + 1, 1, 1) if quarter_month == 10
+           else dt.date(year, quarter_month + 3, 1))
+    # Match the central engine: all Sunday starts inside the quarter, counting
+    # only complete weeks through the frozen report's Sunday start.
+    first_sunday = start + dt.timedelta(days=(6 - start.weekday()) % 7)
+    total = ((end - dt.timedelta(days=1) - first_sunday).days // 7) + 1
+    elapsed = max(0, (week_start - first_sunday).days // 7 + 1)
+    tracking = elapsed / total < 0.30
+    return {
+        **evidence,
+        "status": ("Tracking" if tracking else
+                   ":large_green_circle: On track" if observed >= 100 else
+                   ":large_yellow_circle: At risk"),
+        "status_reason": "early_quarter" if tracking else "qtd_growth_vs_target",
+        "status_rule": GEL_STATUS_RULE,
+        "status_source": GEL_STATUS_SOURCE,
+        "status_target_value": 100.0,
+        "status_attainment_pct": observed,
+        "status_weeks_elapsed": elapsed,
+        "status_weeks_total": total,
+    }
 
 
 def build_results(
@@ -380,7 +427,8 @@ def build_results(
                 "current": f"{pro_plus} CEs",
                 "detail": "L92 predicted revenue ≥ $10K",
                 "value": pro_plus,
-                "status": OFFICIAL_STATUS[OKR_IDS[0]],
+                "status": STATUS_UNAVAILABLE,
+                "status_reason": "projection_rule_not_verified",
                 "drilldown": {"ce_ids": _ce_ids(row.get("pro_plus_ce_ids"))},
             },
             {
@@ -390,7 +438,8 @@ def build_results(
                 "detail": f"{mature_reached} reached · L4W projection · new vs prior 4 quarters",
                 "value": mature,
                 "reached": mature_reached,
-                "status": OFFICIAL_STATUS[OKR_IDS[1]],
+                "status": STATUS_UNAVAILABLE,
+                "status_reason": "projection_rule_not_verified",
                 "drilldown": {"ce_ids": _ce_ids(row.get("mature_ce_ids"))},
             },
             {
@@ -402,7 +451,8 @@ def build_results(
                 ),
                 "value": emerging,
                 "reached": emerging_reached,
-                "status": OFFICIAL_STATUS[OKR_IDS[2]],
+                "status": STATUS_UNAVAILABLE,
+                "status_reason": "projection_rule_not_verified",
                 "drilldown": {"ce_ids": _ce_ids(row.get("emerging_growth_ce_ids"))},
             },
             {
@@ -411,16 +461,22 @@ def build_results(
                 "current": _pct(gel_yoy),
                 "detail": f"{_money(gel_ty)} vs {_money(gel_ly)} QTD LY",
                 "value": gel_yoy,
-                "status": OFFICIAL_STATUS[OKR_IDS[3]],
+                "status": STATUS_UNAVAILABLE,
                 "drilldown": {"ce_ids": _ce_ids(row.get("gel_ce_ids"))},
             },
         ]
         if slug == "headout":
-            targets = COMPANY_TARGETS.get(quarter, {})
+            targets = COMPANY_TARGETS.get(quarter, {}) if report_date.year == 2026 else {}
             for result in markets[slug]:
                 target = targets.get(result["id"])
                 if target is not None:
                     result["target"] = target
+        gel = markets[slug][3]
+        gel.update(_gel_status(
+            slug=slug, year=report_date.year, week_start=report_date,
+            value=gel_yoy, target=gel.get("target"),
+            revenue_ly=row.get("gel_revenue_ly"),
+        ))
     return {
         "schema_version": 1,
         "week_start": week_start,
@@ -428,7 +484,9 @@ def build_results(
         "markets": markets,
         "_meta": {
             "source": "scripts/band_dashboards/generate_dashboards.py",
-            "status_source": "H2 2026 official_status in central OKR engine",
+            "status_source": GEL_STATUS_SOURCE,
+            "status_rule": GEL_STATUS_RULE,
+            "status_policy": "GEL company-only; unverified targets/projections unavailable",
             "grain": "market",
             "okr_ids": list(OKR_IDS),
             "read_only": True,

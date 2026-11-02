@@ -315,13 +315,9 @@ class MarketOKRBuilderContract(unittest.TestCase):
         self.assertEqual(results[3]["current"], "+25.0% YoY")
         self.assertEqual(
             [row["status"] for row in results],
-            [
-                ":large_yellow_circle: At risk",
-                ":large_yellow_circle: At risk",
-                ":large_yellow_circle: At risk",
-                ":large_green_circle: On track",
-            ],
+            ["Status unavailable"] * 4,
         )
+        self.assertEqual(results[3]["status_reason"], "market_target_unavailable")
         self.assertEqual(payload["week_end"], "2026-08-08")
 
     def test_company_result_adds_q3_targets_without_leaking_them_to_markets(self):
@@ -344,6 +340,81 @@ class MarketOKRBuilderContract(unittest.TestCase):
             [row["target"] for row in payload["markets"]["headout"]],
             ["500 CEs", "55 CEs", "35 CEs", "+100% YoY"],
         )
+
+    def gel_result(self, value, week="2026-10-25", market="Headout", baseline=100000):
+        slug = "headout" if market == "Headout" else "italy"
+        return build_market_okr_results.build_results([{
+            "market": market, "gel_revenue_ty": 148979.45579592678,
+            "gel_revenue_ly": baseline, "gel_yoy_pct": value,
+        }], {slug: market}, week)["markets"][slug][3]
+
+    def test_published_49_percent_regression_is_at_risk_not_fixed_green(self):
+        row = self.gel_result(48.979455795926775)
+        self.assertEqual(row["current"], "+49.0% YoY")
+        self.assertEqual(row["value"], 48.979455795926775)
+        self.assertEqual(row["target"], "+100% YoY")
+        self.assertEqual(row["status"], ":large_yellow_circle: At risk")
+        self.assertEqual(row["status_as_of"], "2026-10-31")
+        self.assertEqual(row["status_weeks_elapsed"], 4)
+        self.assertEqual(row["status_weeks_total"], 13)
+        self.assertEqual(row["status_grain"], "company")
+        self.assertEqual(row["status_rule"], "central-okr/flowrev-progress-v1")
+        text = weekly_alert_v2._okr_line(row, "headout")
+        self.assertIn("+49.0% YoY QTD vs +100% YoY target", text)
+        self.assertIn("At risk", text)
+        self.assertNotIn("On track", text)
+
+    def test_growth_status_threshold_uses_unrounded_value(self):
+        for value, expected in ((-20, "At risk"), (0, "At risk"),
+                                (99.99, "At risk"), (100, "On track"),
+                                (150, "On track")):
+            with self.subTest(value=value):
+                self.assertTrue(self.gel_result(value)["status"].endswith(expected))
+
+    def test_early_quarter_neutral_matches_central_tracker(self):
+        for week in ("2026-10-04", "2026-10-11", "2026-10-18"):
+            for value in (49, 150):
+                with self.subTest(week=week, value=value):
+                    row = self.gel_result(value, week=week)
+                    self.assertEqual(row["status"], "Tracking")
+                    self.assertEqual(row["status_reason"], "early_quarter")
+
+    def test_missing_invalid_or_zero_baseline_is_never_green_or_at_risk(self):
+        for value in (None, float("nan"), float("inf"), -float("inf"), True, "bad"):
+            with self.subTest(value=value):
+                row = self.gel_result(value)
+                self.assertEqual(row["status"], "Status unavailable")
+                self.assertEqual(row["current"], "unavailable")
+                self.assertIsNone(row["value"])
+        for baseline in (None, 0, -1, float("nan")):
+            with self.subTest(baseline=baseline):
+                self.assertEqual(self.gel_result(150, baseline=baseline)["status"],
+                                 "Status unavailable")
+
+    def test_company_target_never_classifies_market_contributions(self):
+        for value in (-4.6, 49, 150):
+            row = self.gel_result(value, market="Italy")
+            self.assertNotIn("target", row)
+            self.assertEqual(row["status"], "Status unavailable")
+            self.assertEqual(row["status_reason"], "market_target_unavailable")
+
+    def test_2026_targets_are_not_silently_reused_in_future_years(self):
+        row = self.gel_result(150, week="2027-10-24")
+        self.assertNotIn("target", row)
+        self.assertEqual(row["status"], "Status unavailable")
+
+    def test_frozen_evidence_is_not_mutated_by_status_projection(self):
+        source = {"market": "Headout", "pro_plus_ces": 477,
+                  "gel_revenue_ty": 148979.45579592678,
+                  "gel_revenue_ly": 100000, "gel_yoy_pct": 48.979455795926775,
+                  "gel_ce_ids": "1,2,3"}
+        original = dict(source)
+        row = build_market_okr_results.build_results(
+            [source], {"headout": "Headout"}, "2026-10-25"
+        )["markets"]["headout"][3]
+        self.assertEqual(source, original)
+        self.assertEqual(row["drilldown"]["ce_ids"], ["1", "2", "3"])
+        self.assertEqual(row["value"], source["gel_yoy_pct"])
 
     def test_sql_preserves_current_engine_definitions_and_market_grain(self):
         sql = build_market_okr_results.MARKET_OKR_SQL
