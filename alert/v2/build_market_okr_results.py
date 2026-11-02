@@ -48,8 +48,15 @@ COMPANY_TARGETS = {
         "grow_cumulative_pro_plus_ces": "520 CEs",
         "launch_new_pro_plus_mature": "45 CEs",
         "launch_new_pro_plus_emerging_growth": "25 CEs",
-        "grow_non_poi_gel_revenue_yoy": "+100% YoY",
+        "grow_non_poi_gel_revenue_yoy": "+90% YoY",
     },
+}
+
+COMPANY_GEL_TARGET_SOURCE = {
+    "source": "https://docs.google.com/spreadsheets/d/1vRgfr9jnefP7grYKa-zaSkUzCpT7pnah7UCkaZuz5Dg/edit?gid=1972760172",
+    "source_tab": "H2 2026",
+    "source_verified_on": "2026-11-02",
+    "source_cells": {3: "F30", 4: "G30"},
 }
 
 
@@ -347,15 +354,43 @@ def _ce_ids(value: Any) -> list[str]:
     return [item for item in str(value or "").split(",") if item]
 
 
+def _market_gel_target(slug, market_name, report_date, allocations):
+    """Return only a source-evidenced target at the measured market/quarter grain."""
+    if (allocations.get('schema') != 'weekly-market-okr-targets/v1'
+            or allocations.get('kr_id') != OKR_IDS[3]
+            or allocations.get('unit') != 'pct_yoy'):
+        return None
+    source = allocations.get('source') or {}
+    record = (allocations.get('markets') or {}).get(slug) or {}
+    quarter = f'{report_date.year}-Q{(report_date.month - 1) // 3 + 1}'
+    period = (record.get('periods') or {}).get(quarter) or {}
+    value = _number(period.get('value'))
+    raw = str(period.get('raw', ''))
+    try:
+        verified = dt.date.fromisoformat(source.get('verified_on', ''))
+    except (ValueError, TypeError):
+        return None
+    if (record.get('grain') != 'market' or record.get('source_market') != market_name
+            or not source.get('url') or not source.get('tab') or not source.get('kr_cell')
+            or not period.get('cell') or verified > dt.datetime.now(dt.timezone.utc).date()
+            or value is None or value <= 0 or not raw.endswith('%')
+            or _number(raw[:-1]) != value):
+        return None
+    return {'market_slug': slug, 'quarter': quarter, 'grain': 'market',
+            'value': value, 'unit': 'pct_yoy', 'source': source['url'],
+            'source_tab': source['tab'], 'source_cell': period['cell'],
+            'source_verified_on': source['verified_on']}
+
+
 def _gel_status(
     *, slug: str, year: int, week_start: dt.date, value: Any,
-    target: str | None, revenue_ly: Any,
+    target: str | None, revenue_ly: Any, approved_target: dict | None = None,
 ) -> dict:
     """Status-only projection; never changes the measured QTD YoY or SQL.
 
-    Only the H2 2026 company GEL target/rule is verified here. Other KRs need
-    their own central projection/qualification inputs; market targets are not
-    supplied by this sidecar. Both cases must remain neutral, not guessed.
+    Market targets require an exact, source-evidenced market/quarter allocation.
+    Other KRs need their own central projection/qualification inputs. Missing
+    allocations stay neutral; company/group goals never substitute for them.
     """
     evidence = {
         "status": STATUS_UNAVAILABLE,
@@ -363,10 +398,34 @@ def _gel_status(
         "status_as_of": str(week_start + dt.timedelta(days=6)),
         "status_grain": "market" if slug != "headout" else "company",
     }
+    target_value = 100.0
+    target_evidence = {}
     if slug != "headout":
-        return evidence
-    if year != 2026 or target != "+100% YoY":
-        return {**evidence, "status_reason": "verified_target_unavailable"}
+        approval = approved_target or {}
+        quarter = f'{year}-Q{(week_start.month - 1) // 3 + 1}'
+        target_value = _number(approval.get('value'))
+        if (approval.get('market_slug') != slug or approval.get('quarter') != quarter
+                or approval.get('grain') != 'market' or approval.get('unit') != 'pct_yoy'
+                or not approval.get('source') or not approval.get('source_cell')
+                or not approval.get('source_verified_on')
+                or target_value is None or target_value <= 0
+                or target != f'+{target_value:g}% YoY'):
+            return evidence
+        target_evidence = {'status_target_source': approval['source'],
+                           'status_target_cell': approval['source_cell'],
+                           'status_target_verified_on': approval['source_verified_on']}
+    else:
+        quarter = (week_start.month - 1) // 3 + 1
+        company_target = COMPANY_TARGETS.get(quarter, {}).get(OKR_IDS[3]) if year == 2026 else None
+        target_value = _number((company_target or '').replace('% YoY', ''))
+        if (company_target is None or target != company_target
+                or target_value is None or target_value <= 0):
+            return {**evidence, "status_reason": "verified_target_unavailable"}
+        target_evidence = {
+            'status_target_source': COMPANY_GEL_TARGET_SOURCE['source'],
+            'status_target_cell': COMPANY_GEL_TARGET_SOURCE['source_cells'][quarter],
+            'status_target_verified_on': COMPANY_GEL_TARGET_SOURCE['source_verified_on'],
+        }
     observed, baseline = _number(value), _number(revenue_ly)
     if observed is None or baseline is None or baseline <= 0:
         return {**evidence, "status_reason": "comparison_unavailable"}
@@ -383,15 +442,16 @@ def _gel_status(
     return {
         **evidence,
         "status": ("Tracking" if tracking else
-                   ":large_green_circle: On track" if observed >= 100 else
+                   ":large_green_circle: On track" if observed >= target_value else
                    ":large_yellow_circle: At risk"),
         "status_reason": "early_quarter" if tracking else "qtd_growth_vs_target",
         "status_rule": GEL_STATUS_RULE,
         "status_source": GEL_STATUS_SOURCE,
-        "status_target_value": 100.0,
-        "status_attainment_pct": observed,
+        "status_target_value": target_value,
+        "status_attainment_pct": observed / target_value * 100,
         "status_weeks_elapsed": elapsed,
         "status_weeks_total": total,
+        **target_evidence,
     }
 
 
@@ -399,12 +459,16 @@ def build_results(
     rows: Iterable[dict],
     market_names: dict[str, str],
     week_start: str,
+    market_targets: dict | None = None,
 ) -> dict:
     """Convert one query row per market into the alert's stable sidecar contract."""
     by_market = {str(row["market"]): row for row in rows}
     report_date = dt.date.fromisoformat(week_start)
     week_end = str(report_date + dt.timedelta(days=6))
     quarter = (report_date.month - 1) // 3 + 1
+    if market_targets is None:
+        path = Path(__file__).with_name('okr_market_targets.json')
+        market_targets = json.loads(path.read_text()) if path.is_file() else {}
     markets: dict[str, list[dict]] = {}
     for slug, market_name in market_names.items():
         if market_name not in by_market:
@@ -472,10 +536,15 @@ def build_results(
                 if target is not None:
                     result["target"] = target
         gel = markets[slug][3]
+        approved_target = _market_gel_target(slug, market_name, report_date, market_targets)
+        if approved_target is not None and slug != 'headout':
+            gel['target'] = f"+{approved_target['value']:g}% YoY"
+            gel['target_provenance'] = approved_target
         gel.update(_gel_status(
             slug=slug, year=report_date.year, week_start=report_date,
             value=gel_yoy, target=gel.get("target"),
             revenue_ly=row.get("gel_revenue_ly"),
+            approved_target=approved_target,
         ))
     return {
         "schema_version": 1,
@@ -486,7 +555,7 @@ def build_results(
             "source": "scripts/band_dashboards/generate_dashboards.py",
             "status_source": GEL_STATUS_SOURCE,
             "status_rule": GEL_STATUS_RULE,
-            "status_policy": "GEL company-only; unverified targets/projections unavailable",
+            "status_policy": "GEL exact market/quarter allocations only; no company/group fallback",
             "grain": "market",
             "okr_ids": list(OKR_IDS),
             "read_only": True,

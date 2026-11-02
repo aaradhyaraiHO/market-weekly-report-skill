@@ -23,12 +23,14 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
-def corrected_rows(rows, slug, week):
+def corrected_rows(rows, slug, week, approved_targets=False):
     result = deepcopy(rows)
     if [r['id'] for r in rows] != list(builder.OKR_IDS):
         raise ValueError('Unexpected selected KR inventory')
     date = dt.date.fromisoformat(week)
     for row in result:
+        if approved_targets and row['id'] != builder.OKR_IDS[3]:
+            continue
         for key in list(row):
             if key.startswith('status'):
                 del row[key]
@@ -36,6 +38,19 @@ def corrected_rows(rows, slug, week):
                    status_reason='projection_rule_not_verified')
         if row['id'] != builder.OKR_IDS[3]:
             continue
+        allocation = None
+        if approved_targets:
+            if slug == 'headout':
+                target = builder.COMPANY_TARGETS.get((date.month-1)//3+1, {}).get(row['id']) if date.year == 2026 else None
+            else:
+                allocations = json.loads((ROOT/'alert/v2/okr_market_targets.json').read_text())
+                allocation = builder._market_gel_target(slug, integrity.config.MARKETS.get(slug), date, allocations)
+                target = f"+{allocation['value']:g}% YoY" if allocation else None
+            if target is None:
+                raise ValueError('No verified exact-grain target for approved correction')
+            row['target'] = target
+            if allocation:
+                row['target_provenance'] = allocation
         # The frozen display retains only rounded baseline dollars. Use its sign
         # solely to prove comparison availability, never to recompute YoY or
         # replace a monetary operand. Fail closed on unknown display formats.
@@ -43,7 +58,8 @@ def corrected_rows(rows, slug, week):
         positive_baseline = bool(baseline and float(baseline[1].replace(',', '')) > 0)
         row.update(builder._gel_status(
             slug=slug, year=date.year, week_start=date, value=row.get('value'),
-            target=row.get('target'), revenue_ly=1 if positive_baseline else None))
+            target=row.get('target'), revenue_ly=1 if positive_baseline else None,
+            approved_target=allocation))
     return result
 
 
@@ -55,7 +71,7 @@ def without_status(value):
     return value
 
 
-def patch_page(original, week, expected, replacements):
+def patch_page(original, week, expected, replacements, approved_targets=False):
     match = DATA.search(original)
     if not match:
         raise ValueError('Missing report payload')
@@ -65,11 +81,23 @@ def patch_page(original, week, expected, replacements):
         slug = view['market_slug']
         if view['week_start'] != week or view.get('market_okrs') != expected[slug]:
             raise ValueError('Wrong week or frozen OKR evidence mismatch')
-        view['market_okrs'] = corrected_rows(view['market_okrs'], slug, week)
+        view['market_okrs'] = corrected_rows(view['market_okrs'], slug, week, approved_targets)
     # Only status fields inside selected KR rows can change, not any other data.
     restored = deepcopy(payload)
     for old_view, new_view in zip(before['headlines'], restored['headlines']):
-        if without_status(old_view['market_okrs']) != without_status(new_view['market_okrs']):
+        comparison = deepcopy(new_view['market_okrs'])
+        if approved_targets:
+            for old_row, new_row in zip(old_view['market_okrs'], comparison):
+                if old_row['id'] != builder.OKR_IDS[3]:
+                    if new_row != old_row:
+                        raise ValueError('Unselected KR changed')
+                    continue
+                for key in ('target', 'target_provenance'):
+                    if key in old_row:
+                        new_row[key] = old_row[key]
+                    else:
+                        new_row.pop(key, None)
+        if without_status(old_view['market_okrs']) != without_status(comparison):
             raise ValueError('OKR measurement changed')
         new_view['market_okrs'] = old_view['market_okrs']
     if restored != before:
@@ -104,7 +132,7 @@ def patch_page(original, week, expected, replacements):
     return updated
 
 
-def stage(base, target, week, sidecar, base_receipt, original_commit):
+def stage(base, target, week, sidecar, base_receipt, original_commit, approved_targets=False):
     base, target, sidecar = map(Path, (base, target, sidecar))
     evidence = json.loads(Path(base_receipt).read_text())
     if evidence['status'] != 'verified' or Path(evidence['notebook']) != base:
@@ -119,7 +147,9 @@ def stage(base, target, week, sidecar, base_receipt, original_commit):
         ['git', 'show', f'{original_commit}:{template_path}'], text=True)
     new_template = (ROOT / template_path).read_text()
     replacements = []
-    for prefix in ('    .okr-status.risk {', '        const statusClass=row=>'):
+    prefixes = ('        grid.innerHTML=rows.map(row=>`<article class="okr-card"',) if approved_targets else (
+        '    .okr-status.risk {', '        const statusClass=row=>')
+    for prefix in prefixes:
         old = next(line for line in old_template.splitlines() if line.startswith(prefix))
         new = next(line for line in new_template.splitlines() if line.startswith(prefix))
         if prefix.startswith('    .okr-status'):
@@ -128,9 +158,16 @@ def stage(base, target, week, sidecar, base_receipt, original_commit):
         replacements.append((old, new))
     integrity.seed(base, target)
     pages = []
-    for name in integrity.report_names(week):
+    names = integrity.report_names(week)
+    if approved_targets:
+        routes = [integrity.LEDGER_SLUG[slug] for slug in ('headout','italy','france','iberia')]
+        names = [f'weekly-report-{route}{suffix}.html' for route in routes
+                 for suffix in ('', '-'+week)]
+    for name in names:
         original = (base / name).read_text()
-        updated = patch_page(original, week, _json_safe(frozen['markets']), replacements)
+        expected = ({v['market_slug']:v['market_okrs'] for v in json.loads(DATA.search(original)[1])['headlines']}
+                    if approved_targets else _json_safe(frozen['markets']))
+        updated = patch_page(original, week, expected, replacements, approved_targets)
         (target / name).write_text(updated)
         pages.append(name)
     manifest = integrity.verify_artifact(base, target, week)
@@ -147,4 +184,7 @@ def stage(base, target, week, sidecar, base_receipt, original_commit):
               'files': after, 'sidecar_sha256': storage.sha256(sidecar),
               'data_queries': False, 'snapshots_modified': False,
               'mini_audit_files_modified': False, 'old_editions_modified': False}
+    if approved_targets:
+        result.update(mode='approved-exact-grain-gel-targets',
+                      target_source_sha256=storage.sha256(ROOT/'alert/v2/okr_market_targets.json'))
     return manifest, result

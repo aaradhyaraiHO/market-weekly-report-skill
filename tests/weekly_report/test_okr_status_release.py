@@ -16,7 +16,7 @@ class FrozenOKRStatusRelease(unittest.TestCase):
                  'status': ':large_yellow_circle: At risk'}
                 for key in release.builder.OKR_IDS]
         rows[3].update(value=48.979455795926775, current='+49.0% YoY',
-                       target='+100% YoY', detail='$2.3M vs $1.5M QTD LY',
+                       target='+90% YoY', detail='$2.3M vs $1.5M QTD LY',
                        status=':large_green_circle: On track')
         return rows
 
@@ -59,6 +59,34 @@ class FrozenOKRStatusRelease(unittest.TestCase):
         }) + '</script>'
         with self.assertRaisesRegex(ValueError, 'Wrong week'):
             release.patch_page(text, '2026-10-25', {'headout':rows}, [])
+
+    def test_target_correction_is_explicit_and_preserves_other_krs_and_values(self):
+        for slug in ('headout','italy','france','iberia'):
+            with self.subTest(slug=slug):
+                rows = self.rows()
+                rows[3]['target'] = '+100% YoY'
+                before = copy.deepcopy(rows)
+                corrected = release.corrected_rows(rows,slug,'2026-10-25',approved_targets=True)
+                self.assertEqual(rows,before)
+                self.assertEqual(corrected[:3],before[:3])
+                self.assertEqual(corrected[3]['value'],before[3]['value'])
+                self.assertEqual(corrected[3]['detail'],before[3]['detail'])
+                self.assertEqual(corrected[3]['target'],
+                                 {'headout':'+90% YoY','italy':'+90% YoY',
+                                  'france':'+120% YoY','iberia':'+200% YoY'}[slug])
+        with self.assertRaisesRegex(ValueError,'No verified'):
+            release.corrected_rows(self.rows(),'united_kingdom','2026-10-25',approved_targets=True)
+
+    def test_target_page_patch_changes_no_other_report_measurements(self):
+        rows = self.rows();rows[3]['target']='+100% YoY'
+        payload={'headlines':[{'market_slug':'headout','week_start':'2026-10-25',
+                              'market_okrs':rows,'revenue':123.456}], 'notes_url':'/api/review'}
+        text='<script id="report-data" type="application/json">'+json.dumps(payload,separators=(',',':'))+'</script><script>MINI AUDIT</script>'
+        actual=json.loads(release.DATA.search(release.patch_page(
+            text,'2026-10-25',{'headout':rows},[],approved_targets=True))[1])
+        self.assertEqual(actual['headlines'][0]['market_okrs'][3]['target'],'+90% YoY')
+        actual['headlines'][0]['market_okrs']=rows
+        self.assertEqual(actual,payload)
 
 
 if __name__ == '__main__':

@@ -211,11 +211,18 @@ this authenticated proxy confirms the existing Weekly Actions Sheet write.
 
 Selected OKR badges are not fixed official-status overrides. The company GEL
 badge follows the central tracker's exact-calendar QTD YoY versus the verified
-H2 2026 +100% target: neutral `Tracking` before 30% of Sunday-start quarter weeks
+H2 2026 target (+100% in Q3, +90% in Q4; source cells F30/G30 re-read November 2):
+neutral `Tracking` before 30% of Sunday-start quarter weeks
 have elapsed, then `On track` at/above target and `At risk` below it. It uses
 unrounded inputs and records the rule, cutoff and target in the sidecar. Missing
-comparisons/targets are `Status unavailable`. Market contributions have no
-verified market targets here, so they cannot inherit a company badge. The other
+comparisons/targets are `Status unavailable`. The source-verified allocations in
+`alert/v2/okr_market_targets.json` supply same-market, same-quarter GEL targets
+for Italy, France and Iberia (H2 2026 source read on November 2). Q4 uses +90%,
++120% and +200%, respectively; Q3 targets are kept separately. Targets appear
+beside report badges and in alerts, with source-cell/verification provenance in
+the sidecar. UK/Benelux and CSEE/Nordics ownership-group goals, regional goals,
+missing allocations and future quarters cannot fall back to a company target or
+be split across markets. Re-verify the source before updating allocations. The other
 three selected KRs also remain unavailable until their central projection and
 qualification rules are verified, rather than displaying old fixed statuses.
 This status-only projection does not alter the underlying OKR measurements,

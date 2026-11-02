@@ -1,0 +1,43 @@
+{
+  "schema": "weekly-market-okr-targets/v1",
+  "kr_id": "grow_non_poi_gel_revenue_yoy",
+  "unit": "pct_yoy",
+  "source": {
+    "url": "https://docs.google.com/spreadsheets/d/1vRgfr9jnefP7grYKa-zaSkUzCpT7pnah7UCkaZuz5Dg/edit?gid=1972760172",
+    "spreadsheet_id": "1vRgfr9jnefP7grYKa-zaSkUzCpT7pnah7UCkaZuz5Dg",
+    "sheet_id": 1972760172,
+    "tab": "H2 2026",
+    "range": "A80:G85",
+    "verified_on": "2026-11-02",
+    "kr_cell": "C80",
+    "kr_text": "KR5: Grow revenue from Growth, Emerging & Later buckets by X% YoY (non-POI)"
+  },
+  "markets": {
+    "france": {
+      "source_market": "France", "grain": "market",
+      "periods": {
+        "2026-Q3": {"value": 110, "cell": "F82", "raw": "110%"},
+        "2026-Q4": {"value": 120, "cell": "G82", "raw": "120%"}
+      }
+    },
+    "italy": {
+      "source_market": "Italy", "grain": "market",
+      "periods": {
+        "2026-Q3": {"value": 70, "cell": "F83", "raw": "70%"},
+        "2026-Q4": {"value": 90, "cell": "G83", "raw": "90%"}
+      }
+    },
+    "iberia": {
+      "source_market": "Iberia", "grain": "market",
+      "periods": {
+        "2026-Q3": {"value": 300, "cell": "F85", "raw": "300%"},
+        "2026-Q4": {"value": 200, "cell": "G85", "raw": "200%"}
+      }
+    }
+  },
+  "excluded_ownership_targets": [
+    {"source_market": "UK & Benelux", "q4_raw": "50%", "cell": "G81", "reason": "ownership-group target; no approved split for weekly UK and Benelux"},
+    {"source_market": "CSEE", "q4_raw": "120%", "cell": "G84", "reason": "central ownership mapping includes Nordics; weekly aggregation remains paused"}
+  ],
+  "policy": "Exact market + quarter + KR + unit matches only. No company, region or ownership-group fallback. Do not divide combined targets or reuse Q3 for Q4."
+}

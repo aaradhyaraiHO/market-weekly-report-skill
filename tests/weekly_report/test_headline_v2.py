@@ -831,6 +831,12 @@ for (const [status, css, label] of [
 context.renderMarketOkrs({market_okrs:[]});
 assert.equal(section.hidden, true);
 assert.equal(grid.innerHTML, '');
+context.renderMarketOkrs({market:'Italy', market_okrs:[{
+  status:':large_green_circle: On track', current:'+95.0% YoY', target:'+90% YoY'
+}]});
+assert.ok(grid.innerHTML.includes('Target: +90% YoY'));
+context.renderMarketOkrs({market:'United Kingdom', market_okrs:[{status:'Status unavailable'}]});
+assert.ok(!grid.innerHTML.includes('Target:'));
 """
         result = subprocess.run([shutil.which("node"), "-e", harness],
                                 input=json.dumps(renderer), capture_output=True,
