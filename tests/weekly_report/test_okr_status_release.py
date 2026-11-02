@@ -11,6 +11,28 @@ import release_okr_status as release
 
 
 class FrozenOKRStatusRelease(unittest.TestCase):
+    def test_company_pro_plus_patch_preserves_gel_and_every_measurement(self):
+        rows=self.rows()
+        for index,count in enumerate((487,26,9)):
+            rows[index].update(value=count,current=str(count),
+                target=release.builder.COMPANY_TARGETS[4][release.builder.OKR_IDS[index]],
+                drilldown={'ce_ids':[str(i) for i in range(count)]})
+            if index:
+                rows[index]['reached']=2
+        history=[{'week':week,'value':value} for week,value in zip(
+            ('2026-09-20','2026-09-27','2026-10-04','2026-10-11','2026-10-18','2026-10-25'),
+            (489,493,492,495,492,487))]
+        before=copy.deepcopy(rows)
+        corrected=release.corrected_rows(rows,'headout','2026-10-25',pro_plus_history=history)
+        self.assertEqual(rows,before)
+        self.assertEqual(corrected[3],before[3])
+        self.assertEqual(release.without_status(corrected),release.without_status(before))
+        self.assertTrue(all(r['status']==':large_yellow_circle: At risk' for r in corrected[:3]))
+        with self.assertRaisesRegex(ValueError,'company-only'):
+            release.corrected_rows(rows,'italy','2026-10-25',pro_plus_history=history)
+        with self.assertRaisesRegex(ValueError,'Missing verified'):
+            release.corrected_rows(rows,'headout','2026-10-25',pro_plus_history=history[:-1])
+
     def rows(self):
         rows = [{'id': key, 'value': 10, 'current': '10 CEs',
                  'status': ':large_yellow_circle: At risk'}

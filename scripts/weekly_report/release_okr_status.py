@@ -23,11 +23,23 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
-def corrected_rows(rows, slug, week, approved_targets=False):
+def corrected_rows(rows, slug, week, approved_targets=False, pro_plus_history=None):
     result = deepcopy(rows)
     if [r['id'] for r in rows] != list(builder.OKR_IDS):
         raise ValueError('Unexpected selected KR inventory')
     date = dt.date.fromisoformat(week)
+    if pro_plus_history is not None:
+        if approved_targets or slug != 'headout':
+            raise ValueError('Pro+ correction is company-only and cannot change GEL targets')
+        for row in result[:3]:
+            for key in list(row):
+                if key.startswith('status'):
+                    del row[key]
+            row.update(builder._pro_plus_status(slug=slug, week_start=date, row=row,
+                                                history=pro_plus_history))
+            if row['status'] == builder.STATUS_UNAVAILABLE:
+                raise ValueError('Missing verified Pro+ evidence: '+row['status_reason'])
+        return result
     for row in result:
         if approved_targets and row['id'] != builder.OKR_IDS[3]:
             continue
@@ -71,7 +83,7 @@ def without_status(value):
     return value
 
 
-def patch_page(original, week, expected, replacements, approved_targets=False):
+def patch_page(original, week, expected, replacements, approved_targets=False, pro_plus_history=None):
     match = DATA.search(original)
     if not match:
         raise ValueError('Missing report payload')
@@ -81,11 +93,13 @@ def patch_page(original, week, expected, replacements, approved_targets=False):
         slug = view['market_slug']
         if view['week_start'] != week or view.get('market_okrs') != expected[slug]:
             raise ValueError('Wrong week or frozen OKR evidence mismatch')
-        view['market_okrs'] = corrected_rows(view['market_okrs'], slug, week, approved_targets)
+        view['market_okrs'] = corrected_rows(view['market_okrs'], slug, week, approved_targets, pro_plus_history)
     # Only status fields inside selected KR rows can change, not any other data.
     restored = deepcopy(payload)
     for old_view, new_view in zip(before['headlines'], restored['headlines']):
         comparison = deepcopy(new_view['market_okrs'])
+        if pro_plus_history is not None and old_view['market_okrs'][3] != comparison[3]:
+            raise ValueError('GEL changed during company Pro+ correction')
         if approved_targets:
             for old_row, new_row in zip(old_view['market_okrs'], comparison):
                 if old_row['id'] != builder.OKR_IDS[3]:
@@ -132,7 +146,7 @@ def patch_page(original, week, expected, replacements, approved_targets=False):
     return updated
 
 
-def stage(base, target, week, sidecar, base_receipt, original_commit, approved_targets=False):
+def stage(base, target, week, sidecar, base_receipt, original_commit, approved_targets=False, pro_plus_history=None):
     base, target, sidecar = map(Path, (base, target, sidecar))
     evidence = json.loads(Path(base_receipt).read_text())
     if evidence['status'] != 'verified' or Path(evidence['notebook']) != base:
@@ -147,7 +161,7 @@ def stage(base, target, week, sidecar, base_receipt, original_commit, approved_t
         ['git', 'show', f'{original_commit}:{template_path}'], text=True)
     new_template = (ROOT / template_path).read_text()
     replacements = []
-    prefixes = ('        grid.innerHTML=rows.map(row=>`<article class="okr-card"',) if approved_targets else (
+    prefixes = () if pro_plus_history is not None else ('        grid.innerHTML=rows.map(row=>`<article class="okr-card"',) if approved_targets else (
         '    .okr-status.risk {', '        const statusClass=row=>')
     for prefix in prefixes:
         old = next(line for line in old_template.splitlines() if line.startswith(prefix))
@@ -159,6 +173,8 @@ def stage(base, target, week, sidecar, base_receipt, original_commit, approved_t
     integrity.seed(base, target)
     pages = []
     names = integrity.report_names(week)
+    if pro_plus_history is not None:
+        names = [f'weekly-report-headout{suffix}.html' for suffix in ('', '-'+week)]
     if approved_targets:
         routes = [integrity.LEDGER_SLUG[slug] for slug in ('headout','italy','france','iberia')]
         names = [f'weekly-report-{route}{suffix}.html' for route in routes
@@ -166,8 +182,8 @@ def stage(base, target, week, sidecar, base_receipt, original_commit, approved_t
     for name in names:
         original = (base / name).read_text()
         expected = ({v['market_slug']:v['market_okrs'] for v in json.loads(DATA.search(original)[1])['headlines']}
-                    if approved_targets else _json_safe(frozen['markets']))
-        updated = patch_page(original, week, expected, replacements, approved_targets)
+                    if approved_targets or pro_plus_history is not None else _json_safe(frozen['markets']))
+        updated = patch_page(original, week, expected, replacements, approved_targets, pro_plus_history)
         (target / name).write_text(updated)
         pages.append(name)
     manifest = integrity.verify_artifact(base, target, week)
@@ -187,4 +203,6 @@ def stage(base, target, week, sidecar, base_receipt, original_commit, approved_t
     if approved_targets:
         result.update(mode='approved-exact-grain-gel-targets',
                       target_source_sha256=storage.sha256(ROOT/'alert/v2/okr_market_targets.json'))
+    if pro_plus_history is not None:
+        result.update(mode='verified-company-pro-plus-status', status_history=pro_plus_history)
     return manifest, result

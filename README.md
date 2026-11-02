@@ -222,9 +222,18 @@ for Italy, France and Iberia (H2 2026 source read on November 2). Q4 uses +90%,
 beside report badges and in alerts, with source-cell/verification provenance in
 the sidecar. UK/Benelux and CSEE/Nordics ownership-group goals, regional goals,
 missing allocations and future quarters cannot fall back to a company target or
-be split across markets. Re-verify the source before updating allocations. The other
-three selected KRs also remain unavailable until their central projection and
-qualification rules are verified, rather than displaying old fixed statuses.
+be split across markets. Re-verify the source before updating allocations.
+Headout's other three badges use the verified central stock/flow rules: cumulative
+Pro+ projects the last six weekly counts' regression slope to quarter end; new
+Mature and Emerging/Growth Pro+ compare the achieved-or-projected CE count with
+their own targets (Q4 520/45/25, source G13/G24/G25 verified November 2). These are
+revenue-based live outlooks, not quarter-end ROI-qualified achievement. The first
+30% of quarter weeks remains neutral Tracking. Missing/stale stock history,
+count/member inconsistencies, unknown targets and cross-quarter windows remain
+unavailable. Market Pro+ badges stay unavailable without verified allocations;
+company goals are never applied to individual markets. Status history is an
+additive byte-capped read; its failure preserves counts and marks stock status
+unavailable, never invents a flat history.
 This status-only projection does not alter the underlying OKR measurements,
 weekly metrics or buckets. Existing frozen sidecars/delivery packages are not
 rewritten by a code update; correcting an already-sent alert is a separate action.
