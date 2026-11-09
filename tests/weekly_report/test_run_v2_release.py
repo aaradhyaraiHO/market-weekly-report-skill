@@ -161,6 +161,23 @@ class RunV2ReleaseTests(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
             self.assertEqual(run.call_args.args[0], ('deploy-placeholder',))
 
+    def test_failed_transport_preflight_never_starts_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory).resolve()
+            plan = [
+                release.Step('deployment-transport-preflight', ('check-upload-tool',), str(ROOT)),
+                release.Step('build-markets', ('must-not-query',), str(ROOT)),
+            ]
+            with patch.object(release, 'CACHE', cache), patch.object(release, 'git_metadata', return_value={}), \
+                    patch.object(release.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'check-upload-tool')) as run:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    release.execute(plan, self.week, cache / 'notebook')
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0], ('check-upload-tool',))
+            receipt = json.loads((cache / f'v2_run_{self.week}.json').read_text())
+            self.assertEqual(receipt['status'], 'failed')
+            self.assertEqual([s['name'] for s in receipt['steps']], ['deployment-transport-preflight'])
+
 
 if __name__ == "__main__":
     unittest.main()

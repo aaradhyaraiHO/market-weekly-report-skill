@@ -188,6 +188,14 @@ against the same populated staging directory. Browser mode pauses after deploy;
 resume the receipt's `planned_steps` verification and frozen-delivery commands,
 not generation/deployment. Read `docs/v2/release-workflow.md` before executing.
 
+Production uploads use the recurring `vercel_upload.py` transport: reviewed CLI
+52.0.0/Node 24 preflight before generation, small compressed archive parts,
+bounded transient retries, and a persistent deployment identity. Build-monitor
+timeouts inspect/resume that deployment rather than upload again. Tool files
+stay isolated from the notebook and global CLI. Browser verification and frozen
+alert delivery remain separate required gates. See the deployment transport and
+recovery section in the operator procedure for pin updates and safe resumption.
+
 The canonical V2 release now includes Headout in alert preparation and delivery.
 Supply `--base-notebook /absolute/path/to/verified-complete-notebook` (or
 `WEEKLY_BASE_NOTEBOOK`) so staging preserves the whole notebook and its archives.

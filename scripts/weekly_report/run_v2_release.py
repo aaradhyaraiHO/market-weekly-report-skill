@@ -196,10 +196,16 @@ def build_plan(
     if deploy:
         steps.insert(1, Step('slack-access-preflight',
                             (python, str(ROOT / 'alert' / 'v2' / 'delivery_access.py')), str(ROOT)))
+        # Detect unreviewed CLI/runtime drift before source queries or copies.
+        steps.insert(0, Step('deployment-transport-preflight',
+                            (python, str(SCRIPTS / 'vercel_upload.py'), '--check',
+                             '--notebook', str(base_notebook)), str(ROOT)))
         steps.append(
             Step(
                 "deploy-vercel",
-                ("vercel", "deploy", "--prod", "--yes", "--cwd", str(notebook_dir)),
+                (python, str(SCRIPTS / 'vercel_upload.py'), '--notebook', str(notebook_dir),
+                 '--base-notebook', str(base_notebook), '--manifest', str(artifact),
+                 '--receipt', str(package / 'deployment_transport.json'), '--under-release-lock'),
                 str(ROOT),
                 external_write=True,
             )

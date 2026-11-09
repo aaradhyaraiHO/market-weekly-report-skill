@@ -133,6 +133,49 @@ Never substitute `run_weekly.py --alert-version v2 --post` or the V1 poster. The
 staged V2 command is dry-run-only; V1 code remains the explicit fallback, not an
 automatic retry path.
 
+## Deployment transport and recovery
+
+The recurring `deploy-vercel` step calls `vercel_upload.py`; do not replace it
+with a raw `vercel deploy` retry. The transport preflight runs before generation
+and reads the verified base's project link. It requires the reviewed Vercel CLI
+52.0.0 upload module and Node 24 LTS (already installed on the release Mac).
+`WEEKLY_VERCEL_CLI` and `WEEKLY_VERCEL_NODE` may select their installed paths;
+unreviewed versions/module hashes stop before expensive work. No software is
+automatically installed or globally patched during a release.
+
+The helper copies only CLI tool files into `.cache/vercel_upload`, outside the
+notebook. A version/hash-guarded adapter uses 8 MiB compressed archive parts,
+original byte-buffer request bodies, fresh HTTPS connections and bounded retries
+for EPIPE and actual server 5xx responses, including plain-text error bodies.
+Each part gets at most three retries with 1–5 second backoff. Authorization and
+other non-transient failures stop. Configured proxy/custom TLS settings are
+preserved. TLS verification, credentials, project scope,
+notebook bytes and all report/alert logic remain unchanged. The adapted upload
+module is byte-identical to the November 9 successful supervised recovery.
+
+Uploads use `--no-wait --format=json`. The helper then records and inspects the
+created deployment instead of relying on the CLI's long-running build watcher.
+`deployment_transport.json` binds the deployment reference to the artifact hash
+and verified base. Its stdout/stderr logs are retained alongside it. A monitor
+timeout resumes the same ID; it must never create a second deployment. If an
+interruption lost the receipt update, a retained CLI acknowledgement can recover
+the reference. Unknown upload outcomes without a confirmed reference stop for
+reconciliation. Never remove these receipts/logs to force a fresh upload.
+
+To resume a known deployment from its prepared package, use the receipt's exact
+transport command without `--under-release-lock`; the standalone helper acquires
+the shared weekly/monthly writer guard. Keep the same notebook, base, manifest
+and transport receipt. Do not rerun `run_v2_release.py` into the populated package.
+The internal `--under-release-lock` flag only accepts a canonical child whose
+parent actually owns the shared guard. Return status `ready_for_browser_verification`
+means deployment only: the exact-artifact browser and frozen Slack delivery
+gates below are still mandatory. This helper never queries data or sends alerts.
+
+Changing CLI/runtime pins requires review of the vendor adapter contract and
+rerunning its fault-injection tests. The guards do not promise Vercel/network
+availability; exhausted retries stop with recovery state intact and require a
+failure notification.
+
 ## Browser verification handoff
 
 Browser mode is the default because the user selected their signed-in browser.
