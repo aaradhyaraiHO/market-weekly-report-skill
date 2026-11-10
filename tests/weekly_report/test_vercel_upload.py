@@ -250,6 +250,7 @@ class DeploymentTransportTests(unittest.TestCase):
             self.assertIn('--no-wait', command)
             self.assertIn('--format=json', command)
             self.assertIn(str(self.notebook), command)
+            self.assertEqual(kwargs['timeout'], 90 * 60)
             kwargs['stdout'].write(json.dumps({'deployment': {'id': 'dpl_new'}}))
             kwargs['stdout'].flush()
             return subprocess.CompletedProcess(command, 0)
@@ -259,6 +260,15 @@ class DeploymentTransportTests(unittest.TestCase):
         self.assertEqual((code, ref), (0, 'dpl_new'))
         self.assertEqual(run.call_count, 1)
         self.assertEqual(upload.files(self.notebook), self.before)
+
+    def test_large_upload_timeout_is_bounded_and_still_stops_without_identity(self):
+        client=upload.Client(Path('/node'),Path('/vendor'))
+        with patch.object(upload,'prepare_cli',return_value=self.root/'tool'), patch.object(
+                upload.subprocess,'run',side_effect=subprocess.TimeoutExpired('upload',90*60)) as run:
+            self.assertEqual(client.upload(self.notebook,'manifest-hash',self.receipt),(124,None))
+        self.assertEqual(run.call_args.kwargs['timeout'],5400)
+        self.assertEqual(run.call_count,1)
+        self.assertEqual(upload.files(self.notebook),self.before)
 
 
 if __name__ == '__main__':

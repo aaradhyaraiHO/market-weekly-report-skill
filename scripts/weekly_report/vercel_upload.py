@@ -36,6 +36,10 @@ PROJECT_ID = 'prj_BSPLExXUAkqYlGKYp4LYCH4vAak7'
 ORG_ID = 'team_3ITtCVZrgEK9WCoyJE2qN1Dk'
 RUNTIME = Path(__file__).with_name('vercel_upload_runtime.cjs')
 TOOL_CACHE = ROOT / '.cache/vercel_upload'
+# A complete preserved notebook is ~560 MiB compressed. On a slow Mac uplink
+# a healthy transfer can exceed 30 minutes. Keep a finite overall budget without
+# interrupting it prematurely; retries/identity reconciliation remain unchanged.
+UPLOAD_TIMEOUT_SECONDS = 90 * 60
 
 
 def sha(data):
@@ -211,7 +215,7 @@ class Client:
         # Exclusive files and a pre-existing receipt prevent accidental upload replay.
         with out.open('x') as stdout, err.open('x') as stderr:
             try:
-                result = subprocess.run(command, env=env, stdout=stdout, stderr=stderr, timeout=1800)
+                result = subprocess.run(command, env=env, stdout=stdout, stderr=stderr, timeout=UPLOAD_TIMEOUT_SECONDS)
                 code = result.returncode
             except subprocess.TimeoutExpired:
                 code = 124

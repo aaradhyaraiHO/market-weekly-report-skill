@@ -162,6 +162,15 @@ preserved. TLS verification, credentials, project scope,
 notebook bytes and all report/alert logic remain unchanged. The adapted upload
 module is byte-identical to the November 9 successful supervised recovery.
 
+The complete preserved notebook is about 560 MiB compressed. The overall upload
+budget is bounded at 90 minutes; a slow uplink exceeded the former 30-minute
+budget during the November 10 correction. This changes transport waiting only,
+not report bytes, retries, source caps or delivery gates. A timeout without an
+identity still stops for reconciliation. Never start another upload merely
+because the progress display is slow. Preserve the failed attempt receipt/logs;
+an operator must establish that no deployment was created and production did not
+advance before authorizing a separate recovery attempt from the same artifact.
+
 Uploads use `--no-wait --format=json`. The helper then records and inspects the
 created deployment instead of relying on the CLI's long-running build watcher.
 `deployment_transport.json` binds the deployment reference to the artifact hash
