@@ -41,5 +41,8 @@ class SnapshotVersionTests(unittest.TestCase):
     def test_corrupt_registry_never_reverts_to_the_old_snapshot(self):
         (self.root/v.REGISTRY).write_text('{broken')
         with self.assertRaises(v.CorrectionEvidenceError):self.load()
+    def test_missing_record_in_a_corrected_edition_does_not_reactivate_original(self):
+        self.index['weeks'][self.week]={};self.activate()
+        with self.assertRaises(v.CorrectionEvidenceError):self.load()
 
 if __name__=='__main__':unittest.main()

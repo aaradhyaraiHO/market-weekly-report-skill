@@ -32,6 +32,8 @@ def load_prior(cache, slug, week):
             index=json.loads(registry.read_text())
             if index['schema']!=SCHEMA:raise ValueError('Unknown correction registry')
             record=index['weeks'].get(week,{}).get(slug)
+            if week in index['weeks'] and record is None:
+                raise ValueError('Registered corrected edition has an incomplete scope map')
         except Exception as exc:
             raise CorrectionEvidenceError('Invalid verified snapshot correction registry') from exc
     if record is None:
