@@ -17,7 +17,9 @@ from build_v2_goals import FORECAST_AUTHORITY
 
 AD_COSTS = ('sum_google_ads_spend', 'sum_google_split_ads_spend', 'sum_pmax_ads_spend',
     'sum_travel_ads_spend', 'sum_google_remarketing_ads_spend', 'sum_google_brand_ads_spend',
-    'sum_microsoft_ads_spend', 'sum_microsoft_split_ads_spend', 'sum_facebook_ads_spend',
+    'sum_microsoft_ads_spend', 'sum_microsoft_split_ads_spend',
+    'sum_microsoft_brand_ads_spend', 'sum_microsoft_remarketing_ads_spend',
+    'sum_facebook_ads_spend',
     'sum_facebook_split_ads_spend', 'sum_facebook_remarketing_ads_spend',
     'sum_apple_ads_spend', 'sum_criteo_remarketing_ads_spend')
 OTHER_COSTS = ('sum_coupon_discount', 'sum_wallet_credits', 'sum_affiliate_commission',
@@ -37,6 +39,13 @@ def read_daily(week):
         params.update({f's{i}': a.isoformat(), f'e{i}': (b+dt.timedelta(days=1)).isoformat()})
         conditions.append(f'(report_timestamp >= TIMESTAMP(@s{i}) AND report_timestamp < TIMESTAMP(@e{i}))')
     costs = ' + '.join(f'SUM({c})' for c in OTHER_COSTS)
+    # Verified Omni semantics: absent Bing brand/remarketing values contribute
+    # zero, including historical comparisons. A missing source column still fails.
+    ad_costs = ' + '.join(
+        f'COALESCE({c}, 0)' if c in (
+            'sum_microsoft_brand_ads_spend', 'sum_microsoft_remarketing_ads_spend'
+        ) else c for c in AD_COSTS
+    )
     sql = f"""
         SELECT report_date, business_market, CAST(combined_entity_id AS STRING) ce_id,
                SUM({config.REVENUE_COL}) revenue, SUM(sum_revenue) booked_revenue,
@@ -44,7 +53,7 @@ def read_daily(week):
                COUNTIF({config.REVENUE_COL} IS NULL AND count_orders > 0) missing_revenue,
                SUM({config.REVENUE_COL}) + SUM(sum_co_marketing_commission)
                  + SUM(sum_insider_commission) - SUM(sum_direct_costs) cm1_business,
-               SUM({' + '.join(AD_COSTS)}) + {costs} gross_marketing_cost
+               SUM({ad_costs}) + {costs} gross_marketing_cost
         FROM {config.CE_STATS}
         WHERE {' OR '.join(conditions)}
         GROUP BY 1, 2, 3

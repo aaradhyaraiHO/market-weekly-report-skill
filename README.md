@@ -62,6 +62,12 @@ diagnostic context, not the outlook formula. Recurring releases now gate extreme
 source anomalies and independently reconcile revenue/ROI/forecast operands before
 staging and deployment. See [source correction and gates](docs/v2/source-correction-2026-11-10.md).
 
+Future generated business ROI1/CM2 includes all four Bing spend components:
+Search, split, brand and remarketing, matching Omni's overall marketing cost.
+The source guard and seasonality reads use the same coverage; Search-only paid
+metrics and bucket thresholds keep their existing definitions. This source-input
+fix applies to new TY/LY queries, not already-frozen reports or alert packages.
+
 ```sh
 python3 scripts/weekly_report/build_v2_goals.py \
   /path/to/snapshot_north_america_2026-08-02.json \

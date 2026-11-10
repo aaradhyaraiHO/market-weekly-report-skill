@@ -75,3 +75,37 @@ selection only; follow-up and bucket calculations are unchanged.
 Live correction evidence resides under
 `.cache/weekly_report/source_correction_2026-11-10/`. A staged package or passing
 fixture suite alone is not proof that deployment/Slack correction completed.
+
+## Omni follow-up: future-run Bing cost coverage
+
+A direct all-market Omni check after publication confirmed the corrected revenue,
+CM1, full-month forecast and target. It also exposed a separate cost omission:
+the report included Bing Search/split spend but omitted brand/remarketing from
+overall ad spend. For November 1–7, brand spend was $2,957.53 and remarketing was
+$0. Omni's gross marketing cost was $1,777,577.26 versus the report's
+$1,774,619.73, producing 132.06% ROI1 versus 132.29%. Earlier source checks shared
+the incomplete cost list and therefore did not catch this component omission.
+
+The user requested this correction **for the next run only**. Future business
+queries for every market and true-global Headout now include all 15 platform
+cost columns, including `sum_microsoft_brand_ads_spend` and
+`sum_microsoft_remarketing_ads_spend`. Match Omni's verified `COALESCE(..., 0)`
+semantics for these two operands, including LY; an absent column remains a query
+failure. Apply the same coverage to source reconciliation and seasonality CM2.
+The ROI/CM2 equations, Search-only paid metrics, classification thresholds, date
+windows and byte cap are unchanged. Corrected cost inputs can change future
+overall ROI/CM2 values; they are not a fixed percentage adjustment.
+
+Regression tests independently specify Omni's 15-component contract, evaluate
+the real producer SQL with nonzero brand/remarketing and historical NULLs, check
+that paid Search/revenue/CM1 remain unchanged, and prove the source gate rejects
+an omitted cost in W0, W−1 and LY for both a market and Headout. Existing reports,
+snapshots, verified correction references and Slack messages are not rewritten.
+
+Read-only validation ran the changed business fetch and actual metric assembler
+for Headout and North America, then independently reconciled W0/W−1/LY daily
+source totals. Headout's November 1–7 result is now 132.06%, matching the Omni
+UI/unrounded export. All six comparisons passed, as did 554 tests and the
+baseline gate. Evidence: `next_run_bing_cost_verification.json` and
+`next_run_bing_cost_{tests,baseline}.log` in the correction evidence directory.
+This validation generated no reports and performed no production writes.

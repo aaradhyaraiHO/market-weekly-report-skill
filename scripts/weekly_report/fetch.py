@@ -107,7 +107,8 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
         SUM(sum_insider_commission)              AS insider_commission,
         SUM(sum_direct_costs)                     AS direct_costs,
 
-        -- Ad Spend (Total) — all 13 platform spend columns (business.md canon)
+        -- Ad Spend (Total) — all 15 platform spend columns, matching Omni.
+        -- Omni treats NULL Bing brand/remarketing operands as zero, including LY.
         SUM(
             sum_google_ads_spend
             + sum_google_split_ads_spend
@@ -117,6 +118,8 @@ def ce_weekly_business(market: str | None, start: dt.date, end: dt.date) -> pd.D
             + sum_google_brand_ads_spend
             + sum_microsoft_ads_spend
             + sum_microsoft_split_ads_spend
+            + COALESCE(sum_microsoft_brand_ads_spend, 0)
+            + COALESCE(sum_microsoft_remarketing_ads_spend, 0)
             + sum_facebook_ads_spend
             + sum_facebook_split_ads_spend
             + sum_facebook_remarketing_ads_spend
