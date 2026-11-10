@@ -71,6 +71,14 @@ class CorrectionTests(unittest.TestCase):
             plan['operations'][0]['after']['blocks']=blocks('unreviewed value')
             with self.assertRaisesRegex(ValueError,'plan changed'):e.edit(plan,slack,journal,True)
 
+    def test_multiple_updates_have_bounded_spacing(self):
+        slack=FakeSlack();plan=self.plan();op=copy.deepcopy(plan['operations'][0])
+        op.update(ts='2',key='msg2');op['before']['blocks']=blocks('other market')
+        plan['operations'].append(op);waits=[]
+        with tempfile.TemporaryDirectory() as tmp:
+            e.edit(plan,slack,Path(tmp)/'j',True,clock=lambda:0,sleep=waits.append)
+        self.assertEqual(waits,[2]);self.assertEqual(slack.calls,['chat.update','chat.update'])
+
     def test_new_reply_slots_fail_closed_instead_of_posting(self):
         market=dict(slug='headout',week='2026-11-01',channel='channel',operations=[dict(key='msg1',anchor=None,blocks=blocks('bad value'))])
         old=dict(week='2026-11-01',markets=[market],sha256='old')

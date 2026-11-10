@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 
 from safe_delivery import Slack, atomic_json, digest, locked, matches, read_json, slack_text, validate_bundle
 
@@ -63,7 +64,7 @@ def freeze_plan(original, corrected, state_dir, slack):
         'prepared_at':dt.datetime.now(dt.timezone.utc).isoformat(),'operations':operations}
 
 
-def edit(plan, slack, journal_path, apply=False):
+def edit(plan, slack, journal_path, apply=False, *, clock=time.monotonic, sleep=time.sleep):
     plan_hash=digest(plan)
     journal=read_json(journal_path,{'plan_hash':plan_hash,'operations':{}})
     if journal.get('plan_hash')!=plan_hash:
@@ -87,11 +88,18 @@ def edit(plan, slack, journal_path, apply=False):
         observed[(op['market'],op['key'])]=current
     if not apply:
         return {'status':'ready','messages':len(plan['operations']),'new_posts':0}
+    last_write=None
     for op in plan['operations']:
         key=op['market']+'/'+op['key']; current=observed[(op['market'],op['key'])]
         if not message_matches(op['after'],current):
             journal['operations'][key]={'status':'updating','ts':op['ts']}
             atomic_json(journal_path,journal)
+            # Bound workspace-wide update bursts. A rate-limit/error still
+            # stops with write-ahead recovery state; never retry writes blindly.
+            if last_write is not None:
+                delay=max(0,2-(clock()-last_write))
+                if delay:sleep(delay)
+            last_write=clock()
             # Lost acknowledgement stops. Next invocation reads the exact TS and
             # reconciles before deciding whether an idempotent update is needed.
             slack.call('chat.update',dict(channel=op['channel'],ts=op['ts'],**op['after']),write=True)
