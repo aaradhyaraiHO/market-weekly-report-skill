@@ -220,6 +220,44 @@ def market_period_revenue(market: str | None, start: dt.date, end: dt.date) -> p
     )
 
 
+def market_month_forecast(market: str | None, month: dt.date) -> pd.DataFrame:
+    """Goals dashboard authority: SUM(predicted revenue) for the whole month.
+
+    Includes warehouse forecast rows. Do not extrapolate completed weekly facts
+    or restrict this read to the weekly report's Saturday cutoff.
+    """
+    end = (month.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    return query_df(f"""
+        SELECT SUM({REV}) AS forecast_revenue,
+               COUNT(*) AS source_rows,
+               COUNTIF({REV} IS NULL) AS null_revenue_rows,
+               COUNT(DISTINCT report_date) AS source_days
+        FROM {config.CE_STATS}
+        WHERE report_timestamp >= TIMESTAMP(@month)
+          AND report_timestamp < TIMESTAMP(@end)
+          {'AND business_market = @market' if market else ''}
+    """, "market_month_forecast", {
+        **({"market": market} if market else {}),
+        "month": config.iso(month.replace(day=1)), "end": config.iso(end),
+    })
+
+
+def ce_month_forecasts(market: str | None, month: dt.date) -> pd.DataFrame:
+    end = (month.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    return query_df(f"""
+        SELECT CAST(combined_entity_id AS STRING) AS ce_id,
+               SUM({REV}) AS forecast_revenue
+        FROM {config.CE_STATS}
+        WHERE report_timestamp >= TIMESTAMP(@month)
+          AND report_timestamp < TIMESTAMP(@end)
+          {'AND business_market = @market' if market else ''}
+        GROUP BY 1
+    """, "ce_month_forecasts", {
+        **({"market": market} if market else {}),
+        "month": config.iso(month.replace(day=1)), "end": config.iso(end),
+    })
+
+
 def market_month_comparisons(
     market: str | None,
     prior_start: dt.date,

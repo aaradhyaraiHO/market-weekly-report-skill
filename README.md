@@ -55,6 +55,13 @@ the report explicitly shows that the target comparison is unavailable.
 
 Build that frozen sidecar with the same canonical revenue field used by V1:
 
+The monthly outlook uses the warehouse's full-calendar-month predicted revenue,
+matching Revenue Goals. Actual MTD retains the report's Saturday cutoff; forecast
+rows reflect the source available when retrieved. The four-week run rate is
+diagnostic context, not the outlook formula. Recurring releases now gate extreme
+source anomalies and independently reconcile revenue/ROI/forecast operands before
+staging and deployment. See [source correction and gates](docs/v2/source-correction-2026-11-10.md).
+
 ```sh
 python3 scripts/weekly_report/build_v2_goals.py \
   /path/to/snapshot_north_america_2026-08-02.json \

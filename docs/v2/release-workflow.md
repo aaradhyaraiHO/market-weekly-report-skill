@@ -31,6 +31,15 @@ Implementation and local tests are not a supervised live-run pass.
 3. Check read-only BigQuery access and approved target sources. Google/Bing raw
    evidence, including TY/LY comparisons, follows the existing metric definitions;
    missing source fields stay unavailable. See `future-platform-history-2026-09-11.md`.
+   The recurring source-anomaly preflight blocks extreme negative CE/day revenue
+   and missing/non-finite required economics. Source reconciliation runs before
+   staging and again before deployment: W0/W−1/weekday-aligned LY revenue,
+   business CM1, marketing cost and ROI must match fresh source operands.
+   Attached monthly forecasts must match the warehouse's full-month predicted
+   revenue, the same authority as Revenue Goals, rather than weekly extrapolation.
+   Preserve failed receipts and notify; do not clamp suspect values or bypass a
+   gate. See `source-correction-2026-11-10.md` for thresholds and the separate
+   in-place correction procedure for an already-sent edition.
    The pipeline uses Application Default Credentials (ADC), not just the browser
    login. For the Drive-backed target table, renew with
    `gcloud auth login aaradhya.rai@headout.com --enable-gdrive-access --update-adc --force`.

@@ -38,6 +38,7 @@ class RunV2ReleaseTests(unittest.TestCase):
             names,
             [
                 "baseline",
+                "source-anomaly-preflight",
                 "seed-notebook",
                 "build-markets",
                 "build-headout",
@@ -45,6 +46,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 "combined-v2-gate",
                 "build-shared-market-report",
                 "alert-readiness",
+                "source-reconciliation",
                 "stage-notebook",
                 "alerts-dry-run",
                 "artifact-integrity",

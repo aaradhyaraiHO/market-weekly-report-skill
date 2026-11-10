@@ -132,7 +132,7 @@ def _market_breakdown(ces, biz_idx, paid_idx, ly_rev, w0_start, wm1_start):
 # --------------------------------------------------------------------------- #
 # Main build
 # --------------------------------------------------------------------------- #
-def build_global(week: str) -> dict:
+def build_global(week: str, *, evaluation_date=None) -> dict:
     """True-global Headout snapshot: queries BQ globally (no market filter)."""
     w0_start = dt.date.fromisoformat(week)
     w0_end = w0_start + dt.timedelta(days=6)
@@ -481,7 +481,7 @@ def build_global(week: str) -> dict:
     )
 
     # ---- 8. Fluctuation engine + buckets ----
-    today = dt.date.today()
+    today = evaluation_date or dt.date.today()
     mat_cutoff = min(w0_end, today - dt.timedelta(days=config.MATURITY_DAYS))
     if mat_cutoff < w0_start:
         fallback = config.latest_matured_week(today)

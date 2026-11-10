@@ -692,7 +692,7 @@ def _attach_resource_histories(ces, lead_df, country_df, channel_df) -> None:
             row["history"] = channels.get((cid, str(row.get("channel"))), [])
 
 
-def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True) -> dict:
+def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True, evaluation_date=None) -> dict:
     market = config.MARKETS[market_slug]
     weeks = config.week_starts(w0_start, config.WEEKS_BACK)
     w0_end = w0_start + dt.timedelta(days=6)
@@ -1139,7 +1139,7 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True)
     # bucket must NOT read its qualifiers/drivers off an unsettled week. So it uses the latest
     # FULLY-MATURED week: flux_w0 = min(report W0, latest_complete_week). No-op when the report week
     # is already matured; lags one week when the report is on a fresh (not-yet-settled) week.
-    today = dt.date.today()
+    today = evaluation_date or dt.date.today()
     # The bucket analyses the FULL report week (2026-08-04). The old maturity trim
     # (mat_cutoff = min(week_end, today − 3)) was dropped: measured on NA + Italy, the
     # freshest day shows no attribution deficit vs the same weekday a week earlier, and

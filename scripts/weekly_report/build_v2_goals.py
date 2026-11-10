@@ -19,6 +19,7 @@ import fetch
 import render
 
 WEEKS_TO_MONTH = 4.345
+FORECAST_AUTHORITY = "warehouse-full-month-predicted-revenue/v1"
 
 
 def _number(value):
@@ -189,11 +190,19 @@ def build_market_goal(market, as_of=None):
     expected_mtd_share = elapsed_days / days_in_month
     expected_mtd_method = "calendar-linear target pacing"
     remaining_month_share = max(0.0, 1.0 - expected_mtd_share) if remaining_days else 0.0
-    # Forecast the unelapsed calendar days at the observed trailing-four-week
-    # daily pace. Do not prorate a synthetic 4.345-week month: that makes the
-    # displayed "actual MTD + recent pace" method disagree with its numbers.
-    forecast_remaining_revenue = run_rate_weekly_revenue * remaining_days / 7.0
-    forecast_revenue = mtd_revenue + forecast_remaining_revenue
+    # Match the Revenue Goals dashboard's full-month query. Keep the four-week
+    # pace as diagnostic context only; it is not the approved forecast source.
+    forecast_row = _first_row(fetch.market_month_forecast(query_market, month))
+    forecast_revenue = _number(forecast_row.get("forecast_revenue"))
+    if (forecast_revenue is None or not forecast_row.get("source_rows")
+            or forecast_row.get("source_days") != days_in_month
+            or forecast_row.get("null_revenue_rows") != 0):
+        raise RuntimeError(f"Missing/incomplete warehouse monthly forecast for {market_name}")
+    forecast_remaining_revenue = forecast_revenue - mtd_revenue
+    ce_forecasts = {
+        str(row["ce_id"]): _number(row.get("forecast_revenue"))
+        for row in fetch.ce_month_forecasts(query_market, month).to_dict("records")
+    }
     expected_mtd_revenue = monthly_goal * expected_mtd_share
     mtd_gap = mtd_revenue - expected_mtd_revenue
     forecast_gap = forecast_revenue - monthly_goal
@@ -251,6 +260,7 @@ def build_market_goal(market, as_of=None):
             "mtd_gap": gap,
             "mtd_gap_pct": _percent_change(actual, expected),
             "monthly_goal": ce_goal,
+            "forecast_revenue": ce_forecasts.get(ce_id),
             "prior_mtd_revenue": ce_prior_mtd_revenue.get(ce_id, 0.0),
             "prior_month_revenue": ce_prior_month_revenue.get(ce_id, 0.0),
             "ly_mtd_revenue": ce_ly_mtd_revenue.get(ce_id, 0.0),
@@ -283,10 +293,12 @@ def build_market_goal(market, as_of=None):
         "goal_grain": goal_grain,
         "scope": "all markets" if market_slug == "headout" else market_name,
         "goal_row_count": market_rows if goal_grain == "Market" else ce_rows,
-        "forecast_method": (
-            "actual MTD + latest 4 complete weeks run rate allocated to "
-            "the remaining calendar days"
-        ),
+        "forecast_method": "warehouse full-month predicted revenue, matching Revenue Goals",
+        "forecast_authority": FORECAST_AUTHORITY,
+        "forecast_source_revenue": forecast_revenue,
+        "forecast_source_rows": int(forecast_row["source_rows"]),
+        "forecast_source_days": int(forecast_row["source_days"]),
+        "ce_month_forecasts": ce_forecasts,
         "forecast_baseline_revenue": run_rate_monthly_revenue,
         "forecast_remaining_revenue": forecast_remaining_revenue,
         "forecast_remaining_share_pct": remaining_month_share * 100.0,

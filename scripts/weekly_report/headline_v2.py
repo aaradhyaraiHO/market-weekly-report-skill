@@ -878,6 +878,11 @@ def _country_goal(goal, ces, rows, weekly_ly):
     run_rate = fmean(recent) if recent else None
     forecast_remaining = run_rate * remaining_days / 7.0 if run_rate is not None else None
     forecast = mtd + forecast_remaining if forecast_remaining is not None else None
+    if goal.get("forecast_authority"):
+        forecasts = goal.get("ce_month_forecasts") or {}
+        values = [_number(forecasts.get(ce_id)) for ce_id in ids]
+        forecast = sum(values) if values and all(v is not None for v in values) else None
+        forecast_remaining = forecast - mtd if forecast is not None else None
     prior_mtd = sum(_number(row.get("prior_mtd_revenue")) or 0.0 for row in records)
     ly_mtd = sum(_number(row.get("ly_mtd_revenue")) or 0.0 for row in records)
     prior_month = sum(_number(row.get("prior_month_revenue")) or 0.0 for row in records)
@@ -887,12 +892,13 @@ def _country_goal(goal, ces, rows, weekly_ly):
     result = {key: goal.get(key) for key in (
         "month", "as_of", "retrieved_at", "days_in_month", "elapsed_days",
         "remaining_days", "expected_mtd_method", "expected_mtd_share_pct",
+        "forecast_authority", "forecast_source_days",
     )}
     result.update({
         "monthly_goal": monthly_goal,
         "mtd_revenue": mtd,
         "forecast_revenue": forecast,
-        "source": "revenue_goals (Combined Entity roll-up); V1 CE weekly facts",
+        "source": "revenue_goals (Combined Entity country roll-up); combined_entity_stats",
         "goal_grain": "Combined Entity country roll-up",
         "goal_row_count": len(records),
         "forecast_method": goal.get("forecast_method"),
@@ -1026,6 +1032,7 @@ def build_headline_view(market, goal=None, ce_dimensions=None, include_country_v
             "forecast_vs_last_year_pct", "ce_target_coverage_pct", "ce_gap_contributors",
             "ce_target_pacing",
             "goal_grain", "goal_row_count", "forecast_method",
+            "forecast_authority", "forecast_source_revenue", "forecast_source_days",
             "retrieved_at",
             "partial_period", "report_week_end", "scope", "reference",
         )})

@@ -95,6 +95,8 @@ def build_plan(
 
     steps = [
         Step("baseline", (python, str(SCRIPTS / "verify_baseline.py")), str(ROOT)),
+        Step('source-anomaly-preflight', (python, str(SCRIPTS / 'source_guard.py'),
+             '--week', week, '--out', str(package / 'source_preflight.json')), str(ROOT)),
         Step('seed-notebook', (python, integrity, 'seed', '--base', str(base_notebook),
                               '--target', str(notebook_dir), '--week', week), str(ROOT)),
         Step(
@@ -163,6 +165,10 @@ def build_plan(
             (python, str(ROOT / "alert" / "v2" / "check_readiness.py"), '--include-headout'),
             str(ROOT),
         ),
+        Step('source-reconciliation', (python, str(SCRIPTS / 'source_guard.py'),
+             '--week', week, '--snapshots', *(str(p) for p in snapshot_paths(week)),
+             '--goals', str(V2_REPORTS / 'goals_v2.json'),
+             '--out', str(package / 'source_reconciliation.json')), str(ROOT)),
         Step(
             "stage-notebook",
             (
@@ -200,6 +206,11 @@ def build_plan(
         steps.insert(0, Step('deployment-transport-preflight',
                             (python, str(SCRIPTS / 'vercel_upload.py'), '--check',
                              '--notebook', str(base_notebook)), str(ROOT)))
+        steps.append(Step('pre-deploy-source-reconciliation',
+            (python, str(SCRIPTS / 'source_guard.py'), '--week', week,
+             '--snapshots', *(str(p) for p in snapshot_paths(week)),
+             '--goals', str(V2_REPORTS / 'goals_v2.json'),
+             '--out', str(package / 'pre_deploy_source_reconciliation.json')), str(ROOT)))
         steps.append(
             Step(
                 "deploy-vercel",

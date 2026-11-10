@@ -49,13 +49,31 @@ class BuildV2GoalsContract(unittest.TestCase):
             patcher = mock.patch.object(build_v2_goals.fetch, name, return_value=value)
             setattr(self, name, patcher.start())
             self.addCleanup(patcher.stop)
+        for name, value in (
+            ('market_month_forecast', pd.DataFrame([dict(forecast_revenue=1_520_271.50481,
+                source_rows=100, null_revenue_rows=0, source_days=31)])),
+            ('ce_month_forecasts', pd.DataFrame([dict(ce_id='CE-001',forecast_revenue=80_000)])),
+        ):
+            patcher=mock.patch.object(build_v2_goals.fetch,name,return_value=value)
+            setattr(self,name,patcher.start()); self.addCleanup(patcher.stop)
 
     def _period_revenue(self):
         return pd.DataFrame([{"revenue": 536_000.0}])
 
+    @mock.patch.object(build_v2_goals.fetch, 'market_period_revenue')
+    @mock.patch.object(build_v2_goals.fetch, 'market_monthly_goal')
+    def test_incomplete_forecast_never_falls_back_to_four_week_estimate(self, goal, revenue):
+        goal.return_value=pd.DataFrame([dict(market_row_count=1,market_goal=6_800_000)])
+        revenue.return_value=self._period_revenue()
+        for fields in (dict(source_days=30),dict(null_revenue_rows=1),dict(forecast_revenue=None)):
+            self.market_month_forecast.return_value=pd.DataFrame([dict(
+                forecast_revenue=1_520_271,source_rows=100,null_revenue_rows=0,source_days=31)|fields])
+            with self.assertRaisesRegex(RuntimeError,'incomplete warehouse'):
+                build_v2_goals.build_market_goal(copy.deepcopy(self.market))
+
     @mock.patch.object(build_v2_goals.fetch, "market_period_revenue")
     @mock.patch.object(build_v2_goals.fetch, "market_monthly_goal")
-    def test_market_goal_is_authoritative_and_forecast_reuses_snapshot_revenue(
+    def test_market_goal_is_authoritative_and_forecast_matches_warehouse_not_four_week_pace(
         self, goal_query, revenue_query
     ):
         goal_query.return_value = pd.DataFrame([{
@@ -75,14 +93,16 @@ class BuildV2GoalsContract(unittest.TestCase):
         recent = [row["revenue"] for row in self.market["market_summary"]["weekly"][-4:]]
         expected_run_rate_weekly = sum(recent) / len(recent)
         expected_baseline = expected_run_rate_weekly * 4.345
-        expected_remaining = expected_run_rate_weekly * 23 / 7
-        expected_forecast = 536_000.0 + expected_remaining
+        expected_forecast = 1_520_271.50481
+        expected_remaining = expected_forecast - 536_000
         self.assertEqual(goal["forecast_revenue"], expected_forecast)
         self.assertEqual(goal["run_rate_weekly_revenue"], expected_run_rate_weekly)
         self.assertEqual(goal["forecast_baseline_revenue"], expected_baseline)
         self.assertEqual(goal["forecast_remaining_revenue"], expected_remaining)
         self.assertAlmostEqual(goal["forecast_remaining_share_pct"], 100 * 23 / 31)
-        self.assertIn("actual MTD", goal["forecast_method"])
+        self.assertIn("warehouse", goal["forecast_method"])
+        self.assertEqual(goal['forecast_authority'], build_v2_goals.FORECAST_AUTHORITY)
+        self.assertEqual(goal['ce_month_forecasts']['CE-001'],80_000)
         self.assertAlmostEqual(goal["expected_mtd_revenue"], 6_800_000 * 8 / 31)
         self.assertAlmostEqual(goal["expected_mtd_share_pct"], 100 * 8 / 31)
         self.assertEqual(goal["expected_mtd_method"], "calendar-linear target pacing")
@@ -232,6 +252,7 @@ class BuildV2GoalsContract(unittest.TestCase):
         market['meta'].update(week_start='2026-09-06', week_end='2026-09-12', market_slug='headout')
         market['market_summary']['weekly'] = [dict(week=w, revenue=r) for w, r in [
             ('2026-08-09', 100), ('2026-08-16', 200), ('2026-08-23', 300), ('2026-08-30', 400), ('2026-09-06', 9999)]]
+        self.market_month_forecast.return_value.loc[0,'source_days']=30
         goal_query.return_value = pd.DataFrame([dict(market_row_count=25, market_goal=10000, ce_row_count=0)])
         revenue_query.return_value = self._period_revenue()
         _, goal = build_v2_goals.build_market_goal(market, as_of=dt.date(2026, 9, 9))
