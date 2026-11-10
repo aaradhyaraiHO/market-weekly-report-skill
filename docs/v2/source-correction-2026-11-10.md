@@ -63,6 +63,15 @@ Read back every parent/RCA after edits. Old frozen delivery commands intentional
 reject corrected content; use the correction receipt for this edition's audits.
 Future weeks use new packages normally. Never clear old state to make a retry pass.
 
+After the correction's complete verified deployment receipt exists, record its
+snapshot directory and hashes in `verified_snapshot_corrections.json` inside the
+weekly cache. Next week's follow-up reader uses that verified version, not the
+superseded cache file. The original snapshot bytes remain unchanged. Missing,
+tampered, symlinked or unverified correction evidence stops the read instead of
+silently falling back to known superseded facts. Ordinary weeks without a
+correction keep their original reader behavior. This changes data-version
+selection only; follow-up and bucket calculations are unchanged.
+
 Live correction evidence resides under
 `.cache/weekly_report/source_correction_2026-11-10/`. A staged package or passing
 fixture suite alone is not proof that deployment/Slack correction completed.

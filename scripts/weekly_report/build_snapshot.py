@@ -1258,12 +1258,14 @@ def build_market(market_slug: str, w0_start: dt.date, *, with_availability=True,
 # Follow-up snapshot
 # --------------------------------------------------------------------------- #
 def _build_followup(market_slug, prior_week, current_bucket1, names, biz, w0_start, wm1_start):
-    prior_path = OUT_DIR / f"snapshot_{market_slug}_{config.iso(prior_week)}.json"
-    if not prior_path.exists():
-        return []
+    from snapshot_versions import load_prior, CorrectionEvidenceError
     try:
-        prior = json.loads(prior_path.read_text())
+        prior = load_prior(OUT_DIR, market_slug, config.iso(prior_week))
+    except CorrectionEvidenceError:
+        raise
     except Exception:
+        return []
+    if prior is None:
         return []
     prior_rows = prior.get("bucket1_fluctuations", [])
     current_ids = {r["ce_id"] for r in current_bucket1}
