@@ -152,6 +152,15 @@ and reads the verified base's project link. It requires the reviewed Vercel CLI
 unreviewed versions/module hashes stop before expensive work. No software is
 automatically installed or globally patched during a release.
 
+The separately authorized November 16 tool restoration installed the unchanged
+52.0.0 package under `.cache/vercel_upload/vendor-52.0.0/`, with lifecycle scripts
+disabled. Selection order is explicit `WEEKLY_VERCEL_CLI`, this restored local
+entry, then PATH. Every selected entry still passes the exact version/module
+hash checks and uses reviewed Node 24; a bad override does not silently fall
+back. This prevents unrelated global CLI upgrades from changing the release
+runtime. Restoring a missing local copy is a maintenance action, never an
+automatic install during a scheduled run. The upload adapter/limits are unchanged.
+
 The helper copies only CLI tool files into `.cache/vercel_upload`, outside the
 notebook. A version/hash-guarded adapter uses 8 MiB compressed archive parts,
 original byte-buffer request bodies, fresh HTTPS connections and bounded retries

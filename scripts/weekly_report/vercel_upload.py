@@ -94,8 +94,15 @@ def patched_upload(source):
     return source
 
 
+def cli_entry():
+    """Prefer the explicitly restored tool; never install or modify global tools."""
+    override = os.environ.get('WEEKLY_VERCEL_CLI')
+    pinned = TOOL_CACHE / f'vendor-{VERSION}' / 'node_modules/vercel/dist/vc.js'
+    return override or (str(pinned) if pinned.exists() else shutil.which('vercel'))
+
+
 def toolchain():
-    cli = os.environ.get('WEEKLY_VERCEL_CLI') or shutil.which('vercel')
+    cli = cli_entry()
     if not cli:
         raise ValueError(f'Install reviewed Vercel CLI {VERSION} before the run')
     entry = Path(cli).resolve()

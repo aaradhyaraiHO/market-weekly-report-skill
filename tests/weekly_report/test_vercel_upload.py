@@ -172,6 +172,33 @@ class DeploymentTransportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unreviewed Vercel upload client'):
             upload.patched_upload('different vendor code')
 
+    def test_restored_project_cli_takes_precedence_over_global_upgrades(self):
+        cache = self.root / 'tools'
+        cli = cache / 'vendor-52.0.0/node_modules/vercel/dist/vc.js'
+        cli.parent.mkdir(parents=True)
+        cli.write_text('fixture entry')
+        with patch.object(upload, 'TOOL_CACHE', cache), \
+                patch.dict(upload.os.environ, {'WEEKLY_VERCEL_CLI': ''}), \
+                patch.object(upload.shutil, 'which', return_value='/global/vercel-65') as which:
+            self.assertEqual(upload.cli_entry(), str(cli))
+        which.assert_not_called()
+
+    def test_explicit_cli_override_still_fails_closed_if_unreviewed(self):
+        cli = self.root / 'explicit/dist/vc.js'
+        cli.parent.mkdir(parents=True)
+        cli.write_text('unreviewed entry')
+        (cli.parent.parent / 'package.json').write_text(json.dumps({'version': '65.16.0'}))
+        with patch.dict(upload.os.environ, {'WEEKLY_VERCEL_CLI': str(cli)}):
+            self.assertEqual(upload.cli_entry(), str(cli))
+            with self.assertRaisesRegex(ValueError, '52.0.0 required'):
+                upload.toolchain()
+
+    def test_missing_project_cli_retains_guarded_path_fallback(self):
+        with patch.object(upload, 'TOOL_CACHE', self.root / 'absent'), \
+                patch.dict(upload.os.environ, {'WEEKLY_VERCEL_CLI': ''}), \
+                patch.object(upload.shutil, 'which', return_value='/existing/vercel'):
+            self.assertEqual(upload.cli_entry(), '/existing/vercel')
+
     def test_only_project_deployment_identity_is_extracted(self):
         self.assertEqual(upload.deployment_reference(json.dumps({'deployment': {'id': 'dpl_new'}})), 'dpl_new')
         self.assertEqual(upload.deployment_reference('Production: https://market-notebook-abc-headout.vercel.app'),
