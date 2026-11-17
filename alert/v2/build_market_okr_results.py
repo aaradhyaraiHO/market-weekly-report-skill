@@ -37,27 +37,7 @@ GEL_STATUS_SOURCE = "scripts/band_dashboards/okr_tracker_template.html:computeKr
 # Company-grain targets from the authoritative H2 2026 OKR tracker. These are
 # deliberately attached only to the Headout roll-up: comparing a company goal
 # with an individual market actual would be a grain error.
-COMPANY_TARGETS = {
-    3: {
-        "grow_cumulative_pro_plus_ces": "500 CEs",
-        "launch_new_pro_plus_mature": "55 CEs",
-        "launch_new_pro_plus_emerging_growth": "35 CEs",
-        "grow_non_poi_gel_revenue_yoy": "+100% YoY",
-    },
-    4: {
-        "grow_cumulative_pro_plus_ces": "520 CEs",
-        "launch_new_pro_plus_mature": "45 CEs",
-        "launch_new_pro_plus_emerging_growth": "25 CEs",
-        "grow_non_poi_gel_revenue_yoy": "+90% YoY",
-    },
-}
-
-COMPANY_GEL_TARGET_SOURCE = {
-    "source": "https://docs.google.com/spreadsheets/d/1vRgfr9jnefP7grYKa-zaSkUzCpT7pnah7UCkaZuz5Dg/edit?gid=1972760172",
-    "source_tab": "H2 2026",
-    "source_verified_on": "2026-11-02",
-    "source_cells": {3: "F30", 4: "G30"},
-}
+from report_contract import COMPANY_TARGETS, COMPANY_GEL_TARGET_SOURCE, gel_progress
 
 COMPANY_PRO_TARGET_CELLS = {
     OKR_IDS[0]: {3: 'F13', 4: 'G13'},
@@ -528,30 +508,13 @@ def _gel_status(
     observed, baseline = _number(value), _number(revenue_ly)
     if observed is None or baseline is None or baseline <= 0:
         return {**evidence, "status_reason": "comparison_unavailable"}
-    quarter_month = (week_start.month - 1) // 3 * 3 + 1
-    start = dt.date(year, quarter_month, 1)
-    end = (dt.date(year + 1, 1, 1) if quarter_month == 10
-           else dt.date(year, quarter_month + 3, 1))
-    # Match the central engine: all Sunday starts inside the quarter, counting
-    # only complete weeks through the frozen report's Sunday start.
-    first_sunday = start + dt.timedelta(days=(6 - start.weekday()) % 7)
-    total = ((end - dt.timedelta(days=1) - first_sunday).days // 7) + 1
-    elapsed = max(0, (week_start - first_sunday).days // 7 + 1)
-    tracking = elapsed / total < 0.30
-    return {
-        **evidence,
-        "status": ("Tracking" if tracking else
-                   ":large_green_circle: On track" if observed >= target_value else
-                   ":large_yellow_circle: At risk"),
-        "status_reason": "early_quarter" if tracking else "qtd_growth_vs_target",
-        "status_rule": GEL_STATUS_RULE,
-        "status_source": GEL_STATUS_SOURCE,
-        "status_target_value": target_value,
-        "status_attainment_pct": observed / target_value * 100,
-        "status_weeks_elapsed": elapsed,
-        "status_weeks_total": total,
-        **target_evidence,
-    }
+    progress = gel_progress(cutoff=week_start + dt.timedelta(days=6), value=observed,
+                            revenue_ly=baseline, target=target_value)
+    status = progress['status']
+    if status == 'On track': status = ':large_green_circle: On track'
+    if status == 'At risk': status = ':large_yellow_circle: At risk'
+    return {**evidence, **progress, 'status': status, 'status_rule': GEL_STATUS_RULE,
+            'status_source': GEL_STATUS_SOURCE, **target_evidence}
 
 
 def build_results(

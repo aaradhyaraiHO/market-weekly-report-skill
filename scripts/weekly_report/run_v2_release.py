@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -29,6 +29,7 @@ V2_REPORTS = ROOT / "thoughts" / "shared" / "weekly-report-v2"
 sys.path.insert(0, str(SCRIPTS))
 import config  # noqa: E402
 import report_storage  # noqa: E402
+import report_release  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,9 @@ def build_plan(
 
     steps = [
         Step("baseline", (python, str(SCRIPTS / "verify_baseline.py")), str(ROOT)),
+        Step('dependency-readiness', (python, str(SCRIPTS/'report_readiness.py'),
+            '--month', (date.fromisoformat(week) + timedelta(days=6)).strftime('%Y-%m'),
+            '--out', str(package/'dependency_readiness.json')), str(ROOT)),
         Step('source-anomaly-preflight', (python, str(SCRIPTS / 'source_guard.py'),
              '--week', week, '--out', str(package / 'source_preflight.json')), str(ROOT)),
         Step('seed-notebook', (python, integrity, 'seed', '--base', str(base_notebook),
@@ -226,6 +230,11 @@ def build_plan(
         if verification_mode == 'browser':
             verify_command += ('--observations', str(package / 'browser_observations.json'))
         steps.append(Step('verify-live-reports', verify_command, str(ROOT)))
+        if verification_mode == 'browser':
+            steps.append(Step('retain-production-baseline',(python,str(SCRIPTS/'report_baseline.py'),
+                '--notebook',str(notebook_dir),'--base-notebook',str(base_notebook),
+                '--manifest',str(artifact),'--proof',str(package/'live_verification.json'),
+                '--transport',str(package/'deployment_transport.json'),'--under-release-lock'),str(ROOT)))
     if post_alerts:
         steps.append(
             Step(
@@ -272,6 +281,7 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
     notebook_dir.mkdir(parents=True, exist_ok=True)
     package_dir.mkdir(parents=True, exist_ok=True)
 
+    runtime_sources = report_release.bind_sources(package_dir)
     receipt: dict[str, Any] = {
         "schema": "weekly-v2-run/v1",
         "status": "running",
@@ -280,6 +290,7 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
         "markets": [*config.MARKETS, "headout"],
         "notebook_dir": str(notebook_dir),
         "git": git_metadata(),
+        "runtime_sources": runtime_sources,
         # Keep unexecuted commands available when browser verification pauses.
         # This is a plan, not evidence that any step has passed.
         "planned_steps": [step.public() for step in plan],
@@ -317,8 +328,11 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
         if step.env:
             env.update(step.env)
         try:
-            subprocess.run(step.command, cwd=step.cwd, env=env, check=True)
-        except (subprocess.CalledProcessError, OSError) as exc:
+            argv, env, budget = report_release.execution(step, package_dir, env)
+            record.update(executed_command=list(argv), timeout_seconds=budget)
+            write_receipt(receipt_path, receipt)
+            report_release.run_bounded(argv, cwd=step.cwd, env=env, check=True, timeout=budget)
+        except (subprocess.SubprocessError, OSError) as exc:
             record.update(
                 status="failed",
                 exit_code=getattr(exc, 'returncode', None),
@@ -328,6 +342,7 @@ def execute(plan: Sequence[Step], week: str, notebook_dir: Path) -> Path:
                 status="failed", finished_at=datetime.now(timezone.utc).isoformat()
             )
             write_receipt(receipt_path, receipt)
+            report_release.notify_failure('weekly', week, step.name)
             raise
         record.update(
             status="passed", duration_seconds=round(time.monotonic() - started, 3)

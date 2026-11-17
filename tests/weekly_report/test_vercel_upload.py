@@ -215,7 +215,7 @@ class DeploymentTransportTests(unittest.TestCase):
         deploy = next(s for s in plan if s.name == 'deploy-vercel')
         self.assertIn(str(ROOT / 'scripts/weekly_report/vercel_upload.py'), deploy.command)
         self.assertIn('--under-release-lock', deploy.command)
-        self.assertEqual([s.name for s in plan][-3:], ['deploy-vercel', 'verify-live-reports', 'post-alerts'])
+        self.assertEqual([s.name for s in plan][-4:], ['deploy-vercel', 'verify-live-reports', 'retain-production-baseline', 'post-alerts'])
 
     def test_child_cannot_claim_nonexistent_parent_guard(self):
         lock = self.root / 'writer.lock'
@@ -300,3 +300,52 @@ class DeploymentTransportTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class IncrementalUploadTests(unittest.TestCase):
+    def test_incremental_cli_omits_archive_and_keeps_immutable_metadata(self):
+        with tempfile.TemporaryDirectory() as root:
+            p=Path(root); client=upload.Client(Path('/node'),Path('/vendor'),mode='incremental')
+            def simulate(command,**kw):
+                self.assertNotIn('--archive=tgz',command)
+                self.assertIn('--no-wait',command);self.assertIn('--format=json',command)
+                kw['stdout'].write('{"id":"dpl_fixture"}')
+                return subprocess.CompletedProcess(command,0)
+            with patch.object(upload,'prepare_cli',return_value=p/'tool') as prep, patch.object(upload.subprocess,'run',side_effect=simulate):
+                self.assertEqual(client.upload(p,'manifest',p/'transport.json'),(0,'dpl_fixture'))
+                self.assertEqual(prep.call_args.kwargs['mode'],'incremental')
+
+    def test_lazy_hash_metadata_and_immediate_byte_check(self):
+        with tempfile.TemporaryDirectory() as root:
+            p=Path(root); script=p/'test.cjs'
+            script.write_text('''const assert=require('node:assert/strict'), fs=require('node:fs');
+const h=require(process.argv[2]); const a=process.argv[3], b=process.argv[4];
+(async()=>{fs.writeFileSync(a,'same bytes');fs.writeFileSync(b,'same bytes');
+const m=await h.hashes([a,b]);assert.equal(m.size,1);const [sha,row]=[...m][0];
+assert.equal(row.names.length,2);assert.equal(Buffer.isBuffer(row.data),false);
+assert.equal(row.data.length,10);assert.equal((await h.load(row,sha)).toString(),'same bytes');
+fs.writeFileSync(row.names[0],'bad bytes!');await assert.rejects(()=>h.load(row,sha),/bytes changed/);
+fs.symlinkSync(b,a+'.link');await assert.rejects(()=>h.hashes([a+'.link']),/Symlink/);
+console.log('incremental lazy hashing passed');})();''')
+            result=subprocess.run(['node',str(script),str(upload.HASH_HELPER),str(p/'a'),str(p/'b')],capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('passed',result.stdout)
+
+    def test_exact_incremental_adapter_and_existing_archive_pin(self):
+        vendor=upload.ROOT/'.cache/vercel_upload/vendor-52.0.0/node_modules/vercel'
+        if not vendor.exists():self.skipTest('Pinned vendor unavailable')
+        source=(vendor/upload.UPLOAD_FILE).read_text()
+        self.assertEqual(upload.sha(upload.patched_upload(source).encode()),upload.ADAPTED_SHA256)
+        patched=upload.patched_incremental(source)
+        self.assertEqual(upload.sha(patched.encode()),upload.INCREMENTAL_SHA256)
+        self.assertIn('.hashes(files, map)',patched);self.assertIn('.load(file, sha)',patched)
+
+    def test_exact_vendor_incremental_upload_faults_and_reuse(self):
+        vendor=upload.ROOT/'.cache/vercel_upload/vendor-52.0.0/node_modules/vercel'
+        if not vendor.exists():self.skipTest('Pinned vendor unavailable')
+        with tempfile.TemporaryDirectory() as root:
+            p=Path(root);src=p/'adapted.js';helper=p/'report_file_hashes.cjs'
+            src.write_text(upload.patched_incremental((vendor/upload.UPLOAD_FILE).read_text()))
+            helper.write_bytes(upload.HASH_HELPER.read_bytes())
+            result=subprocess.run(['node',str(ROOT/'tests/weekly_report/js/incremental_upload_runtime.cjs'),str(src),str(helper),str(p)],capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('passed',result.stdout)

@@ -94,6 +94,36 @@ def patched_upload(source):
     return source
 
 
+INCREMENTAL_ADAPTER = 'report-incremental-upload-v1'
+INCREMENTAL_SHA256 = '8257ca2eee48697a1e18a23dabbe09617e92249ad5b92503a80d0ce40a485a36'
+HASH_HELPER = Path(__file__).with_name('report_file_hashes.cjs')
+
+
+def patched_incremental(source):
+    source = patched_upload(source)
+    a = source.index('    async function hashes(files, map = /* @__PURE__ */ new Map()) {')
+    b = source.index('      return map;\n    }', a) + len('      return map;\n    }')
+    helper = '__require(__require("path").join(process.env.WEEKLY_VERCEL_ISOLATED_ROOT, "report_file_hashes.cjs"))'
+    source = source[:a] + ('    async function hashes(files, map = new Map()) {\n'
+                            f'      return {helper}.hashes(files, map);\n    }}') + source[b:]
+    old = '            const { data } = file;'
+    if source.count(old) != 1: raise ValueError('Incremental upload contract changed')
+    source = source.replace(old, f'            const data = await {helper}.load(file, sha);')
+    marker = '      const uploadList = {};'
+    guard = r'''      const uploadList = {};
+      const maximum = Number(process.env.REPORT_MAX_MISSING_BYTES || Infinity);
+      const missingBytes = options.shas.reduce((n, sha) => n + (options.files.get(sha)?.data?.length || 0), 0);
+      if (missingBytes > maximum) {
+        yield {type: "error", payload: new Error("Historical upload cache unavailable: missing bytes exceed prepared transfer budget. Reconcile this deployment; do not replay.")};
+        return;
+      }'''
+    if source.count(marker) != 1: raise ValueError('Upload budget adapter contract changed')
+    source = source.replace(marker, guard)
+    if sha(source.encode()) != INCREMENTAL_SHA256:
+        raise ValueError('Incremental adapter differs from reviewed content')
+    return source
+
+
 def cli_entry():
     """Prefer the explicitly restored tool; never install or modify global tools."""
     override = os.environ.get('WEEKLY_VERCEL_CLI')
@@ -135,7 +165,7 @@ def check_project(notebook):
         raise ValueError('Notebook is not linked to the approved Headout market-notebook project')
 
 
-def prepare_cli(vendor, cache=TOOL_CACHE):
+def prepare_cli(vendor, cache=TOOL_CACHE, mode="archive"):
     """Independent tool files only. Never copy/modify the notebook or global CLI."""
     cache = report_storage.no_symlinks(cache)
     expected = {'package.json': (vendor / 'package.json').read_bytes()}
@@ -144,9 +174,12 @@ def prepare_cli(vendor, cache=TOOL_CACHE):
             raise ValueError('Symlink inside vendor CLI distribution')
         if path.is_file():
             expected[path.relative_to(vendor).as_posix()] = path.read_bytes()
-    expected[UPLOAD_FILE] = patched_upload(expected[UPLOAD_FILE].decode()).encode()
+    patcher = patched_incremental if mode == 'incremental' else patched_upload
+    expected[UPLOAD_FILE] = patcher(expected[UPLOAD_FILE].decode()).encode()
+    if mode == 'incremental': expected['report_file_hashes.cjs'] = HASH_HELPER.read_bytes()
     manifest = {name: sha(data) for name, data in expected.items()}
-    target = cache / f'{VERSION}-{ADAPTER}'
+    adapter = INCREMENTAL_ADAPTER if mode == 'incremental' else ADAPTER
+    target = cache / f'{VERSION}-{adapter}'
     if target.exists():
         actual = {}
         for path in target.rglob('*'):
@@ -164,7 +197,7 @@ def prepare_cli(vendor, cache=TOOL_CACHE):
         dest = staging / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
-    atomic_json(staging / 'adapter.json', {'adapter': ADAPTER, 'version': VERSION,
+    atomic_json(staging / 'adapter.json', {'adapter': adapter, 'version': VERSION,
         'original_upload_sha256': UPLOAD_SHA256, 'files': manifest})
     staging.rename(target)
     return target
@@ -190,8 +223,10 @@ def deployment_reference(text):
 
 
 class Client:
-    def __init__(self, node, vendor):
-        self.node, self.vendor = node, vendor
+    def __init__(self, node, vendor, mode="archive"):
+        if mode not in ("archive", "incremental"): raise ValueError("Unknown upload mode")
+        self.node, self.vendor, self.mode = node, vendor, mode
+        self.missing_byte_budget = 512*1024**2
 
     def inspect(self, ref):
         for attempt in range(3):
@@ -212,11 +247,11 @@ class Client:
                 time.sleep(2 ** attempt)
 
     def upload(self, notebook, manifest_hash, receipt):
-        isolated = prepare_cli(self.vendor)
-        env = dict(os.environ, WEEKLY_VERCEL_VENDOR_ROOT=str(self.vendor),
+        isolated = prepare_cli(self.vendor, mode=self.mode)
+        env = dict(os.environ, REPORT_MAX_MISSING_BYTES=str(self.missing_byte_budget), WEEKLY_VERCEL_VENDOR_ROOT=str(self.vendor),
                    WEEKLY_VERCEL_ISOLATED_ROOT=str(isolated), NODE_PATH=str(self.vendor.parent))
         command = [str(self.node), '--require', str(RUNTIME), str(isolated / 'dist/vc.js'),
-            'deploy', '--prod', '--yes', '--scope', TEAM, '--archive=tgz', '--no-wait', '--format=json',
+            'deploy', '--prod', '--yes', '--scope', TEAM, *(['--archive=tgz'] if self.mode == 'archive' else []), '--no-wait', '--format=json',
             '--meta', f'weekly_manifest_sha256={manifest_hash}', '--cwd', str(notebook)]
         out, err = receipt.with_suffix('.stdout.log'), receipt.with_suffix('.stderr.log')
         # Exclusive files and a pre-existing receipt prevent accidental upload replay.
@@ -234,23 +269,41 @@ class InspectionTransient(RuntimeError):
     pass
 
 
-def deploy_prepared(notebook, base, manifest_path, receipt_path, client, *, clock=time.monotonic, sleep=time.sleep):
+def deploy_prepared(notebook, base, manifest_path, receipt_path, client, *, clock=time.monotonic, sleep=time.sleep, cadence="weekly", verifier=None):
     notebook, base, manifest_path, receipt_path = map(report_storage.no_symlinks, (notebook, base, manifest_path, receipt_path))
     if any(p.is_relative_to(root) for p in (receipt_path, manifest_path) for root in (notebook, base)):
         raise ValueError('Deployment receipts/manifests must remain outside immutable notebooks')
     check_project(notebook)
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
-    if verify_artifact(base, notebook, manifest['week']) != manifest:
+    period = manifest['week'] if cadence == 'weekly' else manifest['month']
+    verify = verifier or verify_artifact
+    if verify(base, notebook, period) != manifest:
         raise ValueError('Prepared notebook differs from its preservation manifest')
     baseline = json.loads((base.parent / 'deployment_receipt.json').read_text())
     if baseline.get('status') != 'verified' or baseline.get('files') != files(base):
         raise ValueError('Base notebook no longer matches its verified complete receipt')
-    identity = {'schema': 'weekly-v2-deployment-transport/v1', 'notebook': str(notebook),
-                'base_notebook': str(base), 'manifest_sha256': sha(manifest_bytes), 'week': manifest['week'],
+    identity = {'schema': ('weekly-v2-deployment-transport/v1' if cadence == 'weekly' else 'monthly-deployment-transport/v1'), 'notebook': str(notebook),
+                'base_notebook': str(base), 'manifest_sha256': sha(manifest_bytes), ('week' if cadence == 'weekly' else 'month'): period,
                 'previous_deployment_id': baseline['deployment_id']}
     existing = receipt_path.exists()
     receipt = json.loads(receipt_path.read_text()) if existing else dict(identity)
+    mode = getattr(client, 'mode', 'archive')
+    if existing and receipt.get('transport_mode', 'archive') != mode:
+        raise ValueError('Upload mode differs from recorded attempt; no transport replay')
+    if not existing: receipt['transport_mode'] = mode
+    if mode == 'incremental':
+        current, old = files(notebook), set(files(base).values())
+        unique = {}
+        for name, digest in current.items():
+            unique[digest] = (notebook/name).stat().st_size
+        new = {h:size for h,size in unique.items() if h not in old}
+        budget = max(512*1024**2, 2*sum(new.values()))
+        client.missing_byte_budget = budget
+        receipt['transfer_plan'] = {'local_unique_bytes':sum(unique.values()),
+            'new_unique_bytes':sum(new.values()), 'new_unique_files':len(new),
+            'maximum_provider_missing_bytes':budget,
+            'historical_cache_reuse':'estimate only; provider missing list is authoritative'}
     if any(receipt.get(k) != v for k, v in identity.items()):
         raise ValueError('Existing deployment receipt belongs to another artifact; never overwrite it')
 
@@ -277,7 +330,7 @@ def deploy_prepared(notebook, base, manifest_path, receipt_path, client, *, cloc
     if not existing:
         if canonical['id'] != identity['previous_deployment_id']:
             raise ValueError('Production advanced beyond the verified base; stop without uploading')
-        record('upload_started', adapter=ADAPTER, cli_version=VERSION, started_at=datetime.now(timezone.utc).isoformat())
+        record('upload_started', adapter=(INCREMENTAL_ADAPTER if mode == 'incremental' else ADAPTER), cli_version=VERSION, started_at=datetime.now(timezone.utc).isoformat())
         try:
             code, reference = client.upload(notebook, identity['manifest_sha256'], receipt_path)
         except BaseException:
@@ -308,7 +361,7 @@ def deploy_prepared(notebook, base, manifest_path, receipt_path, client, *, cloc
             record('deployment_failed')
             raise RuntimeError('The existing deployment failed; no replacement was created')
         if deployment['readyState'] == 'READY' and canonical['id'] == deployment['id']:
-            if verify_artifact(base, notebook, manifest['week']) != manifest:
+            if verify(base, notebook, period) != manifest:
                 raise ValueError('Prepared notebook changed during deployment')
             record('ready_for_browser_verification')
             return receipt
@@ -338,6 +391,7 @@ def main(argv=None):
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--receipt', type=Path)
     parser.add_argument('--under-release-lock', action='store_true')
+    parser.add_argument('--mode', choices=['archive', 'incremental'], help='New runs use content-addressed incremental upload; existing attempts retain recorded mode')
     args = parser.parse_args(argv)
     notebook = report_storage.no_symlinks(args.notebook.expanduser())
     node, vendor = toolchain()
@@ -353,7 +407,8 @@ def main(argv=None):
     guard = nullcontext() if args.under_release_lock else report_storage.release_guard('weekly-vercel-upload', [base, notebook], baseline=base)
     with guard:
         report_storage.require_space([base, notebook], working_bytes=max(report_storage.MIN_WORKING, report_storage.tree_bytes(base, exclude_build_cache=True) * 3))
-        result = deploy_prepared(notebook, base, manifest, receipt, Client(node, vendor))
+        mode = args.mode or ((json.loads(receipt.read_text()).get('transport_mode', 'archive')) if receipt.exists() else 'incremental')
+        result = deploy_prepared(notebook, base, manifest, receipt, Client(node, vendor, mode))
     print(json.dumps({'status': result['status'], 'deployment_id': result['deployment_id'], 'receipt': str(receipt)}))
     return 0
 

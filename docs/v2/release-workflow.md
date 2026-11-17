@@ -144,6 +144,16 @@ automatic retry path.
 
 ## Deployment transport and recovery
 
+As of 17 November, new attempts use the shared incremental transport, bounded
+BQ runtime, market/query checkpoints and common baseline finalizer described in
+[shared-release-reliability-2026-11-17.md](shared-release-reliability-2026-11-17.md).
+The archive adapter described below remains the recorded mode for old attempts
+and an explicit reviewed recovery option. New incremental attempts use the same
+pinned CLI/runtime and guarded retries, but stream hashes without retaining all
+historical HTML in memory. A missing-byte budget stops unexpected provider-cache
+misses; never switch modes or reupload automatically after an uncertain attempt.
+
+
 The recurring `deploy-vercel` step calls `vercel_upload.py`; do not replace it
 with a raw `vercel deploy` retry. The transport preflight runs before generation
 and reads the verified base's project link. It requires the reviewed Vercel CLI

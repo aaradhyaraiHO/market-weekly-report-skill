@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 import config
+from report_contract import ad_cost_sql
 from bq import query_df
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -69,15 +70,7 @@ def _fetch_weekly_cm2(
         -- Gross Marketing Cost (all 15 ad-spend cols + non-ad spend).
         -- Keep Bing brand/remarketing NULL handling aligned with Omni and TY/LY.
         SUM(
-            sum_google_ads_spend + sum_google_split_ads_spend
-            + sum_pmax_ads_spend + sum_travel_ads_spend
-            + sum_google_remarketing_ads_spend + sum_google_brand_ads_spend
-            + sum_microsoft_ads_spend + sum_microsoft_split_ads_spend
-            + COALESCE(sum_microsoft_brand_ads_spend, 0)
-            + COALESCE(sum_microsoft_remarketing_ads_spend, 0)
-            + sum_facebook_ads_spend + sum_facebook_split_ads_spend
-            + sum_facebook_remarketing_ads_spend
-            + sum_apple_ads_spend + sum_criteo_remarketing_ads_spend
+            {ad_cost_sql(null_policy='bing_only')}
         )
         + SUM(sum_coupon_discount)
         + SUM(sum_wallet_credits)

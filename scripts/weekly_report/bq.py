@@ -10,6 +10,7 @@ import pandas as pd
 from google.cloud import bigquery
 
 import config
+from report_runtime import harden_http, cap_config
 
 _client: bigquery.Client | None = None
 
@@ -18,7 +19,7 @@ def client() -> bigquery.Client:
     global _client
     if _client is None:
         # Pin the location (analytics_reporting is EU) so jobs never mis-route on auto-detect.
-        _client = bigquery.Client(project=config.BQ_PROJECT, location=config.BQ_LOCATION)
+        _client = harden_http(bigquery.Client(project=config.BQ_PROJECT, location=config.BQ_LOCATION))
     return _client
 
 
@@ -29,9 +30,7 @@ def query_df(sql: str, label: str = "run", params: dict | None = None,
     or list for @name IN UNNEST). Dates should be passed as ISO strings and cast
     in SQL, or as datetime.date (mapped to DATE params).
 
-    `max_bytes` overrides the default 80 GB per-query cap for a single call — used
-    by the global (Headout) Mixpanel drawer queries, whose surfaced-CE set scans a
-    bit more than one market. Per-market callers leave it None (→ config default).
+    `max_bytes` can select a stricter per-call cap; it cannot exceed 80 GiB.
     """
     query_params = []
     for name, value in (params or {}).items():
@@ -48,11 +47,11 @@ def query_df(sql: str, label: str = "run", params: dict | None = None,
             query_params.append(bigquery.ScalarQueryParameter(name, "STRING", str(value)))
 
     job_config = bigquery.QueryJobConfig(
-        maximum_bytes_billed=max_bytes or config.MAX_BYTES_BILLED,
+        maximum_bytes_billed=max_bytes if max_bytes is not None else config.MAX_BYTES_BILLED,
         query_parameters=query_params,
         labels={"tool": "weekly_report", "step": label[:63].lower()},
     )
     header = f"-- Query Run by Claude using Analytics-Skill [weekly_report:{label}]\n"
-    job = client().query(header + sql, job_config=job_config)
-    rows = [dict(r) for r in job.result()]
+    job = client().query(header + sql, job_config=cap_config(job_config), timeout=30)
+    rows = [dict(r) for r in job.result(timeout=900)]
     return pd.DataFrame(rows)

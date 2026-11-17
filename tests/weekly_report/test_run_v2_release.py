@@ -38,6 +38,7 @@ class RunV2ReleaseTests(unittest.TestCase):
             names,
             [
                 "baseline",
+                "dependency-readiness",
                 "source-anomaly-preflight",
                 "seed-notebook",
                 "build-markets",
@@ -114,8 +115,8 @@ class RunV2ReleaseTests(unittest.TestCase):
         plan = release.build_plan(
             self.week, self.notebook, deploy=True, post_alerts=True
         )
-        self.assertEqual([step.name for step in plan][-3:], ["deploy-vercel", "verify-live-reports", "post-alerts"])
-        self.assertTrue(plan[-3].external_write)
+        self.assertEqual([step.name for step in plan][-4:], ["deploy-vercel", "verify-live-reports", "retain-production-baseline", "post-alerts"])
+        self.assertTrue(plan[-4].external_write)
         self.assertFalse(plan[-2].external_write)
         self.assertTrue(plan[-1].external_write)
         self.assertIn("--verified-release", plan[-1].command)
@@ -153,7 +154,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 release.Step('post-alerts', ('frozen-delivery-placeholder',), str(ROOT), external_write=True),
             ]
             with patch.object(release, 'CACHE', cache), patch.object(release, 'git_metadata', return_value={}), \
-                    patch.object(release.subprocess, 'run') as run:
+                    patch.object(release.report_release, 'run_bounded') as run:
                 receipt_path = release.execute(plan, self.week, cache / 'notebook')
             receipt = json.loads(receipt_path.read_text())
             self.assertEqual(receipt['status'], 'awaiting_browser_verification')
@@ -171,7 +172,7 @@ class RunV2ReleaseTests(unittest.TestCase):
                 release.Step('build-markets', ('must-not-query',), str(ROOT)),
             ]
             with patch.object(release, 'CACHE', cache), patch.object(release, 'git_metadata', return_value={}), \
-                    patch.object(release.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'check-upload-tool')) as run:
+                    patch.object(release.report_release, 'run_bounded', side_effect=subprocess.CalledProcessError(1, 'check-upload-tool')) as run:
                 with self.assertRaises(subprocess.CalledProcessError):
                     release.execute(plan, self.week, cache / 'notebook')
             self.assertEqual(run.call_count, 1)

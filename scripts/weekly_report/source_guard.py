@@ -15,15 +15,7 @@ import config
 from bq import query_df
 from build_v2_goals import FORECAST_AUTHORITY
 
-AD_COSTS = ('sum_google_ads_spend', 'sum_google_split_ads_spend', 'sum_pmax_ads_spend',
-    'sum_travel_ads_spend', 'sum_google_remarketing_ads_spend', 'sum_google_brand_ads_spend',
-    'sum_microsoft_ads_spend', 'sum_microsoft_split_ads_spend',
-    'sum_microsoft_brand_ads_spend', 'sum_microsoft_remarketing_ads_spend',
-    'sum_facebook_ads_spend',
-    'sum_facebook_split_ads_spend', 'sum_facebook_remarketing_ads_spend',
-    'sum_apple_ads_spend', 'sum_criteo_remarketing_ads_spend')
-OTHER_COSTS = ('sum_coupon_discount', 'sum_wallet_credits', 'sum_affiliate_commission',
-    'sum_creator_collab_costs', 'sum_creator_collab_coupon_costs')
+from report_contract import AD_COSTS, OTHER_COSTS
 
 
 def read_daily(week):

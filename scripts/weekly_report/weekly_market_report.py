@@ -31,6 +31,8 @@ from pathlib import Path
 import build_global
 import build_snapshot
 import config
+from report_runtime import artifact_checkpoint
+from report_release import source_identity
 import release_v2
 import render_v2
 
@@ -80,15 +82,17 @@ def main() -> None:
     # ---- build + write a snapshot per market (reuse build_snapshot helpers) ----
     snapshot_paths: list[Path] = []
     for slug in targets:
-        if slug == "headout":
-            # true-global aggregate: its own build path (no market filter)
-            snap = build_global.build_global(config.iso(w0))
-            path = build_snapshot._write(snap, "headout", w0)
-            snapshot_paths.append(path)
-            continue
-        snap = build_snapshot.build_market(slug, w0)
-        path = build_snapshot._write(snap, slug, w0)
+        path = CACHE / f'snapshot_{slug}_{config.iso(w0)}.json'
+        def produce():
+            snap = (build_global.build_global(config.iso(w0)) if slug == 'headout'
+                    else build_snapshot.build_market(slug, w0))
+            build_snapshot._write(snap, slug, w0)
+        reused = artifact_checkpoint(slug, {'week':config.iso(w0),'market':slug,
+            'renderer':args.renderer,'sources':source_identity()}, [path], produce)
+        if reused: print(f'  [{slug}] Reused verified completed snapshot checkpoint')
         snapshot_paths.append(path)
+        if slug == 'headout': continue
+        snap = json.loads(path.read_text())
         if args.validate:
             if slug == "north_america":
                 ok = build_snapshot.validate_na(snap)

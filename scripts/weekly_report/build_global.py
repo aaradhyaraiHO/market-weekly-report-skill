@@ -576,7 +576,7 @@ def build_global(week: str, *, evaluation_date=None) -> dict:
     # a bit more than one market's worth. The 7.7 TB table grows daily, so this
     # crept just over the 80 GB per-market rail (~87 GB). Give ONLY these two global
     # calls extra headroom; per-market builds stay at config.MAX_BYTES_BILLED.
-    MIXPANEL_GLOBAL_CAP = 140 * 1024 ** 3   # 140 GB
+    MIXPANEL_GLOBAL_CAP = config.MAX_BYTES_BILLED  # Same 80 GiB cap for global and market queries
 
     print(f"  fetching RE-SOURCE drawers for {len(surfaced_ids)} surfaced CEs...")
     print("    tgids (fct_orders, global)...")
